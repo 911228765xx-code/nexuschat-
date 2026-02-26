@@ -1,10 +1,11 @@
 /*
  * Discover — 发现页面
- * 三个Tab：社群 / 动态（朋友圈） / 推荐用户
+ * 三个Tab：动态（朋友圈） / 社群 / 推荐用户
+ * 增强互动：点赞动画、评论输入框与评论列表
  * Cyberpunk Noir风格
  */
-import { useState, useRef } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -32,6 +33,15 @@ interface TrendingUser {
   isVerified: boolean;
 }
 
+interface Comment {
+  id: string;
+  author: { name: string; avatar: string; };
+  content: string;
+  timestamp: string;
+  likes: number;
+  isLiked: boolean;
+}
+
 interface MomentPost {
   id: string;
   author: { name: string; avatar: string; isVerified: boolean; handle: string };
@@ -44,6 +54,8 @@ interface MomentPost {
   isLiked: boolean;
   isBookmarked: boolean;
   tags?: string[];
+  commentList: Comment[];
+  showComments: boolean;
 }
 
 /* ─── Mock Data ─── */
@@ -63,6 +75,29 @@ const mockUsers: TrendingUser[] = [
   { id: "4", name: "0xSisyphus", avatar: "S", bio: "DeFi researcher", followers: 340000, isVerified: false },
 ];
 
+const mockComments: Record<string, Comment[]> = {
+  "1": [
+    { id: "c1", author: { name: "alice.eth", avatar: "A" }, content: "This is huge! Can't wait for the full rollout 🔥", timestamp: "1h ago", likes: 42, isLiked: false },
+    { id: "c2", author: { name: "bob_trader", avatar: "B" }, content: "L2 fees dropping will bring so many new users to DeFi", timestamp: "1h ago", likes: 18, isLiked: true },
+    { id: "c3", author: { name: "defi_dev.eth", avatar: "D" }, content: "Already testing on Holesky. The blob transactions are working great!", timestamp: "45m ago", likes: 8, isLiked: false },
+  ],
+  "2": [
+    { id: "c4", author: { name: "crypto_analyst", avatar: "C" }, content: "Which wallet? Can you share the address?", timestamp: "3h ago", likes: 15, isLiked: false },
+    { id: "c5", author: { name: "on_chain_sleuth", avatar: "O" }, content: "I tracked it too. Multiple wallets, all funded from the same source.", timestamp: "2h ago", likes: 31, isLiked: false },
+  ],
+  "3": [
+    { id: "c6", author: { name: "art_collector", avatar: "🎭" }, content: "Beautiful work! Just minted #42. The generative patterns are mesmerizing.", timestamp: "5h ago", likes: 7, isLiked: false },
+  ],
+  "4": [
+    { id: "c7", author: { name: "newbie_trader", avatar: "N" }, content: "What exchange do you use for copy trading?", timestamp: "7h ago", likes: 5, isLiked: false },
+    { id: "c8", author: { name: "risk_manager", avatar: "R" }, content: "340% ROI is impressive but what's the max drawdown?", timestamp: "6h ago", likes: 22, isLiked: false },
+    { id: "c9", author: { name: "trader_pro.eth", avatar: "📊" }, content: "@risk_manager Max drawdown was 12%. I use strict position sizing.", timestamp: "5h ago", likes: 35, isLiked: true },
+  ],
+  "5": [
+    { id: "c10", author: { name: "sol_builder", avatar: "◎" }, content: "The Firedancer client is a game changer for reliability!", timestamp: "10h ago", likes: 11, isLiked: false },
+  ],
+};
+
 const mockMoments: MomentPost[] = [
   {
     id: "1",
@@ -75,6 +110,8 @@ const mockMoments: MomentPost[] = [
     isLiked: false,
     isBookmarked: false,
     tags: ["#Ethereum", "#Danksharding"],
+    commentList: mockComments["1"] || [],
+    showComments: false,
   },
   {
     id: "2",
@@ -87,6 +124,8 @@ const mockMoments: MomentPost[] = [
     isLiked: true,
     isBookmarked: false,
     tags: ["#OnChain", "#WhaleAlert"],
+    commentList: mockComments["2"] || [],
+    showComments: false,
   },
   {
     id: "3",
@@ -99,6 +138,8 @@ const mockMoments: MomentPost[] = [
     isLiked: false,
     isBookmarked: true,
     tags: ["#NFT", "#GenerativeArt", "#OnChainArt"],
+    commentList: mockComments["3"] || [],
+    showComments: false,
   },
   {
     id: "4",
@@ -111,6 +152,8 @@ const mockMoments: MomentPost[] = [
     isLiked: false,
     isBookmarked: false,
     tags: ["#Trading", "#CopyTrading", "#Alpha"],
+    commentList: mockComments["4"] || [],
+    showComments: false,
   },
   {
     id: "5",
@@ -123,8 +166,34 @@ const mockMoments: MomentPost[] = [
     isLiked: false,
     isBookmarked: false,
     tags: ["#Solana", "#L1"],
+    commentList: mockComments["5"] || [],
+    showComments: false,
   },
 ];
+
+/* ─── Like Animation Particles ─── */
+function LikeParticles({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {[...Array(6)].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 1, scale: 0.5, x: 0, y: 0 }}
+          animate={{
+            opacity: 0,
+            scale: 0,
+            x: (Math.random() - 0.5) * 40,
+            y: -20 - Math.random() * 30,
+          }}
+          transition={{ duration: 0.6, delay: i * 0.05 }}
+          className="absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: i % 2 === 0 ? "#ff4d6a" : "#ff8fa3" }}
+        />
+      ))}
+    </div>
+  );
+}
 
 /* ─── Component ─── */
 export default function Discover() {
@@ -134,6 +203,10 @@ export default function Discover() {
   const [moments, setMoments] = useState(mockMoments);
   const [showCompose, setShowCompose] = useState(false);
   const [composeText, setComposeText] = useState("");
+  const [commentInputId, setCommentInputId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
+  const commentInputRef = useRef<HTMLInputElement>(null);
   const { t } = useI18n();
 
   const categories = ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
@@ -150,13 +223,23 @@ export default function Discover() {
     return n.toString();
   };
 
+  useEffect(() => {
+    if (commentInputId && commentInputRef.current) {
+      commentInputRef.current.focus();
+    }
+  }, [commentInputId]);
+
   const toggleLike = (id: string) => {
     setMoments((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, isLiked: !m.isLiked, likes: m.isLiked ? m.likes - 1 : m.likes + 1 }
-          : m
-      )
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        if (!m.isLiked) {
+          // Trigger particle animation
+          setLikeAnimations((a) => ({ ...a, [id]: true }));
+          setTimeout(() => setLikeAnimations((a) => ({ ...a, [id]: false })), 700);
+        }
+        return { ...m, isLiked: !m.isLiked, likes: m.isLiked ? m.likes - 1 : m.likes + 1 };
+      })
     );
   };
 
@@ -169,23 +252,89 @@ export default function Discover() {
     toast("Bookmark updated");
   };
 
+  const toggleComments = (id: string) => {
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, showComments: !m.showComments } : m
+      )
+    );
+    // If opening comments, also open the comment input
+    const post = moments.find((m) => m.id === id);
+    if (post && !post.showComments) {
+      setCommentInputId(id);
+    } else {
+      setCommentInputId(null);
+    }
+  };
+
+  const openCommentInput = (id: string) => {
+    // Ensure comments are visible
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, showComments: true } : m
+      )
+    );
+    setCommentInputId(id);
+    setCommentText("");
+  };
+
+  const submitComment = (postId: string) => {
+    if (!commentText.trim()) return;
+    const newComment: Comment = {
+      id: `new-${Date.now()}`,
+      author: { name: "me.eth", avatar: "🦊" },
+      content: commentText,
+      timestamp: t("discover.justNow") || "Just now",
+      likes: 0,
+      isLiked: false,
+    };
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === postId
+          ? { ...m, commentList: [...m.commentList, newComment], comments: m.comments + 1 }
+          : m
+      )
+    );
+    setCommentText("");
+    toast(t("discover.commentSent") || "Comment posted! 💬");
+  };
+
+  const toggleCommentLike = (postId: string, commentId: string) => {
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === postId
+          ? {
+              ...m,
+              commentList: m.commentList.map((c) =>
+                c.id === commentId
+                  ? { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 }
+                  : c
+              ),
+            }
+          : m
+      )
+    );
+  };
+
   const handlePublish = () => {
     if (!composeText.trim()) return;
     const newPost: MomentPost = {
       id: Date.now().toString(),
       author: { name: "me.eth", avatar: "🦊", isVerified: false, handle: "0x71C7...3a9b" },
       content: composeText,
-      timestamp: "Just now",
+      timestamp: t("discover.justNow") || "Just now",
       likes: 0,
       comments: 0,
       reposts: 0,
       isLiked: false,
       isBookmarked: false,
+      commentList: [],
+      showComments: false,
     };
     setMoments((prev) => [newPost, ...prev]);
     setComposeText("");
     setShowCompose(false);
-    toast("Post published! 🎉");
+    toast(t("discover.postPublished") || "Post published! 🎉");
   };
 
   return (
@@ -284,31 +433,43 @@ export default function Discover() {
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-1 mt-3 -ml-2">
+                        {/* Comment button */}
                         <button
-                          onClick={() => toast("Comments coming soon")}
+                          onClick={() => openCommentInput(post.id)}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all"
                         >
                           <MessageSquare size={15} />
                           <span className="text-[11px]">{formatNum(post.comments)}</span>
                         </button>
+                        {/* Repost button */}
                         <button
-                          onClick={() => toast("Repost coming soon")}
+                          onClick={() => toast(t("discover.repostSoon") || "Repost coming soon")}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
                         >
                           <Repeat2 size={15} />
                           <span className="text-[11px]">{formatNum(post.reposts)}</span>
                         </button>
-                        <button
-                          onClick={() => toggleLike(post.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
-                            post.isLiked
-                              ? "text-neon-red"
-                              : "text-muted-foreground hover:text-neon-red hover:bg-neon-red/5"
-                          }`}
-                        >
-                          <Heart size={15} className={post.isLiked ? "fill-neon-red" : ""} />
-                          <span className="text-[11px]">{formatNum(post.likes)}</span>
-                        </button>
+                        {/* Like button with animation */}
+                        <div className="relative">
+                          <button
+                            onClick={() => toggleLike(post.id)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
+                              post.isLiked
+                                ? "text-neon-red"
+                                : "text-muted-foreground hover:text-neon-red hover:bg-neon-red/5"
+                            }`}
+                          >
+                            <motion.div
+                              animate={post.isLiked ? { scale: [1, 1.4, 1] } : { scale: 1 }}
+                              transition={{ duration: 0.3, ease: "easeOut" }}
+                            >
+                              <Heart size={15} className={post.isLiked ? "fill-neon-red" : ""} />
+                            </motion.div>
+                            <span className="text-[11px]">{formatNum(post.likes)}</span>
+                          </button>
+                          <LikeParticles show={likeAnimations[post.id] || false} />
+                        </div>
+                        {/* Bookmark */}
                         <button
                           onClick={() => toggleBookmark(post.id)}
                           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
@@ -319,13 +480,120 @@ export default function Discover() {
                         >
                           <Bookmark size={15} className={post.isBookmarked ? "fill-neon-purple" : ""} />
                         </button>
+                        {/* Share */}
                         <button
-                          onClick={() => { navigator.clipboard.writeText(post.content); toast("Copied to clipboard"); }}
+                          onClick={() => { navigator.clipboard.writeText(post.content); toast(t("discover.copied") || "Copied to clipboard"); }}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all ml-auto"
                         >
                           <Share2 size={15} />
                         </button>
                       </div>
+
+                      {/* ─── Comments Section ─── */}
+                      <AnimatePresence>
+                        {post.showComments && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 pt-3 border-t border-border/10 space-y-3">
+                              {/* Comment list */}
+                              {post.commentList.length > 0 ? (
+                                post.commentList.map((comment) => (
+                                  <div key={comment.id} className="flex gap-2.5 group">
+                                    <Avatar className="w-7 h-7 shrink-0">
+                                      <AvatarFallback className="bg-secondary/60 text-[10px]">{comment.author.avatar}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-baseline gap-1.5">
+                                        <span className="text-xs font-semibold text-foreground">{comment.author.name}</span>
+                                        <span className="text-[9px] text-muted-foreground">{comment.timestamp}</span>
+                                      </div>
+                                      <p className="text-xs text-foreground/90 mt-0.5 leading-relaxed">{comment.content}</p>
+                                      <div className="flex items-center gap-3 mt-1">
+                                        <button
+                                          onClick={() => toggleCommentLike(post.id, comment.id)}
+                                          className={`flex items-center gap-1 text-[10px] transition-colors ${
+                                            comment.isLiked ? "text-neon-red" : "text-muted-foreground hover:text-neon-red"
+                                          }`}
+                                        >
+                                          <Heart size={10} className={comment.isLiked ? "fill-neon-red" : ""} />
+                                          {comment.likes > 0 && <span>{comment.likes}</span>}
+                                        </button>
+                                        <button
+                                          onClick={() => { setCommentText(`@${comment.author.name} `); setCommentInputId(post.id); }}
+                                          className="text-[10px] text-muted-foreground hover:text-neon-cyan transition-colors"
+                                        >
+                                          {t("discover.reply") || "Reply"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-xs text-muted-foreground text-center py-2">{t("discover.noComments") || "No comments yet. Be the first!"}</p>
+                              )}
+
+                              {/* View more comments link */}
+                              {post.comments > post.commentList.length && (
+                                <button className="text-[11px] text-neon-cyan hover:underline">
+                                  {t("discover.viewMore") || `View all ${post.comments} comments`}
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* ─── Comment Input ─── */}
+                      <AnimatePresence>
+                        {commentInputId === post.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="flex items-center gap-2 mt-3 pt-2">
+                              <Avatar className="w-7 h-7 shrink-0">
+                                <AvatarFallback className="bg-neon-cyan/15 text-neon-cyan text-[10px]">🦊</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 flex items-center gap-1.5 bg-secondary/40 rounded-full px-3 py-1.5 border border-border/20 focus-within:border-neon-cyan/30 transition-colors">
+                                <input
+                                  ref={commentInputRef}
+                                  type="text"
+                                  value={commentText}
+                                  onChange={(e) => setCommentText(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") submitComment(post.id); }}
+                                  placeholder={t("discover.writeComment") || "Write a comment..."}
+                                  className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
+                                />
+                                <button
+                                  onClick={() => { setCommentText(commentText + "@"); }}
+                                  className="p-0.5 text-muted-foreground hover:text-neon-cyan transition-colors"
+                                >
+                                  <AtSign size={13} />
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => submitComment(post.id)}
+                                disabled={!commentText.trim()}
+                                className={`p-1.5 rounded-full transition-all ${
+                                  commentText.trim()
+                                    ? "bg-neon-cyan text-background hover:opacity-90"
+                                    : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
+                                }`}
+                              >
+                                <Send size={13} />
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     <button className="shrink-0 p-1 text-muted-foreground hover:text-foreground">
                       <MoreHorizontal size={16} />
@@ -495,7 +763,7 @@ export default function Discover() {
               {/* Compose toolbar */}
               <div className="flex items-center justify-between border-t border-border/20 pt-3">
                 <div className="flex gap-2">
-                  <button onClick={() => toast("Image upload coming soon")} className="p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all">
+                  <button onClick={() => toast(t("discover.imageUploadSoon") || "Image upload coming soon")} className="p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all">
                     <Image size={18} />
                   </button>
                 </div>
