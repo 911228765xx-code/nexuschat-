@@ -41,17 +41,59 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   /* Custom NexusChat colors */
-  --color-neon-cyan: oklch(0.82 0.15 195);
-  --color-neon-purple: oklch(0.65 0.25 295);
-  --color-neon-green: oklch(0.82 0.22 155);
-  --color-neon-red: oklch(0.65 0.25 15);
+  --color-neon-cyan: var(--neon-cyan);
+  --color-neon-purple: var(--neon-purple);
+  --color-neon-green: var(--neon-green);
+  --color-neon-red: var(--neon-red);
   --font-display: 'Space Grotesk', sans-serif;
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
+/* Light theme (default) */
 :root {
   --radius: 0.75rem;
+  --background: oklch(0.97 0.005 260);
+  --foreground: oklch(0.18 0.02 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 260);
+  --primary: oklch(0.55 0.2 195);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.93 0.008 260);
+  --secondary-foreground: oklch(0.35 0.02 260);
+  --muted: oklch(0.93 0.008 260);
+  --muted-foreground: oklch(0.5 0.02 260);
+  --accent: oklch(0.93 0.02 295);
+  --accent-foreground: oklch(0.18 0.02 260);
+  --destructive: oklch(0.55 0.25 15);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.88 0.01 260);
+  --input: oklch(0.93 0.008 260);
+  --ring: oklch(0.55 0.2 195);
+  --chart-1: oklch(0.55 0.2 195);
+  --chart-2: oklch(0.5 0.25 295);
+  --chart-3: oklch(0.6 0.22 155);
+  --chart-4: oklch(0.55 0.15 60);
+  --chart-5: oklch(0.5 0.2 340);
+  --sidebar: oklch(0.96 0.005 260);
+  --sidebar-foreground: oklch(0.18 0.02 260);
+  --sidebar-primary: oklch(0.55 0.2 195);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.93 0.02 295);
+  --sidebar-accent-foreground: oklch(0.18 0.02 260);
+  --sidebar-border: oklch(0.88 0.01 260);
+  --sidebar-ring: oklch(0.55 0.2 195);
+  /* NexusChat brand colors - light mode */
+  --neon-cyan: oklch(0.55 0.2 195);
+  --neon-purple: oklch(0.5 0.25 295);
+  --neon-green: oklch(0.55 0.22 155);
+  --neon-red: oklch(0.55 0.25 15);
+}
+
+/* Dark theme */
+.dark {
   --background: oklch(0.11 0.02 260);
   --foreground: oklch(0.93 0.005 260);
   --card: oklch(0.15 0.02 260);
@@ -84,6 +126,11 @@
   --sidebar-accent-foreground: oklch(0.93 0.005 260);
   --sidebar-border: oklch(0.25 0.02 260);
   --sidebar-ring: oklch(0.82 0.15 195);
+  /* NexusChat brand colors - dark mode (brighter/neon) */
+  --neon-cyan: oklch(0.82 0.15 195);
+  --neon-purple: oklch(0.65 0.25 295);
+  --neon-green: oklch(0.82 0.22 155);
+  --neon-red: oklch(0.65 0.25 15);
 }
 
 @layer base {
@@ -144,26 +191,26 @@
 
   /* Neon glow effects */
   .glow-cyan {
-    box-shadow: 0 0 20px oklch(0.82 0.15 195 / 0.3), 0 0 40px oklch(0.82 0.15 195 / 0.1);
+    box-shadow: 0 0 20px oklch(from var(--neon-cyan) l c h / 0.3), 0 0 40px oklch(from var(--neon-cyan) l c h / 0.1);
   }
   .glow-purple {
-    box-shadow: 0 0 20px oklch(0.65 0.25 295 / 0.3), 0 0 40px oklch(0.65 0.25 295 / 0.1);
+    box-shadow: 0 0 20px oklch(from var(--neon-purple) l c h / 0.3), 0 0 40px oklch(from var(--neon-purple) l c h / 0.1);
   }
   .glow-green {
-    box-shadow: 0 0 20px oklch(0.82 0.22 155 / 0.3), 0 0 40px oklch(0.82 0.22 155 / 0.1);
+    box-shadow: 0 0 20px oklch(from var(--neon-green) l c h / 0.3), 0 0 40px oklch(from var(--neon-green) l c h / 0.1);
   }
 
   /* Glass morphism */
   .glass {
-    background: oklch(0.15 0.02 260 / 0.6);
+    background: oklch(from var(--card) l c h / 0.8);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid oklch(1 0 0 / 0.08);
+    border: 1px solid oklch(from var(--border) l c h / 0.5);
   }
 
   /* Gradient text */
   .text-gradient {
-    background: linear-gradient(135deg, oklch(0.82 0.15 195), oklch(0.65 0.25 295));
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -178,9 +225,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.3 0.02 260);
+  background: oklch(from var(--muted-foreground) l c h / 0.3);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.4 0.02 260);
+  background: oklch(from var(--muted-foreground) l c h / 0.5);
 }

@@ -22,14 +22,12 @@ function AppContent() {
   useEffect(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     if (!onboarded) {
-      // Check if user navigated to /app routes
       if (window.location.pathname.startsWith("/app")) {
         setShowOnboarding(true);
       }
     }
   }, []);
 
-  // Listen for route changes to /app
   useEffect(() => {
     const handlePopState = () => {
       const onboarded = localStorage.getItem("nexuschat_onboarded");
@@ -93,15 +91,15 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark" switchable>
         <I18nProvider>
           <TooltipProvider>
             <Toaster
               toastOptions={{
                 style: {
-                  background: 'oklch(0.15 0.02 260)',
-                  border: '1px solid oklch(0.25 0.02 260)',
-                  color: 'oklch(0.93 0.005 260)',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--foreground)',
                 },
               }}
             />

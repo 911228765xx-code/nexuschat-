@@ -1,15 +1,17 @@
 /*
  * Profile — 我的个人中心
- * 身份卡片、核心数据、功能入口、设置
+ * 身份卡片、核心数据、功能入口、主题切换、设置
  */
-import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, LogOut, Shield, ExternalLink } from "lucide-react";
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Profile() {
   const { t } = useI18n();
+  const { theme, toggleTheme } = useTheme();
 
   const menuSections = [
     {
@@ -27,14 +29,6 @@ export default function Profile() {
         { icon: Gift, label: t("profile.invite"), value: "+1000 NP", color: "text-neon-green" },
         { icon: Trophy, label: t("profile.leaderboard"), value: "#1,247", color: "text-neon-cyan" },
         { icon: CheckSquare, label: t("profile.tasks"), value: "3/5", color: "text-neon-purple" },
-      ],
-    },
-    {
-      title: t("profile.settings"),
-      items: [
-        { icon: Settings, label: t("profile.security"), value: "API Key", color: "text-foreground" },
-        { icon: Bell, label: t("profile.notifications"), value: "", color: "text-foreground" },
-        { icon: Moon, label: t("profile.darkMode"), value: "ON", color: "text-foreground" },
       ],
     },
   ];
@@ -158,10 +152,79 @@ export default function Profile() {
             </motion.div>
           ))}
 
+          {/* Settings Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("profile.settings")}</h3>
+            <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => toggleTheme?.()}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+                  {theme === "dark" ? (
+                    <Moon size={16} className="text-neon-purple" />
+                  ) : (
+                    <Sun size={16} className="text-amber-500" />
+                  )}
+                </div>
+                <span className="flex-1 text-sm text-left">{t("profile.darkMode")}</span>
+                {/* Toggle Switch */}
+                <div
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
+                    theme === "dark"
+                      ? "bg-neon-cyan/30 border border-neon-cyan/40"
+                      : "bg-secondary border border-border"
+                  }`}
+                >
+                  <motion.div
+                    layout
+                    className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-colors ${
+                      theme === "dark"
+                        ? "bg-neon-cyan"
+                        : "bg-muted-foreground"
+                    }`}
+                    animate={{ left: theme === "dark" ? "calc(100% - 22px)" : "2px" }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </div>
+              </button>
+
+              {/* Security */}
+              <button
+                onClick={() => toast("Coming soon")}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+                  <Settings size={16} className="text-foreground" />
+                </div>
+                <span className="flex-1 text-sm text-left">{t("profile.security")}</span>
+                <span className="text-xs text-muted-foreground font-mono">API Key</span>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </button>
+
+              {/* Notifications */}
+              <button
+                onClick={() => toast("Coming soon")}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+                  <Bell size={16} className="text-foreground" />
+                </div>
+                <span className="flex-1 text-sm text-left">{t("profile.notifications")}</span>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </button>
+            </div>
+          </motion.div>
+
           {/* Logout */}
           <button
             onClick={() => toast("Coming soon")}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-neon-red/5 border border-neon-red/15 text-neon-red text-sm font-medium hover:bg-neon-red/10 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-destructive/5 border border-destructive/15 text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
             <LogOut size={16} />
             {t("profile.logout")}
