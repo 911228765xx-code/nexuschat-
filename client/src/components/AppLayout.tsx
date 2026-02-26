@@ -9,7 +9,12 @@ import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+interface AppLayoutProps {
+  children: ReactNode;
+  hideNav?: boolean;
+}
+
+export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const [location] = useLocation();
   const { t } = useI18n();
 
@@ -29,65 +34,67 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </main>
 
       {/* Bottom Tab Navigation */}
-      <nav className="glass border-t border-border/50 px-2 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-          {tabs.map((tab) => {
-            const isActive =
-              location === tab.path ||
-              (tab.path === "/app/chat" && location.startsWith("/app/chat/"));
-            const Icon = tab.icon;
+      {!hideNav && (
+        <nav className="glass border-t border-border/50 px-2 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+            {tabs.map((tab) => {
+              const isActive =
+                location === tab.path ||
+                (tab.path === "/app/chat" && location.startsWith("/app/chat/"));
+              const Icon = tab.icon;
 
-            return (
-              <Link key={tab.path} href={tab.path}>
-                <button className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors">
-                  {isActive && (
-                    <motion.div
-                      layoutId="tab-indicator"
-                      className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-neon-cyan"
-                      style={{
-                        boxShadow: "0 0 8px oklch(0.82 0.15 195 / 0.6)",
-                      }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  <div className="relative">
-                    <Icon
-                      size={22}
-                      className={
-                        isActive
-                          ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
-                          : "text-muted-foreground"
-                      }
-                    />
-                    {/* Unread badge */}
-                    {tab.badge > 0 && (
+              return (
+                <Link key={tab.path} href={tab.path}>
+                  <button className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors">
+                    {isActive && (
                       <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center"
+                        layoutId="tab-indicator"
+                        className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-neon-cyan"
                         style={{
-                          boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
+                          boxShadow: "0 0 8px oklch(0.82 0.15 195 / 0.6)",
                         }}
-                      >
-                        <span className="text-[9px] font-bold text-white leading-none">
-                          {tab.badge > 99 ? "99+" : tab.badge}
-                        </span>
-                      </motion.div>
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
                     )}
-                  </div>
-                  <span
-                    className={`text-[10px] font-medium ${
-                      isActive ? "text-neon-cyan" : "text-muted-foreground"
-                    }`}
-                  >
-                    {t(tab.labelKey)}
-                  </span>
-                </button>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+                    <div className="relative">
+                      <Icon
+                        size={22}
+                        className={
+                          isActive
+                            ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
+                            : "text-muted-foreground"
+                        }
+                      />
+                      {/* Unread badge */}
+                      {tab.badge > 0 && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center"
+                          style={{
+                            boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
+                          }}
+                        >
+                          <span className="text-[9px] font-bold text-white leading-none">
+                            {tab.badge > 99 ? "99+" : tab.badge}
+                          </span>
+                        </motion.div>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[10px] font-medium ${
+                        isActive ? "text-neon-cyan" : "text-muted-foreground"
+                      }`}
+                    >
+                      {t(tab.labelKey)}
+                    </span>
+                  </button>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

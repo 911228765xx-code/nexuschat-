@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -13,31 +13,15 @@ import Research from "./pages/Research";
 import Trading from "./pages/Trading";
 import Profile from "./pages/Profile";
 import Discover from "./pages/Discover";
+import Contacts from "./pages/Contacts";
 import AppLayout from "./components/AppLayout";
 import Onboarding from "./components/Onboarding";
 
 function AppContent() {
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
-  useEffect(() => {
+  const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
-    if (!onboarded) {
-      if (window.location.pathname.startsWith("/app")) {
-        setShowOnboarding(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const onboarded = localStorage.getItem("nexuschat_onboarded");
-      if (!onboarded && window.location.pathname.startsWith("/app")) {
-        setShowOnboarding(true);
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+    return !onboarded && window.location.pathname.startsWith("/app");
+  });
 
   return (
     <>
@@ -54,6 +38,11 @@ function AppContent() {
         <Route path="/app/chat" component={() => (
           <AppLayout>
             <Chat />
+          </AppLayout>
+        )} />
+        <Route path="/app/contacts" component={() => (
+          <AppLayout hideNav>
+            <Contacts />
           </AppLayout>
         )} />
         <Route path="/app/discover" component={() => (
