@@ -1,6 +1,6 @@
 /*
  * AppLayout — Cyberpunk Noir mobile-first layout
- * Bottom tab navigation with glassmorphism effect
+ * Bottom tab navigation with glassmorphism effect + unread badge
  * 5 tabs: Chat / Discover / Research / Trading / Profile
  */
 import { useLocation, Link } from "wouter";
@@ -14,11 +14,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
 
   const tabs = [
-    { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle },
-    { path: "/app/discover", labelKey: "tab.discover", icon: Compass },
-    { path: "/app/research", labelKey: "tab.research", icon: Brain },
-    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp },
-    { path: "/app/profile", labelKey: "tab.profile", icon: User },
+    { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: 20 },
+    { path: "/app/discover", labelKey: "tab.discover", icon: Compass, badge: 0 },
+    { path: "/app/research", labelKey: "tab.research", icon: Brain, badge: 3 },
+    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 1 },
+    { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: 5 },
   ];
 
   return (
@@ -50,14 +50,31 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
-                  <Icon
-                    size={22}
-                    className={
-                      isActive
-                        ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
-                        : "text-muted-foreground"
-                    }
-                  />
+                  <div className="relative">
+                    <Icon
+                      size={22}
+                      className={
+                        isActive
+                          ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
+                          : "text-muted-foreground"
+                      }
+                    />
+                    {/* Unread badge */}
+                    {tab.badge > 0 && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center"
+                        style={{
+                          boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
+                        }}
+                      >
+                        <span className="text-[9px] font-bold text-white leading-none">
+                          {tab.badge > 99 ? "99+" : tab.badge}
+                        </span>
+                      </motion.div>
+                    )}
+                  </div>
                   <span
                     className={`text-[10px] font-medium ${
                       isActive ? "text-neon-cyan" : "text-muted-foreground"

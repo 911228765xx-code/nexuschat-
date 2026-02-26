@@ -1,11 +1,23 @@
 /*
  * Research — AI投研机器人页面
- * 输入代币名称生成投研报告卡片
+ * 增强版：迷你K线图 + 雷达图 + 详细报告卡片
  */
-import { useState } from "react";
-import { Search, TrendingUp, TrendingDown, Shield, Activity, Code, Globe, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+} from "recharts";
 
 interface ResearchReport {
   id: string;
@@ -22,6 +34,8 @@ interface ResearchReport {
   securityScore: string;
   devActivity: string;
   timestamp: string;
+  priceHistory: { time: string; price: number }[];
+  radarData: { metric: string; score: number; fullMark: number }[];
 }
 
 const mockReports: ResearchReport[] = [
@@ -40,6 +54,22 @@ const mockReports: ResearchReport[] = [
     securityScore: "A+",
     devActivity: "Very High (2,847 commits/mo)",
     timestamp: "2 min ago",
+    priceHistory: [
+      { time: "Jan", price: 2280 }, { time: "Feb", price: 2520 },
+      { time: "Mar", price: 3100 }, { time: "Apr", price: 3350 },
+      { time: "May", price: 2980 }, { time: "Jun", price: 3420 },
+      { time: "Jul", price: 3180 }, { time: "Aug", price: 3560 },
+      { time: "Sep", price: 3280 }, { time: "Oct", price: 3650 },
+      { time: "Nov", price: 3780 }, { time: "Dec", price: 3842 },
+    ],
+    radarData: [
+      { metric: "Security", score: 95, fullMark: 100 },
+      { metric: "Dev Activity", score: 92, fullMark: 100 },
+      { metric: "Ecosystem", score: 88, fullMark: 100 },
+      { metric: "Tokenomics", score: 82, fullMark: 100 },
+      { metric: "Community", score: 90, fullMark: 100 },
+      { metric: "Liquidity", score: 96, fullMark: 100 },
+    ],
   },
   {
     id: "2",
@@ -56,10 +86,38 @@ const mockReports: ResearchReport[] = [
     securityScore: "A",
     devActivity: "High (1,523 commits/mo)",
     timestamp: "15 min ago",
+    priceHistory: [
+      { time: "Jan", price: 95 }, { time: "Feb", price: 110 },
+      { time: "Mar", price: 145 }, { time: "Apr", price: 168 },
+      { time: "May", price: 135 }, { time: "Jun", price: 155 },
+      { time: "Jul", price: 142 }, { time: "Aug", price: 170 },
+      { time: "Sep", price: 158 }, { time: "Oct", price: 175 },
+      { time: "Nov", price: 192 }, { time: "Dec", price: 187 },
+    ],
+    radarData: [
+      { metric: "Security", score: 75, fullMark: 100 },
+      { metric: "Dev Activity", score: 80, fullMark: 100 },
+      { metric: "Ecosystem", score: 82, fullMark: 100 },
+      { metric: "Tokenomics", score: 68, fullMark: 100 },
+      { metric: "Community", score: 88, fullMark: 100 },
+      { metric: "Liquidity", score: 85, fullMark: 100 },
+    ],
   },
 ];
 
 const hotTokens = ["BTC", "ETH", "SOL", "AVAX", "ARB", "OP", "MATIC", "LINK"];
+
+/* Custom tooltip for K-line chart */
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number }> }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="px-2.5 py-1.5 rounded-lg bg-card border border-border/40 shadow-lg">
+      <p className="text-xs font-mono text-neon-cyan font-semibold">
+        ${payload[0].value.toLocaleString()}
+      </p>
+    </div>
+  );
+}
 
 export default function Research() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,6 +199,7 @@ export default function Research() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {mockReports.map((report, index) => {
           const isExpanded = expandedId === report.id;
+          const isPositive = report.change24h >= 0;
           return (
             <motion.div
               key={report.id}
@@ -149,7 +208,7 @@ export default function Research() {
               transition={{ delay: index * 0.1 }}
               className="rounded-2xl border border-border/30 bg-card/50 overflow-hidden"
             >
-              {/* Report Header - Always visible */}
+              {/* Report Header */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : report.id)}
                 className="w-full px-4 py-3.5 text-left"
@@ -163,11 +222,32 @@ export default function Research() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono font-semibold">{report.price}</span>
-                    <span className={`text-xs font-mono flex items-center gap-0.5 ${report.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
-                      {report.change24h >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {report.change24h >= 0 ? "+" : ""}{report.change24h}%
+                    <span className={`text-xs font-mono flex items-center gap-0.5 ${isPositive ? "text-neon-green" : "text-neon-red"}`}>
+                      {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                      {isPositive ? "+" : ""}{report.change24h}%
                     </span>
                   </div>
+                </div>
+
+                {/* Mini K-line chart (always visible) */}
+                <div className="h-16 mb-3 -mx-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={report.priceHistory}>
+                      <defs>
+                        <linearGradient id={`gradient-${report.id}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="price"
+                        stroke={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"}
+                        strokeWidth={1.5}
+                        fill={`url(#gradient-${report.id})`}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
 
                 {/* Key metrics grid */}
@@ -208,7 +288,77 @@ export default function Research() {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-4 pb-4 space-y-3 border-t border-border/20 pt-3">
+                    <div className="px-4 pb-4 space-y-4 border-t border-border/20 pt-3">
+
+                      {/* Detailed K-line chart */}
+                      <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                        <p className="text-[10px] text-muted-foreground mb-2 font-mono">12M Price Chart</p>
+                        <div className="h-36">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={report.priceHistory}>
+                              <defs>
+                                <linearGradient id={`gradient-detail-${report.id}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"} stopOpacity={0.4} />
+                                  <stop offset="100%" stopColor={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"} stopOpacity={0.02} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis
+                                dataKey="time"
+                                tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }}
+                                axisLine={false}
+                                tickLine={false}
+                                domain={["dataMin - 100", "dataMax + 100"]}
+                                tickFormatter={(v: number) => `$${v}`}
+                                width={45}
+                              />
+                              <RechartsTooltip content={<ChartTooltip />} />
+                              <Area
+                                type="monotone"
+                                dataKey="price"
+                                stroke={isPositive ? "oklch(0.82 0.19 155)" : "oklch(0.65 0.25 25)"}
+                                strokeWidth={2}
+                                fill={`url(#gradient-detail-${report.id})`}
+                                dot={false}
+                                activeDot={{ r: 4, fill: "oklch(0.82 0.15 195)", stroke: "oklch(0.82 0.15 195)", strokeWidth: 2 }}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Radar Chart */}
+                      <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                        <p className="text-[10px] text-muted-foreground mb-2 font-mono">Multi-Dimensional Analysis</p>
+                        <div className="h-52">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart data={report.radarData} cx="50%" cy="50%" outerRadius="70%">
+                              <PolarGrid
+                                stroke="oklch(0.3 0.01 260)"
+                                strokeDasharray="3 3"
+                              />
+                              <PolarAngleAxis
+                                dataKey="metric"
+                                tick={{ fontSize: 10, fill: "oklch(0.65 0.02 260)" }}
+                              />
+                              <Radar
+                                name="Score"
+                                dataKey="score"
+                                stroke="oklch(0.82 0.15 195)"
+                                fill="oklch(0.82 0.15 195)"
+                                fillOpacity={0.15}
+                                strokeWidth={2}
+                                dot={{ r: 3, fill: "oklch(0.82 0.15 195)" }}
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
                       {/* AI Summary */}
                       <div className="p-3 rounded-xl bg-neon-purple/5 border border-neon-purple/15">
                         <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">

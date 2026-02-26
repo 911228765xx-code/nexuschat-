@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -13,49 +14,79 @@ import Trading from "./pages/Trading";
 import Profile from "./pages/Profile";
 import Discover from "./pages/Discover";
 import AppLayout from "./components/AppLayout";
+import Onboarding from "./components/Onboarding";
 
-function Router() {
+function AppContent() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    const onboarded = localStorage.getItem("nexuschat_onboarded");
+    if (!onboarded) {
+      // Check if user navigated to /app routes
+      if (window.location.pathname.startsWith("/app")) {
+        setShowOnboarding(true);
+      }
+    }
+  }, []);
+
+  // Listen for route changes to /app
+  useEffect(() => {
+    const handlePopState = () => {
+      const onboarded = localStorage.getItem("nexuschat_onboarded");
+      if (!onboarded && window.location.pathname.startsWith("/app")) {
+        setShowOnboarding(true);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/app/chat/:id" component={() => (
-        <AppLayout>
-          <ChatRoom />
-        </AppLayout>
-      )} />
-      <Route path="/app/chat" component={() => (
-        <AppLayout>
-          <Chat />
-        </AppLayout>
-      )} />
-      <Route path="/app/discover" component={() => (
-        <AppLayout>
-          <Discover />
-        </AppLayout>
-      )} />
-      <Route path="/app/research" component={() => (
-        <AppLayout>
-          <Research />
-        </AppLayout>
-      )} />
-      <Route path="/app/trading" component={() => (
-        <AppLayout>
-          <Trading />
-        </AppLayout>
-      )} />
-      <Route path="/app/profile" component={() => (
-        <AppLayout>
-          <Profile />
-        </AppLayout>
-      )} />
-      <Route path="/app" component={() => (
-        <AppLayout>
-          <Chat />
-        </AppLayout>
-      )} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      {showOnboarding && (
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/app/chat/:id" component={() => (
+          <AppLayout>
+            <ChatRoom />
+          </AppLayout>
+        )} />
+        <Route path="/app/chat" component={() => (
+          <AppLayout>
+            <Chat />
+          </AppLayout>
+        )} />
+        <Route path="/app/discover" component={() => (
+          <AppLayout>
+            <Discover />
+          </AppLayout>
+        )} />
+        <Route path="/app/research" component={() => (
+          <AppLayout>
+            <Research />
+          </AppLayout>
+        )} />
+        <Route path="/app/trading" component={() => (
+          <AppLayout>
+            <Trading />
+          </AppLayout>
+        )} />
+        <Route path="/app/profile" component={() => (
+          <AppLayout>
+            <Profile />
+          </AppLayout>
+        )} />
+        <Route path="/app" component={() => (
+          <AppLayout>
+            <Chat />
+          </AppLayout>
+        )} />
+        <Route path="/404" component={NotFound} />
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 
@@ -74,7 +105,7 @@ function App() {
                 },
               }}
             />
-            <Router />
+            <AppContent />
           </TooltipProvider>
         </I18nProvider>
       </ThemeProvider>
