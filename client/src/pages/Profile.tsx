@@ -6,39 +6,42 @@ import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, 
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-const menuSections = [
-  {
-    title: "我的活动",
-    items: [
-      { icon: Wallet, label: "我的钱包", value: "$12,480.50", color: "text-neon-cyan" },
-      { icon: TrendingUp, label: "我的跟单策略", value: "3个运行中", color: "text-neon-green" },
-      { icon: FileText, label: "我的投研历史", value: "23份", color: "text-neon-purple" },
-      { icon: Users, label: "我的社群", value: "12个群", color: "text-foreground" },
-    ],
-  },
-  {
-    title: "裂变增长",
-    items: [
-      { icon: Gift, label: "邀请好友", value: "+1000 NP", color: "text-neon-green" },
-      { icon: Trophy, label: "积分排行榜", value: "#1,247", color: "text-neon-cyan" },
-      { icon: CheckSquare, label: "任务中心", value: "3/5 已完成", color: "text-neon-purple" },
-    ],
-  },
-  {
-    title: "设置",
-    items: [
-      { icon: Settings, label: "账户与安全", value: "API Key 管理", color: "text-foreground" },
-      { icon: Bell, label: "通知设置", value: "", color: "text-foreground" },
-      { icon: Moon, label: "深色模式", value: "已开启", color: "text-foreground" },
-    ],
-  },
-];
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function Profile() {
+  const { t } = useI18n();
+
+  const menuSections = [
+    {
+      title: t("profile.activity"),
+      items: [
+        { icon: Wallet, label: t("profile.wallet"), value: "$12,480.50", color: "text-neon-cyan" },
+        { icon: TrendingUp, label: t("profile.strategies"), value: "3", color: "text-neon-green" },
+        { icon: FileText, label: t("profile.researchHistory"), value: "23", color: "text-neon-purple" },
+        { icon: Users, label: t("profile.groups"), value: "12", color: "text-foreground" },
+      ],
+    },
+    {
+      title: t("profile.growth"),
+      items: [
+        { icon: Gift, label: t("profile.invite"), value: "+1000 NP", color: "text-neon-green" },
+        { icon: Trophy, label: t("profile.leaderboard"), value: "#1,247", color: "text-neon-cyan" },
+        { icon: CheckSquare, label: t("profile.tasks"), value: "3/5", color: "text-neon-purple" },
+      ],
+    },
+    {
+      title: t("profile.settings"),
+      items: [
+        { icon: Settings, label: t("profile.security"), value: "API Key", color: "text-foreground" },
+        { icon: Bell, label: t("profile.notifications"), value: "", color: "text-foreground" },
+        { icon: Moon, label: t("profile.darkMode"), value: "ON", color: "text-foreground" },
+      ],
+    },
+  ];
+
   const handleCopyAddress = () => {
     navigator.clipboard.writeText("0x71C7...3a9b");
-    toast.success("钱包地址已复制");
+    toast.success(t("profile.copied"));
   };
 
   return (
@@ -46,7 +49,7 @@ export default function Profile() {
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
-          <h1 className="text-lg font-semibold font-display">我的</h1>
+          <h1 className="text-lg font-semibold font-display">{t("profile.title")}</h1>
         </div>
       </header>
 
@@ -77,10 +80,10 @@ export default function Profile() {
               </button>
               <div className="flex gap-1.5 mt-1.5">
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-purple/15 text-neon-purple border border-neon-purple/20 font-medium">
-                  创世贡献者
+                  {t("profile.genesis")}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 font-medium">
-                  SBT 持有者
+                  SBT Holder
                 </span>
               </div>
             </div>
@@ -89,9 +92,9 @@ export default function Profile() {
           {/* Core Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Nexus 积分", value: "24,680", sub: "NP", color: "text-neon-cyan" },
-              { label: "跟单收益", value: "+$342.80", sub: "", color: "text-neon-green" },
-              { label: "邀请人数", value: "47", sub: "人", color: "text-neon-purple" },
+              { label: t("profile.points"), value: "24,680", sub: "NP", color: "text-neon-cyan" },
+              { label: t("profile.tradingProfit"), value: "+$342.80", sub: "", color: "text-neon-green" },
+              { label: t("profile.invites"), value: "47", sub: "", color: "text-neon-purple" },
             ].map((stat) => (
               <div key={stat.label} className="text-center p-2.5 rounded-xl bg-background/40">
                 <p className="text-[10px] text-muted-foreground">{stat.label}</p>
@@ -107,7 +110,7 @@ export default function Profile() {
         {/* Level Progress */}
         <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-medium">Lv.3 黄金节点</span>
+            <span className="text-xs font-medium">{t("profile.level")}</span>
             <span className="text-[10px] text-muted-foreground font-mono">24,680 / 30,000 NP</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
@@ -118,7 +121,7 @@ export default function Profile() {
               className="h-full rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple"
             />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1">距离钻石节点还需 5,320 NP</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("profile.nextLevel")}</p>
         </div>
 
         {/* Menu Sections */}
@@ -137,10 +140,10 @@ export default function Profile() {
                   return (
                     <button
                       key={item.label}
-                      onClick={() => toast("功能开发中，敬请期待")}
+                      onClick={() => toast("Coming soon")}
                       className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
                     >
-                      <div className={`w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center`}>
+                      <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
                         <Icon size={16} className={item.color} />
                       </div>
                       <span className="flex-1 text-sm text-left">{item.label}</span>
@@ -157,11 +160,11 @@ export default function Profile() {
 
           {/* Logout */}
           <button
-            onClick={() => toast("功能开发中")}
+            onClick={() => toast("Coming soon")}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-neon-red/5 border border-neon-red/15 text-neon-red text-sm font-medium hover:bg-neon-red/10 transition-colors"
           >
             <LogOut size={16} />
-            退出登录
+            {t("profile.logout")}
           </button>
 
           <div className="pb-4" />

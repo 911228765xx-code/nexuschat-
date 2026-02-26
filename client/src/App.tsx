@@ -1,10 +1,10 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, Router as WouterRouter } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { I18nProvider } from "./contexts/I18nContext";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import ChatRoom from "./pages/ChatRoom";
@@ -18,7 +18,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/app/chat/:id" component={(params: any) => (
+      <Route path="/app/chat/:id" component={() => (
         <AppLayout>
           <ChatRoom />
         </AppLayout>
@@ -63,18 +63,20 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <TooltipProvider>
-          <Toaster
-            toastOptions={{
-              style: {
-                background: 'oklch(0.15 0.02 260)',
-                border: '1px solid oklch(0.25 0.02 260)',
-                color: 'oklch(0.93 0.005 260)',
-              },
-            }}
-          />
-          <Router />
-        </TooltipProvider>
+        <I18nProvider>
+          <TooltipProvider>
+            <Toaster
+              toastOptions={{
+                style: {
+                  background: 'oklch(0.15 0.02 260)',
+                  border: '1px solid oklch(0.25 0.02 260)',
+                  color: 'oklch(0.93 0.005 260)',
+                },
+              }}
+            />
+            <Router />
+          </TooltipProvider>
+        </I18nProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

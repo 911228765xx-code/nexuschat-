@@ -7,17 +7,19 @@ import { useLocation, Link } from "wouter";
 import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
-
-const tabs = [
-  { path: "/app/chat", label: "消息", icon: MessageCircle },
-  { path: "/app/discover", label: "发现", icon: Compass },
-  { path: "/app/research", label: "投研", icon: Brain },
-  { path: "/app/trading", label: "跟单", icon: TrendingUp },
-  { path: "/app/profile", label: "我的", icon: User },
-];
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { t } = useI18n();
+
+  const tabs = [
+    { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle },
+    { path: "/app/discover", labelKey: "tab.discover", icon: Compass },
+    { path: "/app/research", labelKey: "tab.research", icon: Brain },
+    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp },
+    { path: "/app/profile", labelKey: "tab.profile", icon: User },
+  ];
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
@@ -61,7 +63,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       isActive ? "text-neon-cyan" : "text-muted-foreground"
                     }`}
                   >
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </span>
                 </button>
               </Link>

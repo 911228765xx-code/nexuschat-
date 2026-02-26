@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Search, TrendingUp, TrendingDown, Shield, Activity, Code, Globe, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface ResearchReport {
   id: string;
@@ -34,11 +35,11 @@ const mockReports: ResearchReport[] = [
     tvl: "$58.2B",
     activeAddresses: "524,891",
     aiScore: 8.5,
-    aiVerdict: "强烈看好",
-    aiSummary: "ETH 基本面强劲，质押率持续上升至 27.3%，L2 生态（Arbitrum、Optimism、Base）蓬勃发展。EIP-4844 实施后 L2 费用大幅下降，推动链上活跃度创新高。机构持仓稳步增加，Grayscale ETH Trust 溢价转正。建议长期持有，关注 $4,000 阻力位突破情况。",
+    aiVerdict: "Strong Buy",
+    aiSummary: "ETH fundamentals are strong with staking rate rising to 27.3%. L2 ecosystem (Arbitrum, Optimism, Base) is thriving. EIP-4844 significantly reduced L2 fees, driving on-chain activity to new highs. Institutional holdings steadily increasing. Recommend long-term hold, watch $4,000 resistance.",
     securityScore: "A+",
-    devActivity: "极高 (2,847 commits/月)",
-    timestamp: "2分钟前",
+    devActivity: "Very High (2,847 commits/mo)",
+    timestamp: "2 min ago",
   },
   {
     id: "2",
@@ -50,11 +51,11 @@ const mockReports: ResearchReport[] = [
     tvl: "$8.9B",
     activeAddresses: "1,234,567",
     aiScore: 7.2,
-    aiVerdict: "看好",
-    aiSummary: "SOL 生态持续扩张，DeFi TVL 稳步增长。Firedancer 客户端即将上线，将显著提升网络性能。NFT 市场活跃度回升，Jupiter DEX 交易量领先。需关注网络稳定性风险和 FTX 遗留代币解锁压力。",
+    aiVerdict: "Buy",
+    aiSummary: "SOL ecosystem continues to expand with steady DeFi TVL growth. Firedancer client launching soon will significantly boost network performance. NFT market activity recovering, Jupiter DEX leading in volume. Watch for network stability risks and FTX legacy token unlock pressure.",
     securityScore: "A",
-    devActivity: "高 (1,523 commits/月)",
-    timestamp: "15分钟前",
+    devActivity: "High (1,523 commits/mo)",
+    timestamp: "15 min ago",
   },
 ];
 
@@ -64,6 +65,7 @@ export default function Research() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>("1");
   const [isSearching, setIsSearching] = useState(false);
+  const { t } = useI18n();
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
@@ -77,7 +79,7 @@ export default function Research() {
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
           <Sparkles size={20} className="text-neon-purple" />
-          <h1 className="text-lg font-semibold font-display">AI 投研</h1>
+          <h1 className="text-lg font-semibold font-display">{t("research.title")}</h1>
         </div>
 
         {/* Search */}
@@ -85,7 +87,7 @@ export default function Research() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
           <input
             type="text"
-            placeholder="输入代币名称，如 BTC、ETH、SOL..."
+            placeholder={t("research.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -95,7 +97,7 @@ export default function Research() {
             onClick={handleSearch}
             className="absolute right-1.5 top-1/2 -translate-y-[calc(50%+6px)] px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-xs font-medium hover:bg-neon-purple/30 transition-colors"
           >
-            分析
+            {t("research.analyze")}
           </button>
         </div>
 
@@ -124,12 +126,12 @@ export default function Research() {
           >
             <div className="w-10 h-10 rounded-full border-2 border-neon-purple/30 border-t-neon-purple animate-spin" />
             <p className="text-sm text-muted-foreground">
-              正在分析 <span className="text-neon-purple font-mono">{searchQuery.toUpperCase()}</span>...
+              Analyzing <span className="text-neon-purple font-mono">{searchQuery.toUpperCase()}</span>...
             </p>
             <div className="flex gap-2 text-[10px] text-muted-foreground font-mono">
               <span className="text-neon-green">✓ CoinGecko</span>
               <span className="text-neon-green">✓ DefiLlama</span>
-              <span className="animate-pulse">⟳ AI分析中</span>
+              <span className="animate-pulse">⟳ AI Processing</span>
             </div>
           </motion.div>
         )}
@@ -171,10 +173,10 @@ export default function Research() {
                 {/* Key metrics grid */}
                 <div className="grid grid-cols-4 gap-2 mb-3">
                   {[
-                    { label: "市值", value: report.marketCap },
-                    { label: "TVL", value: report.tvl },
-                    { label: "活跃地址", value: report.activeAddresses },
-                    { label: "AI评分", value: `${report.aiScore}/10` },
+                    { label: t("research.marketCap"), value: report.marketCap },
+                    { label: t("research.tvl"), value: report.tvl },
+                    { label: t("research.activeAddr"), value: report.activeAddresses },
+                    { label: t("research.aiScore"), value: `${report.aiScore}/10` },
                   ].map((m) => (
                     <div key={m.label} className="text-center p-2 rounded-lg bg-secondary/30">
                       <p className="text-[10px] text-muted-foreground">{m.label}</p>
@@ -187,7 +189,7 @@ export default function Research() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles size={14} className="text-neon-purple" />
-                    <span className="text-xs font-medium">AI 判定：</span>
+                    <span className="text-xs font-medium">{t("research.aiVerdict")}</span>
                     <span className={`text-xs font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red"}`}>
                       {report.aiVerdict}
                     </span>
@@ -211,7 +213,7 @@ export default function Research() {
                       <div className="p-3 rounded-xl bg-neon-purple/5 border border-neon-purple/15">
                         <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                           <Sparkles size={12} className="text-neon-purple" />
-                          AI 综合分析
+                          {t("research.aiAnalysis")}
                         </p>
                         <p className="text-sm leading-relaxed">{report.aiSummary}</p>
                       </div>
@@ -221,14 +223,14 @@ export default function Research() {
                         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary/30">
                           <Shield size={14} className="text-neon-green shrink-0" />
                           <div>
-                            <p className="text-[10px] text-muted-foreground">安全评级</p>
+                            <p className="text-[10px] text-muted-foreground">{t("research.security")}</p>
                             <p className="text-xs font-mono font-semibold text-neon-green">{report.securityScore}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary/30">
                           <Code size={14} className="text-neon-cyan shrink-0" />
                           <div>
-                            <p className="text-[10px] text-muted-foreground">开发活跃度</p>
+                            <p className="text-[10px] text-muted-foreground">{t("research.devActivity")}</p>
                             <p className="text-xs font-mono font-semibold">{report.devActivity}</p>
                           </div>
                         </div>
@@ -236,7 +238,7 @@ export default function Research() {
 
                       {/* Timestamp */}
                       <p className="text-[10px] text-muted-foreground text-right font-mono">
-                        生成于 {report.timestamp}
+                        {t("research.generatedAt")} {report.timestamp}
                       </p>
                     </div>
                   </motion.div>

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { TrendingUp, Plus, Play, Pause, Zap, ArrowUpRight, ArrowDownRight, Settings, Link as LinkIcon, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface Strategy {
   id: string;
@@ -34,10 +35,10 @@ interface TradeLog {
 const mockStrategies: Strategy[] = [
   {
     id: "1",
-    name: "BTC 均线突破",
+    name: "BTC MA Breakout",
     signalSource: "TradingView Webhook",
     pair: "BTC/USDT",
-    amount: "$100/次",
+    amount: "$100/trade",
     status: "running",
     totalProfit: 234.5,
     profitPercent: 12.3,
@@ -46,10 +47,10 @@ const mockStrategies: Strategy[] = [
   },
   {
     id: "2",
-    name: "ETH RSI 超卖",
+    name: "ETH RSI Oversold",
     signalSource: "TradingView Webhook",
     pair: "ETH/USDT",
-    amount: "$50/次",
+    amount: "$50/trade",
     status: "running",
     totalProfit: 89.2,
     profitPercent: 8.9,
@@ -58,10 +59,10 @@ const mockStrategies: Strategy[] = [
   },
   {
     id: "3",
-    name: "SOL 布林带",
+    name: "SOL Bollinger",
     signalSource: "TradingView Webhook",
     pair: "SOL/USDT",
-    amount: "$30/次",
+    amount: "$30/trade",
     status: "paused",
     totalProfit: 19.1,
     profitPercent: 3.2,
@@ -71,14 +72,15 @@ const mockStrategies: Strategy[] = [
 ];
 
 const mockTrades: TradeLog[] = [
-  { id: "1", pair: "BTC/USDT", side: "buy", amount: "$100", price: "$67,432", profit: 12.5, time: "14:30", strategy: "BTC 均线突破" },
-  { id: "2", pair: "ETH/USDT", side: "sell", amount: "$50", price: "$3,842", profit: 8.3, time: "13:15", strategy: "ETH RSI 超卖" },
-  { id: "3", pair: "BTC/USDT", side: "sell", amount: "$100", price: "$67,890", profit: -5.2, time: "11:42", strategy: "BTC 均线突破" },
-  { id: "4", pair: "ETH/USDT", side: "buy", amount: "$50", price: "$3,780", profit: 15.1, time: "09:20", strategy: "ETH RSI 超卖" },
+  { id: "1", pair: "BTC/USDT", side: "buy", amount: "$100", price: "$67,432", profit: 12.5, time: "14:30", strategy: "BTC MA Breakout" },
+  { id: "2", pair: "ETH/USDT", side: "sell", amount: "$50", price: "$3,842", profit: 8.3, time: "13:15", strategy: "ETH RSI Oversold" },
+  { id: "3", pair: "BTC/USDT", side: "sell", amount: "$100", price: "$67,890", profit: -5.2, time: "11:42", strategy: "BTC MA Breakout" },
+  { id: "4", pair: "ETH/USDT", side: "buy", amount: "$50", price: "$3,780", profit: 15.1, time: "09:20", strategy: "ETH RSI Oversold" },
 ];
 
 export default function Trading() {
   const [activeTab, setActiveTab] = useState<"strategies" | "logs">("strategies");
+  const { t } = useI18n();
 
   const totalProfit = mockStrategies.reduce((sum, s) => sum + s.totalProfit, 0);
   const totalTrades = mockStrategies.reduce((sum, s) => sum + s.trades, 0);
@@ -93,10 +95,10 @@ export default function Trading() {
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
             <Zap size={20} className="text-neon-green" />
-            <h1 className="text-lg font-semibold font-display">信号跟单</h1>
+            <h1 className="text-lg font-semibold font-display">{t("trading.title")}</h1>
           </div>
           <button
-            onClick={() => toast("功能开发中，敬请期待")}
+            onClick={() => toast("Coming soon")}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <Plus size={18} className="text-neon-green" />
@@ -107,7 +109,7 @@ export default function Trading() {
       <div className="flex-1 overflow-y-auto">
         {/* Profit Overview Card */}
         <div className="mx-4 mt-4 p-4 rounded-2xl bg-gradient-to-br from-neon-green/10 to-neon-cyan/5 border border-neon-green/20">
-          <p className="text-xs text-muted-foreground mb-1">总收益</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("trading.totalProfit")}</p>
           <div className="flex items-baseline gap-2 mb-3">
             <span className="text-3xl font-bold font-display text-neon-green">
               +${totalProfit.toFixed(2)}
@@ -115,9 +117,9 @@ export default function Trading() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "总交易", value: `${totalTrades}笔` },
-              { label: "平均胜率", value: `${avgWinRate}%` },
-              { label: "运行策略", value: `${mockStrategies.filter((s) => s.status === "running").length}个` },
+              { label: t("trading.totalTrades"), value: `${totalTrades}` },
+              { label: t("trading.avgWinRate"), value: `${avgWinRate}%` },
+              { label: t("trading.activeStrategies"), value: `${mockStrategies.filter((s) => s.status === "running").length}` },
             ].map((m) => (
               <div key={m.label} className="text-center">
                 <p className="text-[10px] text-muted-foreground">{m.label}</p>
@@ -139,7 +141,7 @@ export default function Trading() {
                   : "text-muted-foreground"
               }`}
             >
-              {tab === "strategies" ? "我的策略" : "交易记录"}
+              {tab === "strategies" ? t("trading.myStrategies") : t("trading.tradeHistory")}
             </button>
           ))}
         </div>
@@ -164,11 +166,11 @@ export default function Trading() {
                           ? "bg-neon-green/10 text-neon-green"
                           : "bg-muted text-muted-foreground"
                       }`}>
-                        {strategy.status === "running" ? "运行中" : "已暂停"}
+                        {strategy.status === "running" ? t("trading.running") : t("trading.paused")}
                       </span>
                     </div>
                     <button
-                      onClick={() => toast("功能开发中")}
+                      onClick={() => toast("Coming soon")}
                       className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
                     >
                       {strategy.status === "running" ? (
@@ -190,17 +192,17 @@ export default function Trading() {
 
                   <div className="grid grid-cols-3 gap-2">
                     <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                      <p className="text-[10px] text-muted-foreground">收益</p>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.profit")}</p>
                       <p className={`text-xs font-mono font-semibold ${strategy.totalProfit >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                         {strategy.totalProfit >= 0 ? "+" : ""}${strategy.totalProfit.toFixed(1)}
                       </p>
                     </div>
                     <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                      <p className="text-[10px] text-muted-foreground">交易</p>
-                      <p className="text-xs font-mono font-semibold">{strategy.trades}笔</p>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.trades")}</p>
+                      <p className="text-xs font-mono font-semibold">{strategy.trades}</p>
                     </div>
                     <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                      <p className="text-[10px] text-muted-foreground">胜率</p>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.winRate")}</p>
                       <p className="text-xs font-mono font-semibold">{strategy.winRate}%</p>
                     </div>
                   </div>
@@ -211,7 +213,7 @@ export default function Trading() {
               <div className="flex items-start gap-2 p-3 rounded-xl bg-neon-red/5 border border-neon-red/15">
                 <AlertTriangle size={14} className="text-neon-red shrink-0 mt-0.5" />
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  跟单交易存在风险，历史收益不代表未来表现。请确保只使用您能承受损失的资金，并在交易所设置低权限 API Key（仅开放交易权限，禁止提现）。
+                  {t("trading.risk")}
                 </p>
               </div>
             </>
@@ -240,7 +242,7 @@ export default function Trading() {
                       <span className={`text-[10px] uppercase font-mono ${
                         trade.side === "buy" ? "text-neon-green" : "text-neon-red"
                       }`}>
-                        {trade.side === "buy" ? "买入" : "卖出"}
+                        {trade.side.toUpperCase()}
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate">

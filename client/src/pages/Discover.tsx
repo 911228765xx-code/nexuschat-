@@ -7,6 +7,7 @@ import { Search, Users, Lock, TrendingUp, Star, Zap, Globe } from "lucide-react"
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface Community {
   id: string;
@@ -30,12 +31,12 @@ interface TrendingUser {
 }
 
 const mockCommunities: Community[] = [
-  { id: "1", name: "BAYC Holders 🐵", avatar: "🐵", members: 8432, description: "Bored Ape Yacht Club 官方持有者社群", isTokenGated: true, gateToken: "BAYC NFT", category: "NFT", isHot: true },
-  { id: "2", name: "DeFi Alpha Club 🔒", avatar: "🔑", members: 3210, description: "专业 DeFi 策略分享与讨论", isTokenGated: true, gateToken: "≥100 UNI", category: "DeFi", isHot: true },
-  { id: "3", name: "ETH 开发者社区", avatar: "⟠", members: 12500, description: "以太坊开发者技术交流", isTokenGated: false, category: "开发" },
-  { id: "4", name: "Solana 生态", avatar: "◎", members: 9800, description: "Solana 生态项目讨论与Alpha分享", isTokenGated: false, category: "L1" },
-  { id: "5", name: "AI x Crypto", avatar: "🤖", members: 5600, description: "AI 与加密货币交叉领域探索", isTokenGated: false, category: "AI", isHot: true },
-  { id: "6", name: "Azuki Holders", avatar: "⛩️", members: 4200, description: "Azuki NFT 持有者专属社群", isTokenGated: true, gateToken: "Azuki NFT", category: "NFT" },
+  { id: "1", name: "BAYC Holders 🐵", avatar: "🐵", members: 8432, description: "Bored Ape Yacht Club official holders community", isTokenGated: true, gateToken: "BAYC NFT", category: "NFT", isHot: true },
+  { id: "2", name: "DeFi Alpha Club 🔒", avatar: "🔑", members: 3210, description: "Professional DeFi strategy sharing & discussion", isTokenGated: true, gateToken: "≥100 UNI", category: "DeFi", isHot: true },
+  { id: "3", name: "ETH Developers", avatar: "⟠", members: 12500, description: "Ethereum developer community", isTokenGated: false, category: "Dev" },
+  { id: "4", name: "Solana Ecosystem", avatar: "◎", members: 9800, description: "Solana ecosystem projects & alpha sharing", isTokenGated: false, category: "L1" },
+  { id: "5", name: "AI x Crypto", avatar: "🤖", members: 5600, description: "Exploring the intersection of AI and crypto", isTokenGated: false, category: "AI", isHot: true },
+  { id: "6", name: "Azuki Holders", avatar: "⛩️", members: 4200, description: "Azuki NFT holders exclusive community", isTokenGated: true, gateToken: "Azuki NFT", category: "NFT" },
 ];
 
 const mockUsers: TrendingUser[] = [
@@ -45,16 +46,17 @@ const mockUsers: TrendingUser[] = [
   { id: "4", name: "0xSisyphus", avatar: "S", bio: "DeFi researcher", followers: 340000, isVerified: false },
 ];
 
-const categories = ["全部", "NFT", "DeFi", "L1", "开发", "AI"];
-
 export default function Discover() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("全部");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState<"communities" | "users">("communities");
+  const { t } = useI18n();
+
+  const categories = ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
 
   const filteredCommunities = mockCommunities.filter(
     (c) =>
-      (activeCategory === "全部" || c.category === activeCategory) &&
+      (activeCategory === "All" || c.category === activeCategory) &&
       c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -70,7 +72,7 @@ export default function Discover() {
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
           <Globe size={20} className="text-neon-cyan" />
-          <h1 className="text-lg font-semibold font-display">发现</h1>
+          <h1 className="text-lg font-semibold font-display">{t("discover.title")}</h1>
         </div>
 
         {/* Search */}
@@ -78,7 +80,7 @@ export default function Discover() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
           <input
             type="text"
-            placeholder="搜索社群、用户..."
+            placeholder={t("discover.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
@@ -97,7 +99,7 @@ export default function Discover() {
                   : "border-transparent text-muted-foreground"
               }`}
             >
-              {tab === "communities" ? "社群" : "推荐用户"}
+              {tab === "communities" ? t("discover.communities") : t("discover.users")}
             </button>
           ))}
         </div>
@@ -148,7 +150,7 @@ export default function Discover() {
                       <div className="flex items-center gap-3">
                         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Users size={10} />
-                          {community.members.toLocaleString()} 成员
+                          {community.members.toLocaleString()} {t("discover.members")}
                         </span>
                         {community.isTokenGated && (
                           <span className="text-[11px] text-neon-purple flex items-center gap-1">
@@ -159,10 +161,10 @@ export default function Discover() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toast("功能开发中，敬请期待")}
+                      onClick={() => toast("Coming soon")}
                       className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
                     >
-                      加入
+                      {t("discover.join")}
                     </button>
                   </div>
                 </motion.div>
@@ -196,10 +198,10 @@ export default function Discover() {
                   </p>
                 </div>
                 <button
-                  onClick={() => toast("功能开发中，敬请期待")}
+                  onClick={() => toast("Coming soon")}
                   className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
                 >
-                  关注
+                  {t("discover.follow")}
                 </button>
               </motion.div>
             ))}

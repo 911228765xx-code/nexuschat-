@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { Search, Plus, Users, Lock, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface Conversation {
   id: string;
@@ -26,8 +27,8 @@ const mockConversations: Conversation[] = [
     id: "1",
     name: "vitalik.eth",
     avatar: "V",
-    lastMessage: "ETH 2.0 的质押收益率看起来很不错 🚀",
-    time: "刚刚",
+    lastMessage: "ETH 2.0 staking yield looks great 🚀",
+    time: "now",
     unread: 3,
     isGroup: false,
     isTokenGated: false,
@@ -37,8 +38,8 @@ const mockConversations: Conversation[] = [
     id: "2",
     name: "BAYC Holders 🐵",
     avatar: "🐵",
-    lastMessage: "Alice: 新的路线图发布了，大家看了吗？",
-    time: "5分钟前",
+    lastMessage: "Alice: New roadmap is out!",
+    time: "5m",
     unread: 12,
     isGroup: true,
     isTokenGated: true,
@@ -47,8 +48,8 @@ const mockConversations: Conversation[] = [
     id: "3",
     name: "0xDeFi...3a9b",
     avatar: "D",
-    lastMessage: "/research SOL 的报告已生成",
-    time: "15分钟前",
+    lastMessage: "/research SOL report generated",
+    time: "15m",
     unread: 0,
     isGroup: false,
     isTokenGated: false,
@@ -56,10 +57,10 @@ const mockConversations: Conversation[] = [
   },
   {
     id: "4",
-    name: "NexusChat 官方群",
+    name: "NexusChat Official",
     avatar: "N",
-    lastMessage: "管理员: 新版本 v0.2.0 已发布！",
-    time: "1小时前",
+    lastMessage: "Admin: v0.2.0 released!",
+    time: "1h",
     unread: 5,
     isGroup: true,
     isTokenGated: false,
@@ -68,8 +69,8 @@ const mockConversations: Conversation[] = [
     id: "5",
     name: "satoshi.btc",
     avatar: "S",
-    lastMessage: "BTC 的链上数据显示巨鲸在增持",
-    time: "2小时前",
+    lastMessage: "BTC on-chain data shows whale accumulation",
+    time: "2h",
     unread: 0,
     isGroup: false,
     isTokenGated: false,
@@ -79,8 +80,8 @@ const mockConversations: Conversation[] = [
     id: "6",
     name: "DeFi Alpha 🔒",
     avatar: "🔑",
-    lastMessage: "Bob: 这个新的流动性池APY有200%+",
-    time: "3小时前",
+    lastMessage: "Bob: This new LP has 200%+ APY",
+    time: "3h",
     unread: 0,
     isGroup: true,
     isTokenGated: true,
@@ -89,8 +90,8 @@ const mockConversations: Conversation[] = [
     id: "7",
     name: "punk6529.eth",
     avatar: "P",
-    lastMessage: "NFT 市场正在回暖，注意 Blur 的数据",
-    time: "昨天",
+    lastMessage: "NFT market is recovering, watch Blur data",
+    time: "1d",
     unread: 0,
     isGroup: false,
     isTokenGated: false,
@@ -100,6 +101,7 @@ const mockConversations: Conversation[] = [
 
 export default function Chat() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { t } = useI18n();
 
   const filtered = mockConversations.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -112,9 +114,9 @@ export default function Chat() {
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
             <Shield size={20} className="text-neon-cyan" />
-            <h1 className="text-lg font-semibold font-display">消息</h1>
+            <h1 className="text-lg font-semibold font-display">{t("chat.title")}</h1>
             <span className="text-[10px] font-mono text-neon-cyan bg-neon-cyan/10 px-1.5 py-0.5 rounded-full">
-              E2E加密
+              {t("chat.e2e")}
             </span>
           </div>
           <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
@@ -130,7 +132,7 @@ export default function Chat() {
           />
           <input
             type="text"
-            placeholder="搜索钱包地址 / ENS / 群名..."
+            placeholder={t("chat.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
