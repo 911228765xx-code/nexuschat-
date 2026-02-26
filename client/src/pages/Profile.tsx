@@ -1,0 +1,172 @@
+/*
+ * Profile — 我的个人中心
+ * 身份卡片、核心数据、功能入口、设置
+ */
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, LogOut, Shield, ExternalLink } from "lucide-react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+const menuSections = [
+  {
+    title: "我的活动",
+    items: [
+      { icon: Wallet, label: "我的钱包", value: "$12,480.50", color: "text-neon-cyan" },
+      { icon: TrendingUp, label: "我的跟单策略", value: "3个运行中", color: "text-neon-green" },
+      { icon: FileText, label: "我的投研历史", value: "23份", color: "text-neon-purple" },
+      { icon: Users, label: "我的社群", value: "12个群", color: "text-foreground" },
+    ],
+  },
+  {
+    title: "裂变增长",
+    items: [
+      { icon: Gift, label: "邀请好友", value: "+1000 NP", color: "text-neon-green" },
+      { icon: Trophy, label: "积分排行榜", value: "#1,247", color: "text-neon-cyan" },
+      { icon: CheckSquare, label: "任务中心", value: "3/5 已完成", color: "text-neon-purple" },
+    ],
+  },
+  {
+    title: "设置",
+    items: [
+      { icon: Settings, label: "账户与安全", value: "API Key 管理", color: "text-foreground" },
+      { icon: Bell, label: "通知设置", value: "", color: "text-foreground" },
+      { icon: Moon, label: "深色模式", value: "已开启", color: "text-foreground" },
+    ],
+  },
+];
+
+export default function Profile() {
+  const handleCopyAddress = () => {
+    navigator.clipboard.writeText("0x71C7...3a9b");
+    toast.success("钱包地址已复制");
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
+        <div className="flex items-center gap-2 h-14">
+          <h1 className="text-lg font-semibold font-display">我的</h1>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Identity Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mt-4 p-4 rounded-2xl bg-gradient-to-br from-neon-cyan/10 via-card to-neon-purple/10 border border-border/30"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="relative">
+              <Avatar className="w-16 h-16 ring-2 ring-neon-cyan/40">
+                <AvatarFallback className="bg-secondary text-xl font-display">🦊</AvatarFallback>
+              </Avatar>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">
+                <Shield size={12} className="text-neon-purple" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold font-display">cryptowhale.eth</h2>
+              <button
+                onClick={handleCopyAddress}
+                className="flex items-center gap-1 text-xs text-muted-foreground font-mono hover:text-neon-cyan transition-colors"
+              >
+                0x71C7...3a9b
+                <Copy size={10} />
+              </button>
+              <div className="flex gap-1.5 mt-1.5">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-purple/15 text-neon-purple border border-neon-purple/20 font-medium">
+                  创世贡献者
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 font-medium">
+                  SBT 持有者
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Core Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Nexus 积分", value: "24,680", sub: "NP", color: "text-neon-cyan" },
+              { label: "跟单收益", value: "+$342.80", sub: "", color: "text-neon-green" },
+              { label: "邀请人数", value: "47", sub: "人", color: "text-neon-purple" },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center p-2.5 rounded-xl bg-background/40">
+                <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                <p className={`text-base font-bold font-mono mt-0.5 ${stat.color}`}>
+                  {stat.value}
+                </p>
+                {stat.sub && <p className="text-[9px] text-muted-foreground">{stat.sub}</p>}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Level Progress */}
+        <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium">Lv.3 黄金节点</span>
+            <span className="text-[10px] text-muted-foreground font-mono">24,680 / 30,000 NP</span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: "82%" }}
+              transition={{ duration: 1, delay: 0.3 }}
+              className="h-full rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">距离钻石节点还需 5,320 NP</p>
+        </div>
+
+        {/* Menu Sections */}
+        <div className="px-4 py-4 space-y-4">
+          {menuSections.map((section, sIndex) => (
+            <motion.div
+              key={section.title}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + sIndex * 0.05 }}
+            >
+              <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{section.title}</h3>
+              <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={() => toast("功能开发中，敬请期待")}
+                      className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
+                    >
+                      <div className={`w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center`}>
+                        <Icon size={16} className={item.color} />
+                      </div>
+                      <span className="flex-1 text-sm text-left">{item.label}</span>
+                      {item.value && (
+                        <span className="text-xs text-muted-foreground font-mono">{item.value}</span>
+                      )}
+                      <ChevronRight size={14} className="text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          ))}
+
+          {/* Logout */}
+          <button
+            onClick={() => toast("功能开发中")}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-neon-red/5 border border-neon-red/15 text-neon-red text-sm font-medium hover:bg-neon-red/10 transition-colors"
+          >
+            <LogOut size={16} />
+            退出登录
+          </button>
+
+          <div className="pb-4" />
+        </div>
+      </div>
+    </div>
+  );
+}
