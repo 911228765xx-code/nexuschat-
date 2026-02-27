@@ -418,7 +418,7 @@ export default function Trading() {
     { key: "strategies", label: t("trading.myStrategies"), icon: <Zap size={13} /> },
     { key: "market", label: t("trading.market") || "Market", icon: <Users size={13} /> },
     { key: "positions", label: t("trading.positions") || "Positions", icon: <Activity size={13} /> },
-    { key: "calendar", label: "PnL", icon: <Calendar size={13} /> },
+    { key: "calendar", label: "PnL Cal", icon: <Calendar size={13} /> },
     { key: "logs", label: t("trading.tradeHistory"), icon: <Clock size={13} /> },
   ];
 

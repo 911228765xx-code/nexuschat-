@@ -59,18 +59,18 @@ const defaultGroups: ContactGroup[] = [
 ];
 
 const mockContacts: Contact[] = [
-  { id: "1", name: "alice.eth", avatar: "A", address: "0x71C7...3a9b", ens: "alice.eth", note: "DeFi研究员", isVerified: true, isFavorite: true, lastActive: "Online", group: "A", tags: ["defi"] },
-  { id: "2", name: "bob_trader", avatar: "B", address: "0xA3F2...8c1d", note: "量化交易员", isVerified: true, isFavorite: true, lastActive: "2h ago", group: "B", tags: ["trading"] },
+  { id: "1", name: "alice.eth", avatar: "A", address: "0x71C7...3a9b", ens: "alice.eth", note: "DeFi Researcher", isVerified: true, isFavorite: true, lastActive: "Online", group: "A", tags: ["defi"] },
+  { id: "2", name: "bob_trader", avatar: "B", address: "0xA3F2...8c1d", note: "Quant Trader", isVerified: true, isFavorite: true, lastActive: "2h ago", group: "B", tags: ["trading"] },
   { id: "3", name: "charlie.eth", avatar: "C", address: "0xB9E4...2f7a", ens: "charlie.eth", isVerified: false, isFavorite: false, lastActive: "1d ago", group: "C", tags: [] },
-  { id: "4", name: "david_nft", avatar: "D", address: "0xD5C1...9e3b", note: "NFT收藏家", isVerified: true, isFavorite: false, lastActive: "3h ago", group: "D", tags: ["nft"] },
-  { id: "5", name: "emma.eth", avatar: "E", address: "0xE2F8...4d5c", ens: "emma.eth", note: "Solana开发者", isVerified: true, isFavorite: true, lastActive: "Online", group: "E", tags: ["dev"] },
+  { id: "4", name: "david_nft", avatar: "D", address: "0xD5C1...9e3b", note: "NFT Collector", isVerified: true, isFavorite: false, lastActive: "3h ago", group: "D", tags: ["nft"] },
+  { id: "5", name: "emma.eth", avatar: "E", address: "0xE2F8...4d5c", ens: "emma.eth", note: "Solana Developer", isVerified: true, isFavorite: true, lastActive: "Online", group: "E", tags: ["dev"] },
   { id: "6", name: "frank_dev", avatar: "F", address: "0xF1A3...7b2e", isVerified: false, isFavorite: false, lastActive: "5h ago", group: "F", tags: ["dev"] },
-  { id: "7", name: "grace.eth", avatar: "G", address: "0xG4B7...1c8f", ens: "grace.eth", note: "DAO治理专家", isVerified: true, isFavorite: false, lastActive: "12h ago", group: "G", tags: ["dao"] },
-  { id: "8", name: "henry_whale", avatar: "H", address: "0xH8D2...5a3g", note: "巨鲸", isVerified: true, isFavorite: true, lastActive: "Online", group: "H", tags: ["trading", "defi"] },
+  { id: "7", name: "grace.eth", avatar: "G", address: "0xG4B7...1c8f", ens: "grace.eth", note: "DAO Governance Expert", isVerified: true, isFavorite: false, lastActive: "12h ago", group: "G", tags: ["dao"] },
+  { id: "8", name: "henry_whale", avatar: "H", address: "0xH8D2...5a3g", note: "Whale Investor", isVerified: true, isFavorite: true, lastActive: "Online", group: "H", tags: ["trading", "defi"] },
   { id: "9", name: "iris.eth", avatar: "I", address: "0xI9E5...2b7h", ens: "iris.eth", isVerified: false, isFavorite: false, lastActive: "2d ago", group: "I", tags: [] },
-  { id: "10", name: "jack_alpha", avatar: "J", address: "0xJ3F1...8c4i", note: "Alpha猎手", isVerified: true, isFavorite: false, lastActive: "1h ago", group: "J", tags: ["trading"] },
+  { id: "10", name: "jack_alpha", avatar: "J", address: "0xJ3F1...8c4i", note: "Alpha Hunter", isVerified: true, isFavorite: false, lastActive: "1h ago", group: "J", tags: ["trading"] },
   { id: "11", name: "kate.eth", avatar: "K", address: "0xK7A2...3d9j", ens: "kate.eth", isVerified: true, isFavorite: false, lastActive: "4h ago", group: "K", tags: ["nft"] },
-  { id: "12", name: "luna_art", avatar: "L", address: "0xL2B8...6e1k", note: "链上艺术家", isVerified: false, isFavorite: false, lastActive: "6h ago", group: "L", tags: ["nft"] },
+  { id: "12", name: "luna_art", avatar: "L", address: "0xL2B8...6e1k", note: "On-chain Artist", isVerified: false, isFavorite: false, lastActive: "6h ago", group: "L", tags: ["nft"] },
 ];
 
 const mockRequests: FriendRequest[] = [

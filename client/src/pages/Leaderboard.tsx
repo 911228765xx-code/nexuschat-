@@ -156,27 +156,27 @@ export default function Leaderboard() {
           ))}
         </div>
 
-        {/* Top 3 Podium */}
+        {/* Top 3 Podium — correct order: 2nd (left), 1st (center, tallest), 3rd (right) */}
         <div className="px-4 mb-4">
           <div className="flex items-end justify-center gap-3">
-            {/* 2nd place */}
+            {/* 2nd place — left */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
               className="flex-1 flex flex-col items-center"
             >
-              <Avatar className="w-14 h-14 ring-2 ring-gray-400/40 mb-2">
+              <Avatar className="w-14 h-14 ring-2 ring-slate-400/50 mb-2">
                 <AvatarFallback className="bg-secondary text-xl">{data.list[1]?.avatar}</AvatarFallback>
               </Avatar>
-              <span className="text-xs font-medium truncate max-w-full">{data.list[1]?.name}</span>
-              <span className="text-[10px] font-mono text-muted-foreground mt-0.5">{data.list[1]?.value}</span>
-              <div className="w-full mt-2 pt-4 pb-3 rounded-t-2xl bg-gradient-to-t from-gray-400/10 to-transparent flex items-center justify-center">
+              <span className="text-xs font-medium truncate max-w-full text-center">{data.list[1]?.name}</span>
+              <span className="text-[10px] font-mono text-slate-400 mt-0.5">{data.list[1]?.value}</span>
+              <div className="w-full mt-2 pt-5 pb-3 rounded-t-2xl bg-gradient-to-t from-slate-400/15 to-transparent border-t-2 border-x-2 border-slate-400/25 flex items-center justify-center">
                 <span className="text-2xl">🥈</span>
               </div>
             </motion.div>
 
-            {/* 1st place */}
+            {/* 1st place — center, tallest */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -184,33 +184,33 @@ export default function Leaderboard() {
               className="flex-1 flex flex-col items-center"
             >
               <div className="relative">
-                <Avatar className="w-18 h-18 ring-2 ring-amber-400/60 mb-2" style={{ width: 72, height: 72 }}>
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Crown size={22} className="text-amber-400 drop-shadow-lg" />
+                </div>
+                <Avatar className="w-[72px] h-[72px] ring-2 ring-amber-400/70 mb-2 mt-2">
                   <AvatarFallback className="bg-secondary text-2xl">{data.list[0]?.avatar}</AvatarFallback>
                 </Avatar>
-                <div className="absolute -top-2 -right-1">
-                  <Crown size={20} className="text-amber-400 drop-shadow-lg" />
-                </div>
               </div>
-              <span className="text-sm font-semibold truncate max-w-full">{data.list[0]?.name}</span>
+              <span className="text-sm font-bold font-display truncate max-w-full text-center">{data.list[0]?.name}</span>
               <span className="text-xs font-mono text-amber-400 mt-0.5">{data.list[0]?.value}</span>
-              <div className="w-full mt-2 pt-6 pb-3 rounded-t-2xl bg-gradient-to-t from-amber-400/10 to-transparent flex items-center justify-center">
+              <div className="w-full mt-2 pt-8 pb-3 rounded-t-2xl bg-gradient-to-t from-amber-400/15 to-transparent border-t-2 border-x-2 border-amber-400/30 flex items-center justify-center">
                 <span className="text-3xl">🏆</span>
               </div>
             </motion.div>
 
-            {/* 3rd place */}
+            {/* 3rd place — right */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
               className="flex-1 flex flex-col items-center"
             >
-              <Avatar className="w-14 h-14 ring-2 ring-amber-700/40 mb-2">
+              <Avatar className="w-14 h-14 ring-2 ring-amber-700/50 mb-2">
                 <AvatarFallback className="bg-secondary text-xl">{data.list[2]?.avatar}</AvatarFallback>
               </Avatar>
-              <span className="text-xs font-medium truncate max-w-full">{data.list[2]?.name}</span>
-              <span className="text-[10px] font-mono text-muted-foreground mt-0.5">{data.list[2]?.value}</span>
-              <div className="w-full mt-2 pt-3 pb-3 rounded-t-2xl bg-gradient-to-t from-amber-700/10 to-transparent flex items-center justify-center">
+              <span className="text-xs font-medium truncate max-w-full text-center">{data.list[2]?.name}</span>
+              <span className="text-[10px] font-mono text-amber-700/80 mt-0.5">{data.list[2]?.value}</span>
+              <div className="w-full mt-2 pt-3 pb-3 rounded-t-2xl bg-gradient-to-t from-amber-700/15 to-transparent border-t-2 border-x-2 border-amber-700/25 flex items-center justify-center">
                 <span className="text-2xl">🥉</span>
               </div>
             </motion.div>

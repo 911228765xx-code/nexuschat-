@@ -541,14 +541,24 @@ export default function Discover() {
                       <AvatarFallback className="bg-secondary text-base">{post.author.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold font-display truncate">{post.author.name}</span>
-                        {post.author.isVerified && (
-                          <Star size={12} className="text-neon-cyan fill-neon-cyan shrink-0" />
-                        )}
-                        <span className="text-[10px] text-muted-foreground font-mono ml-1">{post.author.handle}</span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm font-semibold font-display truncate">{post.author.name}</span>
+                          {post.author.isVerified && (
+                            <Star size={12} className="text-neon-cyan fill-neon-cyan shrink-0" />
+                          )}
+                          <span className="text-[10px] text-muted-foreground font-mono truncate">{post.author.handle}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[10px] text-muted-foreground/50">{post.timestamp}</span>
+                          <button
+                            onClick={() => toast(t("discover.moreOptions") || "More options")}
+                            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+                          >
+                            <MoreHorizontal size={15} />
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{post.timestamp}</span>
 
                       {/* Content */}
                       <p className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line">{post.content}</p>

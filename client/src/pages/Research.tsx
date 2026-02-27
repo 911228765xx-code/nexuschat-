@@ -1118,23 +1118,68 @@ export default function Research() {
       </AnimatePresence>
 
       {/* Market Overview Bar */}
-      <div className="px-4 py-2.5 flex items-center gap-3 overflow-x-auto border-b border-border/15 bg-card/20 scrollbar-hide">
-        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neon-purple/8 border border-neon-purple/15">
-          <BarChart3 size={12} className="text-neon-purple" />
-          <span className="text-[10px] text-muted-foreground">{t("research.avgScore")}</span>
-          <span className="text-[11px] font-mono font-bold text-neon-purple">{marketStats.avgScore}</span>
+      <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto border-b border-border/15 bg-gradient-to-r from-neon-purple/[0.03] via-card/50 to-neon-cyan/[0.03] scrollbar-hide">
+        {/* AI Score */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neon-purple/10 border border-neon-purple/25 hover:border-neon-purple/40 transition-colors">
+          <BarChart3 size={11} className="text-neon-purple" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">{t("research.avgScore")}</span>
+            <span className="text-[12px] font-mono font-bold text-neon-purple leading-tight">{marketStats.avgScore}<span className="text-[8px] text-neon-purple/60">/10</span></span>
+          </div>
         </div>
-        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neon-green/8 border border-neon-green/15">
-          <TrendingUp size={12} className="text-neon-green" />
-          <span className="text-[10px] text-muted-foreground">{t("research.bullish")}</span>
-          <span className="text-[11px] font-mono font-bold text-neon-green">{marketStats.bullish}/{marketStats.total}</span>
+        <div className="w-px h-5 bg-border/20 shrink-0" />
+        {/* Bullish */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
+          <TrendingUp size={11} className="text-neon-green" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">{t("research.bullish")}</span>
+            <span className="text-[12px] font-mono font-bold text-neon-green leading-tight">{marketStats.bullish}<span className="text-[9px] text-muted-foreground">/{marketStats.total}</span></span>
+          </div>
         </div>
-        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neon-cyan/8 border border-neon-cyan/15">
-          <Activity size={12} className="text-neon-cyan" />
-          <span className="text-[10px] text-muted-foreground">{t("research.fearGreed")}</span>
-          <span className={`text-[11px] font-mono font-bold ${marketStats.avgFearGreed >= 60 ? "text-neon-green" : marketStats.avgFearGreed >= 40 ? "text-yellow-500" : "text-neon-red"}`}>
-            {marketStats.avgFearGreed}
-          </span>
+        <div className="w-px h-5 bg-border/20 shrink-0" />
+        {/* Fear & Greed */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neon-cyan/10 border border-neon-cyan/25 hover:border-neon-cyan/40 transition-colors">
+          <Gauge size={11} className="text-neon-cyan" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">{t("research.fearGreed")}</span>
+            <span className={`text-[12px] font-mono font-bold leading-tight ${marketStats.avgFearGreed >= 60 ? "text-neon-green" : marketStats.avgFearGreed >= 40 ? "text-yellow-400" : "text-neon-red"}`}>
+              {marketStats.avgFearGreed}
+              <span className="text-[8px] ml-0.5 opacity-70">{marketStats.avgFearGreed >= 60 ? "Greed" : marketStats.avgFearGreed >= 40 ? "Neutral" : "Fear"}</span>
+            </span>
+          </div>
+        </div>
+        <div className="w-px h-5 bg-border/20 shrink-0" />
+        {/* BTC Dominance */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 hover:border-amber-500/40 transition-colors">
+          <CircleDot size={11} className="text-amber-400" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">BTC Dom</span>
+            <span className="text-[12px] font-mono font-bold text-amber-400 leading-tight">52.4<span className="text-[8px] text-amber-400/60">%</span></span>
+          </div>
+        </div>
+        <div className="w-px h-5 bg-border/20 shrink-0" />
+        {/* Total Market Cap */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/40 border border-border/20 hover:border-border/40 transition-colors">
+          <Globe size={11} className="text-muted-foreground" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">Mkt Cap</span>
+            <span className="text-[12px] font-mono font-bold text-foreground leading-tight">$2.4<span className="text-[8px] text-muted-foreground">T</span></span>
+          </div>
+        </div>
+        <div className="w-px h-5 bg-border/20 shrink-0" />
+        {/* 24h Change */}
+        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
+          <ArrowUpRight size={11} className="text-neon-green" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">24h Avg</span>
+            <span className="text-[12px] font-mono font-bold text-neon-green leading-tight">+3.2<span className="text-[8px] text-neon-green/60">%</span></span>
+          </div>
+        </div>
+        <div className="ml-auto shrink-0 flex items-center gap-1 text-[9px] text-muted-foreground/60 font-mono">
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }}>
+            <RefreshCw size={9} />
+          </motion.div>
+          <span>Live</span>
         </div>
       </div>
 

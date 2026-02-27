@@ -155,17 +155,21 @@ export default function TaskCenter() {
                       ? "bg-neon-green/15 border border-neon-green/30"
                       : isToday
                         ? "bg-neon-cyan/10 border border-neon-cyan/30 ring-1 ring-neon-cyan/40"
-                        : "bg-secondary/30 border border-border/20"
+                        : "bg-secondary/30 border border-border/20 opacity-70"
                   }`}
                 >
-                  <span className="text-[9px] text-muted-foreground">{t("tasks.day")}{i + 1}</span>
+                  <span className={`text-[9px] ${isChecked ? "text-neon-green/70" : isToday ? "text-neon-cyan/70" : "text-muted-foreground"}`}>{t("tasks.day")}{i + 1}</span>
                   {isChecked ? (
-                    <CheckCircle2 size={16} className="text-neon-green my-1" />
+                    <>
+                      <span className="text-[11px] font-bold font-mono my-0.5 text-neon-green">+{reward}</span>
+                      <span className="text-[8px] font-mono text-neon-green/60">NP</span>
+                      <CheckCircle2 size={9} className="text-neon-green/70 mt-0.5" />
+                    </>
                   ) : (
-                    <span className="text-xs font-bold font-mono my-1 text-muted-foreground">+{reward}</span>
-                  )}
-                  {i === 6 && !isChecked && (
-                    <span className="text-[8px] text-neon-purple">×2</span>
+                    <>
+                      <span className={`text-[11px] font-bold font-mono my-0.5 ${isToday ? "text-neon-cyan" : "text-muted-foreground"}`}>+{reward}</span>
+                      <span className={`text-[8px] font-mono ${isToday ? "text-neon-cyan/60" : "text-muted-foreground/50"}`}>{i === 6 ? "×2" : "NP"}</span>
+                    </>
                   )}
                 </div>
               );

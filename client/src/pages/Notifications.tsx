@@ -196,8 +196,8 @@ export default function Notifications() {
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className={`group flex items-start gap-3 px-4 py-3.5 border-b border-border/10 transition-colors cursor-pointer ${
-                  !notification.read ? "bg-neon-cyan/[0.03]" : ""
+                className={`group relative flex items-start gap-3 px-4 py-3.5 border-b border-border/10 transition-colors cursor-pointer ${
+                  !notification.read ? "bg-neon-cyan/[0.06] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-neon-cyan before:rounded-r hover:bg-neon-cyan/[0.09]" : "hover:bg-secondary/20"
                 }`}
                 onClick={() => markNotificationRead(notification.id)}
               >

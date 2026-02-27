@@ -457,6 +457,26 @@ export default function Settings() {
           <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("settings.support")}</h3>
           <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
             <button
+              onClick={() => toast.info("Opening Help Center")}
+              className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">
+                <HelpCircle size={16} className="text-neon-cyan" />
+              </div>
+              <span className="flex-1 text-sm text-left">{t("settings.helpCenter")}</span>
+              <ExternalLink size={12} className="text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => toast.info("Opening Feedback")}
+              className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">
+                <MessageSquare size={16} className="text-neon-green" />
+              </div>
+              <span className="flex-1 text-sm text-left">{t("settings.feedback") || "Send Feedback"}</span>
+              <ExternalLink size={12} className="text-muted-foreground" />
+            </button>
+            <button
               onClick={() => setSection("about")}
               className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 transition-colors"
             >
@@ -478,6 +498,12 @@ export default function Settings() {
           <LogOut size={16} />
           {t("settings.logout")}
         </button>
+
+        {/* Version info */}
+        <div className="text-center py-2">
+          <p className="text-[10px] text-muted-foreground/40 font-mono">NexusChat v2.1.0 (Build 2026.02)</p>
+          <p className="text-[9px] text-muted-foreground/30 mt-0.5">{t("settings.builtWith")}</p>
+        </div>
 
         <div className="h-4" />
       </div>

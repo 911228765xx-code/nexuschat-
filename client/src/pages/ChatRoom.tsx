@@ -621,7 +621,7 @@ export default function ChatRoom() {
                     <span className="text-[10px] text-muted-foreground">{msg.time}</span>
                     {/* Read receipt indicator */}
                     {msg.isMine && msg.readStatus && (
-                      <span className={`text-[10px] flex items-center ${
+                      <span className={`text-[10px] flex items-center gap-0.5 ${
                         msg.readStatus === "read" ? "text-neon-cyan" :
                         msg.readStatus === "delivered" ? "text-muted-foreground" :
                         "text-muted-foreground/50"
@@ -631,6 +631,7 @@ export default function ChatRoom() {
                         ) : (
                           <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><path d="M1 5l3 3L12 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 5l3 3L16 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         )}
+                        {msg.readStatus === "read" && <span className="text-[9px] font-medium">Read</span>}
                       </span>
                     )}
                     {msg.reactions && Object.entries(msg.reactions).map(([emoji, count]) => (

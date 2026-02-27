@@ -207,6 +207,18 @@ export default function Wallet() {
               </span>
             </div>
 
+            {/* Wallet Address */}
+            <div className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-lg bg-background/20 border border-white/10">
+              <div className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />
+              <span className="flex-1 text-[10px] font-mono text-muted-foreground truncate">{walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}</span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success("Address copied!"); }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Copy size={11} />
+              </button>
+            </div>
+
             {/* Quick Actions */}
             <div className="flex items-center gap-2">
               {[

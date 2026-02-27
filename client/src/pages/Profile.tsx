@@ -266,7 +266,11 @@ export default function Profile() {
             {t("profile.logout")}
           </button>
 
-          <div className="pb-4" />
+          {/* Version info */}
+          <div className="text-center pb-4">
+            <p className="text-[10px] text-muted-foreground/40 font-mono">NexusChat v2.1.0</p>
+            <p className="text-[9px] text-muted-foreground/30 mt-0.5">Built for Web3 • Powered by NexusAI</p>
+          </div>
         </div>
       </div>
     </div>

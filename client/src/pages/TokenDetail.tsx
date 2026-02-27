@@ -94,9 +94,10 @@ const generatePriceData = (base: number, vol: number, trend: number, count: numb
 };
 
 const h1Labels = Array.from({ length: 12 }, (_, i) => `${i * 5}m`);
-const h4Labels = Array.from({ length: 16 }, (_, i) => `${i}:00`);
-const d1Labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const w1Labels = Array.from({ length: 30 }, (_, i) => `${i + 1}`);
+const h4Labels = Array.from({ length: 16 }, (_, i) => `${(i * 4) % 24}:00`);
+// 1D = 24 hourly candles (every hour from 0:00 to 23:00)
+const d1Labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+const w1Labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
 const m1Labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Pre-built AI chat responses per token
@@ -137,7 +138,7 @@ const TOKENS_DATA: Record<string, TokenData> = {
     category: "L1", chain: "Bitcoin",
     priceHistory1h: generatePriceData(97245, 500, 0.05, 12, h1Labels),
     priceHistory4h: generatePriceData(97245, 1200, 0.15, 16, h4Labels),
-    priceHistory1d: generatePriceData(97245, 1800, 0.25, 7, d1Labels),
+    priceHistory1d: generatePriceData(97245, 1800, 0.25, 24, d1Labels),
     priceHistory1w: generatePriceData(97245, 2500, 0.4, 30, w1Labels),
     priceHistory1m: generatePriceData(97245, 3500, 0.6, 12, m1Labels),
     radarData: [
@@ -216,7 +217,7 @@ const TOKENS_DATA: Record<string, TokenData> = {
     category: "L1", chain: "Ethereum",
     priceHistory1h: generatePriceData(3842, 30, 0.08, 12, h1Labels),
     priceHistory4h: generatePriceData(3842, 80, 0.12, 16, h4Labels),
-    priceHistory1d: generatePriceData(3842, 120, 0.2, 7, d1Labels),
+    priceHistory1d: generatePriceData(3842, 120, 0.2, 24, d1Labels),
     priceHistory1w: generatePriceData(3842, 180, 0.3, 30, w1Labels),
     priceHistory1m: generatePriceData(3842, 250, 0.5, 12, m1Labels),
     radarData: [
@@ -295,7 +296,7 @@ const TOKENS_DATA: Record<string, TokenData> = {
     category: "L1", chain: "Solana",
     priceHistory1h: generatePriceData(187.3, 2, -0.05, 12, h1Labels),
     priceHistory4h: generatePriceData(187.3, 5, -0.08, 16, h4Labels),
-    priceHistory1d: generatePriceData(187.3, 8, 0.1, 7, d1Labels),
+    priceHistory1d: generatePriceData(187.3, 8, 0.1, 24, d1Labels),
     priceHistory1w: generatePriceData(187.3, 12, 0.2, 30, w1Labels),
     priceHistory1m: generatePriceData(187.3, 18, 0.4, 12, m1Labels),
     radarData: [

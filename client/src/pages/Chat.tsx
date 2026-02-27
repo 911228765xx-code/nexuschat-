@@ -248,8 +248,33 @@ export default function Chat() {
         onRefresh={async () => { await new Promise(r => setTimeout(r, 1000)); toast.success(t("chat.refreshed") || "Refreshed!"); }}
         className="flex-1"
       >
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-secondary/40 flex items-center justify-center">
+              <MessageSquare size={28} className="text-muted-foreground/40" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-muted-foreground">{t("chat.noConversations") || "No conversations yet"}</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{t("chat.startChat") || "Start a new chat or join a group"}</p>
+            </div>
+            <Link href="/app/create-group">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25 text-sm font-medium hover:bg-neon-cyan/25 transition-all">
+                <Plus size={15} />
+                {t("chat.newChat") || "New Chat"}
+              </button>
+            </Link>
+          </div>
+        )}
+        {filtered.length > 0 && (
+          <div className="px-4 py-2 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border/15" />
+            <span className="text-[10px] text-muted-foreground/40 font-mono">{filtered.length} {t("chat.conversations") || "conversations"}</span>
+            <div className="h-px flex-1 bg-border/15" />
+          </div>
+        )}
         {filtered.map((conv, index) => {
           const isPinned = conv.isPinned;
+          const isLast = index === filtered.length - 1;
           return (
             <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : `/app/chat/${conv.id}`}>
               <motion.div
@@ -323,6 +348,15 @@ export default function Chat() {
             </Link>
           );
         })}
+        {filtered.length > 0 && (
+          <div className="py-6 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-3 w-full px-8">
+              <div className="h-px flex-1 bg-border/10" />
+              <span className="text-[9px] text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
+              <div className="h-px flex-1 bg-border/10" />
+            </div>
+          </div>
+        )}
       </PullToRefresh>
 
       {/* Context Menu */}
