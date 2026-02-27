@@ -8,7 +8,9 @@ import {
   Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp,
   Sparkles, Share2, Check, ExternalLink, AlertTriangle, Activity,
   BarChart3, Flame, Eye, Clock, Zap, Globe, Lock, Users, ArrowUpRight,
-  ArrowDownRight, Minus, RefreshCw, BookOpen, Filter, Star, StarOff
+  ArrowDownRight, Minus, RefreshCw, BookOpen, Filter, Star, StarOff,
+  Target, Crosshair, Gauge, CircleDot, CheckCircle, XCircle, Timer,
+  ArrowUp, ArrowDown, Signal
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -78,6 +80,43 @@ interface ResearchReport {
     trend: "bullish" | "bearish" | "neutral";
     mentions24h: number;
     fearGreedIndex: number;
+  };
+  aiSignal: {
+    overallScore: number;
+    signal: "strongBuy" | "buy" | "neutral" | "sell" | "strongSell";
+    confidence: number;
+    updatedAgo: string;
+    technicalIndicators: {
+      name: string;
+      value: string;
+      signal: "buy" | "neutral" | "sell";
+      score: number;
+    }[];
+    timeframes: {
+      period: string;
+      signal: "strongBuy" | "buy" | "neutral" | "sell" | "strongSell";
+      score: number;
+    }[];
+    strategy: {
+      action: string;
+      entry: string;
+      stopLoss: string;
+      takeProfit1: string;
+      takeProfit2: string;
+      riskReward: string;
+      positionSize: string;
+      leverage: string;
+      timeHorizon: string;
+      reasoning: string;
+    };
+    signalHistory: {
+      date: string;
+      signal: string;
+      price: string;
+      result: "win" | "loss" | "pending";
+      pnl: string;
+    }[];
+    accuracy: { total: number; wins: number; losses: number; winRate: number; avgReturn: number };
   };
 }
 
@@ -151,6 +190,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$1.2B",
     },
     socialSentiment: { score: 82, trend: "bullish", mentions24h: 245800, fearGreedIndex: 72 },
+    aiSignal: {
+      overallScore: 82, signal: "strongBuy", confidence: 88, updatedAgo: "30s ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "62.4", signal: "buy", score: 72 },
+        { name: "MACD", value: "+1,245", signal: "buy", score: 78 },
+        { name: "Bollinger", value: "Upper Band", signal: "neutral", score: 55 },
+        { name: "MA Cross", value: "Golden Cross", signal: "buy", score: 85 },
+        { name: "Volume", value: "Above Avg", signal: "buy", score: 80 },
+        { name: "Stochastic", value: "68.2", signal: "buy", score: 70 },
+        { name: "ADX", value: "32.5", signal: "buy", score: 75 },
+        { name: "OBV", value: "Rising", signal: "buy", score: 82 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "buy", score: 72 },
+        { period: "4H", signal: "strongBuy", score: 85 },
+        { period: "1D", signal: "strongBuy", score: 88 },
+        { period: "1W", signal: "buy", score: 76 },
+      ],
+      strategy: {
+        action: "Long", entry: "$96,800 - $97,200", stopLoss: "$94,500 (-2.8%)",
+        takeProfit1: "$99,500 (+2.4%)", takeProfit2: "$103,000 (+6.0%)", riskReward: "1:2.1",
+        positionSize: "2-3% of portfolio", leverage: "3x-5x", timeHorizon: "3-7 days",
+        reasoning: "research.btcStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 25", signal: "Buy", price: "$95,200", result: "win", pnl: "+3.2%" },
+        { date: "Feb 20", signal: "Hold", price: "$94,800", result: "win", pnl: "+1.8%" },
+        { date: "Feb 15", signal: "Buy", price: "$92,100", result: "win", pnl: "+5.6%" },
+        { date: "Feb 10", signal: "Sell", price: "$98,400", result: "loss", pnl: "-1.2%" },
+        { date: "Feb 5", signal: "Buy", price: "$91,500", result: "win", pnl: "+4.8%" },
+      ],
+      accuracy: { total: 48, wins: 35, losses: 13, winRate: 72.9, avgReturn: 3.2 },
+    },
   },
   {
     id: "2",
@@ -202,6 +274,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$8.5B",
     },
     socialSentiment: { score: 78, trend: "bullish", mentions24h: 189500, fearGreedIndex: 68 },
+    aiSignal: {
+      overallScore: 75, signal: "buy", confidence: 82, updatedAgo: "45s ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "58.7", signal: "buy", score: 65 },
+        { name: "MACD", value: "+42.3", signal: "buy", score: 72 },
+        { name: "Bollinger", value: "Mid Band", signal: "neutral", score: 50 },
+        { name: "MA Cross", value: "Bullish", signal: "buy", score: 78 },
+        { name: "Volume", value: "Average", signal: "neutral", score: 52 },
+        { name: "Stochastic", value: "55.8", signal: "neutral", score: 55 },
+        { name: "ADX", value: "28.1", signal: "buy", score: 68 },
+        { name: "OBV", value: "Rising", signal: "buy", score: 75 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "neutral", score: 55 },
+        { period: "4H", signal: "buy", score: 72 },
+        { period: "1D", signal: "buy", score: 78 },
+        { period: "1W", signal: "buy", score: 74 },
+      ],
+      strategy: {
+        action: "Long", entry: "$3,800 - $3,850", stopLoss: "$3,680 (-3.5%)",
+        takeProfit1: "$3,980 (+3.6%)", takeProfit2: "$4,200 (+9.3%)", riskReward: "1:2.7",
+        positionSize: "3-5% of portfolio", leverage: "2x-4x", timeHorizon: "5-14 days",
+        reasoning: "research.ethStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 25", signal: "Buy", price: "$3,720", result: "win", pnl: "+2.8%" },
+        { date: "Feb 21", signal: "Hold", price: "$3,650", result: "win", pnl: "+1.5%" },
+        { date: "Feb 16", signal: "Sell", price: "$3,900", result: "win", pnl: "+2.1%" },
+        { date: "Feb 11", signal: "Buy", price: "$3,580", result: "win", pnl: "+4.2%" },
+        { date: "Feb 6", signal: "Buy", price: "$3,450", result: "loss", pnl: "-2.1%" },
+      ],
+      accuracy: { total: 42, wins: 30, losses: 12, winRate: 71.4, avgReturn: 2.8 },
+    },
   },
   {
     id: "3",
@@ -253,6 +358,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$2.1B",
     },
     socialSentiment: { score: 65, trend: "neutral", mentions24h: 98200, fearGreedIndex: 55 },
+    aiSignal: {
+      overallScore: 58, signal: "neutral", confidence: 65, updatedAgo: "1m ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "45.2", signal: "neutral", score: 48 },
+        { name: "MACD", value: "-2.8", signal: "sell", score: 38 },
+        { name: "Bollinger", value: "Lower Band", signal: "buy", score: 68 },
+        { name: "MA Cross", value: "Bearish", signal: "sell", score: 35 },
+        { name: "Volume", value: "Below Avg", signal: "sell", score: 40 },
+        { name: "Stochastic", value: "32.5", signal: "buy", score: 65 },
+        { name: "ADX", value: "18.4", signal: "neutral", score: 45 },
+        { name: "OBV", value: "Flat", signal: "neutral", score: 50 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "sell", score: 38 },
+        { period: "4H", signal: "neutral", score: 52 },
+        { period: "1D", signal: "neutral", score: 55 },
+        { period: "1W", signal: "buy", score: 68 },
+      ],
+      strategy: {
+        action: "Wait", entry: "$178 - $182 (if support holds)", stopLoss: "$170 (-5.0%)",
+        takeProfit1: "$195 (+7.2%)", takeProfit2: "$210 (+15.5%)", riskReward: "1:1.4",
+        positionSize: "1-2% of portfolio", leverage: "1x-2x", timeHorizon: "7-21 days",
+        reasoning: "research.solStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 24", signal: "Sell", price: "$192", result: "win", pnl: "+2.5%" },
+        { date: "Feb 19", signal: "Hold", price: "$188", result: "loss", pnl: "-1.8%" },
+        { date: "Feb 14", signal: "Buy", price: "$175", result: "win", pnl: "+6.8%" },
+        { date: "Feb 9", signal: "Sell", price: "$198", result: "win", pnl: "+3.2%" },
+        { date: "Feb 4", signal: "Buy", price: "$165", result: "win", pnl: "+8.5%" },
+      ],
+      accuracy: { total: 38, wins: 25, losses: 13, winRate: 65.8, avgReturn: 2.1 },
+    },
   },
   {
     id: "4",
@@ -304,6 +442,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$450M",
     },
     socialSentiment: { score: 71, trend: "bullish", mentions24h: 42300, fearGreedIndex: 62 },
+    aiSignal: {
+      overallScore: 71, signal: "buy", confidence: 75, updatedAgo: "2m ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "65.8", signal: "buy", score: 70 },
+        { name: "MACD", value: "+0.08", signal: "buy", score: 68 },
+        { name: "Bollinger", value: "Upper Band", signal: "neutral", score: 52 },
+        { name: "MA Cross", value: "Golden Cross", signal: "buy", score: 82 },
+        { name: "Volume", value: "Above Avg", signal: "buy", score: 75 },
+        { name: "Stochastic", value: "72.1", signal: "neutral", score: 48 },
+        { name: "ADX", value: "26.8", signal: "buy", score: 65 },
+        { name: "OBV", value: "Rising", signal: "buy", score: 72 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "buy", score: 68 },
+        { period: "4H", signal: "buy", score: 74 },
+        { period: "1D", signal: "buy", score: 72 },
+        { period: "1W", signal: "neutral", score: 58 },
+      ],
+      strategy: {
+        action: "Long", entry: "$1.80 - $1.86", stopLoss: "$1.68 (-8.6%)",
+        takeProfit1: "$2.05 (+10.8%)", takeProfit2: "$2.30 (+24.3%)", riskReward: "1:1.3",
+        positionSize: "1-2% of portfolio", leverage: "2x-3x", timeHorizon: "7-14 days",
+        reasoning: "research.arbStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 25", signal: "Buy", price: "$1.72", result: "win", pnl: "+7.6%" },
+        { date: "Feb 20", signal: "Hold", price: "$1.65", result: "win", pnl: "+3.0%" },
+        { date: "Feb 15", signal: "Buy", price: "$1.55", result: "win", pnl: "+12.9%" },
+        { date: "Feb 10", signal: "Sell", price: "$1.80", result: "loss", pnl: "-3.3%" },
+        { date: "Feb 5", signal: "Buy", price: "$1.48", result: "win", pnl: "+10.8%" },
+      ],
+      accuracy: { total: 32, wins: 22, losses: 10, winRate: 68.8, avgReturn: 3.5 },
+    },
   },
   {
     id: "5",
@@ -355,6 +526,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$320M",
     },
     socialSentiment: { score: 74, trend: "bullish", mentions24h: 56700, fearGreedIndex: 65 },
+    aiSignal: {
+      overallScore: 73, signal: "buy", confidence: 78, updatedAgo: "1m ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "61.2", signal: "buy", score: 68 },
+        { name: "MACD", value: "+0.85", signal: "buy", score: 72 },
+        { name: "Bollinger", value: "Mid Band", signal: "neutral", score: 55 },
+        { name: "MA Cross", value: "Bullish", signal: "buy", score: 75 },
+        { name: "Volume", value: "Above Avg", signal: "buy", score: 70 },
+        { name: "Stochastic", value: "58.4", signal: "neutral", score: 55 },
+        { name: "ADX", value: "24.6", signal: "neutral", score: 52 },
+        { name: "OBV", value: "Rising", signal: "buy", score: 78 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "buy", score: 65 },
+        { period: "4H", signal: "buy", score: 72 },
+        { period: "1D", signal: "buy", score: 75 },
+        { period: "1W", signal: "neutral", score: 58 },
+      ],
+      strategy: {
+        action: "Long", entry: "$22.00 - $22.50", stopLoss: "$20.80 (-6.5%)",
+        takeProfit1: "$24.50 (+9.1%)", takeProfit2: "$27.00 (+20.2%)", riskReward: "1:1.4",
+        positionSize: "2-3% of portfolio", leverage: "2x-3x", timeHorizon: "7-21 days",
+        reasoning: "research.linkStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 24", signal: "Buy", price: "$20.80", result: "win", pnl: "+5.8%" },
+        { date: "Feb 19", signal: "Hold", price: "$21.50", result: "win", pnl: "+2.2%" },
+        { date: "Feb 14", signal: "Buy", price: "$19.20", result: "win", pnl: "+8.5%" },
+        { date: "Feb 9", signal: "Sell", price: "$23.10", result: "loss", pnl: "-2.6%" },
+        { date: "Feb 4", signal: "Buy", price: "$18.50", result: "win", pnl: "+12.2%" },
+      ],
+      accuracy: { total: 36, wins: 26, losses: 10, winRate: 72.2, avgReturn: 3.1 },
+    },
   },
   {
     id: "6",
@@ -406,6 +610,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$180M",
     },
     socialSentiment: { score: 52, trend: "neutral", mentions24h: 23400, fearGreedIndex: 48 },
+    aiSignal: {
+      overallScore: 52, signal: "neutral", confidence: 60, updatedAgo: "2m ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "42.8", signal: "neutral", score: 45 },
+        { name: "MACD", value: "-1.2", signal: "sell", score: 35 },
+        { name: "Bollinger", value: "Lower Band", signal: "buy", score: 65 },
+        { name: "MA Cross", value: "Neutral", signal: "neutral", score: 50 },
+        { name: "Volume", value: "Below Avg", signal: "sell", score: 38 },
+        { name: "Stochastic", value: "28.5", signal: "buy", score: 68 },
+        { name: "ADX", value: "15.2", signal: "neutral", score: 42 },
+        { name: "OBV", value: "Declining", signal: "sell", score: 32 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "sell", score: 35 },
+        { period: "4H", signal: "neutral", score: 48 },
+        { period: "1D", signal: "neutral", score: 52 },
+        { period: "1W", signal: "buy", score: 62 },
+      ],
+      strategy: {
+        action: "Wait", entry: "$38.00 - $39.50 (if reversal)", stopLoss: "$36.00 (-7.5%)",
+        takeProfit1: "$44.00 (+13.0%)", takeProfit2: "$48.00 (+23.3%)", riskReward: "1:1.7",
+        positionSize: "1% of portfolio", leverage: "1x-2x", timeHorizon: "14-30 days",
+        reasoning: "research.avaxStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 23", signal: "Sell", price: "$42.50", result: "win", pnl: "+5.2%" },
+        { date: "Feb 18", signal: "Hold", price: "$40.80", result: "loss", pnl: "-3.1%" },
+        { date: "Feb 13", signal: "Buy", price: "$36.20", result: "win", pnl: "+8.8%" },
+        { date: "Feb 8", signal: "Sell", price: "$44.00", result: "win", pnl: "+4.5%" },
+        { date: "Feb 3", signal: "Buy", price: "$35.00", result: "win", pnl: "+11.4%" },
+      ],
+      accuracy: { total: 30, wins: 19, losses: 11, winRate: 63.3, avgReturn: 2.4 },
+    },
   },
   {
     id: "7",
@@ -457,6 +694,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$280M",
     },
     socialSentiment: { score: 85, trend: "bullish", mentions24h: 78900, fearGreedIndex: 78 },
+    aiSignal: {
+      overallScore: 78, signal: "buy", confidence: 82, updatedAgo: "1m ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "67.5", signal: "buy", score: 72 },
+        { name: "MACD", value: "+0.42", signal: "buy", score: 75 },
+        { name: "Bollinger", value: "Upper Band", signal: "neutral", score: 50 },
+        { name: "MA Cross", value: "Golden Cross", signal: "buy", score: 85 },
+        { name: "Volume", value: "High", signal: "buy", score: 82 },
+        { name: "Stochastic", value: "74.2", signal: "neutral", score: 48 },
+        { name: "ADX", value: "35.8", signal: "buy", score: 80 },
+        { name: "OBV", value: "Strong Rise", signal: "buy", score: 85 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "buy", score: 72 },
+        { period: "4H", signal: "strongBuy", score: 82 },
+        { period: "1D", signal: "buy", score: 78 },
+        { period: "1W", signal: "strongBuy", score: 85 },
+      ],
+      strategy: {
+        action: "Long", entry: "$11.20 - $11.60", stopLoss: "$10.20 (-9.5%)",
+        takeProfit1: "$13.50 (+19.8%)", takeProfit2: "$15.00 (+33.0%)", riskReward: "1:2.1",
+        positionSize: "2-3% of portfolio", leverage: "2x-3x", timeHorizon: "7-21 days",
+        reasoning: "research.renderStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 25", signal: "Buy", price: "$10.50", result: "win", pnl: "+8.6%" },
+        { date: "Feb 20", signal: "Hold", price: "$9.80", result: "win", pnl: "+5.1%" },
+        { date: "Feb 15", signal: "Buy", price: "$8.50", result: "win", pnl: "+18.8%" },
+        { date: "Feb 10", signal: "Hold", price: "$9.20", result: "win", pnl: "+3.3%" },
+        { date: "Feb 5", signal: "Buy", price: "$7.80", result: "win", pnl: "+25.6%" },
+      ],
+      accuracy: { total: 28, wins: 21, losses: 7, winRate: 75.0, avgReturn: 4.8 },
+    },
   },
   {
     id: "8",
@@ -508,6 +778,39 @@ const mockReports: ResearchReport[] = [
       dexVolume: "$1.8B",
     },
     socialSentiment: { score: 42, trend: "bearish", mentions24h: 156000, fearGreedIndex: 32 },
+    aiSignal: {
+      overallScore: 35, signal: "sell", confidence: 72, updatedAgo: "30s ago",
+      technicalIndicators: [
+        { name: "RSI (14)", value: "28.5", signal: "sell", score: 25 },
+        { name: "MACD", value: "-0.00002", signal: "sell", score: 22 },
+        { name: "Bollinger", value: "Below Lower", signal: "buy", score: 72 },
+        { name: "MA Cross", value: "Death Cross", signal: "sell", score: 18 },
+        { name: "Volume", value: "Spike Down", signal: "sell", score: 20 },
+        { name: "Stochastic", value: "15.2", signal: "buy", score: 75 },
+        { name: "ADX", value: "42.5", signal: "sell", score: 28 },
+        { name: "OBV", value: "Sharp Drop", signal: "sell", score: 15 },
+      ],
+      timeframes: [
+        { period: "1H", signal: "strongSell", score: 18 },
+        { period: "4H", signal: "sell", score: 28 },
+        { period: "1D", signal: "sell", score: 32 },
+        { period: "1W", signal: "neutral", score: 45 },
+      ],
+      strategy: {
+        action: "Short / Avoid", entry: "Wait for $0.0000085+ (bounce)", stopLoss: "$0.0000095 (+11.8%)",
+        takeProfit1: "$0.0000065 (-23.5%)", takeProfit2: "$0.0000050 (-41.2%)", riskReward: "1:2.0",
+        positionSize: "0.5-1% of portfolio", leverage: "1x (spot short)", timeHorizon: "1-7 days",
+        reasoning: "research.pepeStrategyReason",
+      },
+      signalHistory: [
+        { date: "Feb 25", signal: "Sell", price: "$0.0000092", result: "win", pnl: "+8.7%" },
+        { date: "Feb 20", signal: "Sell", price: "$0.0000105", result: "win", pnl: "+12.4%" },
+        { date: "Feb 15", signal: "Buy", price: "$0.0000088", result: "loss", pnl: "-15.9%" },
+        { date: "Feb 10", signal: "Sell", price: "$0.0000120", result: "win", pnl: "+18.3%" },
+        { date: "Feb 5", signal: "Buy", price: "$0.0000095", result: "loss", pnl: "-8.4%" },
+      ],
+      accuracy: { total: 25, wins: 14, losses: 11, winRate: 56.0, avgReturn: 1.8 },
+    },
   },
 ];
 
@@ -600,7 +903,7 @@ export default function Research() {
   const [shareCaption, setShareCaption] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chart" | "radar" | "volume" | "onchain">("chart");
+  const [activeTab, setActiveTab] = useState<"chart" | "radar" | "volume" | "onchain" | "signal">("chart");
   const [showFilters, setShowFilters] = useState(false);
 
   const handleSearch = useCallback(() => {
@@ -972,6 +1275,7 @@ export default function Research() {
                           { key: "radar" as const, icon: Activity, label: t("research.tabRadar") },
                           { key: "volume" as const, icon: BarChart3, label: t("research.tabVolume") },
                           { key: "onchain" as const, icon: Globe, label: t("research.tabOnChain") },
+                          { key: "signal" as const, icon: Signal, label: t("research.tabSignal") },
                         ]).map((tab) => (
                           <button
                             key={tab.key}
@@ -1175,6 +1479,231 @@ export default function Research() {
                           </div>
                         </div>
                       )}
+
+                      {/* ─── AI Signal Tab ─── */}
+                      {activeTab === "signal" && (() => {
+                        const sig = report.aiSignal;
+                        const signalColor = (s: string) => s === "strongBuy" ? "text-neon-green" : s === "buy" ? "text-neon-green/80" : s === "neutral" ? "text-yellow-500" : s === "sell" ? "text-neon-red/80" : "text-neon-red";
+                        const signalBg = (s: string) => s === "strongBuy" ? "bg-neon-green/10 border-neon-green/20" : s === "buy" ? "bg-neon-green/8 border-neon-green/15" : s === "neutral" ? "bg-yellow-500/10 border-yellow-500/20" : s === "sell" ? "bg-neon-red/8 border-neon-red/15" : "bg-neon-red/10 border-neon-red/20";
+                        const signalLabel = (s: string) => s === "strongBuy" ? t("research.signalStrongBuy") : s === "buy" ? t("research.signalBuy") : s === "neutral" ? t("research.signalNeutral") : s === "sell" ? t("research.signalSell") : t("research.signalStrongSell");
+                        const indSignalColor = (s: string) => s === "buy" ? "text-neon-green" : s === "neutral" ? "text-yellow-500" : "text-neon-red";
+                        const indSignalBg = (s: string) => s === "buy" ? "bg-neon-green/10" : s === "neutral" ? "bg-yellow-500/10" : "bg-neon-red/10";
+                        const scoreColor = (v: number) => v >= 70 ? "text-neon-green" : v >= 50 ? "text-yellow-500" : "text-neon-red";
+                        const scoreRing = (v: number) => v >= 70 ? "oklch(0.82 0.19 155)" : v >= 50 ? "oklch(0.75 0.15 85)" : "oklch(0.65 0.25 25)";
+
+                        return (
+                          <div className="space-y-3">
+                            {/* ── Overall Score Gauge ── */}
+                            <div className="p-4 rounded-2xl bg-gradient-to-br from-secondary/30 to-secondary/10 border border-border/20">
+                              <div className="flex items-center gap-4">
+                                {/* Circular Score */}
+                                <div className="relative w-24 h-24 shrink-0">
+                                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="oklch(0.2 0.01 260)" strokeWidth="8" />
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke={scoreRing(sig.overallScore)} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${sig.overallScore * 2.64} 264`} className="transition-all duration-1000" />
+                                  </svg>
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className={`text-2xl font-bold font-mono ${scoreColor(sig.overallScore)}`}>{sig.overallScore}</span>
+                                    <span className="text-[8px] text-muted-foreground">/100</span>
+                                  </div>
+                                </div>
+                                {/* Signal Info */}
+                                <div className="flex-1 space-y-2">
+                                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-bold ${signalBg(sig.signal)} ${signalColor(sig.signal)}`}>
+                                    <Target size={14} />
+                                    {signalLabel(sig.signal)}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div>
+                                      <p className="text-[9px] text-muted-foreground">{t("research.confidence")}</p>
+                                      <p className="text-sm font-mono font-bold">{sig.confidence}%</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-muted-foreground">{t("research.updated")}</p>
+                                      <p className="text-[11px] font-mono text-neon-cyan">{sig.updatedAgo}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ── Multi-Timeframe Analysis ── */}
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                                <Timer size={10} />
+                                {t("research.timeframeAnalysis")}
+                              </p>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {sig.timeframes.map((tf) => (
+                                  <div key={tf.period} className={`text-center p-2 rounded-xl border ${signalBg(tf.signal)}`}>
+                                    <p className="text-[10px] font-mono font-bold text-foreground mb-1">{tf.period}</p>
+                                    <div className="w-full h-1.5 rounded-full bg-secondary/40 overflow-hidden mb-1">
+                                      <div className="h-full rounded-full transition-all" style={{ width: `${tf.score}%`, backgroundColor: scoreRing(tf.score) }} />
+                                    </div>
+                                    <p className={`text-[9px] font-medium ${signalColor(tf.signal)}`}>{signalLabel(tf.signal)}</p>
+                                    <p className={`text-[10px] font-mono font-bold ${scoreColor(tf.score)}`}>{tf.score}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* ── Technical Indicators Matrix ── */}
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                                <Gauge size={10} />
+                                {t("research.technicalIndicators")}
+                              </p>
+                              <div className="space-y-1.5">
+                                {sig.technicalIndicators.map((ind) => (
+                                  <div key={ind.name} className="flex items-center gap-2 p-1.5 rounded-lg bg-background/30">
+                                    <span className="text-[10px] text-muted-foreground w-20 shrink-0">{ind.name}</span>
+                                    <span className="text-[10px] font-mono font-semibold flex-1">{ind.value}</span>
+                                    <div className="w-16 h-1.5 rounded-full bg-secondary/40 overflow-hidden">
+                                      <div className="h-full rounded-full transition-all" style={{ width: `${ind.score}%`, backgroundColor: scoreRing(ind.score) }} />
+                                    </div>
+                                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${indSignalBg(ind.signal)} ${indSignalColor(ind.signal)}`}>
+                                      {ind.signal === "buy" ? t("research.indBuy") : ind.signal === "sell" ? t("research.indSell") : t("research.indNeutral")}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Summary bar */}
+                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/10">
+                                <div className="flex gap-3">
+                                  <span className="text-[10px] text-neon-green flex items-center gap-0.5">
+                                    <ArrowUp size={10} />
+                                    {sig.technicalIndicators.filter(i => i.signal === "buy").length} {t("research.indBuy")}
+                                  </span>
+                                  <span className="text-[10px] text-yellow-500 flex items-center gap-0.5">
+                                    <Minus size={10} />
+                                    {sig.technicalIndicators.filter(i => i.signal === "neutral").length} {t("research.indNeutral")}
+                                  </span>
+                                  <span className="text-[10px] text-neon-red flex items-center gap-0.5">
+                                    <ArrowDown size={10} />
+                                    {sig.technicalIndicators.filter(i => i.signal === "sell").length} {t("research.indSell")}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ── AI Trading Strategy ── */}
+                            <div className="p-3 rounded-2xl bg-gradient-to-br from-neon-purple/8 to-neon-cyan/5 border border-neon-purple/15">
+                              <p className="text-[10px] text-muted-foreground mb-2.5 font-mono flex items-center gap-1">
+                                <Crosshair size={10} className="text-neon-purple" />
+                                {t("research.aiStrategy")}
+                              </p>
+                              {/* Action badge */}
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                                  sig.strategy.action === "Long" ? "bg-neon-green/15 text-neon-green border-neon-green/25" :
+                                  sig.strategy.action === "Wait" ? "bg-yellow-500/15 text-yellow-500 border-yellow-500/25" :
+                                  "bg-neon-red/15 text-neon-red border-neon-red/25"
+                                }`}>
+                                  {sig.strategy.action}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">{sig.strategy.timeHorizon}</span>
+                              </div>
+                              {/* Strategy grid */}
+                              <div className="grid grid-cols-2 gap-2 mb-2.5">
+                                <div className="p-2 rounded-lg bg-background/30">
+                                  <p className="text-[9px] text-muted-foreground">{t("research.entry")}</p>
+                                  <p className="text-[11px] font-mono font-semibold text-neon-cyan">{sig.strategy.entry}</p>
+                                </div>
+                                <div className="p-2 rounded-lg bg-background/30">
+                                  <p className="text-[9px] text-muted-foreground">{t("research.stopLoss")}</p>
+                                  <p className="text-[11px] font-mono font-semibold text-neon-red">{sig.strategy.stopLoss}</p>
+                                </div>
+                                <div className="p-2 rounded-lg bg-background/30">
+                                  <p className="text-[9px] text-muted-foreground">{t("research.tp1")}</p>
+                                  <p className="text-[11px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit1}</p>
+                                </div>
+                                <div className="p-2 rounded-lg bg-background/30">
+                                  <p className="text-[9px] text-muted-foreground">{t("research.tp2")}</p>
+                                  <p className="text-[11px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit2}</p>
+                                </div>
+                              </div>
+                              {/* Risk params */}
+                              <div className="flex gap-2 mb-2.5">
+                                <div className="flex-1 p-1.5 rounded-lg bg-background/20 text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.riskReward")}</p>
+                                  <p className="text-[11px] font-mono font-bold text-neon-purple">{sig.strategy.riskReward}</p>
+                                </div>
+                                <div className="flex-1 p-1.5 rounded-lg bg-background/20 text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.posSize")}</p>
+                                  <p className="text-[10px] font-mono font-semibold">{sig.strategy.positionSize}</p>
+                                </div>
+                                <div className="flex-1 p-1.5 rounded-lg bg-background/20 text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.leverage")}</p>
+                                  <p className="text-[10px] font-mono font-semibold">{sig.strategy.leverage}</p>
+                                </div>
+                              </div>
+                              {/* AI Reasoning */}
+                              <div className="p-2 rounded-lg bg-neon-purple/5 border border-neon-purple/10">
+                                <p className="text-[9px] text-neon-purple mb-0.5 flex items-center gap-1">
+                                  <Sparkles size={9} />
+                                  {t("research.aiReasoning")}
+                                </p>
+                                <p className="text-[11px] leading-relaxed text-muted-foreground">{t(sig.strategy.reasoning)}</p>
+                              </div>
+                            </div>
+
+                            {/* ── Signal History & Accuracy ── */}
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
+                                  <CircleDot size={10} />
+                                  {t("research.signalHistory")}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-neon-green font-mono">{t("research.winRate")}: {sig.accuracy.winRate}%</span>
+                                  <span className="text-[10px] text-neon-cyan font-mono">{t("research.avgReturn")}: +{sig.accuracy.avgReturn}%</span>
+                                </div>
+                              </div>
+                              {/* History table */}
+                              <div className="space-y-1">
+                                {sig.signalHistory.map((h, i) => (
+                                  <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg bg-background/20">
+                                    <span className="text-[9px] text-muted-foreground font-mono w-14 shrink-0">{h.date}</span>
+                                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded w-10 text-center ${
+                                      h.signal === "Buy" ? "bg-neon-green/10 text-neon-green" :
+                                      h.signal === "Sell" ? "bg-neon-red/10 text-neon-red" :
+                                      "bg-yellow-500/10 text-yellow-500"
+                                    }`}>{h.signal}</span>
+                                    <span className="text-[10px] font-mono flex-1">{h.price}</span>
+                                    <span className="flex items-center gap-0.5">
+                                      {h.result === "win" ? <CheckCircle size={10} className="text-neon-green" /> :
+                                       h.result === "loss" ? <XCircle size={10} className="text-neon-red" /> :
+                                       <Clock size={10} className="text-yellow-500" />}
+                                    </span>
+                                    <span className={`text-[10px] font-mono font-semibold w-14 text-right ${
+                                      h.result === "win" ? "text-neon-green" : h.result === "loss" ? "text-neon-red" : "text-yellow-500"
+                                    }`}>{h.pnl}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Accuracy summary */}
+                              <div className="grid grid-cols-4 gap-1.5 mt-2 pt-2 border-t border-border/10">
+                                <div className="text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.totalSignals")}</p>
+                                  <p className="text-xs font-mono font-bold">{sig.accuracy.total}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.wins")}</p>
+                                  <p className="text-xs font-mono font-bold text-neon-green">{sig.accuracy.wins}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.losses")}</p>
+                                  <p className="text-xs font-mono font-bold text-neon-red">{sig.accuracy.losses}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[8px] text-muted-foreground">{t("research.winRate")}</p>
+                                  <p className={`text-xs font-mono font-bold ${sig.accuracy.winRate >= 65 ? "text-neon-green" : sig.accuracy.winRate >= 50 ? "text-yellow-500" : "text-neon-red"}`}>{sig.accuracy.winRate}%</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Social Sentiment */}
                       <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
