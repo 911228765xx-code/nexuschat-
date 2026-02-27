@@ -4,11 +4,13 @@
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet } from "lucide-react";
+import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+
+type MessageType = "text" | "image" | "voice" | "location" | "file" | "redpacket" | "transfer" | "ai";
 
 interface Message {
   id: string;
@@ -17,6 +19,7 @@ interface Message {
   content: string;
   time: string;
   isMine: boolean;
+  type?: MessageType;
   isAI?: boolean;
   reactions?: Record<string, number>;
   replyTo?: { sender: string; content: string };
@@ -25,6 +28,20 @@ interface Message {
   isTransfer?: boolean;
   cryptoAmount?: string;
   cryptoToken?: string;
+  // Voice message
+  voiceDuration?: number;
+  voiceWaveform?: number[];
+  // Location message
+  locationName?: string;
+  locationAddress?: string;
+  locationLat?: number;
+  locationLng?: number;
+  // File message
+  fileName?: string;
+  fileSize?: string;
+  fileType?: string;
+  // Image gallery
+  imageGallery?: string[];
 }
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
@@ -38,15 +55,20 @@ const TOKENS = [
 ];
 
 const mockMessages: Message[] = [
-  { id: "1", sender: "vitalik.eth", senderAvatar: "V", content: "你看了最新的 EIP-4844 提案吗？", time: "14:20", isMine: false },
-  { id: "2", sender: "me", senderAvatar: "M", content: "看了，Proto-Danksharding 对 L2 的费用影响很大", time: "14:21", isMine: true, replyTo: { sender: "vitalik.eth", content: "你看了最新的 EIP-4844 提案吗？" } },
-  { id: "3", sender: "vitalik.eth", senderAvatar: "V", content: "是的，预计 L2 交易费用能降低 10-100 倍。Arbitrum 和 Optimism 都会受益 🚀", time: "14:22", isMine: false, reactions: { "🔥": 3, "👍": 2 } },
-  { id: "4", sender: "me", senderAvatar: "M", content: "", time: "14:23", isMine: true, isRedPacket: true, cryptoAmount: "0.05", cryptoToken: "ETH" },
-  { id: "5", sender: "vitalik.eth", senderAvatar: "V", content: "收到红包！谢谢 🧧", time: "14:24", isMine: false, reactions: { "🎉": 2 } },
-  { id: "6", sender: "me", senderAvatar: "M", content: "ETH 2.0 的质押收益率现在怎么样？", time: "14:25", isMine: true },
-  { id: "7", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:25", isMine: false, isTransfer: true, cryptoAmount: "100", cryptoToken: "USDT" },
-  { id: "8", sender: "vitalik.eth", senderAvatar: "V", content: "目前大约在 4-5% APY，质押率持续上升中", time: "14:26", isMine: false, reactions: { "💎": 1 } },
-  { id: "9", sender: "NexusBot", senderAvatar: "🤖", content: "📊 **ETH 投研快报**\n\n💰 价格: $3,842.50 (+2.4%)\n📈 市值: $461.8B (#2)\n🔒 TVL: $58.2B\n⛓️ 24h活跃地址: 524,891\n\n🤖 AI评级: **强烈看好** (8.5/10)\n\n> ETH 基本面强劲，质押率持续上升，L2生态蓬勃发展。建议长期持有。", time: "14:27", isMine: false, isAI: true },
+  { id: "1", sender: "vitalik.eth", senderAvatar: "V", content: "你看了最新的 EIP-4844 提案吗？", time: "14:20", isMine: false, type: "text" },
+  { id: "2", sender: "me", senderAvatar: "M", content: "看了，Proto-Danksharding 对 L2 的费用影响很大", time: "14:21", isMine: true, type: "text", replyTo: { sender: "vitalik.eth", content: "你看了最新的 EIP-4844 提案吗？" } },
+  { id: "3", sender: "vitalik.eth", senderAvatar: "V", content: "是的，预计 L2 交易费用能降低 10-100 倍。Arbitrum 和 Optimism 都会受益 🚀", time: "14:22", isMine: false, type: "text", reactions: { "🔥": 3, "👍": 2 } },
+  { id: "v1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:22", isMine: false, type: "voice", voiceDuration: 12, voiceWaveform: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7, 0.5, 0.3, 0.6, 0.8, 0.4, 0.2, 0.5, 0.7, 0.9, 0.6, 0.3, 0.5, 0.4] },
+  { id: "4", sender: "me", senderAvatar: "M", content: "", time: "14:23", isMine: true, type: "redpacket", isRedPacket: true, cryptoAmount: "0.05", cryptoToken: "ETH" },
+  { id: "5", sender: "vitalik.eth", senderAvatar: "V", content: "收到红包！谢谢 🧧", time: "14:24", isMine: false, type: "text", reactions: { "🎉": 2 } },
+  { id: "img1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:24", isMine: false, type: "image", imageGallery: ["https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&h=300&fit=crop", "https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=400&h=300&fit=crop"] },
+  { id: "6", sender: "me", senderAvatar: "M", content: "ETH 2.0 的质押收益率现在怎么样？", time: "14:25", isMine: true, type: "text" },
+  { id: "loc1", sender: "me", senderAvatar: "M", content: "", time: "14:25", isMine: true, type: "location", locationName: "ETH Denver 2026", locationAddress: "National Western Complex, Denver, CO", locationLat: 39.7817, locationLng: -104.9718 },
+  { id: "7", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:25", isMine: false, type: "transfer", isTransfer: true, cryptoAmount: "100", cryptoToken: "USDT" },
+  { id: "file1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:26", isMine: false, type: "file", fileName: "EIP-4844_Analysis.pdf", fileSize: "2.4 MB", fileType: "PDF" },
+  { id: "8", sender: "vitalik.eth", senderAvatar: "V", content: "目前大约在 4-5% APY，质押率持续上升中", time: "14:26", isMine: false, type: "text", reactions: { "💎": 1 } },
+  { id: "v2", sender: "me", senderAvatar: "M", content: "", time: "14:26", isMine: true, type: "voice", voiceDuration: 5, voiceWaveform: [0.2, 0.4, 0.7, 0.5, 0.8, 0.6, 0.3, 0.5, 0.4, 0.2] },
+  { id: "9", sender: "NexusBot", senderAvatar: "🤖", content: "📊 **ETH 投研快报**\n\n💰 价格: $3,842.50 (+2.4%)\n📈 市值: $461.8B (#2)\n🔒 TVL: $58.2B\n⛓️ 24h活跃地址: 524,891\n\n🤖 AI评级: **强烈看好** (8.5/10)\n\n> ETH 基本面强劲，质押率持续上升，L2生态蓬勃发展。建议长期持有。", time: "14:27", isMine: false, type: "ai", isAI: true },
 ];
 
 export default function ChatRoom() {
@@ -57,6 +79,11 @@ export default function ChatRoom() {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const recordingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showRedPacket, setShowRedPacket] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -268,6 +295,148 @@ export default function ChatRoom() {
     </div>
   );
 
+  // Render voice message bubble
+  const renderVoiceBubble = (msg: Message) => {
+    const isPlaying = playingVoiceId === msg.id;
+    const bars = msg.voiceWaveform || [];
+    return (
+      <div
+        className={`rounded-2xl px-3.5 py-2.5 ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"} ${msg.isMine ? "bg-neon-cyan/15 border border-neon-cyan/20" : "bg-secondary/60 border border-border/20"}`}
+        style={{ minWidth: 180 }}
+      >
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => {
+              setPlayingVoiceId(isPlaying ? null : msg.id);
+              if (!isPlaying) setTimeout(() => setPlayingVoiceId(null), (msg.voiceDuration || 5) * 1000);
+            }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${msg.isMine ? "bg-neon-cyan/30 text-neon-cyan" : "bg-secondary text-foreground"}`}
+          >
+            {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+          </button>
+          <div className="flex items-end gap-[2px] h-6 flex-1">
+            {bars.map((h, i) => (
+              <motion.div
+                key={i}
+                className={`w-[3px] rounded-full ${msg.isMine ? "bg-neon-cyan" : "bg-foreground/40"}`}
+                initial={{ height: 4 }}
+                animate={{
+                  height: isPlaying ? h * 24 : h * 16,
+                  opacity: isPlaying ? [0.5, 1, 0.5] : 0.6,
+                }}
+                transition={{
+                  height: { duration: 0.3, delay: isPlaying ? i * 0.05 : 0 },
+                  opacity: isPlaying ? { duration: 0.6, repeat: Infinity, delay: i * 0.05 } : { duration: 0.2 },
+                }}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+            {msg.voiceDuration ? `${Math.floor(msg.voiceDuration / 60)}:${String(msg.voiceDuration % 60).padStart(2, "0")}` : "0:00"}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  // Render image gallery bubble
+  const renderImageBubble = (msg: Message) => (
+    <div className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"}`}>
+      {msg.imageGallery && msg.imageGallery.length > 1 ? (
+        <div className="grid grid-cols-2 gap-0.5" style={{ maxWidth: 260 }}>
+          {msg.imageGallery.map((url, i) => (
+            <img
+              key={i}
+              src={url}
+              alt={`photo ${i + 1}`}
+              className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => toast.info("Image viewer coming soon")}
+            />
+          ))}
+        </div>
+      ) : msg.imageGallery ? (
+        <img
+          src={msg.imageGallery[0]}
+          alt="shared"
+          className="max-w-[260px] max-h-[200px] object-cover rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => toast.info("Image viewer coming soon")}
+        />
+      ) : msg.imageUrl ? (
+        <img
+          src={msg.imageUrl}
+          alt="shared"
+          className="max-w-[260px] max-h-[200px] object-cover rounded-2xl"
+        />
+      ) : null}
+    </div>
+  );
+
+  // Render location message bubble
+  const renderLocationBubble = (msg: Message) => (
+    <div
+      className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"} border ${msg.isMine ? "border-neon-cyan/20" : "border-border/20"}`}
+      style={{ minWidth: 220, maxWidth: 260 }}
+    >
+      {/* Map preview placeholder */}
+      <div className="h-28 bg-gradient-to-br from-neon-cyan/10 via-secondary/30 to-neon-purple/10 flex items-center justify-center relative">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-3 left-4 w-16 h-0.5 bg-muted-foreground/30 rounded" />
+          <div className="absolute top-6 left-8 w-24 h-0.5 bg-muted-foreground/20 rounded" />
+          <div className="absolute top-10 left-3 w-20 h-0.5 bg-muted-foreground/30 rounded" />
+          <div className="absolute bottom-8 right-4 w-16 h-0.5 bg-muted-foreground/20 rounded" />
+          <div className="absolute bottom-4 right-8 w-12 h-0.5 bg-muted-foreground/30 rounded" />
+          <div className="absolute top-1/2 left-1/4 w-0.5 h-12 bg-muted-foreground/20 rounded" />
+          <div className="absolute top-1/3 right-1/3 w-0.5 h-16 bg-muted-foreground/20 rounded" />
+        </div>
+        <div className="relative">
+          <div className="w-10 h-10 rounded-full bg-neon-red/20 flex items-center justify-center animate-pulse">
+            <MapPin size={20} className="text-neon-red" />
+          </div>
+          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-neon-red/40" />
+        </div>
+      </div>
+      <div className={`px-3 py-2.5 ${msg.isMine ? "bg-neon-cyan/5" : "bg-card/50"}`}>
+        <p className="text-sm font-medium truncate">{msg.locationName}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{msg.locationAddress}</p>
+      </div>
+    </div>
+  );
+
+  // Render file message bubble
+  const renderFileBubble = (msg: Message) => {
+    const getFileIcon = (type?: string) => {
+      switch (type?.toUpperCase()) {
+        case "PDF": return { bg: "bg-red-500/15", text: "text-red-400", label: "PDF" };
+        case "DOC": case "DOCX": return { bg: "bg-blue-500/15", text: "text-blue-400", label: "DOC" };
+        case "XLS": case "XLSX": return { bg: "bg-green-500/15", text: "text-green-400", label: "XLS" };
+        default: return { bg: "bg-secondary/50", text: "text-muted-foreground", label: type || "FILE" };
+      }
+    };
+    const fi = getFileIcon(msg.fileType);
+    return (
+      <div
+        className={`rounded-2xl px-3.5 py-3 ${msg.isMine ? "rounded-br-md bg-neon-cyan/15 border border-neon-cyan/20" : "rounded-bl-md bg-secondary/60 border border-border/20"}`}
+        style={{ minWidth: 200 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl ${fi.bg} flex items-center justify-center shrink-0`}>
+            <span className={`text-[10px] font-bold font-mono ${fi.text}`}>{fi.label}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{msg.fileName}</p>
+            <p className="text-[10px] text-muted-foreground">{msg.fileSize}</p>
+          </div>
+          <button
+            onClick={() => toast.info("Download started")}
+            className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center hover:bg-secondary/80 transition-colors shrink-0"
+          >
+            <Download size={14} className="text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -325,7 +494,15 @@ export default function ChatRoom() {
                   )}
 
                   {/* Message bubble - conditional rendering */}
-                  {msg.isRedPacket ? (
+                  {msg.type === "voice" ? (
+                    renderVoiceBubble(msg)
+                  ) : (msg.type === "image" || (msg.imageGallery && msg.imageGallery.length > 0)) ? (
+                    renderImageBubble(msg)
+                  ) : msg.type === "location" ? (
+                    renderLocationBubble(msg)
+                  ) : msg.type === "file" ? (
+                    renderFileBubble(msg)
+                  ) : msg.isRedPacket ? (
                     renderRedPacketBubble(msg)
                   ) : msg.isTransfer ? (
                     renderTransferBubble(msg)
@@ -690,7 +867,124 @@ export default function ChatRoom() {
           </div>
         )}
 
+        {/* Recording UI */}
+        <AnimatePresence>
+          {isRecording && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex items-center gap-3 mb-2 px-3 py-2.5 rounded-xl bg-neon-red/10 border border-neon-red/20"
+            >
+              <motion.div
+                className="w-3 h-3 rounded-full bg-neon-red"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              />
+              <span className="text-sm text-neon-red font-mono flex-1">
+                Recording... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, "0")}
+              </span>
+              <button
+                onClick={() => {
+                  if (recordingInterval.current) clearInterval(recordingInterval.current);
+                  setIsRecording(false);
+                  setRecordingTime(0);
+                  toast.info("Recording cancelled");
+                }}
+                className="w-8 h-8 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary transition-colors"
+              >
+                <X size={14} className="text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => {
+                  if (recordingInterval.current) clearInterval(recordingInterval.current);
+                  const duration = recordingTime;
+                  setIsRecording(false);
+                  setRecordingTime(0);
+                  const waveform = Array.from({ length: 20 }, () => Math.random() * 0.7 + 0.2);
+                  const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+                  setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    sender: "me", senderAvatar: "M", content: "", time: now, isMine: true,
+                    type: "voice", voiceDuration: duration || 1, voiceWaveform: waveform,
+                  }]);
+                  toast.success("Voice message sent!");
+                }}
+                className="w-8 h-8 rounded-full bg-neon-cyan flex items-center justify-center hover:bg-neon-cyan/80 transition-colors"
+              >
+                <Send size={14} className="text-background" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Attach menu */}
+        <AnimatePresence>
+          {showAttachMenu && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="grid grid-cols-4 gap-2 p-2">
+                {[
+                  { icon: ImageIcon, label: "Photo", color: "text-neon-green", bg: "bg-neon-green/10", action: () => { fileInputRef.current?.click(); setShowAttachMenu(false); } },
+                  { icon: MapPin, label: "Location", color: "text-blue-400", bg: "bg-blue-400/10", action: () => {
+                    const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+                    setMessages(prev => [...prev, {
+                      id: Date.now().toString(), sender: "me", senderAvatar: "M", content: "", time: now, isMine: true,
+                      type: "location", locationName: "My Location", locationAddress: "Current GPS Position",
+                    }]);
+                    setShowAttachMenu(false);
+                    toast.success("Location shared!");
+                  }},
+                  { icon: FileText, label: "File", color: "text-amber-400", bg: "bg-amber-400/10", action: () => { toast.info("File picker coming soon"); setShowAttachMenu(false); } },
+                  { icon: Gift, label: "Red Packet", color: "text-red-400", bg: "bg-red-400/10", action: () => { setShowRedPacket(true); setShowAttachMenu(false); } },
+                  { icon: ArrowUpDown, label: "Transfer", color: "text-neon-cyan", bg: "bg-neon-cyan/10", action: () => { setShowTransfer(true); setShowAttachMenu(false); } },
+                  { icon: Mic, label: "Voice", color: "text-neon-purple", bg: "bg-neon-purple/10", action: () => {
+                    setIsRecording(true);
+                    setRecordingTime(0);
+                    recordingInterval.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+                    setShowAttachMenu(false);
+                  }},
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={item.action}
+                      className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl hover:bg-secondary/40 transition-colors"
+                    >
+                      <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center`}>
+                        <Icon size={18} className={item.color} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          className="hidden"
+        />
+
         <div className="flex items-end gap-1.5">
+          {/* Plus / Attach button */}
+          <button
+            onClick={() => setShowAttachMenu(!showAttachMenu)}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all shrink-0 ${showAttachMenu ? "bg-neon-cyan/20 text-neon-cyan rotate-45" : "hover:bg-secondary/60 text-muted-foreground"}`}
+          >
+            <Plus size={20} />
+          </button>
+          {/* Emoji */}
           <button
             onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === "__input__" ? null : "__input__")}
             className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0 relative"
@@ -714,35 +1008,7 @@ export default function ChatRoom() {
               </div>
             )}
           </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0"
-          >
-            <ImageIcon size={20} className="text-muted-foreground" />
-          </button>
-          {/* Red Packet Button */}
-          <button
-            onClick={() => setShowRedPacket(true)}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-500/10 transition-colors shrink-0"
-            title="Send Red Packet"
-          >
-            <Gift size={19} className="text-red-400" />
-          </button>
-          {/* Transfer Button */}
-          <button
-            onClick={() => setShowTransfer(true)}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-neon-cyan/10 transition-colors shrink-0"
-            title="Transfer"
-          >
-            <ArrowUpDown size={19} className="text-neon-cyan" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-            className="hidden"
-          />
+          {/* Text input */}
           <div className="flex-1 relative">
             <input
               type="text"
@@ -753,13 +1019,26 @@ export default function ChatRoom() {
               className="w-full h-10 px-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
             />
           </div>
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() && !imagePreview}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 disabled:opacity-30 disabled:hover:bg-neon-cyan/20 transition-all shrink-0"
-          >
-            <Send size={18} />
-          </button>
+          {/* Send or Mic */}
+          {input.trim() || imagePreview ? (
+            <button
+              onClick={handleSend}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-all shrink-0"
+            >
+              <Send size={18} />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setIsRecording(true);
+                setRecordingTime(0);
+                recordingInterval.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+              }}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-all shrink-0"
+            >
+              <Mic size={18} />
+            </button>
+          )}
         </div>
       </div>
     </div>

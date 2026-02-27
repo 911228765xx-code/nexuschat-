@@ -260,9 +260,11 @@ export default function Chat() {
                 <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-neon-red" style={{ boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)" }} />
               </button>
             </Link>
-            <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
-              <Plus size={18} className="text-neon-cyan" />
-            </button>
+            <Link href="/app/create-group">
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
+                <Plus size={18} className="text-neon-cyan" />
+              </button>
+            </Link>
           </div>
         </div>
 

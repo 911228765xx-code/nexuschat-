@@ -2,7 +2,8 @@
  * Profile — 我的个人中心
  * 身份卡片、核心数据、功能入口、主题切换、设置
  */
-import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield } from "lucide-react";
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3 } from "lucide-react";
+import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -44,6 +45,12 @@ export default function Profile() {
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
           <h1 className="text-lg font-semibold font-display">{t("profile.title")}</h1>
+          <div className="flex-1" />
+          <Link href="/app/edit-profile">
+            <button className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors">
+              <Edit3 size={18} className="text-muted-foreground" />
+            </button>
+          </Link>
         </div>
       </header>
 

@@ -17,6 +17,8 @@ import Contacts from "./pages/Contacts";
 import Notifications from "./pages/Notifications";
 import AppLayout from "./components/AppLayout";
 import Onboarding from "./components/Onboarding";
+import CreateGroup from "./pages/CreateGroup";
+import EditProfile from "./pages/EditProfile";
 
 function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -39,6 +41,16 @@ function AppContent() {
         <Route path="/app/chat" component={() => (
           <AppLayout>
             <Chat />
+          </AppLayout>
+        )} />
+        <Route path="/app/create-group" component={() => (
+          <AppLayout hideNav>
+            <CreateGroup />
+          </AppLayout>
+        )} />
+        <Route path="/app/edit-profile" component={() => (
+          <AppLayout hideNav>
+            <EditProfile />
           </AppLayout>
         )} />
         <Route path="/app/contacts" component={() => (
