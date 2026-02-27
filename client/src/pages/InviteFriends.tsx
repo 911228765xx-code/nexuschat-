@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, Copy, Gift, Users, Sparkles, Share2,
-  CheckCircle2, Clock, ChevronRight, QrCode, Download,
+  CheckCircle2, Clock, ChevronRight,
   Zap, Star, Trophy, TrendingUp, UserPlus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import PosterGenerator from "@/components/PosterGenerator";
 
 // Mock invited friends data
 const INVITED_FRIENDS = [
@@ -58,6 +59,10 @@ export default function InviteFriends() {
 
   const handleSharePoster = () => {
     setShowPoster(true);
+  };
+
+  const handleClosePoster = () => {
+    setShowPoster(false);
   };
 
   return (
@@ -354,79 +359,17 @@ export default function InviteFriends() {
         </div>
       </div>
 
-      {/* Share Poster Modal */}
-      <AnimatePresence>
-        {showPoster && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6"
-            onClick={() => setShowPoster(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm rounded-3xl overflow-hidden bg-gradient-to-br from-[#0a1628] via-[#0d1f3c] to-[#0a1628] border border-neon-cyan/20 shadow-2xl"
-            >
-              {/* Poster Content */}
-              <div className="p-6 text-center">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-neon-green/20 to-neon-cyan/20 border border-neon-cyan/30 flex items-center justify-center mb-4">
-                  <span className="text-3xl">{profile.avatar}</span>
-                </div>
-                <h3 className="text-lg font-bold font-display text-white">{profile.displayName}</h3>
-                <p className="text-xs text-gray-400 mt-1">{t("invite.posterInvite")}</p>
-
-                <div className="my-5 p-4 rounded-2xl bg-white/5 border border-white/10">
-                  <p className="text-[10px] text-gray-400 mb-2">{t("invite.posterCode")}</p>
-                  <p className="text-xl font-bold font-mono text-neon-green tracking-widest">{inviteCode}</p>
-                </div>
-
-                {/* QR Code Placeholder */}
-                <div className="w-28 h-28 mx-auto rounded-2xl bg-white flex items-center justify-center mb-4">
-                  <div className="text-center">
-                    <QrCode size={48} className="text-gray-800 mx-auto" />
-                    <p className="text-[8px] text-gray-500 mt-1">nexuschat.app</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                  <Sparkles size={12} className="text-neon-green" />
-                  <span>{t("invite.posterBonus")}</span>
-                </div>
-              </div>
-
-              {/* Poster Actions */}
-              <div className="flex border-t border-white/10">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(inviteLink);
-                    toast.success(t("invite.linkCopied"));
-                    setShowPoster(false);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 py-4 text-sm text-neon-cyan hover:bg-white/5 transition-colors"
-                >
-                  <Copy size={16} />
-                  {t("invite.copyLink")}
-                </button>
-                <div className="w-px bg-white/10" />
-                <button
-                  onClick={() => {
-                    toast.success(t("invite.posterSaved"));
-                    setShowPoster(false);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 py-4 text-sm text-neon-green hover:bg-white/5 transition-colors"
-                >
-                  <Download size={16} />
-                  {t("invite.savePoster")}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Poster Generator Modal */}
+      <PosterGenerator
+        isOpen={showPoster}
+        onClose={handleClosePoster}
+        inviteCode={inviteCode}
+        inviteLink={inviteLink}
+        userName={profile.displayName || "cryptowhale.eth"}
+        userAvatar={profile.avatar}
+        totalInvited={totalInvited}
+        totalRewards={totalRewards}
+      />
     </div>
   );
 }
