@@ -25,6 +25,8 @@ import InviteFriends from "./pages/InviteFriends";
 import TaskCenter from "./pages/TaskCenter";
 import Leaderboard from "./pages/Leaderboard";
 import Settings from "./pages/Settings";
+import TokenDetail from "./pages/TokenDetail";
+import Watchlist from "./pages/Watchlist";
 import { AppProvider } from "./contexts/AppContext";
 
 function AppContent() {
@@ -107,9 +109,19 @@ function AppContent() {
             <Discover />
           </AppLayout>
         </Route>
+        <Route path="/app/research/:token">
+          <AppLayout hideNav>
+            <TokenDetail />
+          </AppLayout>
+        </Route>
         <Route path="/app/research">
           <AppLayout>
             <Research />
+          </AppLayout>
+        </Route>
+        <Route path="/app/watchlist">
+          <AppLayout hideNav>
+            <Watchlist />
           </AppLayout>
         </Route>
         <Route path="/app/trading">

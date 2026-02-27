@@ -4,6 +4,7 @@
  * Design: Cyberpunk dark theme with neon accents, Space Grotesk headings
  */
 import { useState, useMemo, useCallback } from "react";
+import { useLocation } from "wouter";
 import {
   Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp,
   Sparkles, Share2, Check, ExternalLink, AlertTriangle, Activity,
@@ -898,6 +899,7 @@ export default function Research() {
   const [timeRange, setTimeRange] = useState<TimeRange>("1y");
   const [sortBy, setSortBy] = useState<SortBy>("aiScore");
   const [filterCategory, setFilterCategory] = useState<FilterCategory>("all");
+  const [, setLocation] = useLocation();
   const [watchlist, setWatchlist] = useState<Set<string>>(new Set(["1", "2"]));
   const [showShareModal, setShowShareModal] = useState<string | null>(null);
   const [shareCaption, setShareCaption] = useState("");
@@ -995,6 +997,15 @@ export default function Research() {
               className={`p-2 rounded-lg transition-colors ${showFilters ? "bg-neon-purple/15 text-neon-purple" : "text-muted-foreground hover:bg-secondary/40"}`}
             >
               <Filter size={16} />
+            </button>
+            <button
+              onClick={() => setLocation("/app/watchlist")}
+              className="p-2 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors relative"
+            >
+              <Star size={16} />
+              {watchlist.size > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-yellow-500 text-[8px] text-background font-bold flex items-center justify-center">{watchlist.size}</span>
+              )}
             </button>
             <button
               onClick={() => { setIsSearching(true); setTimeout(() => { setIsSearching(false); toast.success(t("research.refreshed")); }, 1500); }}
@@ -1785,6 +1796,13 @@ export default function Research() {
                       {/* Actions */}
                       <div className="flex items-center justify-between">
                         <div className="flex gap-2">
+                          <button
+                            onClick={() => setLocation(`/app/research/${report.token.toLowerCase()}`)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-xs font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all"
+                          >
+                            <ExternalLink size={13} />
+                            {t("research.viewDetail")}
+                          </button>
                           <button
                             onClick={() => toggleWatchlist(report.id)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
