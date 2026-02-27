@@ -19,6 +19,8 @@ import AppLayout from "./components/AppLayout";
 import Onboarding from "./components/Onboarding";
 import CreateGroup from "./pages/CreateGroup";
 import EditProfile from "./pages/EditProfile";
+import GroupChatRoom from "./pages/GroupChatRoom";
+import { AppProvider } from "./contexts/AppContext";
 
 function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -33,6 +35,11 @@ function AppContent() {
       )}
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/app/group/:id" component={() => (
+          <AppLayout hideNav>
+            <GroupChatRoom />
+          </AppLayout>
+        )} />
         <Route path="/app/chat/:id" component={() => (
           <AppLayout>
             <ChatRoom />
@@ -100,18 +107,20 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable>
         <I18nProvider>
-          <TooltipProvider>
-            <Toaster
-              toastOptions={{
-                style: {
-                  background: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--foreground)',
-                },
-              }}
-            />
-            <AppContent />
-          </TooltipProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <Toaster
+                toastOptions={{
+                  style: {
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--foreground)',
+                  },
+                }}
+              />
+              <AppContent />
+            </TooltipProvider>
+          </AppProvider>
         </I18nProvider>
       </ThemeProvider>
     </ErrorBoundary>

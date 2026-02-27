@@ -289,7 +289,7 @@ export default function Chat() {
         {filtered.map((conv, index) => {
           const isPinned = conv.isPinned;
           return (
-            <Link key={conv.id} href={`/app/chat/${conv.id}`}>
+            <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : `/app/chat/${conv.id}`}>
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
