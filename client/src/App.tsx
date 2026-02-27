@@ -26,6 +26,7 @@ import TaskCenter from "./pages/TaskCenter";
 import Leaderboard from "./pages/Leaderboard";
 import Settings from "./pages/Settings";
 import TokenDetail from "./pages/TokenDetail";
+import PostDetail from "./pages/PostDetail";
 import Watchlist from "./pages/Watchlist";
 import { AppProvider } from "./contexts/AppContext";
 
@@ -107,6 +108,11 @@ function AppContent() {
         <Route path="/app/discover">
           <AppLayout>
             <Discover />
+          </AppLayout>
+        </Route>
+        <Route path="/app/post/:id">
+          <AppLayout hideNav>
+            <PostDetail />
           </AppLayout>
         </Route>
         <Route path="/app/research/:token">

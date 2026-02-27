@@ -98,11 +98,17 @@ export default function GroupChatRoom() {
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [members, setMembers] = useState(mockMembers);
+  const [announcement, setAnnouncement] = useState(mockAnnouncement);
+  const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
+  const [editAnnouncementText, setEditAnnouncementText] = useState(mockAnnouncement.content);
+  const [memberActionTarget, setMemberActionTarget] = useState<GroupMember | null>(null);
+  const announcementInputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
 
-  const onlineCount = mockMembers.filter((m) => m.status === "online").length;
+  const onlineCount = members.filter((m) => m.status === "online").length;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -292,8 +298,8 @@ export default function GroupChatRoom() {
         <div className="flex items-start gap-2">
           <Megaphone size={14} className="text-neon-purple shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-foreground leading-relaxed line-clamp-2">{mockAnnouncement.content}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{mockAnnouncement.author} · {mockAnnouncement.time}</p>
+                <p className="text-[11px] text-foreground leading-relaxed line-clamp-2">{announcement.content}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{announcement.author} · {announcement.time}</p>
           </div>
           <button
             onClick={() => setShowAnnouncement(false)}
@@ -606,29 +612,88 @@ export default function GroupChatRoom() {
                 })}
               </div>
 
+              {/* Announcement Edit Section (Owner only) */}
+              <div className="p-3 border-b border-border/20">
+                <div className="flex items-center justify-between mb-2">
+                  <h5 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Megaphone size={12} />
+                    Group Announcement
+                  </h5>
+                  <button
+                    onClick={() => {
+                      setIsEditingAnnouncement(true);
+                      setEditAnnouncementText(announcement.content);
+                      setTimeout(() => announcementInputRef.current?.focus(), 100);
+                    }}
+                    className="text-[10px] text-neon-cyan hover:underline flex items-center gap-0.5"
+                  >
+                    <Settings size={10} />
+                    Edit
+                  </button>
+                </div>
+                {isEditingAnnouncement ? (
+                  <div className="space-y-2">
+                    <textarea
+                      ref={announcementInputRef}
+                      value={editAnnouncementText}
+                      onChange={(e) => setEditAnnouncementText(e.target.value)}
+                      className="w-full h-24 px-3 py-2 rounded-xl bg-secondary/40 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none"
+                      placeholder="Write group announcement..."
+                      maxLength={300}
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground">{editAnnouncementText.length}/300</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsEditingAnnouncement(false)}
+                          className="px-3 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (editAnnouncementText.trim()) {
+                              setAnnouncement({ content: editAnnouncementText, author: "cryptowhale.eth", time: "Just now" });
+                              setIsEditingAnnouncement(false);
+                              setShowAnnouncement(true);
+                              toast.success("Announcement updated!");
+                            }
+                          }}
+                          className="px-3 py-1 rounded-lg text-xs bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{announcement.content}</p>
+                )}
+              </div>
+
               {/* Members List */}
               <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <h5 className="text-xs font-medium text-muted-foreground">{t("group.members")} ({mockMembers.length})</h5>
+                  <h5 className="text-xs font-medium text-muted-foreground">{t("group.members")} ({members.length})</h5>
                   <span className="text-[10px] text-neon-green">{onlineCount} {t("group.online")}</span>
                 </div>
 
                 {/* Online members first, then offline */}
                 {["online", "away", "offline"].map((status) => {
-                  const members = mockMembers.filter((m) => m.status === status);
-                  if (members.length === 0) return null;
+                  const statusMembers = members.filter((m) => m.status === status);
+                  if (statusMembers.length === 0) return null;
                   return (
                     <div key={status} className="mb-3">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 px-1">
-                        {status === "online" ? `${t("group.online")} — ${members.length}` :
-                         status === "away" ? `${t("group.away")} — ${members.length}` :
-                         `${t("group.offline")} — ${members.length}`}
+                        {status === "online" ? `${t("group.online")} — ${statusMembers.length}` :
+                         status === "away" ? `${t("group.away")} — ${statusMembers.length}` :
+                         `${t("group.offline")} — ${statusMembers.length}`}
                       </p>
-                      {members.map((member) => (
+                      {statusMembers.map((member) => (
                         <button
                           key={member.id}
                           className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors"
-                          onClick={() => toast.info(`${member.name} · ${member.address} · ${member.role}`)}
+                          onClick={() => setMemberActionTarget(member)}
                         >
                           <div className="relative">
                             <Avatar className="w-8 h-8">
@@ -656,6 +721,110 @@ export default function GroupChatRoom() {
                   );
                 })}
               </div>
+
+              {/* Leave Group */}
+
+              {/* Member Action Menu */}
+              <AnimatePresence>
+                {memberActionTarget && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end"
+                    onClick={() => setMemberActionTarget(null)}
+                  >
+                    <motion.div
+                      initial={{ y: "100%" }}
+                      animate={{ y: 0 }}
+                      exit={{ y: "100%" }}
+                      transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-2"
+                    >
+                      {/* Member Info */}
+                      <div className="flex items-center gap-3 pb-3 border-b border-border/20">
+                        <Avatar className="w-12 h-12">
+                          <AvatarFallback className="bg-secondary text-lg">{memberActionTarget.avatar}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            {getRoleBadge(memberActionTarget.role)}
+                            <span className="font-semibold font-display text-sm">{memberActionTarget.name}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono">{memberActionTarget.address}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">{memberActionTarget.role} · {memberActionTarget.status}</p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {memberActionTarget.role !== "owner" && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setMembers(prev => prev.map(m =>
+                                m.id === memberActionTarget.id
+                                  ? { ...m, role: m.role === "admin" ? "member" : "admin" }
+                                  : m
+                              ));
+                              toast.success(memberActionTarget.role === "admin"
+                                ? `${memberActionTarget.name} removed from admin`
+                                : `${memberActionTarget.name} promoted to admin`);
+                              setMemberActionTarget(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors"
+                          >
+                            <Shield size={18} className="text-neon-cyan" />
+                            <div className="text-left">
+                              <p className="text-sm font-medium">
+                                {memberActionTarget.role === "admin" ? "Remove Admin" : "Set as Admin"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {memberActionTarget.role === "admin" ? "Revoke admin privileges" : "Grant admin privileges"}
+                              </p>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setMembers(prev => prev.filter(m => m.id !== memberActionTarget.id));
+                              toast.success(`${memberActionTarget.name} removed from group`);
+                              setMemberActionTarget(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-neon-red/5 hover:bg-neon-red/10 transition-colors"
+                          >
+                            <LogOut size={18} className="text-neon-red" />
+                            <div className="text-left">
+                              <p className="text-sm font-medium text-neon-red">Remove from Group</p>
+                              <p className="text-xs text-muted-foreground">Kick this member out</p>
+                            </div>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setInput(`@${memberActionTarget.name} `);
+                          setMemberActionTarget(null);
+                          setShowSidebar(false);
+                          inputRef.current?.focus();
+                        }}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors"
+                      >
+                        <AtSign size={18} className="text-neon-purple" />
+                        <div className="text-left">
+                          <p className="text-sm font-medium">Mention in Chat</p>
+                          <p className="text-xs text-muted-foreground">Send a message mentioning this member</p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setMemberActionTarget(null)}
+                        className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Leave Group */}
               <div className="p-3 border-t border-border/20">

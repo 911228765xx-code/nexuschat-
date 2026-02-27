@@ -349,8 +349,26 @@ export default function Chat() {
           );
         })}
         {filtered.length > 0 && (
-          <div className="py-6 flex flex-col items-center gap-2">
-            <div className="flex items-center gap-3 w-full px-8">
+          <div className="py-4 px-4 space-y-3">
+            {/* Create Group CTA */}
+            <Link href="/app/create-group">
+              <motion.div
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-neon-cyan/5 to-neon-purple/5 border border-neon-cyan/15 hover:border-neon-cyan/30 transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-xl bg-neon-cyan/15 flex items-center justify-center shrink-0">
+                  <Users size={18} className="text-neon-cyan" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold font-display text-foreground">Create a Group</p>
+                  <p className="text-xs text-muted-foreground">Start a token-gated community</p>
+                </div>
+                <ChevronRight size={16} className="text-neon-cyan/60 shrink-0" />
+              </motion.div>
+            </Link>
+            {/* End marker */}
+            <div className="flex items-center gap-3 py-2">
               <div className="h-px flex-1 bg-border/10" />
               <span className="text-[9px] text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
               <div className="h-px flex-1 bg-border/10" />

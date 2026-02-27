@@ -5,7 +5,8 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote } from "lucide-react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -274,6 +275,8 @@ export default function Discover() {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const [composeImages, setComposeImages] = useState<string[]>([]);
   const { t } = useI18n();
+  const [, setLocation] = useLocation();
+  const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
 
   // ─── Infinite Scroll State ───
   const [page, setPage] = useState(0);
@@ -560,8 +563,11 @@ export default function Discover() {
                         </div>
                       </div>
 
-                      {/* Content */}
-                      <p className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line">{post.content}</p>
+                      {/* Content — clickable to open detail */}
+                      <p
+                        className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setLocation(`/app/post/${post.id}`)}
+                      >{post.content}</p>
 
                       {/* Tags */}
                       {post.tags && post.tags.length > 0 && (
@@ -582,12 +588,9 @@ export default function Discover() {
                           <MessageSquare size={15} />
                           <span className="text-[11px]">{formatNum(post.comments)}</span>
                         </button>
-                        {/* Repost button */}
+                        {/* Repost button — opens repost/quote bottom sheet */}
                         <button
-                          onClick={() => {
-                            setMoments(prev => prev.map(m => m.id === post.id ? { ...m, reposts: m.reposts + 1 } : m));
-                            toast.success(t("discover.reposted") || "Reposted to your timeline");
-                          }}
+                          onClick={() => setRepostMenuPostId(post.id)}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
                         >
                           <Repeat2 size={15} />
@@ -904,6 +907,67 @@ export default function Discover() {
           </div>
         )}
       </div>
+
+      {/* ─── Repost / Quote Bottom Sheet ─── */}
+      <AnimatePresence>
+        {repostMenuPostId && (() => {
+          const targetPost = moments.find(m => m.id === repostMenuPostId);
+          if (!targetPost) return null;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end"
+              onClick={() => setRepostMenuPostId(null)}
+            >
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-2"
+              >
+                <h3 className="text-sm font-semibold font-display text-center mb-3">Share Post</h3>
+                <button
+                  onClick={() => {
+                    setMoments(prev => prev.map(m => m.id === repostMenuPostId ? { ...m, reposts: m.reposts + 1 } : m));
+                    toast.success(t("discover.reposted") || "Reposted to your timeline");
+                    setRepostMenuPostId(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-secondary/40 hover:bg-secondary/60 transition-colors"
+                >
+                  <Repeat2 size={20} className="text-neon-green" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Repost</p>
+                    <p className="text-xs text-muted-foreground">Share instantly to your timeline</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setRepostMenuPostId(null);
+                    setLocation(`/app/post/${repostMenuPostId}`);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-secondary/40 hover:bg-secondary/60 transition-colors"
+                >
+                  <Quote size={20} className="text-neon-cyan" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Quote Post</p>
+                    <p className="text-xs text-muted-foreground">Add your own commentary</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setRepostMenuPostId(null)}
+                  className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* ─── Compose Modal ─── */}
       <AnimatePresence>
