@@ -94,6 +94,12 @@ export default function ChatRoom() {
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [showRedPacket, setShowRedPacket] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [showForward, setShowForward] = useState(false);
+  const [forwardMsgId, setForwardMsgId] = useState<string | null>(null);
+  const [forwardTarget, setForwardTarget] = useState<string | null>(null);
+  const fileDocRef = useRef<HTMLInputElement>(null);
   const [rpAmount, setRpAmount] = useState("");
   const [rpToken, setRpToken] = useState("ETH");
   const [rpMessage, setRpMessage] = useState("");
@@ -383,7 +389,7 @@ export default function ChatRoom() {
               src={url}
               alt={`photo ${i + 1}`}
               className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => toast.info("Image viewer coming soon")}
+              onClick={() => { setViewerImages(msg.imageGallery!); setViewerIndex(i); }}
             />
           ))}
         </div>
@@ -392,7 +398,7 @@ export default function ChatRoom() {
           src={msg.imageGallery[0]}
           alt="shared"
           className="max-w-[260px] max-h-[200px] object-cover rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
-          onClick={() => toast.info("Image viewer coming soon")}
+          onClick={() => { setViewerImages(msg.imageGallery!); setViewerIndex(0); }}
         />
       ) : msg.imageUrl ? (
         <img
@@ -681,7 +687,7 @@ export default function ChatRoom() {
             {[
               { icon: Copy, label: t("chat.copy"), action: () => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg?.content) { navigator.clipboard.writeText(msg.content); toast.success(t("chat.copied")); } setContextMenu(null); } },
               { icon: Reply, label: t("chat.replyAction"), action: () => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg) setReplyTo(msg); setContextMenu(null); } },
-              { icon: Forward, label: t("chat.forward"), action: () => { toast.info(t("chat.forwardComingSoon")); setContextMenu(null); } },
+              { icon: Forward, label: t("chat.forward"), action: () => { setForwardMsgId(contextMenu.msgId); setShowForward(true); setContextMenu(null); } },
               { icon: Star, label: t("chat.favorite"), action: () => { toast.success(t("chat.favorited")); setContextMenu(null); } },
               { icon: Trash2, label: t("chat.deleteMsg"), action: () => { setMessages(prev => prev.filter(m => m.id !== contextMenu.msgId)); toast.success(t("chat.msgDeleted")); setContextMenu(null); }, danger: true },
             ].map((item, i) => {
@@ -1056,7 +1062,7 @@ export default function ChatRoom() {
                     setShowAttachMenu(false);
                     toast.success("Location shared!");
                   }},
-                  { icon: FileText, label: "File", color: "text-amber-400", bg: "bg-amber-400/10", action: () => { toast.info("File picker coming soon"); setShowAttachMenu(false); } },
+                  { icon: FileText, label: "File", color: "text-amber-400", bg: "bg-amber-400/10", action: () => { fileDocRef.current?.click(); setShowAttachMenu(false); } },
                   { icon: Gift, label: "Red Packet", color: "text-red-400", bg: "bg-red-400/10", action: () => { setShowRedPacket(true); setShowAttachMenu(false); } },
                   { icon: ArrowUpDown, label: "Transfer", color: "text-neon-cyan", bg: "bg-neon-cyan/10", action: () => { setShowTransfer(true); setShowAttachMenu(false); } },
                   { icon: Mic, label: "Voice", color: "text-neon-purple", bg: "bg-neon-purple/10", action: () => {
@@ -1090,6 +1096,27 @@ export default function ChatRoom() {
           type="file"
           accept="image/*"
           onChange={handleImageSelect}
+          className="hidden"
+        />
+        <input
+          ref={fileDocRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+              const sizeKB = file.size / 1024;
+              const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB.toFixed(0)} KB`;
+              const ext = file.name.split(".").pop()?.toUpperCase() || "FILE";
+              setMessages(prev => [...prev, {
+                id: Date.now().toString(), sender: "me", senderAvatar: "M", content: "", time: now, isMine: true,
+                type: "file", fileName: file.name, fileSize: sizeStr, fileType: ext, readStatus: "sent",
+              }]);
+              toast.success(`File "${file.name}" sent`);
+            }
+            e.target.value = "";
+          }}
           className="hidden"
         />
 
@@ -1126,6 +1153,108 @@ export default function ChatRoom() {
         </div>
       </div>
     </div>
+    {/* Image Viewer Lightbox */}
+    <AnimatePresence>
+      {viewerImages.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center"
+          onClick={() => setViewerImages([])}
+        >
+          <button onClick={() => setViewerImages([])} className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <X size={20} />
+          </button>
+          <div className="relative w-full h-full flex items-center justify-center px-4">
+            {viewerImages.length > 1 && viewerIndex > 0 && (
+              <button onClick={(e) => { e.stopPropagation(); setViewerIndex(i => i - 1); }} className="absolute left-4 z-10 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
+                <ArrowLeft size={20} />
+              </button>
+            )}
+            <motion.img
+              key={viewerIndex}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              src={viewerImages[viewerIndex]}
+              alt="preview"
+              className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            {viewerImages.length > 1 && viewerIndex < viewerImages.length - 1 && (
+              <button onClick={(e) => { e.stopPropagation(); setViewerIndex(i => i + 1); }} className="absolute right-4 z-10 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
+                <ChevronDown size={20} className="-rotate-90" />
+              </button>
+            )}
+          </div>
+          {viewerImages.length > 1 && (
+            <div className="absolute bottom-8 flex gap-2">
+              {viewerImages.map((_, i) => (
+                <button key={i} onClick={(e) => { e.stopPropagation(); setViewerIndex(i); }} className={`w-2 h-2 rounded-full transition-colors ${i === viewerIndex ? "bg-white" : "bg-white/30"}`} />
+              ))}
+            </div>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); const link = document.createElement("a"); link.href = viewerImages[viewerIndex]; link.download = `image-${viewerIndex + 1}.jpg`; link.click(); toast.success("Download started"); }} className="absolute bottom-8 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
+            <Download size={18} />
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Forward Message Modal */}
+    <AnimatePresence>
+      {showForward && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end justify-center"
+          onClick={() => { setShowForward(false); setForwardMsgId(null); setForwardTarget(null); }}
+        >
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border/20 flex items-center justify-between">
+              <h3 className="font-bold font-display">{t("chat.forwardTo")}</h3>
+              <button onClick={() => { setShowForward(false); setForwardMsgId(null); setForwardTarget(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
+            </div>
+            <div className="p-4 border-b border-border/20 bg-secondary/20">
+              <p className="text-xs text-muted-foreground mb-1">{t("chat.forwardingMsg")}</p>
+              <p className="text-sm truncate">{messages.find(m => m.id === forwardMsgId)?.content || `[${messages.find(m => m.id === forwardMsgId)?.type || "message"}]`}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {["vitalik.eth", "satoshi.btc", "0xDeFi...3a9b", "BAYC Holders 🐵", "DeFi Alpha 🔒"].map((name) => (
+                <button
+                  key={name}
+                  onClick={() => setForwardTarget(name)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+                    forwardTarget === name ? "bg-neon-cyan/10 border border-neon-cyan/30" : "hover:bg-secondary/40"
+                  }`}
+                >
+                  <Avatar className="w-9 h-9"><AvatarFallback className="bg-secondary text-xs">{name[0]}</AvatarFallback></Avatar>
+                  <span className="text-sm font-medium flex-1 text-left">{name}</span>
+                  {forwardTarget === name && <div className="w-5 h-5 rounded-full bg-neon-cyan flex items-center justify-center"><ChevronDown size={12} className="text-background -rotate-90" /></div>}
+                </button>
+              ))}
+            </div>
+            <div className="p-4 border-t border-border/20">
+              <button
+                disabled={!forwardTarget}
+                onClick={() => { toast.success(`${t("chat.forwardedTo")} ${forwardTarget}`); setShowForward(false); setForwardMsgId(null); setForwardTarget(null); }}
+                className="w-full h-11 rounded-xl bg-neon-cyan text-background font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
+              >
+                {t("chat.sendForward")}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </SwipeBack>
   );
 }

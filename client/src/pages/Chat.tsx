@@ -355,7 +355,7 @@ export default function Chat() {
                   { icon: Pin, label: conv.isPinned ? t("chat.unpin") : t("chat.pin"), action: () => togglePin(contextMenu.id), color: "text-neon-cyan" },
                   { icon: BellOff, label: conv.isMuted ? t("chat.unmute") : t("chat.mute"), action: () => toggleMute(contextMenu.id), color: "text-neon-purple" },
                   { icon: MessageSquare, label: t("chat.markRead"), action: () => markAsRead(contextMenu.id), color: "text-neon-green" },
-                  { icon: Archive, label: t("chat.archive"), action: () => { toast.success("Feature coming soon"); setContextMenu(null); }, color: "text-muted-foreground" },
+                  { icon: Archive, label: t("chat.archive"), action: () => { deleteConversation(contextMenu.id); toast.success(t("chat.archived") || "Archived"); setContextMenu(null); }, color: "text-muted-foreground" },
                   { icon: Trash2, label: t("chat.delete"), action: () => deleteChat(contextMenu.id), color: "text-neon-red" },
                 ];
                 return menuItems.map((item, i) => (

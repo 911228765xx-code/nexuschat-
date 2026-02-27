@@ -1223,7 +1223,7 @@ export default function Trading() {
               </div>
 
               <div className="px-4 py-3 border-t border-border/30 flex gap-3 shrink-0">
-                <button onClick={() => toast.info("Edit strategy coming soon")}
+                <button onClick={() => { setModalType("createStrategy"); toast.info("Edit mode: modify your strategy parameters"); }}
                   className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
                   <Settings size={14} /> Edit
                 </button>

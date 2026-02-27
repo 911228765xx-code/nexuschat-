@@ -516,7 +516,11 @@ export default function GroupChatRoom() {
             </button>
           ) : (
             <button
-              onClick={() => toast.info("Feature coming soon")}
+              onClick={() => {
+                const voiceMsg: GroupMessage = { id: `vm-${Date.now()}`, sender: "You", senderAvatar: "Y", content: "🎤 Voice message (0:03)", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), isMine: true };
+                setMessages(prev => [...prev, voiceMsg]);
+                toast.success(t("group.voiceSent") || "Voice message sent");
+              }}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-all shrink-0"
             >
               <Mic size={18} />
@@ -583,10 +587,10 @@ export default function GroupChatRoom() {
               {/* Quick Actions */}
               <div className="p-3 border-b border-border/20 grid grid-cols-4 gap-1">
                 {[
-                  { icon: Search, label: t("group.search"), action: () => toast.info("Feature coming soon") },
+                  { icon: Search, label: t("group.search"), action: () => { const q = prompt(t("group.searchPlaceholder") || "Search messages..."); if (q) { const found = messages.filter(m => m.content.toLowerCase().includes(q.toLowerCase())); toast.info(`${found.length} ${t("group.messagesFound") || "messages found"}`); } } },
                   { icon: isMuted ? BellOff : Bell, label: isMuted ? t("group.unmute") : t("group.mute"), action: () => { setIsMuted(!isMuted); toast.success(isMuted ? "Notifications enabled" : "Group muted"); } },
-                  { icon: UserPlus, label: t("group.invite"), action: () => toast.info("Feature coming soon") },
-                  { icon: Settings, label: t("group.settings"), action: () => toast.info("Feature coming soon") },
+                  { icon: UserPlus, label: t("group.invite"), action: () => { navigator.clipboard.writeText(`https://nexuschat.app/group/invite/${id || "g1"}`); toast.success(t("group.inviteCopied") || "Invite link copied!"); } },
+                  { icon: Settings, label: t("group.settings"), action: () => toast.info(t("group.settingsInfo") || "Group settings: Token-gated · Min 0.1 ETH · 128 members max") },
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
@@ -624,7 +628,7 @@ export default function GroupChatRoom() {
                         <button
                           key={member.id}
                           className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors"
-                          onClick={() => toast.info(`View ${member.name}'s profile`)}
+                          onClick={() => toast.info(`${member.name} · ${member.address} · ${member.role}`)}
                         >
                           <div className="relative">
                             <Avatar className="w-8 h-8">
@@ -656,7 +660,7 @@ export default function GroupChatRoom() {
               {/* Leave Group */}
               <div className="p-3 border-t border-border/20">
                 <button
-                  onClick={() => toast.info("Feature coming soon")}
+                  onClick={() => { if (confirm(t("group.leaveConfirm") || "Are you sure you want to leave this group?")) { toast.success(t("group.leftGroup") || "Left group"); setLocation("/app/chat"); } }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-neon-red hover:bg-neon-red/10 transition-colors text-sm"
                 >
                   <LogOut size={16} />

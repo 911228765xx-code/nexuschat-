@@ -268,7 +268,11 @@ export default function Discover() {
   const [commentInputId, setCommentInputId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
+  const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
+  const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const imageUploadRef = useRef<HTMLInputElement>(null);
+  const [composeImages, setComposeImages] = useState<string[]>([]);
   const { t } = useI18n();
 
   // ─── Infinite Scroll State ───
@@ -570,7 +574,10 @@ export default function Discover() {
                         </button>
                         {/* Repost button */}
                         <button
-                          onClick={() => toast(t("discover.repostSoon") || "Repost coming soon")}
+                          onClick={() => {
+                            setMoments(prev => prev.map(m => m.id === post.id ? { ...m, reposts: m.reposts + 1 } : m));
+                            toast.success(t("discover.reposted") || "Reposted to your timeline");
+                          }}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
                         >
                           <Repeat2 size={15} />
@@ -816,10 +823,21 @@ export default function Discover() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toast.info("Join community coming soon")}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
+                      onClick={() => {
+                        setJoinedCommunities(prev => {
+                          const next = new Set(prev);
+                          if (next.has(community.id)) next.delete(community.id); else next.add(community.id);
+                          return next;
+                        });
+                        toast.success(joinedCommunities.has(community.id) ? (t("discover.leftCommunity") || "Left community") : (t("discover.joinedCommunity") || "Joined!"));
+                      }}
+                      className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        joinedCommunities.has(community.id)
+                          ? "bg-secondary/60 text-muted-foreground border-border/30 hover:bg-secondary/80"
+                          : "bg-neon-cyan/15 text-neon-cyan border-neon-cyan/20 hover:bg-neon-cyan/25"
+                      }`}
                     >
-                      {t("discover.join")}
+                      {joinedCommunities.has(community.id) ? (t("discover.joined") || "Joined") : t("discover.join")}
                     </button>
                   </div>
                 </motion.div>
@@ -855,10 +873,21 @@ export default function Discover() {
                   </p>
                 </div>
                 <button
-                  onClick={() => toast.info("Follow user coming soon")}
-                  className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
+                  onClick={() => {
+                    setFollowedUsers(prev => {
+                      const next = new Set(prev);
+                      if (next.has(user.id)) next.delete(user.id); else next.add(user.id);
+                      return next;
+                    });
+                    toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
+                  }}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    followedUsers.has(user.id)
+                      ? "bg-secondary/60 text-muted-foreground border-border/30 hover:bg-secondary/80"
+                      : "bg-neon-cyan/15 text-neon-cyan border-neon-cyan/20 hover:bg-neon-cyan/25"
+                  }`}
                 >
-                  {t("discover.follow")}
+                  {followedUsers.has(user.id) ? (t("discover.following") || "Following") : t("discover.follow")}
                 </button>
               </motion.div>
             ))}
@@ -921,9 +950,41 @@ export default function Discover() {
               {/* Compose toolbar */}
               <div className="flex items-center justify-between border-t border-border/20 pt-3">
                 <div className="flex gap-2">
-                  <button onClick={() => toast(t("discover.imageUploadSoon") || "Image upload coming soon")} className="p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all">
+                  <button onClick={() => imageUploadRef.current?.click()} className="p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all">
                     <Image size={18} />
                   </button>
+                  <input
+                    ref={imageUploadRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        Array.from(files).forEach(f => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) setComposeImages(prev => [...prev, ev.target!.result as string]);
+                          };
+                          reader.readAsDataURL(f);
+                        });
+                      }
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                  {composeImages.length > 0 && (
+                    <div className="flex gap-1 ml-2">
+                      {composeImages.map((img, i) => (
+                        <div key={i} className="relative w-8 h-8 rounded overflow-hidden">
+                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <button onClick={() => setComposeImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive flex items-center justify-center">
+                            <X size={8} className="text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <span className={`text-[10px] font-mono ${composeText.length > 450 ? "text-neon-red" : "text-muted-foreground"}`}>
                   {composeText.length}/500

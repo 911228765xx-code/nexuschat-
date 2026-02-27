@@ -95,6 +95,18 @@ export default function Wallet() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [selectedChain, setSelectedChain] = useState("All");
   const [showChainFilter, setShowChainFilter] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [showSend, setShowSend] = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
+  const [showSwap, setShowSwap] = useState(false);
+  const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
+  const [sendAmount, setSendAmount] = useState("");
+  const [sendAddress, setSendAddress] = useState("");
+  const [sendToken, setSendToken] = useState("ETH");
+  const [swapFrom, setSwapFrom] = useState("ETH");
+  const [swapTo, setSwapTo] = useState("USDT");
+  const [swapAmount, setSwapAmount] = useState("");
+  const walletAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18";
 
   const totalBalance = mockTokens.reduce((sum, t) => sum + t.value, 0);
   const totalNFTValue = mockNFTs.reduce((sum, n) => sum + n.floorPrice, 0);
@@ -136,6 +148,7 @@ export default function Wallet() {
   ];
 
   return (
+    <>
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <header className="glass sticky top-0 z-10 border-b border-border/30">
@@ -148,7 +161,7 @@ export default function Wallet() {
           </button>
           <h1 className="text-base font-semibold font-display flex-1">{t("wallet.title") || "My Wallet"}</h1>
           <button
-            onClick={() => toast.info("QR code coming soon")}
+            onClick={() => setShowQR(true)}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
           >
             <QrCode size={18} className="text-muted-foreground" />
@@ -208,10 +221,14 @@ export default function Wallet() {
                     key={action.label}
                     onClick={() => {
                       if (action.label === (t("wallet.copy") || "Copy")) {
-                        navigator.clipboard.writeText("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18");
+                        navigator.clipboard.writeText(walletAddress);
                         toast.success("Wallet address copied!");
-                      } else {
-                        toast.info(`${action.label} coming soon`);
+                      } else if (action.label === (t("wallet.send") || "Send")) {
+                        setShowSend(true);
+                      } else if (action.label === (t("wallet.receive") || "Receive")) {
+                        setShowReceive(true);
+                      } else if (action.label === "Swap") {
+                        setShowSwap(true);
                       }
                     }}
                     className={`flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl ${action.color} hover:opacity-80 transition-all`}
@@ -365,7 +382,7 @@ export default function Wallet() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}
                     className="rounded-xl overflow-hidden border border-border/30 hover:border-neon-cyan/30 transition-all cursor-pointer group"
-                    onClick={() => toast.info("NFT details coming soon")}
+                    onClick={() => setSelectedNFT(nft)}
                   >
                     <div className="relative aspect-square overflow-hidden">
                       <img
@@ -453,6 +470,162 @@ export default function Wallet() {
           )}
         </AnimatePresence>
       </div>
+    {/* QR Code Modal */}
+    <AnimatePresence>
+      {showQR && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowQR(false)}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-center font-bold font-display mb-4">{t("wallet.receiveQR") || "Receive"}</h3>
+            <div className="bg-white rounded-xl p-4 mx-auto w-48 h-48 flex items-center justify-center mb-4">
+              <div className="w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iMTYwIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjE2MCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTAiIHk9IjEwIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAiIHk9IjExMCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjIwIiB5PSIyMCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBmaWxsPSJ3aGl0ZSIvPjxyZWN0IHg9IjEyMCIgeT0iMjAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIyMCIgeT0iMTIwIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIGZpbGw9IndoaXRlIi8+PHJlY3QgeD0iNjAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjMwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzAiIHk9IjYwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjgwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjcwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTEwIiB5PSI2MCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMCIgeT0iNzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjEyMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExMCIgeT0iMTEwIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxMjAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4=')] bg-contain bg-center bg-no-repeat" />
+            </div>
+            <p className="text-center text-xs text-muted-foreground font-mono break-all px-4 mb-4">{walletAddress}</p>
+            <button onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success("Address copied!"); }} className="w-full h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2">
+              <Copy size={14} /> {t("wallet.copyAddress") || "Copy Address"}
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Send Modal */}
+    <AnimatePresence>
+      {showSend && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSend(false)}>
+          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold font-display mb-4">{t("wallet.send") || "Send"}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Token</label>
+                <select value={sendToken} onChange={(e) => setSendToken(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
+                  {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.recipientAddress") || "Recipient Address"}</label>
+                <input value={sendAddress} onChange={(e) => setSendAddress(e.target.value)} placeholder="0x..." className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.amount") || "Amount"}</label>
+                <input type="number" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} placeholder="0.00" className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                <span>Gas Fee: ~$2.50</span>
+                <span>Network: Ethereum</span>
+              </div>
+              <button onClick={() => { toast.success(`Sent ${sendAmount} ${sendToken}`); setShowSend(false); setSendAmount(""); setSendAddress(""); }} disabled={!sendAmount || !sendAddress} className="w-full h-11 rounded-xl bg-neon-cyan text-background font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
+                {t("wallet.confirmSend") || "Confirm Send"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Receive Modal */}
+    <AnimatePresence>
+      {showReceive && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowReceive(false)}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-center font-bold font-display mb-2">{t("wallet.receive") || "Receive"}</h3>
+            <p className="text-center text-xs text-muted-foreground mb-4">{t("wallet.receiveDesc") || "Share your address to receive tokens"}</p>
+            <div className="space-y-3">
+              {["Ethereum", "Solana", "Bitcoin"].map(chain => (
+                <button key={chain} onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success(`${chain} address copied!`); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20 hover:border-neon-cyan/30 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-neon-cyan/10 flex items-center justify-center text-xs font-bold text-neon-cyan">{chain[0]}</div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium">{chain}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">{walletAddress.slice(0, 12)}...{walletAddress.slice(-6)}</p>
+                  </div>
+                  <Copy size={14} className="text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Swap Modal */}
+    <AnimatePresence>
+      {showSwap && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
+          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold font-display mb-4">Swap</h3>
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
+                <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                <div className="flex items-center gap-2">
+                  <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
+                    {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                  </select>
+                  <input type="number" value={swapAmount} onChange={(e) => setSwapAmount(e.target.value)} placeholder="0.00" className="flex-1 h-9 rounded-lg bg-transparent text-right text-sm font-mono focus:outline-none" />
+                </div>
+              </div>
+              <div className="flex justify-center"><div className="w-8 h-8 rounded-full bg-neon-purple/20 flex items-center justify-center"><RefreshCw size={14} className="text-neon-purple" /></div></div>
+              <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
+                <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                <div className="flex items-center gap-2">
+                  <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
+                    {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                  </select>
+                  <span className="flex-1 text-right text-sm font-mono text-muted-foreground">{swapAmount ? (parseFloat(swapAmount) * 1.05).toFixed(4) : "0.00"}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                <span>Rate: 1 {swapFrom} ≈ 1.05 {swapTo}</span>
+                <span>Slippage: 0.5%</span>
+              </div>
+              <button onClick={() => { toast.success(`Swapped ${swapAmount} ${swapFrom} → ${swapTo}`); setShowSwap(false); setSwapAmount(""); }} disabled={!swapAmount} className="w-full h-11 rounded-xl bg-neon-purple text-white font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
+                Swap
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* NFT Detail Modal */}
+    <AnimatePresence>
+      {selectedNFT && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedNFT(null)}>
+          <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="relative aspect-square">
+              <img src={selectedNFT.image} alt={selectedNFT.name} className="w-full h-full object-cover" />
+              {selectedNFT.rarity && (
+                <span className={`absolute top-3 right-3 text-xs font-bold px-2 py-1 rounded-lg backdrop-blur-sm ${
+                  selectedNFT.rarity === "Legendary" ? "bg-yellow-500/80 text-black" :
+                  selectedNFT.rarity === "Epic" ? "bg-purple-500/80 text-white" :
+                  selectedNFT.rarity === "Rare" ? "bg-blue-500/80 text-white" : "bg-green-500/80 text-white"
+                }`}>{selectedNFT.rarity}</span>
+              )}
+            </div>
+            <div className="p-4 space-y-3">
+              <h3 className="font-bold font-display text-lg">{selectedNFT.name}</h3>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{selectedNFT.collection}</span>
+                <span className="text-sm text-neon-cyan font-mono">⟠ {selectedNFT.floorPrice} ETH</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
+                  <p className="text-[10px] text-muted-foreground">Chain</p>
+                  <p className="text-xs font-medium">{selectedNFT.chain}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
+                  <p className="text-[10px] text-muted-foreground">Floor</p>
+                  <p className="text-xs font-medium font-mono">⟠ {selectedNFT.floorPrice}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => { toast.success("Listed for sale!"); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">List for Sale</button>
+                <button onClick={() => { toast.success("Transfer initiated"); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-secondary/60 text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">Transfer</button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </div>
+    </>
   );
 }

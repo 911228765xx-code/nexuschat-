@@ -533,7 +533,15 @@ export default function TokenDetail() {
               className={`p-2 rounded-lg transition-colors ${alertEnabled ? "text-neon-cyan bg-neon-cyan/10" : "text-muted-foreground hover:bg-secondary/40"}`}>
               {alertEnabled ? <Bell size={16} fill="currentColor" /> : <BellOff size={16} />}
             </button>
-            <button onClick={() => toast.info("Feature coming soon")}
+            <button onClick={() => {
+                const url = window.location.href;
+                if (navigator.share) {
+                  navigator.share({ title: `${token} Analysis`, text: `Check out ${token} on NexusChat`, url });
+                } else {
+                  navigator.clipboard.writeText(url);
+                  toast.success(t("research.linkCopied") || "Link copied to clipboard");
+                }
+              }}
               className="p-2 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
               <Share2 size={16} />
             </button>
