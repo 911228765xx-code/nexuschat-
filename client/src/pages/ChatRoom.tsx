@@ -5,6 +5,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus } from "lucide-react";
+import EnhancedInput from "@/components/EnhancedInput";
+import SwipeMessage from "@/components/SwipeMessage";
+import SwipeBack from "@/components/SwipeBack";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
@@ -438,6 +441,7 @@ export default function ChatRoom() {
   };
 
   return (
+    <SwipeBack backPath="/app/chat">
     <div className="flex flex-col h-full">
       {/* Header */}
       <header className="glass sticky top-0 z-10 border-b border-border/30">
@@ -468,6 +472,11 @@ export default function ChatRoom() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
+            <SwipeMessage
+              key={`swipe-${msg.id}`}
+              onSwipeReply={() => setReplyTo(msg)}
+              enabled={!msg.isMine}
+            >
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -582,6 +591,7 @@ export default function ChatRoom() {
                 </div>
               </div>
             </motion.div>
+            </SwipeMessage>
           ))}
         </AnimatePresence>
       </div>
@@ -984,50 +994,17 @@ export default function ChatRoom() {
           >
             <Plus size={20} />
           </button>
-          {/* Emoji */}
-          <button
-            onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === "__input__" ? null : "__input__")}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0 relative"
-          >
-            <Smile size={20} className="text-muted-foreground" />
-            {emojiPickerMsgId === "__input__" && (
-              <div className="absolute bottom-12 left-0 flex flex-wrap gap-1 p-2 w-[200px] rounded-xl bg-popover/95 backdrop-blur-xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150 z-20">
-                {EMOJI_LIST.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInput((prev) => prev + emoji);
-                      setEmojiPickerMsgId(null);
-                    }}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-xl hover:scale-110 transform"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
-          </button>
-          {/* Text input */}
-          <div className="flex-1 relative">
-            <input
-              type="text"
+          {/* Enhanced Input with Markdown, Token prices, Stickers */}
+          <div className="flex-1">
+            <EnhancedInput
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              onChange={setInput}
+              onSend={handleSend}
               placeholder={t("chat.inputPlaceholder")}
-              className="w-full h-10 px-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
             />
           </div>
-          {/* Send or Mic */}
-          {input.trim() || imagePreview ? (
-            <button
-              onClick={handleSend}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-all shrink-0"
-            >
-              <Send size={18} />
-            </button>
-          ) : (
+          {/* Mic button */}
+          {!input.trim() && !imagePreview && (
             <button
               onClick={() => {
                 setIsRecording(true);
@@ -1042,5 +1019,6 @@ export default function ChatRoom() {
         </div>
       </div>
     </div>
+    </SwipeBack>
   );
 }

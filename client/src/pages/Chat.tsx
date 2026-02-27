@@ -1,7 +1,7 @@
 /*
  * Chat — 消息列表页
  * Cyberpunk Noir: 深色背景 + 霓虹强调色
- * v1.6: 全局消息搜索 + 对话置顶 + 长按上下文菜单
+ * v1.9: AppContext全局状态接入 + 全局消息搜索 + 对话置顶 + 长按上下文菜单
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "wouter";
@@ -13,21 +13,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
+import { useApp } from "@/contexts/AppContext";
+import PullToRefresh from "@/components/PullToRefresh";
 import { toast } from "sonner";
-
-interface Conversation {
-  id: string;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  isGroup: boolean;
-  isTokenGated: boolean;
-  isOnline?: boolean;
-  isPinned?: boolean;
-  isMuted?: boolean;
-}
 
 interface SearchResult {
   id: string;
@@ -38,44 +26,6 @@ interface SearchResult {
   time: string;
   highlight: string;
 }
-
-const initialConversations: Conversation[] = [
-  {
-    id: "1", name: "vitalik.eth", avatar: "V",
-    lastMessage: "ETH 2.0 staking yield looks great 🚀",
-    time: "now", unread: 3, isGroup: false, isTokenGated: false, isOnline: true,
-  },
-  {
-    id: "2", name: "BAYC Holders 🐵", avatar: "🐵",
-    lastMessage: "Alice: New roadmap is out!",
-    time: "5m", unread: 12, isGroup: true, isTokenGated: true,
-  },
-  {
-    id: "3", name: "0xDeFi...3a9b", avatar: "D",
-    lastMessage: "/research SOL report generated",
-    time: "15m", unread: 0, isGroup: false, isTokenGated: false, isOnline: true,
-  },
-  {
-    id: "4", name: "NexusChat Official", avatar: "N",
-    lastMessage: "Admin: v0.2.0 released!",
-    time: "1h", unread: 5, isGroup: true, isTokenGated: false,
-  },
-  {
-    id: "5", name: "satoshi.btc", avatar: "S",
-    lastMessage: "BTC on-chain data shows whale accumulation",
-    time: "2h", unread: 0, isGroup: false, isTokenGated: false, isOnline: false,
-  },
-  {
-    id: "6", name: "DeFi Alpha 🔒", avatar: "🔑",
-    lastMessage: "Bob: This new LP has 200%+ APY",
-    time: "3h", unread: 0, isGroup: true, isTokenGated: true,
-  },
-  {
-    id: "7", name: "punk6529.eth", avatar: "P",
-    lastMessage: "NFT market is recovering, watch Blur data",
-    time: "1d", unread: 0, isGroup: false, isTokenGated: false, isOnline: false,
-  },
-];
 
 const mockSearchResults: SearchResult[] = [
   {
@@ -115,7 +65,6 @@ const timeFilters = ["Any Time", "Today", "This Week", "This Month"];
 
 export default function Chat() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [conversations, setConversations] = useState(initialConversations);
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
@@ -126,6 +75,16 @@ export default function Chat() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
+
+  // ✅ AppContext全局状态
+  const {
+    conversations,
+    pinConversation,
+    muteConversation,
+    deleteConversation,
+    markConversationRead,
+    unreadNotificationCount,
+  } = useApp();
 
   // Sort: pinned first, then by time
   const sortedConversations = [...conversations].sort((a, b) => {
@@ -177,35 +136,29 @@ export default function Chat() {
     }
   };
 
-  // Context menu actions
+  // Context menu actions — now using AppContext
   const togglePin = (id: string) => {
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, isPinned: !c.isPinned } : c
-    ));
     const conv = conversations.find(c => c.id === id);
+    pinConversation(id);
     toast.success(conv?.isPinned ? t("chat.unpinned") : t("chat.pinned"));
     setContextMenu(null);
   };
 
   const toggleMute = (id: string) => {
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, isMuted: !c.isMuted } : c
-    ));
     const conv = conversations.find(c => c.id === id);
+    muteConversation(id);
     toast.success(conv?.isMuted ? t("chat.unmuted") : t("chat.muted"));
     setContextMenu(null);
   };
 
   const markAsRead = (id: string) => {
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, unread: 0 } : c
-    ));
+    markConversationRead(id);
     toast.success(t("chat.markedRead"));
     setContextMenu(null);
   };
 
   const deleteChat = (id: string) => {
-    setConversations(prev => prev.filter(c => c.id !== id));
+    deleteConversation(id);
     toast.success(t("chat.deleted"));
     setContextMenu(null);
   };
@@ -257,7 +210,13 @@ export default function Chat() {
             <Link href="/app/notifications">
               <button className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors">
                 <Bell size={18} className="text-muted-foreground" />
-                <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-neon-red" style={{ boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)" }} />
+                {unreadNotificationCount > 0 && (
+                  <div className="absolute top-1 right-1 min-w-[10px] h-[10px] rounded-full bg-neon-red flex items-center justify-center" style={{ boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)" }}>
+                    {unreadNotificationCount > 9 && (
+                      <span className="text-[7px] font-bold text-white leading-none">{unreadNotificationCount}</span>
+                    )}
+                  </div>
+                )}
               </button>
             </Link>
             <Link href="/app/create-group">
@@ -285,7 +244,10 @@ export default function Chat() {
       </header>
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto">
+      <PullToRefresh
+        onRefresh={async () => { await new Promise(r => setTimeout(r, 1000)); toast.success(t("chat.refreshed") || "Refreshed!"); }}
+        className="flex-1"
+      >
         {filtered.map((conv, index) => {
           const isPinned = conv.isPinned;
           return (
@@ -361,7 +323,7 @@ export default function Chat() {
             </Link>
           );
         })}
-      </div>
+      </PullToRefresh>
 
       {/* Context Menu */}
       <AnimatePresence>
@@ -419,18 +381,18 @@ export default function Chat() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background flex flex-col"
+            className="fixed inset-0 z-50 bg-background"
           >
             {/* Search Header */}
-            <header className="px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
+            <div className="px-4 pt-[env(safe-area-inset-top)]">
               <div className="flex items-center gap-3 h-14">
                 <button
-                  onClick={() => { setShowSearchPanel(false); setGlobalSearch(""); setSearchResults([]); }}
-                  className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0"
+                  onClick={() => { setShowSearchPanel(false); setGlobalSearch(""); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
                 >
-                  <X size={20} className="text-muted-foreground" />
+                  <X size={20} />
                 </button>
-                <div className="relative flex-1">
+                <div className="flex-1 relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
@@ -443,54 +405,51 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* Filter tabs */}
-              <div className="flex gap-2 pb-3 overflow-x-auto">
+              {/* Filters */}
+              <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">
                 {searchFilters.map((f) => (
                   <button
                     key={f}
                     onClick={() => setActiveFilter(f)}
-                    className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                       activeFilter === f
-                        ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
-                        : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
+                        ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30"
+                        : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
                     }`}
                   >
                     {f}
                   </button>
                 ))}
-              </div>
-
-              {/* Time filter */}
-              <div className="flex gap-2 pb-3 overflow-x-auto">
-                <Filter size={14} className="text-muted-foreground shrink-0 mt-0.5" />
-                {timeFilters.map((tf) => (
+                <div className="w-px bg-border/30 mx-1 self-stretch" />
+                {timeFilters.map((f) => (
                   <button
-                    key={tf}
-                    onClick={() => setActiveTimeFilter(tf)}
-                    className={`shrink-0 px-2.5 py-1 rounded-md text-[11px] transition-all ${
-                      activeTimeFilter === tf
-                        ? "bg-neon-purple/15 text-neon-purple"
-                        : "text-muted-foreground hover:text-foreground"
+                    key={f}
+                    onClick={() => setActiveTimeFilter(f)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1 ${
+                      activeTimeFilter === f
+                        ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/30"
+                        : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
                     }`}
                   >
-                    {tf}
+                    <Clock size={10} />
+                    {f}
                   </button>
                 ))}
               </div>
-            </header>
+            </div>
 
             {/* Search Results */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto px-4">
               {isSearching && (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <div className="w-8 h-8 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin" />
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <div className="w-10 h-10 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin" />
                   <p className="text-sm text-muted-foreground">{t("chat.searching")}</p>
                 </div>
               )}
 
               {!isSearching && searchResults.length > 0 && (
-                <div className="px-4 py-3">
-                  <p className="text-xs text-muted-foreground mb-3 font-mono">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3 font-medium">
                     {searchResults.length} {t("chat.resultsFound")}
                   </p>
                   <div className="space-y-1">

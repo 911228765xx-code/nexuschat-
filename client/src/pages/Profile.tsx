@@ -1,6 +1,7 @@
 /*
  * Profile — 我的个人中心
  * 身份卡片、核心数据、功能入口、主题切换、设置
+ * v1.9: AppContext全局状态接入
  */
 import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3 } from "lucide-react";
 import { Link } from "wouter";
@@ -9,10 +10,14 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useApp } from "@/contexts/AppContext";
 
 export default function Profile() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+
+  // ✅ AppContext全局状态
+  const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
 
   const menuSections = [
     {
@@ -35,9 +40,14 @@ export default function Profile() {
   ];
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText("0x71C7...3a9b");
+    navigator.clipboard.writeText(profile.walletAddress);
     toast.success(t("profile.copied"));
   };
+
+  // Truncate wallet address
+  const shortAddress = profile.walletAddress.length > 10
+    ? profile.walletAddress.slice(0, 6) + "..." + profile.walletAddress.slice(-4)
+    : profile.walletAddress;
 
   return (
     <div className="flex flex-col h-full">
@@ -55,7 +65,7 @@ export default function Profile() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Identity Card */}
+        {/* Identity Card — now using AppContext profile */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -64,19 +74,21 @@ export default function Profile() {
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
               <Avatar className="w-16 h-16 ring-2 ring-neon-cyan/40">
-                <AvatarFallback className="bg-secondary text-xl font-display">🦊</AvatarFallback>
+                <AvatarFallback className="bg-secondary text-xl font-display">{profile.avatar}</AvatarFallback>
               </Avatar>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">
-                <Shield size={12} className="text-neon-purple" />
-              </div>
+              {profile.ensVerified && (
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">
+                  <Shield size={12} className="text-neon-purple" />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-bold font-display">cryptowhale.eth</h2>
+              <h2 className="text-lg font-bold font-display">{profile.displayName}</h2>
               <button
                 onClick={handleCopyAddress}
                 className="flex items-center gap-1 text-xs text-muted-foreground font-mono hover:text-neon-cyan transition-colors"
               >
-                0x71C7...3a9b
+                {shortAddress}
                 <Copy size={10} />
               </button>
               <div className="flex gap-1.5 mt-1.5">
@@ -89,6 +101,11 @@ export default function Profile() {
               </div>
             </div>
           </div>
+
+          {/* Bio */}
+          {profile.bio && (
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed line-clamp-2">{profile.bio}</p>
+          )}
 
           {/* Core Stats */}
           <div className="grid grid-cols-3 gap-3">
@@ -180,7 +197,6 @@ export default function Profile() {
                   )}
                 </div>
                 <span className="flex-1 text-sm text-left">{t("profile.darkMode")}</span>
-                {/* Toggle Switch */}
                 <div
                   className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
                     theme === "dark"
@@ -214,17 +230,21 @@ export default function Profile() {
                 <ChevronRight size={14} className="text-muted-foreground" />
               </button>
 
-              {/* Notifications */}
-              <button
-                onClick={() => toast("Coming soon")}
-                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
-              >
-                <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
-                  <Bell size={16} className="text-foreground" />
-                </div>
-                <span className="flex-1 text-sm text-left">{t("profile.notifications")}</span>
-                <ChevronRight size={14} className="text-muted-foreground" />
-              </button>
+              {/* Notifications — link to notification center */}
+              <Link href="/app/notifications">
+                <button className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+                    <Bell size={16} className="text-foreground" />
+                  </div>
+                  <span className="flex-1 text-sm text-left">{t("profile.notifications")}</span>
+                  {unreadNotificationCount > 0 && (
+                    <span className="min-w-5 h-5 px-1.5 rounded-full bg-neon-red flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-white">{unreadNotificationCount}</span>
+                    </span>
+                  )}
+                  <ChevronRight size={14} className="text-muted-foreground" />
+                </button>
+              </Link>
             </div>
           </motion.div>
 
