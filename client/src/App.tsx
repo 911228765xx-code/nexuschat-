@@ -14,6 +14,7 @@ import Trading from "./pages/Trading";
 import Profile from "./pages/Profile";
 import Discover from "./pages/Discover";
 import Contacts from "./pages/Contacts";
+import Notifications from "./pages/Notifications";
 import AppLayout from "./components/AppLayout";
 import Onboarding from "./components/Onboarding";
 
@@ -43,6 +44,11 @@ function AppContent() {
         <Route path="/app/contacts" component={() => (
           <AppLayout hideNav>
             <Contacts />
+          </AppLayout>
+        )} />
+        <Route path="/app/notifications" component={() => (
+          <AppLayout hideNav>
+            <Notifications />
           </AppLayout>
         )} />
         <Route path="/app/discover" component={() => (

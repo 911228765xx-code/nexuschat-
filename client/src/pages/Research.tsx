@@ -3,7 +3,8 @@
  * 增强版：迷你K线图 + 雷达图 + 详细报告卡片
  */
 import { useState, useMemo } from "react";
-import { Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp, Sparkles, Share2, Check, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -123,6 +124,10 @@ export default function Research() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>("1");
   const [isSearching, setIsSearching] = useState(false);
+  const [showShareModal, setShowShareModal] = useState<string | null>(null);
+  const [shareCaption, setShareCaption] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
   const { t } = useI18n();
 
   const handleSearch = () => {
@@ -386,10 +391,19 @@ export default function Research() {
                         </div>
                       </div>
 
-                      {/* Timestamp */}
-                      <p className="text-[10px] text-muted-foreground text-right font-mono">
-                        {t("research.generatedAt")} {report.timestamp}
-                      </p>
+                      {/* Share & Timestamp */}
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => { setShowShareModal(report.id); setShareCaption(""); setShareSuccess(false); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neon-cyan/10 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/20 border border-neon-cyan/20 transition-all"
+                        >
+                          <Share2 size={13} />
+                          {t("research.shareToMoments")}
+                        </button>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {t("research.generatedAt")} {report.timestamp}
+                        </p>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -398,6 +412,138 @@ export default function Research() {
           );
         })}
       </div>
+
+      {/* ─── Share to Moments Modal ─── */}
+      <AnimatePresence>
+        {showShareModal && (() => {
+          const report = mockReports.find(r => r.id === showShareModal);
+          if (!report) return null;
+          const isPositive = report.change24h >= 0;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+              onClick={() => setShowShareModal(null)}
+            >
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-4"
+              >
+                {/* Modal header */}
+                <div className="flex items-center justify-between">
+                  <button onClick={() => setShowShareModal(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                    <span className="text-sm">{t("research.cancel")}</span>
+                  </button>
+                  <h3 className="text-sm font-semibold font-display flex items-center gap-1.5">
+                    <Share2 size={14} className="text-neon-cyan" />
+                    {t("research.shareToMoments")}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setIsSharing(true);
+                      setTimeout(() => {
+                        setIsSharing(false);
+                        setShareSuccess(true);
+                        toast.success(t("research.shareSuccess"));
+                        setTimeout(() => setShowShareModal(null), 1200);
+                      }, 1000);
+                    }}
+                    disabled={isSharing || shareSuccess}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      shareSuccess
+                        ? "bg-neon-green/20 text-neon-green"
+                        : isSharing
+                        ? "bg-secondary/40 text-muted-foreground"
+                        : "bg-neon-cyan text-background hover:opacity-90"
+                    }`}
+                  >
+                    {shareSuccess ? (
+                      <span className="flex items-center gap-1"><Check size={12} /> {t("research.shared")}</span>
+                    ) : isSharing ? (
+                      <span className="flex items-center gap-1">
+                        <div className="w-3 h-3 border border-muted-foreground/50 border-t-muted-foreground rounded-full animate-spin" />
+                        {t("research.sharing")}
+                      </span>
+                    ) : (
+                      t("research.share")
+                    )}
+                  </button>
+                </div>
+
+                {/* Caption input */}
+                <textarea
+                  value={shareCaption}
+                  onChange={(e) => setShareCaption(e.target.value)}
+                  placeholder={t("research.addCaption")}
+                  className="w-full bg-secondary/30 rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none border border-border/20 focus:border-neon-cyan/30 transition-colors min-h-[60px]"
+                  maxLength={280}
+                />
+
+                {/* Research card preview */}
+                <div className="rounded-2xl border border-border/30 bg-secondary/20 overflow-hidden">
+                  <div className="p-3.5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-neon-purple/15 flex items-center justify-center">
+                          <Sparkles size={16} className="text-neon-purple" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">AI Research Report</p>
+                          <p className="text-sm font-bold font-display">{report.token}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-mono font-semibold">{report.price}</p>
+                        <p className={`text-xs font-mono flex items-center gap-0.5 justify-end ${isPositive ? "text-neon-green" : "text-neon-red"}`}>
+                          {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                          {isPositive ? "+" : ""}{report.change24h}%
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Mini metrics */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div className="text-center p-1.5 rounded-lg bg-background/40">
+                        <p className="text-[9px] text-muted-foreground">AI Score</p>
+                        <p className="text-xs font-mono font-bold text-neon-cyan">{report.aiScore}/10</p>
+                      </div>
+                      <div className="text-center p-1.5 rounded-lg bg-background/40">
+                        <p className="text-[9px] text-muted-foreground">Verdict</p>
+                        <p className={`text-xs font-mono font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red"}`}>{report.aiVerdict}</p>
+                      </div>
+                      <div className="text-center p-1.5 rounded-lg bg-background/40">
+                        <p className="text-[9px] text-muted-foreground">Security</p>
+                        <p className="text-xs font-mono font-bold text-neon-green">{report.securityScore}</p>
+                      </div>
+                    </div>
+
+                    {/* Summary preview */}
+                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{report.aiSummary}</p>
+
+                    <div className="flex items-center gap-1 mt-2 text-[10px] text-neon-cyan">
+                      <ExternalLink size={10} />
+                      <span>{t("research.viewFullReport")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Character count */}
+                <div className="flex justify-end">
+                  <span className={`text-[10px] font-mono ${shareCaption.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
+                    {shareCaption.length}/280
+                  </span>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
