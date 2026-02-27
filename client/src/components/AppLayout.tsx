@@ -1,6 +1,6 @@
 /*
  * AppLayout — Cyberpunk Noir mobile-first layout
- * Bottom tab navigation with glassmorphism effect + unread badge
+ * Bottom tab navigation with glassmorphism effect + dynamic unread badges from AppContext
  * 5 tabs: Chat / Discover / Research / Trading / Profile
  */
 import { useLocation, Link } from "wouter";
@@ -8,6 +8,7 @@ import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
+import { useApp } from "@/contexts/AppContext";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -17,13 +18,18 @@ interface AppLayoutProps {
 export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const [location] = useLocation();
   const { t } = useI18n();
+  const { conversations, notifications } = useApp();
+
+  // Dynamic badge counts from AppContext
+  const chatUnread = conversations.reduce((sum, c) => sum + c.unread, 0);
+  const notifUnread = notifications.filter((n) => !n.read).length;
 
   const tabs = [
-    { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: 20 },
+    { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: chatUnread },
     { path: "/app/discover", labelKey: "tab.discover", icon: Compass, badge: 0 },
-    { path: "/app/research", labelKey: "tab.research", icon: Brain, badge: 3 },
-    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 1 },
-    { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: 5 },
+    { path: "/app/research", labelKey: "tab.research", icon: Brain, badge: 0 },
+    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 0 },
+    { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
   ];
 
   return (
@@ -40,7 +46,8 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
             {tabs.map((tab) => {
               const isActive =
                 location === tab.path ||
-                (tab.path === "/app/chat" && location.startsWith("/app/chat/"));
+                (tab.path === "/app/chat" && location.startsWith("/app/chat/")) ||
+                (tab.path === "/app/profile" && (location === "/app/wallet" || location === "/app/edit-profile" || location === "/app/notifications"));
               const Icon = tab.icon;
 
               return (

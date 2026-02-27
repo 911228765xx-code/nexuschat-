@@ -564,7 +564,7 @@ export default function Contacts() {
                     <span className="text-[10px] font-medium text-muted-foreground">{selectedContact.isFavorite ? (t("contacts.unfav") || "Unfavorite") : (t("contacts.fav") || "Favorite")}</span>
                   </button>
                   <button
-                    onClick={() => toast("Transfer coming soon")}
+                    onClick={() => toast.info("Transfer feature coming soon")}
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-neon-purple/10 border border-neon-purple/20 hover:bg-neon-purple/15 transition-colors"
                   >
                     <span className="text-neon-purple text-lg">💸</span>

@@ -4,7 +4,7 @@
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus } from "lucide-react";
+import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus, Copy, Forward, Star, Trash2 } from "lucide-react";
 import EnhancedInput from "@/components/EnhancedInput";
 import SwipeMessage from "@/components/SwipeMessage";
 import SwipeBack from "@/components/SwipeBack";
@@ -90,6 +90,8 @@ export default function ChatRoom() {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const recordingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [showRedPacket, setShowRedPacket] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [rpAmount, setRpAmount] = useState("");
@@ -105,7 +107,22 @@ export default function ChatRoom() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isTyping]);
+
+  // Simulate typing indicator after user sends a message
+  const simulateTyping = useCallback(() => {
+    setIsTyping(true);
+    setTimeout(() => setIsTyping(false), 2000 + Math.random() * 2000);
+  }, []);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    document.addEventListener("click", handler);
+    document.addEventListener("scroll", handler, true);
+    return () => { document.removeEventListener("click", handler); document.removeEventListener("scroll", handler, true); };
+  }, [contextMenu]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -144,6 +161,7 @@ export default function ChatRoom() {
     setInput("");
     setReplyTo(null);
     setImagePreview(null);
+    simulateTyping();
 
     if (input.startsWith("/research")) {
       const token = input.replace("/research", "").trim().toUpperCase() || "BTC";
@@ -495,6 +513,12 @@ export default function ChatRoom() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
               className={`flex ${msg.isMine ? "justify-end" : "justify-start"} group relative`}
+              onContextMenu={(e: React.MouseEvent) => {
+                e.preventDefault();
+                const x = Math.min(e.clientX, window.innerWidth - 180);
+                const y = Math.min(e.clientY, window.innerHeight - 200);
+                setContextMenu({ msgId: msg.id, x, y });
+              }}
             >
               <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                 {!msg.isMine && (
@@ -620,7 +644,64 @@ export default function ChatRoom() {
             </SwipeMessage>
           ))}
         </AnimatePresence>
+
+        {/* Typing indicator */}
+        {isTyping && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="flex items-center gap-2 px-4 py-2"
+          >
+            <Avatar className="w-7 h-7 shrink-0">
+              <AvatarFallback className="bg-secondary text-xs">{id?.[0]?.toUpperCase() || "V"}</AvatarFallback>
+            </Avatar>
+            <div className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-secondary/60 border border-border/20 rounded-bl-md">
+              <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0 }} />
+              <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }} />
+              <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }} />
+            </div>
+            <span className="text-[10px] text-muted-foreground">{t("chat.typing")}</span>
+          </motion.div>
+        )}
       </div>
+
+      {/* Context Menu (long press / right click) */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.12 }}
+            className="fixed z-[100] min-w-[160px] rounded-xl bg-popover/95 backdrop-blur-xl border border-border shadow-2xl overflow-hidden"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[
+              { icon: Copy, label: t("chat.copy"), action: () => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg?.content) { navigator.clipboard.writeText(msg.content); toast.success(t("chat.copied")); } setContextMenu(null); } },
+              { icon: Reply, label: t("chat.replyAction"), action: () => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg) setReplyTo(msg); setContextMenu(null); } },
+              { icon: Forward, label: t("chat.forward"), action: () => { toast.info(t("chat.forwardComingSoon")); setContextMenu(null); } },
+              { icon: Star, label: t("chat.favorite"), action: () => { toast.success(t("chat.favorited")); setContextMenu(null); } },
+              { icon: Trash2, label: t("chat.deleteMsg"), action: () => { setMessages(prev => prev.filter(m => m.id !== contextMenu.msgId)); toast.success(t("chat.msgDeleted")); setContextMenu(null); }, danger: true },
+            ].map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={i}
+                  onClick={item.action}
+                  className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors ${
+                    (item as any).danger ? "text-destructive hover:bg-destructive/10" : "text-foreground hover:bg-secondary/60"
+                  }`}
+                >
+                  <Icon size={15} className="shrink-0" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Red Packet Modal */}
       <AnimatePresence>

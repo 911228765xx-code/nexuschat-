@@ -816,7 +816,7 @@ export default function Discover() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toast("Coming soon")}
+                      onClick={() => toast.info("Join community coming soon")}
                       className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
                     >
                       {t("discover.join")}
@@ -855,7 +855,7 @@ export default function Discover() {
                   </p>
                 </div>
                 <button
-                  onClick={() => toast("Coming soon")}
+                  onClick={() => toast.info("Follow user coming soon")}
                   className="shrink-0 px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan text-xs font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
                 >
                   {t("discover.follow")}

@@ -206,7 +206,14 @@ export default function Wallet() {
                 return (
                   <button
                     key={action.label}
-                    onClick={() => toast.info(`${action.label} coming soon`)}
+                    onClick={() => {
+                      if (action.label === (t("wallet.copy") || "Copy")) {
+                        navigator.clipboard.writeText("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18");
+                        toast.success("Wallet address copied!");
+                      } else {
+                        toast.info(`${action.label} coming soon`);
+                      }
+                    }}
                     className={`flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl ${action.color} hover:opacity-80 transition-all`}
                   >
                     <Icon size={16} />
@@ -407,7 +414,7 @@ export default function Wallet() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                   className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer"
-                  onClick={() => toast.info(`Tx: ${tx.hash}`)}
+                  onClick={() => { navigator.clipboard.writeText(tx.hash); toast.success(`Tx hash copied: ${tx.hash.slice(0, 10)}...`); }}
                 >
                   <div className="w-9 h-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0">
                     {txTypeIcon(tx.type)}

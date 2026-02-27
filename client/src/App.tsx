@@ -35,74 +35,80 @@ function AppContent() {
         <Onboarding onComplete={() => setShowOnboarding(false)} />
       )}
       <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/app/group/:id" component={() => (
+        <Route path="/">
+          <Home />
+        </Route>
+        <Route path="/app/group/:id">
           <AppLayout hideNav>
             <GroupChatRoom />
           </AppLayout>
-        )} />
-        <Route path="/app/chat/:id" component={() => (
+        </Route>
+        <Route path="/app/chat/:id">
           <AppLayout>
             <ChatRoom />
           </AppLayout>
-        )} />
-        <Route path="/app/chat" component={() => (
+        </Route>
+        <Route path="/app/chat">
           <AppLayout>
             <Chat />
           </AppLayout>
-        )} />
-        <Route path="/app/create-group" component={() => (
+        </Route>
+        <Route path="/app/create-group">
           <AppLayout hideNav>
             <CreateGroup />
           </AppLayout>
-        )} />
-        <Route path="/app/edit-profile" component={() => (
+        </Route>
+        <Route path="/app/edit-profile">
           <AppLayout hideNav>
             <EditProfile />
           </AppLayout>
-        )} />
-        <Route path="/app/wallet" component={() => (
+        </Route>
+        <Route path="/app/wallet">
           <AppLayout hideNav>
             <Wallet />
           </AppLayout>
-        )} />
-        <Route path="/app/contacts" component={() => (
+        </Route>
+        <Route path="/app/contacts">
           <AppLayout hideNav>
             <Contacts />
           </AppLayout>
-        )} />
-        <Route path="/app/notifications" component={() => (
+        </Route>
+        <Route path="/app/notifications">
           <AppLayout hideNav>
             <Notifications />
           </AppLayout>
-        )} />
-        <Route path="/app/discover" component={() => (
+        </Route>
+        <Route path="/app/discover">
           <AppLayout>
             <Discover />
           </AppLayout>
-        )} />
-        <Route path="/app/research" component={() => (
+        </Route>
+        <Route path="/app/research">
           <AppLayout>
             <Research />
           </AppLayout>
-        )} />
-        <Route path="/app/trading" component={() => (
+        </Route>
+        <Route path="/app/trading">
           <AppLayout>
             <Trading />
           </AppLayout>
-        )} />
-        <Route path="/app/profile" component={() => (
+        </Route>
+        <Route path="/app/profile">
           <AppLayout>
             <Profile />
           </AppLayout>
-        )} />
-        <Route path="/app" component={() => (
+        </Route>
+        <Route path="/app">
           <AppLayout>
             <Chat />
           </AppLayout>
-        )} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
+        </Route>
+        <Route path="/404">
+          <NotFound />
+        </Route>
+        <Route>
+          <NotFound />
+        </Route>
       </Switch>
     </>
   );

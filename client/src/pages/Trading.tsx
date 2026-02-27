@@ -137,15 +137,30 @@ const mockTrades: TradeLog[] = [
 
 export default function Trading() {
   const [activeTab, setActiveTab] = useState<"strategies" | "logs">("strategies");
+  const [strategies, setStrategies] = useState<Strategy[]>(mockStrategies);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [detailTab, setDetailTab] = useState<"chart" | "trades">("chart");
   const { t } = useI18n();
 
-  const totalProfit = mockStrategies.reduce((sum, s) => sum + s.totalProfit, 0);
-  const totalTrades = mockStrategies.reduce((sum, s) => sum + s.trades, 0);
+  const totalProfit = strategies.reduce((sum, s) => sum + s.totalProfit, 0);
+  const totalTrades = strategies.reduce((sum, s) => sum + s.trades, 0);
   const avgWinRate = Math.round(
-    mockStrategies.reduce((sum, s) => sum + s.winRate, 0) / mockStrategies.length
+    strategies.reduce((sum, s) => sum + s.winRate, 0) / strategies.length
   );
+
+  const toggleStrategyStatus = (id: string) => {
+    setStrategies(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const newStatus = s.status === "running" ? "paused" as const : "running" as const;
+      toast.success(newStatus === "running" ? `${s.name} resumed` : `${s.name} paused`);
+      return { ...s, status: newStatus };
+    }));
+    // Also update selectedStrategy if open
+    setSelectedStrategy(prev => {
+      if (!prev || prev.id !== id) return prev;
+      return { ...prev, status: prev.status === "running" ? "paused" as const : "running" as const };
+    });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -157,7 +172,7 @@ export default function Trading() {
             <h1 className="text-lg font-semibold font-display">{t("trading.title")}</h1>
           </div>
           <button
-            onClick={() => toast("Coming soon")}
+            onClick={() => toast.info("Create new strategy coming soon")}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <Plus size={18} className="text-neon-green" />
@@ -209,7 +224,7 @@ export default function Trading() {
         <div className="px-4 py-4 space-y-3">
           {activeTab === "strategies" ? (
             <>
-              {mockStrategies.map((strategy, index) => (
+            {strategies.map((strategy, index) => (
                 <motion.div
                   key={strategy.id}
                   initial={{ opacity: 0, y: 8 }}
@@ -230,7 +245,7 @@ export default function Trading() {
                       </span>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); toast("Coming soon"); }}
+                      onClick={(e) => { e.stopPropagation(); toggleStrategyStatus(strategy.id); }}
                       className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
                     >
                       {strategy.status === "running" ? (
@@ -528,14 +543,14 @@ export default function Trading() {
               {/* Action Buttons */}
               <div className="px-4 py-3 border-t border-border/30 flex gap-3 shrink-0">
                 <button
-                  onClick={() => { toast("Coming soon"); }}
+                  onClick={() => toast.info("Edit strategy coming soon")}
                   className="flex-1 h-11 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
                 >
                   <Settings size={16} />
                   Edit Strategy
                 </button>
                 <button
-                  onClick={() => { toast("Coming soon"); }}
+                  onClick={() => toggleStrategyStatus(selectedStrategy.id)}
                   className={`flex-1 h-11 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                     selectedStrategy.status === "running"
                       ? "bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20"

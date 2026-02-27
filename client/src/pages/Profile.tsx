@@ -161,7 +161,13 @@ export default function Profile() {
                        key={item.label}
                        onClick={() => {
                          if (item.label === t("profile.wallet")) setLocation("/app/wallet");
-                         else toast("Coming soon");
+                         else if (item.label === t("profile.strategies")) setLocation("/app/trading");
+                         else if (item.label === t("profile.researchHistory")) setLocation("/app/research");
+                         else if (item.label === t("profile.groups")) setLocation("/app/contacts");
+                         else if (item.label === t("profile.invite")) { navigator.clipboard.writeText("https://nexuschat.app/invite/" + profile.displayName); toast.success(t("profile.inviteLinkCopied") || "Invite link copied!"); }
+                         else if (item.label === t("profile.leaderboard")) toast.info(t("profile.leaderboardComingSoon") || "Leaderboard coming soon");
+                         else if (item.label === t("profile.tasks")) toast.info(t("profile.tasksComingSoon") || "Daily tasks coming soon");
+                         else toast.info(`${item.label} coming soon`);
                        }}
                       className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
                     >
@@ -223,7 +229,7 @@ export default function Profile() {
 
               {/* Security */}
               <button
-                onClick={() => toast("Coming soon")}
+                onClick={() => toast.info("Security settings coming soon")}
                 className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
               >
                 <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
@@ -254,7 +260,7 @@ export default function Profile() {
 
           {/* Logout */}
           <button
-            onClick={() => toast("Coming soon")}
+            onClick={() => toast.info("Logout coming soon")}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-destructive/5 border border-destructive/15 text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
             <LogOut size={16} />
