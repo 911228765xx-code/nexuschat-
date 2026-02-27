@@ -4,7 +4,7 @@
  * v1.9: AppContext全局状态接入
  */
 import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -15,6 +15,7 @@ import { useApp } from "@/contexts/AppContext";
 export default function Profile() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const [, setLocation] = useLocation();
 
   // ✅ AppContext全局状态
   const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
@@ -157,8 +158,11 @@ export default function Profile() {
                   const Icon = item.icon;
                   return (
                     <button
-                      key={item.label}
-                      onClick={() => toast("Coming soon")}
+                       key={item.label}
+                       onClick={() => {
+                         if (item.label === t("profile.wallet")) setLocation("/app/wallet");
+                         else toast("Coming soon");
+                       }}
                       className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
                     >
                       <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">

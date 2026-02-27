@@ -4,7 +4,7 @@
  * 增强互动：点赞动画、评论输入框与评论列表
  * Cyberpunk Noir风格
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -195,6 +195,68 @@ function LikeParticles({ show }: { show: boolean }) {
   );
 }
 
+/* ─── Extra Mock Data Generator ─── */
+const extraAuthors = [
+  { name: "whale_watcher.eth", avatar: "🐋", isVerified: true, handle: "0xC4D2...7f1a" },
+  { name: "nft_degen.eth", avatar: "🎭", isVerified: false, handle: "0xE8B1...3c9d" },
+  { name: "yield_farmer", avatar: "🌾", isVerified: true, handle: "0xA1F3...8e2b" },
+  { name: "alpha_hunter.sol", avatar: "🎯", isVerified: true, handle: "0xD7C5...1a4f" },
+  { name: "mev_bot.eth", avatar: "🤖", isVerified: false, handle: "0xB2E4...6d8c" },
+  { name: "dao_governor", avatar: "🏛️", isVerified: true, handle: "0xF9A6...2b7e" },
+  { name: "layer2_maxi", avatar: "⚡", isVerified: false, handle: "0x3C8D...9f1a" },
+  { name: "defi_scientist", avatar: "🧪", isVerified: true, handle: "0x7E2B...4c6d" },
+  { name: "crypto_punk.eth", avatar: "👾", isVerified: true, handle: "0x1A5F...8e3b" },
+  { name: "zk_researcher", avatar: "🔐", isVerified: false, handle: "0x6D9C...2a7f" },
+];
+
+const extraContents = [
+  "Just deployed a new lending protocol on Arbitrum. APY optimization through dynamic interest rate curves. Early depositors getting 15% boost. 🏦\n\nAudit by Trail of Bits complete.",
+  "The merge between AI agents and DeFi is happening faster than expected. Autonomous trading bots now manage $2B+ in TVL across chains. 🤖💰",
+  "Hot take: L2s will eventually settle on a shared sequencer model. Decentralization at the base layer, efficiency at the execution layer. The endgame is clear.",
+  "New governance proposal for our DAO: allocate 5% of treasury to public goods funding. If you hold tokens, please vote! Every voice matters. 🗳️",
+  "Just bridged 50 ETH to zkSync Era. The UX improvements in the latest update are incredible — feels like using a native L1. Zero-knowledge proofs FTW! ⚡",
+  "Unpopular opinion: Most NFT collections will go to zero, but the technology itself will revolutionize digital ownership. Focus on utility, not speculation.",
+  "Breaking: Major CEX just listed our token! 6 months of building in silence, and now the market is finally noticing. LFG! 🚀\n\nFundamentals always win.",
+  "Deep dive into Eigenlayer restaking economics: the risk-reward profile is asymmetric in favor of early restakers. Here's my analysis thread 🧵",
+  "Built a MEV protection system using Flashbots. Saved users $1.2M in the first week alone. Open-sourcing the code next month. 🛡️",
+  "The next bull run will be driven by RWA tokenization. Real estate, bonds, commodities — all on-chain. Traditional finance is not ready for this disruption.",
+  "Attended ETHDenver and the energy was unreal. Met 50+ builders working on privacy-preserving DeFi. The future of finance is private by default. 🏔️",
+  "Staking rewards just hit 8.2% APR on our validator. Running since the Beacon Chain genesis — 847 days of perfect uptime. Consistency is key. ✅",
+  "New research paper: 'Optimal AMM Design for Concentrated Liquidity'. Found that dynamic fee tiers can reduce IL by up to 40%. Link in bio. 📊",
+  "The intersection of gaming and DeFi is massively underexplored. Imagine earning yield while playing — not through ponzinomics, but real economic activity.",
+  "Just completed my first ZK circuit! Proving that I'm over 18 without revealing my age. Privacy is a fundamental right, and ZK makes it possible. 🔒",
+];
+
+const extraTags = [
+  ["#DeFi", "#Arbitrum"], ["#AI", "#Trading"], ["#L2", "#Sequencer"],
+  ["#DAO", "#Governance"], ["#zkSync", "#ZKProofs"], ["#NFT", "#DigitalOwnership"],
+  ["#CEX", "#Listing"], ["#Eigenlayer", "#Restaking"], ["#MEV", "#Flashbots"],
+  ["#RWA", "#Tokenization"], ["#ETHDenver", "#Privacy"], ["#Staking", "#Validator"],
+  ["#AMM", "#Research"], ["#Gaming", "#GameFi"], ["#ZK", "#Privacy"],
+];
+
+function generateMorePosts(page: number, pageSize: number = 5): MomentPost[] {
+  return Array.from({ length: pageSize }, (_, i) => {
+    const idx = (page * pageSize + i) % extraContents.length;
+    const authorIdx = (page * pageSize + i) % extraAuthors.length;
+    const timeHours = 12 + page * 6 + i * 2;
+    return {
+      id: `gen-${page}-${i}`,
+      author: extraAuthors[authorIdx],
+      content: extraContents[idx],
+      timestamp: `${timeHours}h ago`,
+      likes: Math.floor(Math.random() * 8000) + 200,
+      comments: Math.floor(Math.random() * 500) + 10,
+      reposts: Math.floor(Math.random() * 2000) + 50,
+      isLiked: Math.random() > 0.7,
+      isBookmarked: Math.random() > 0.85,
+      tags: extraTags[idx],
+      commentList: [],
+      showComments: false,
+    };
+  });
+}
+
 /* ─── Component ─── */
 export default function Discover() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -208,6 +270,59 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const commentInputRef = useRef<HTMLInputElement>(null);
   const { t } = useI18n();
+
+  // ─── Infinite Scroll State ───
+  const [page, setPage] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const MAX_PAGES = 6; // Total ~35 posts
+
+  // ─── Intersection Observer for infinite scroll ───
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    // Simulate network delay
+    setTimeout(() => {
+      const nextPage = page + 1;
+      if (nextPage >= MAX_PAGES) {
+        setHasMore(false);
+      } else {
+        const newPosts = generateMorePosts(nextPage);
+        setMoments(prev => [...prev, ...newPosts]);
+        setPage(nextPage);
+      }
+      setIsLoadingMore(false);
+    }, 800 + Math.random() * 600);
+  }, [isLoadingMore, hasMore, page]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && activeTab === "moments") {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: "200px" }
+    );
+    const el = loadMoreRef.current;
+    if (el) observer.observe(el);
+    return () => { if (el) observer.unobserve(el); };
+  }, [handleLoadMore, activeTab]);
+
+  // ─── Pull to refresh ───
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      setMoments(mockMoments);
+      setPage(0);
+      setHasMore(true);
+      setIsRefreshing(false);
+      toast(t("discover.refreshed") || "Feed refreshed!");
+    }, 1000);
+  }, [t]);
 
   const categories = ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
 
@@ -394,6 +509,18 @@ export default function Discover() {
               </button>
             </div>
 
+            {/* Pull to refresh indicator */}
+            {isRefreshing && (
+              <div className="flex items-center justify-center py-4 gap-2">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                  className="w-5 h-5 border-2 border-neon-cyan/30 border-t-neon-cyan rounded-full"
+                />
+                <span className="text-xs text-muted-foreground">{t("discover.refreshing") || "Refreshing..."}</span>
+              </div>
+            )}
+
             {/* Moments Feed */}
             <div className="space-y-0">
               {moments.map((post, index) => (
@@ -401,7 +528,7 @@ export default function Discover() {
                   key={post.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: Math.min(index * 0.05, 0.3) }}
                   className="px-4 py-4 border-b border-border/10"
                 >
                   {/* Author row */}
@@ -601,6 +728,37 @@ export default function Discover() {
                   </div>
                 </motion.article>
               ))}
+            </div>
+
+            {/* ─── Load More / Infinite Scroll Trigger ─── */}
+            <div ref={loadMoreRef} className="py-6">
+              {isLoadingMore && (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <motion.div
+                        key={i}
+                        animate={{ y: [-3, 3, -3] }}
+                        transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.15 }}
+                        className="w-2 h-2 rounded-full bg-neon-cyan/60"
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">{t("discover.loadingMore") || "Loading more posts..."}</span>
+                </div>
+              )}
+              {!hasMore && moments.length > 5 && (
+                <div className="flex flex-col items-center gap-2 py-6">
+                  <div className="w-12 h-px bg-border/40" />
+                  <span className="text-xs text-muted-foreground">{t("discover.noMorePosts") || "You've reached the end"}</span>
+                  <button
+                    onClick={handleRefresh}
+                    className="text-xs text-neon-cyan hover:underline mt-1"
+                  >
+                    {t("discover.backToTop") || "Back to top"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

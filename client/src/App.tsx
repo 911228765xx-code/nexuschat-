@@ -20,6 +20,7 @@ import Onboarding from "./components/Onboarding";
 import CreateGroup from "./pages/CreateGroup";
 import EditProfile from "./pages/EditProfile";
 import GroupChatRoom from "./pages/GroupChatRoom";
+import Wallet from "./pages/Wallet";
 import { AppProvider } from "./contexts/AppContext";
 
 function AppContent() {
@@ -58,6 +59,11 @@ function AppContent() {
         <Route path="/app/edit-profile" component={() => (
           <AppLayout hideNav>
             <EditProfile />
+          </AppLayout>
+        )} />
+        <Route path="/app/wallet" component={() => (
+          <AppLayout hideNav>
+            <Wallet />
           </AppLayout>
         )} />
         <Route path="/app/contacts" component={() => (

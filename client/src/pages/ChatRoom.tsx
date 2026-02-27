@@ -45,6 +45,8 @@ interface Message {
   fileType?: string;
   // Image gallery
   imageGallery?: string[];
+  // Read receipt
+  readStatus?: "sent" | "delivered" | "read";
 }
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
@@ -58,19 +60,19 @@ const TOKENS = [
 ];
 
 const mockMessages: Message[] = [
-  { id: "1", sender: "vitalik.eth", senderAvatar: "V", content: "你看了最新的 EIP-4844 提案吗？", time: "14:20", isMine: false, type: "text" },
-  { id: "2", sender: "me", senderAvatar: "M", content: "看了，Proto-Danksharding 对 L2 的费用影响很大", time: "14:21", isMine: true, type: "text", replyTo: { sender: "vitalik.eth", content: "你看了最新的 EIP-4844 提案吗？" } },
+  { id: "1", sender: "vitalik.eth", senderAvatar: "V", content: "你看了最新的 EIP-4844 提案吗？", time: "14:20", isMine: false, type: "text", readStatus: "read" },
+  { id: "2", sender: "me", senderAvatar: "M", content: "看了，Proto-Danksharding 对 L2 的费用影响很大", time: "14:21", isMine: true, type: "text", replyTo: { sender: "vitalik.eth", content: "你看了最新的 EIP-4844 提案吗？" }, readStatus: "read" },
   { id: "3", sender: "vitalik.eth", senderAvatar: "V", content: "是的，预计 L2 交易费用能降低 10-100 倍。Arbitrum 和 Optimism 都会受益 🚀", time: "14:22", isMine: false, type: "text", reactions: { "🔥": 3, "👍": 2 } },
   { id: "v1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:22", isMine: false, type: "voice", voiceDuration: 12, voiceWaveform: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7, 0.5, 0.3, 0.6, 0.8, 0.4, 0.2, 0.5, 0.7, 0.9, 0.6, 0.3, 0.5, 0.4] },
-  { id: "4", sender: "me", senderAvatar: "M", content: "", time: "14:23", isMine: true, type: "redpacket", isRedPacket: true, cryptoAmount: "0.05", cryptoToken: "ETH" },
+  { id: "4", sender: "me", senderAvatar: "M", content: "", time: "14:23", isMine: true, type: "redpacket", isRedPacket: true, cryptoAmount: "0.05", cryptoToken: "ETH", readStatus: "read" },
   { id: "5", sender: "vitalik.eth", senderAvatar: "V", content: "收到红包！谢谢 🧧", time: "14:24", isMine: false, type: "text", reactions: { "🎉": 2 } },
   { id: "img1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:24", isMine: false, type: "image", imageGallery: ["https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&h=300&fit=crop", "https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=400&h=300&fit=crop"] },
-  { id: "6", sender: "me", senderAvatar: "M", content: "ETH 2.0 的质押收益率现在怎么样？", time: "14:25", isMine: true, type: "text" },
-  { id: "loc1", sender: "me", senderAvatar: "M", content: "", time: "14:25", isMine: true, type: "location", locationName: "ETH Denver 2026", locationAddress: "National Western Complex, Denver, CO", locationLat: 39.7817, locationLng: -104.9718 },
+  { id: "6", sender: "me", senderAvatar: "M", content: "ETH 2.0 的质押收益率现在怎么样？", time: "14:25", isMine: true, type: "text", readStatus: "read" },
+  { id: "loc1", sender: "me", senderAvatar: "M", content: "", time: "14:25", isMine: true, type: "location", locationName: "ETH Denver 2026", locationAddress: "National Western Complex, Denver, CO", locationLat: 39.7817, locationLng: -104.9718, readStatus: "delivered" },
   { id: "7", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:25", isMine: false, type: "transfer", isTransfer: true, cryptoAmount: "100", cryptoToken: "USDT" },
   { id: "file1", sender: "vitalik.eth", senderAvatar: "V", content: "", time: "14:26", isMine: false, type: "file", fileName: "EIP-4844_Analysis.pdf", fileSize: "2.4 MB", fileType: "PDF" },
   { id: "8", sender: "vitalik.eth", senderAvatar: "V", content: "目前大约在 4-5% APY，质押率持续上升中", time: "14:26", isMine: false, type: "text", reactions: { "💎": 1 } },
-  { id: "v2", sender: "me", senderAvatar: "M", content: "", time: "14:26", isMine: true, type: "voice", voiceDuration: 5, voiceWaveform: [0.2, 0.4, 0.7, 0.5, 0.8, 0.6, 0.3, 0.5, 0.4, 0.2] },
+  { id: "v2", sender: "me", senderAvatar: "M", content: "", time: "14:26", isMine: true, type: "voice", voiceDuration: 5, voiceWaveform: [0.2, 0.4, 0.7, 0.5, 0.8, 0.6, 0.3, 0.5, 0.4, 0.2], readStatus: "sent" },
   { id: "9", sender: "NexusBot", senderAvatar: "🤖", content: "📊 **ETH 投研快报**\n\n💰 价格: $3,842.50 (+2.4%)\n📈 市值: $461.8B (#2)\n🔒 TVL: $58.2B\n⛓️ 24h活跃地址: 524,891\n\n🤖 AI评级: **强烈看好** (8.5/10)\n\n> ETH 基本面强劲，质押率持续上升，L2生态蓬勃发展。建议长期持有。", time: "14:27", isMine: false, type: "ai", isAI: true },
 ];
 
@@ -118,16 +120,26 @@ export default function ChatRoom() {
   const handleSend = useCallback(() => {
     if (!input.trim() && !imagePreview) return;
     const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    const msgId = Date.now().toString();
     const newMsg: Message = {
-      id: Date.now().toString(),
+      id: msgId,
       sender: "me",
       senderAvatar: "M",
       content: input,
       time: now,
       isMine: true,
+      readStatus: "sent",
       ...(replyTo ? { replyTo: { sender: replyTo.sender, content: replyTo.content.slice(0, 60) } } : {}),
       ...(imagePreview ? { imageUrl: imagePreview } : {}),
     };
+
+    // Simulate read receipt progression: sent → delivered → read
+    setTimeout(() => {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readStatus: "delivered" as const } : m));
+    }, 800);
+    setTimeout(() => {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readStatus: "read" as const } : m));
+    }, 2500);
     setMessages((prev) => [...prev, newMsg]);
     setInput("");
     setReplyTo(null);
@@ -577,6 +589,20 @@ export default function ChatRoom() {
                   {/* Reactions display */}
                   <div className={`flex items-center gap-1 mt-1 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
                     <span className="text-[10px] text-muted-foreground">{msg.time}</span>
+                    {/* Read receipt indicator */}
+                    {msg.isMine && msg.readStatus && (
+                      <span className={`text-[10px] flex items-center ${
+                        msg.readStatus === "read" ? "text-neon-cyan" :
+                        msg.readStatus === "delivered" ? "text-muted-foreground" :
+                        "text-muted-foreground/50"
+                      }`}>
+                        {msg.readStatus === "sent" ? (
+                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 5l3 3L12 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        ) : (
+                          <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><path d="M1 5l3 3L12 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 5l3 3L16 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        )}
+                      </span>
+                    )}
                     {msg.reactions && Object.entries(msg.reactions).map(([emoji, count]) => (
                       <button
                         key={emoji}
