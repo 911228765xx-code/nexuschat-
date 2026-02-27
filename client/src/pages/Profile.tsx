@@ -164,9 +164,9 @@ export default function Profile() {
                          else if (item.label === t("profile.strategies")) setLocation("/app/trading");
                          else if (item.label === t("profile.researchHistory")) setLocation("/app/research");
                          else if (item.label === t("profile.groups")) setLocation("/app/contacts");
-                         else if (item.label === t("profile.invite")) { navigator.clipboard.writeText("https://nexuschat.app/invite/" + profile.displayName); toast.success(t("profile.inviteLinkCopied") || "Invite link copied!"); }
-                         else if (item.label === t("profile.leaderboard")) toast.info(t("profile.leaderboardComingSoon") || "Leaderboard coming soon");
-                         else if (item.label === t("profile.tasks")) toast.info(t("profile.tasksComingSoon") || "Daily tasks coming soon");
+                         else if (item.label === t("profile.invite")) setLocation("/app/invite");
+                         else if (item.label === t("profile.leaderboard")) setLocation("/app/leaderboard");
+                         else if (item.label === t("profile.tasks")) setLocation("/app/tasks");
                          else toast.info(`${item.label} coming soon`);
                        }}
                       className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
@@ -227,16 +227,15 @@ export default function Profile() {
                 </div>
               </button>
 
-              {/* Security */}
+              {/* Settings — link to full settings page */}
               <button
-                onClick={() => toast.info("Security settings coming soon")}
+                onClick={() => setLocation("/app/settings")}
                 className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
               >
                 <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
                   <Settings size={16} className="text-foreground" />
                 </div>
                 <span className="flex-1 text-sm text-left">{t("profile.security")}</span>
-                <span className="text-xs text-muted-foreground font-mono">API Key</span>
                 <ChevronRight size={14} className="text-muted-foreground" />
               </button>
 
@@ -258,9 +257,9 @@ export default function Profile() {
             </div>
           </motion.div>
 
-          {/* Logout */}
+          {/* Logout — redirect to settings */}
           <button
-            onClick={() => toast.info("Logout coming soon")}
+            onClick={() => setLocation("/app/settings")}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-destructive/5 border border-destructive/15 text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
             <LogOut size={16} />

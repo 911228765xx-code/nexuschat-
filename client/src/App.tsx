@@ -21,6 +21,10 @@ import CreateGroup from "./pages/CreateGroup";
 import EditProfile from "./pages/EditProfile";
 import GroupChatRoom from "./pages/GroupChatRoom";
 import Wallet from "./pages/Wallet";
+import InviteFriends from "./pages/InviteFriends";
+import TaskCenter from "./pages/TaskCenter";
+import Leaderboard from "./pages/Leaderboard";
+import Settings from "./pages/Settings";
 import { AppProvider } from "./contexts/AppContext";
 
 function AppContent() {
@@ -76,6 +80,26 @@ function AppContent() {
         <Route path="/app/notifications">
           <AppLayout hideNav>
             <Notifications />
+          </AppLayout>
+        </Route>
+        <Route path="/app/invite">
+          <AppLayout hideNav>
+            <InviteFriends />
+          </AppLayout>
+        </Route>
+        <Route path="/app/tasks">
+          <AppLayout hideNav>
+            <TaskCenter />
+          </AppLayout>
+        </Route>
+        <Route path="/app/leaderboard">
+          <AppLayout hideNav>
+            <Leaderboard />
+          </AppLayout>
+        </Route>
+        <Route path="/app/settings">
+          <AppLayout hideNav>
+            <Settings />
           </AppLayout>
         </Route>
         <Route path="/app/discover">
