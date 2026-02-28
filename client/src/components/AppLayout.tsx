@@ -9,6 +9,8 @@ import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -19,10 +21,19 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const [location] = useLocation();
   const { t } = useI18n();
   const { conversations, notifications } = useApp();
+  const { isAuthenticated } = useAuth();
 
   // Dynamic badge counts from AppContext
   const chatUnread = conversations.reduce((sum, c) => sum + c.unread, 0);
-  const notifUnread = notifications.filter((n) => !n.read).length;
+  const localNotifUnread = notifications.filter((n) => !n.read).length;
+
+  // Real unread count from backend (polls every 30s when authenticated)
+  const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  const notifUnread = unreadData?.count ?? localNotifUnread;
 
   const tabs = [
     { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: chatUnread },

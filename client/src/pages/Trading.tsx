@@ -470,13 +470,13 @@ export default function Trading() {
     }
   };
 
-  const tabItems: { key: MainTab; label: string; icon: React.ReactNode }[] = [
+  const tabItems: { key: MainTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "strategies", label: t("trading.myStrategies"), icon: <Zap size={13} /> },
     { key: "market", label: t("trading.market") || "Market", icon: <Users size={13} /> },
     { key: "positions", label: t("trading.positions") || "Positions", icon: <Activity size={13} /> },
     { key: "calendar", label: "PnL Cal", icon: <Calendar size={13} /> },
     { key: "logs", label: t("trading.tradeHistory"), icon: <Clock size={13} /> },
-    { key: "alerts", label: "Alerts", icon: <Bell size={13} /> },
+    { key: "alerts", label: "Alerts", icon: <Bell size={13} />, badge: realAlerts.length },
   ];
 
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
@@ -552,12 +552,17 @@ export default function Trading() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1 flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${
+              className={`relative flex items-center gap-1 flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.key ? "bg-secondary text-foreground shadow-sm" : "text-muted-foreground"
               }`}
             >
               {tab.icon}
               {tab.label}
+              {tab.badge != null && tab.badge > 0 && (
+                <span className="ml-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-neon-cyan text-[8px] font-bold text-background flex items-center justify-center">
+                  {tab.badge > 9 ? "9+" : tab.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
