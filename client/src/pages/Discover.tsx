@@ -290,6 +290,42 @@ export default function Discover() {
     },
   });
 
+  // ─── tRPC: Fetch posts from backend (with images) ───
+  const { data: serverPostsData } = trpc.posts.list.useQuery(
+    { limit: 30, offset: 0 },
+    { staleTime: 10_000, refetchOnWindowFocus: false }
+  );
+
+  // Merge server posts into moments (server posts take priority, preserve local optimistic)
+  useEffect(() => {
+    if (!serverPostsData?.posts || serverPostsData.posts.length === 0) return;
+    const serverMapped: MomentPost[] = serverPostsData.posts.map((p) => ({
+      id: String(p.id),
+      author: {
+        name: p.authorName ?? "Anonymous",
+        avatar: p.authorAvatar ?? "👤",
+        isVerified: false,
+        handle: p.authorUsername ? `@${p.authorUsername}` : (p.authorWallet ? `${p.authorWallet.slice(0, 6)}...${p.authorWallet.slice(-4)}` : "unknown"),
+      },
+      content: p.content,
+      images: p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls : undefined,
+      tags: p.tags ?? [],
+      timestamp: new Date(p.createdAt).toLocaleDateString("zh-CN"),
+      likes: p.likeCount,
+      comments: p.commentCount,
+      reposts: p.shareCount,
+      isLiked: p.isLiked,
+      isBookmarked: false,
+      commentList: [],
+      showComments: false,
+    }));
+    setMoments((prev) => {
+      // Keep local-only optimistic posts (timestamp-based IDs > 1.7T)
+      const localOnly = prev.filter((m) => Number(m.id) > 1_700_000_000_000);
+      return [...serverMapped, ...localOnly];
+    });
+  }, [serverPostsData]);
+
   // ─── tRPC: Create post mutation ───
   const createPost = trpc.posts.create.useMutation({
     onSuccess: (data) => {
@@ -658,6 +694,41 @@ export default function Discover() {
                         className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => setLocation(`/app/post/${post.id}`)}
                       >{post.content}</p>
+
+                      {/* Media images grid */}
+                      {post.images && post.images.length > 0 && (
+                        <div className={`mt-2.5 rounded-xl overflow-hidden grid gap-0.5 ${
+                          post.images.length === 1 ? 'grid-cols-1' :
+                          post.images.length === 2 ? 'grid-cols-2' :
+                          post.images.length === 3 ? 'grid-cols-2' :
+                          'grid-cols-2'
+                        }`}>
+                          {post.images.slice(0, 4).map((imgUrl, idx) => (
+                            <div
+                              key={idx}
+                              className={`relative overflow-hidden bg-secondary/40 ${
+                                post.images!.length === 1 ? 'aspect-video' :
+                                post.images!.length === 3 && idx === 0 ? 'row-span-2 aspect-square' :
+                                'aspect-square'
+                              }`}
+                            >
+                              <img
+                                src={imgUrl}
+                                alt={`帖子图片 ${idx + 1}`}
+                                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(imgUrl, '_blank')}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                              {/* Show +N overlay for 4th image if more than 4 */}
+                              {idx === 3 && post.images!.length > 4 && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                  <span className="text-white font-bold text-lg">+{post.images!.length - 4}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Tags */}
                       {post.tags && post.tags.length > 0 && (

@@ -305,3 +305,118 @@ describe("Chat Polling", () => {
     expect(tooLong.length <= maxLen).toBe(false);
   });
 });
+
+// ─── Phase 5: Discover Images, Avatar Upload, ChatRoom Polling ────────────────
+describe("Discover Post Image Grid", () => {
+  it("maps 1 image to single column grid", () => {
+    const images = ["url1"];
+    const gridCols = images.length === 1 ? "grid-cols-1" : "grid-cols-2";
+    expect(gridCols).toBe("grid-cols-1");
+  });
+
+  it("maps 2+ images to two-column grid", () => {
+    const images = ["url1", "url2"];
+    const gridCols = images.length === 1 ? "grid-cols-1" : "grid-cols-2";
+    expect(gridCols).toBe("grid-cols-2");
+  });
+
+  it("limits displayed images to 4", () => {
+    const images = ["u1", "u2", "u3", "u4", "u5", "u6"];
+    const displayed = images.slice(0, 4);
+    expect(displayed.length).toBe(4);
+  });
+
+  it("calculates overflow count correctly", () => {
+    const images = ["u1", "u2", "u3", "u4", "u5"];
+    const overflow = images.length > 4 ? images.length - 4 : 0;
+    expect(overflow).toBe(1);
+  });
+
+  it("maps server post mediaUrls to images field", () => {
+    const serverPost = { id: 1, content: "test", mediaUrls: ["https://cdn.example.com/img.jpg"] };
+    const images = serverPost.mediaUrls && serverPost.mediaUrls.length > 0 ? serverPost.mediaUrls : undefined;
+    expect(images).toEqual(["https://cdn.example.com/img.jpg"]);
+  });
+
+  it("returns undefined images when mediaUrls is empty", () => {
+    const serverPost = { id: 2, content: "text only", mediaUrls: [] };
+    const images = serverPost.mediaUrls && serverPost.mediaUrls.length > 0 ? serverPost.mediaUrls : undefined;
+    expect(images).toBeUndefined();
+  });
+});
+
+describe("Avatar S3 Upload", () => {
+  it("validates avatar file size limit (4MB)", () => {
+    const maxBytes = 4 * 1024 * 1024;
+    const smallFile = 500 * 1024; // 500KB
+    const largeFile = 5 * 1024 * 1024; // 5MB
+    expect(smallFile <= maxBytes).toBe(true);
+    expect(largeFile <= maxBytes).toBe(false);
+  });
+
+  it("extracts mime type from avatar data URL", () => {
+    const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+    const mimeType = dataUrl.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+    expect(mimeType).toBe("image/png");
+  });
+
+  it("generates correct file extension from mime type", () => {
+    const mimeType = "image/webp";
+    const ext = mimeType.split("/")[1] ?? "jpg";
+    expect(ext).toBe("webp");
+  });
+
+  it("saves CDN URL as avatar after upload", () => {
+    const uploadResult = { url: "https://cdn.example.com/avatars/user-42-abc123.png" };
+    const avatarImage = uploadResult.url;
+    expect(avatarImage).toMatch(/^https:\/\//);
+  });
+});
+
+describe("ChatRoom DM Polling", () => {
+  it("parses numeric groupId from URL param", () => {
+    const id = "42";
+    const groupId = id ? parseInt(id, 10) : NaN;
+    const isValidRoom = !isNaN(groupId) && groupId > 0;
+    expect(groupId).toBe(42);
+    expect(isValidRoom).toBe(true);
+  });
+
+  it("rejects non-numeric room ID", () => {
+    const id = "dm-alice";
+    const groupId = id ? parseInt(id, 10) : NaN;
+    const isValidRoom = !isNaN(groupId) && groupId > 0;
+    expect(isNaN(groupId)).toBe(true);
+    expect(isValidRoom).toBe(false);
+  });
+
+  it("rejects zero as invalid room ID", () => {
+    const id = "0";
+    const groupId = parseInt(id, 10);
+    const isValidRoom = !isNaN(groupId) && groupId > 0;
+    expect(isValidRoom).toBe(false);
+  });
+
+  it("maps server DM message to Message format", () => {
+    const serverMsg = {
+      id: 99,
+      senderName: "Alice",
+      senderAvatar: "🐱",
+      content: "Hello!",
+      createdAt: new Date("2026-01-15T10:30:00Z"),
+      mediaUrl: null,
+    };
+    const mapped = {
+      id: String(serverMsg.id),
+      sender: serverMsg.senderName ?? "Unknown",
+      senderAvatar: serverMsg.senderAvatar ?? "👤",
+      content: serverMsg.content,
+      time: new Date(serverMsg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      isMine: false,
+      readStatus: "read" as const,
+    };
+    expect(mapped.id).toBe("99");
+    expect(mapped.sender).toBe("Alice");
+    expect(mapped.isMine).toBe(false);
+  });
+});

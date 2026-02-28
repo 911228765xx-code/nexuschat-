@@ -141,6 +141,41 @@ export default function ChatRoom() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Parse groupId from URL param (DM rooms use numeric IDs)
+  const groupId = id ? parseInt(id, 10) : NaN;
+  const isValidRoom = !isNaN(groupId) && groupId > 0;
+
+  // tRPC: poll messages from backend every 3s
+  const { data: serverMessages } = trpc.chat.getMessages.useQuery(
+    { groupId, limit: 50 },
+    {
+      enabled: isValidRoom,
+      refetchInterval: 3000,
+      staleTime: 2000,
+    }
+  );
+
+  // Merge server messages with local optimistic messages
+  useEffect(() => {
+    if (!serverMessages || serverMessages.length === 0) return;
+    setMessages((prev) => {
+      const serverIds = new Set(serverMessages.map((m) => String(m.id)));
+      // Keep local-only optimistic messages (timestamp-based IDs)
+      const localOnly = prev.filter((m) => !serverIds.has(m.id) && Number(m.id) > 1_700_000_000_000);
+      const mapped: Message[] = serverMessages.map((m) => ({
+        id: String(m.id),
+        sender: m.senderName ?? "Unknown",
+        senderAvatar: m.senderAvatar ?? "👤",
+        content: m.content,
+        time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        isMine: false,
+        readStatus: "read" as const,
+        ...(m.mediaUrl ? { imageUrl: m.mediaUrl } : {}),
+      }));
+      return [...mapped, ...localOnly];
+    });
+  }, [serverMessages]);
+
   // tRPC: save DM message (non-blocking)
   const saveMessage = trpc.chat.saveMessage.useMutation({
     onError: (err) => console.warn("[ChatRoom] save failed:", err.message),
@@ -170,9 +205,9 @@ export default function ChatRoom() {
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readStatus: "read" as const } : m));
     }, 2500);
     setMessages((prev) => [...prev, newMsg]);
-    // Persist to backend (best-effort, group 0 = DM placeholder)
-    if (input.trim()) {
-      saveMessage.mutate({ groupId: 0, content: input });
+    // Persist to backend (best-effort)
+    if (input.trim() && isValidRoom) {
+      saveMessage.mutate({ groupId, content: input });
     }
     setInput("");
     setReplyTo(null);

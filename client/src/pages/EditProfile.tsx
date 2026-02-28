@@ -57,6 +57,7 @@ export default function EditProfile() {
   const [newSocialPlatform, setNewSocialPlatform] = useState("");
   const [newSocialUrl, setNewSocialUrl] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // ─── tRPC: load real profile ───────────────────────────────────────────────
   const { data: profileData, isLoading: profileLoading } = trpc.user.getProfile.useQuery(undefined, {
@@ -73,10 +74,16 @@ export default function EditProfile() {
     }
   }, [profileData]);
 
-  // ─── tRPC: update profile ─────────────────────────────────────────────────
+  // ─── tRPC: upload avatar to S3 ────────────────────────────────────────────────
+  const uploadAvatarMutation = trpc.posts.uploadMedia.useMutation({
+    onError: (err) => {
+      if (!err.message.includes("10001")) toast.error("头像上传失败: " + err.message);
+    },
+  });
+
+  // ─── tRPC: update profile ─────────────────────────────────────────────────────
   const utils = trpc.useUtils();
-  const updateProfile = trpc.user.updateProfile.useMutation({
-    onSuccess: () => {
+  const updateProfile = trpc.user.updateProfile.useMutation({ onSuccess: () => {
       utils.user.getProfile.invalidate();
       toast.success(t("editProfile.saved") || "Profile saved successfully!");
       setHasChanges(false);
@@ -93,17 +100,47 @@ export default function EditProfile() {
 
   const markChanged = () => { if (!hasChanges) setHasChanges(true); };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
+
+    // Validate size (max 4MB for avatar)
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error("头像图片不能超过 4MB");
+      return;
+    }
+
+    // Read as base64 for preview + upload
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setAvatarImage(ev.target?.result as string);
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      // Show local preview immediately
+      setAvatarImage(dataUrl);
       setShowAvatarPicker(false);
       markChanged();
+
+      // Upload to S3 in background
+      try {
+        setUploadingAvatar(true);
+        const [header, base64Data] = dataUrl.split(",");
+        const mimeType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+        const ext = mimeType.split("/")[1] ?? "jpg";
+        const result = await uploadAvatarMutation.mutateAsync({
+          fileData: base64Data,
+          fileName: `avatar.${ext}`,
+          mimeType,
+        });
+        // Replace local preview with CDN URL
+        setAvatarImage(result.url);
+        toast.success("头像已上传，请保存资料生效");
+      } catch {
+        // Keep local preview even if upload fails
+      } finally {
+        setUploadingAvatar(false);
+      }
     };
     reader.readAsDataURL(file);
-    e.target.value = "";
   };
 
   const selectEmojiAvatar = (emoji: string) => {
@@ -206,9 +243,15 @@ export default function EditProfile() {
                   <AvatarFallback className="bg-secondary text-4xl">{avatar}</AvatarFallback>
                 )}
               </Avatar>
-              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera size={24} className="text-white" />
-              </div>
+              {uploadingAvatar ? (
+                <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                  <Loader2 size={24} className="text-neon-cyan animate-spin" />
+                </div>
+              ) : (
+                <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Camera size={24} className="text-white" />
+                </div>
+              )}
             </button>
             <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-neon-cyan flex items-center justify-center shadow-lg shadow-neon-cyan/30">
               <Camera size={14} className="text-background" />
