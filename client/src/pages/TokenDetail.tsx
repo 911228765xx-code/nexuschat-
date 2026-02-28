@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
+import { trpc } from "@/lib/trpc";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   Tooltip as RechartsTooltip, RadarChart, PolarGrid,
@@ -436,8 +437,29 @@ export default function TokenDetail() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // tRPC: real-time price data (must be before getPriceData)
+  const { data: livePrice } = trpc.trading.getPrices.useQuery(
+    { symbols: [token] },
+    { staleTime: 30_000, refetchInterval: 60_000 }
+  );
+  const livePriceData = livePrice?.[0];
+
+  // tRPC: real chart data (7 days)
+  const { data: chartData } = trpc.trading.getChart.useQuery(
+    { symbol: token, days: 7 },
+    { staleTime: 60_000 }
+  );
+  const realChartPrices = (chartData?.prices ?? []) as unknown as [number, number][];
+
   const getPriceData = useCallback(() => {
     if (!data) return [];
+    // Use real CoinGecko data for 1w timeframe when available
+    if (chartTimeframe === "1w" && realChartPrices.length > 0) {
+      return realChartPrices.map((item: [number, number]) => ({
+        time: new Date(item[0]).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        price: item[1],
+      }));
+    }
     switch (chartTimeframe) {
       case "1h": return data.priceHistory1h;
       case "4h": return data.priceHistory4h;
@@ -445,7 +467,14 @@ export default function TokenDetail() {
       case "1w": return data.priceHistory1w;
       case "1m": return data.priceHistory1m;
     }
-  }, [data, chartTimeframe]);
+  }, [data, chartTimeframe, realChartPrices]);
+
+  const handleSetAlert = useCallback(() => {
+    if (!alertPrice.trim()) return;
+    setAlertEnabled(true);
+    setShowAlertInput(false);
+    toast.success(`${t("research.alertSet")} ${token} @ $${alertPrice}`);
+  }, [alertPrice, token, t]);
 
   const handleSendChat = useCallback(() => {
     if (!chatInput.trim() || isAiTyping) return;
@@ -468,12 +497,15 @@ export default function TokenDetail() {
     }, 1500 + Math.random() * 1500);
   }, [chatInput, isAiTyping, token]);
 
-  const handleSetAlert = useCallback(() => {
-    if (!alertPrice.trim()) return;
-    setAlertEnabled(true);
-    setShowAlertInput(false);
-    toast.success(`${t("research.alertSet")} ${token} @ $${alertPrice}`);
-  }, [alertPrice, token, t]);
+  // Merge real price into display values
+  const displayPrice = livePriceData ? `$${livePriceData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : data?.price ?? "N/A";
+  const displayChange24h = livePriceData ? livePriceData.change : (data?.change24h ?? 0);
+  const displayMarketCap = livePriceData && livePriceData.marketCap > 0
+    ? `$${(livePriceData.marketCap / 1e9).toFixed(2)}B`
+    : (data?.marketCap ?? "N/A");
+  const displayVolume = livePriceData && livePriceData.volume > 0
+    ? `$${(livePriceData.volume / 1e6).toFixed(1)}M`
+    : (data?.volume24h ?? "N/A");
 
   if (!data) {
     return (
@@ -570,11 +602,11 @@ export default function TokenDetail() {
         {/* Price Display */}
         <div className="flex items-end justify-between pb-3">
           <div>
-            <p className="text-2xl font-bold font-mono">{data.price}</p>
+            <p className="text-2xl font-bold font-mono">{displayPrice}</p>
             <div className="flex items-center gap-3 mt-0.5">
               {[
                 { label: "1h", value: data.change1h },
-                { label: "24h", value: data.change24h },
+                { label: "24h", value: displayChange24h },
                 { label: "7d", value: data.change7d },
                 { label: "30d", value: data.change30d },
               ].map((c) => (
@@ -659,8 +691,8 @@ export default function TokenDetail() {
               {/* Key Metrics Grid */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: t("research.marketCap"), value: data.marketCap, icon: BarChart3 },
-                  { label: "24h Vol", value: data.volume24h, icon: Activity },
+                  { label: t("research.marketCap"), value: displayMarketCap, icon: BarChart3 },
+                  { label: "24h Vol", value: displayVolume, icon: Activity },
                   { label: "TVL", value: data.tvl, icon: Lock },
                   { label: "FDV", value: data.fdv, icon: PieChart },
                   { label: t("research.holders"), value: data.holders, icon: Users },

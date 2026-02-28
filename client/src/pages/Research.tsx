@@ -918,13 +918,26 @@ export default function Research() {
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
 
-  // tRPC: report history
+   // tRPC: report history
   const [showHistory, setShowHistory] = useState(false);
   const { data: reportHistory, refetch: refetchHistory } = trpc.research.getHistory.useQuery(
     undefined,
     { enabled: isAuthenticated, staleTime: 30_000 }
   );
-
+  // tRPC: price alerts
+  const { data: serverAlerts, refetch: refetchAlerts } = trpc.research.myAlerts.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+  const createResearchAlert = trpc.research.createAlert.useMutation({
+    onSuccess: () => {
+      toast.success("价格预警已设置");
+      refetchAlerts();
+    },
+    onError: (err) => {
+      toast.error("设置预警失败: " + err.message);
+    },
+  });
   // tRPC AI report generation
   const generateReport = trpc.research.generate.useMutation({
     onSuccess: (data) => {
@@ -1987,6 +2000,26 @@ export default function Research() {
                             <Share2 size={13} />
                             {t("research.shareToMoments")}
                           </button>
+                          {isAuthenticated && (
+                            <button
+                              onClick={() => {
+                                const targetPrice = prompt(`设置 ${report.token} 价格预警\n当前价格: ${report.price}\n请输入目标价格 (USD):`);
+                                if (!targetPrice || isNaN(Number(targetPrice))) return;
+                                const condition = Number(targetPrice) > report.priceNum ? "above" : "below";
+                                createResearchAlert.mutate({
+                                  tokenSymbol: report.token,
+                                  tokenId: report.token.toLowerCase(),
+                                  targetPrice,
+                                  condition,
+                                });
+                              }}
+                              disabled={createResearchAlert.isPending}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-xs font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all disabled:opacity-50"
+                            >
+                              <Crosshair size={13} />
+                              设置预警
+                            </button>
+                          )}
                         </div>
                         <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
                           <Clock size={10} />

@@ -3,8 +3,9 @@
  * 支持价格预警设置、批量管理、排序筛选、快速跳转代币详情
  * Design: Cyberpunk dark theme with neon accents
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Star, Bell, BellOff, Trash2, Plus, Search,
   ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown,
@@ -130,6 +131,27 @@ export default function Watchlist() {
     setWatchlist(prev => [...prev, newItem]);
     toast.success(`${token.token} ${t("research.addedToWatchlist")}`);
   };
+
+  // tRPC: real-time prices from CoinGecko (refresh every 60s)
+  const watchlistSymbols = useMemo(() => watchlist.map(w => w.token), [watchlist]);
+  const { data: livePrices } = trpc.trading.getPrices.useQuery(
+    { symbols: watchlistSymbols },
+    { staleTime: 30_000, refetchInterval: 60_000, enabled: watchlistSymbols.length > 0 }
+  );
+
+  // Merge live prices into watchlist
+  useEffect(() => {
+    if (!livePrices || livePrices.length === 0) return;
+    setWatchlist(prev => prev.map(item => {
+      const live = livePrices.find(p => p.symbol === item.token);
+      if (!live) return item;
+      const priceNum = live.price;
+      const price = `$${priceNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: priceNum < 1 ? 6 : 2 })}`;
+      const marketCap = live.marketCap > 0 ? `$${(live.marketCap / 1e9).toFixed(2)}B` : item.marketCap;
+      const volume24h = live.volume > 0 ? `$${(live.volume / 1e6).toFixed(1)}M` : item.volume24h;
+      return { ...item, price, priceNum, change24h: live.change, marketCap, volume24h };
+    }));
+  }, [livePrices]);
 
   const alertCount = watchlist.filter(w => w.alertEnabled).length;
 

@@ -5,6 +5,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
+import { useSocket, SocketMessage } from "@/hooks/useSocket";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Send, Smile, MoreVertical, X, Reply, Users,
   Megaphone, ChevronRight, Shield, Crown, Hash, AtSign,
@@ -157,13 +159,50 @@ export default function GroupChatRoom() {
     (m) => m.name.toLowerCase().includes(mentionFilter) && m.name !== "cryptowhale.eth"
   );
 
-  // tRPC: poll messages from backend every 3s
+  // Auth: get current user for socket
+  const { user } = useAuth();
+
+  // Socket.IO: real-time messages (replaces 3s polling)
+  const { connected, joinGroup, leaveGroup, sendMessage: socketSend, onMessage } = useSocket({
+    userId: user?.id,
+    userName: user?.name ?? user?.username ?? "User",
+  });
+
+  // Join/leave group room on mount/unmount
+  useEffect(() => {
+    if (!connected || !isValidGroup) return;
+    joinGroup(groupId);
+    return () => { leaveGroup(groupId); };
+  }, [connected, isValidGroup, groupId, joinGroup, leaveGroup]);
+
+  // Listen for real-time messages from Socket.IO
+  useEffect(() => {
+    const cleanup = onMessage((msg: SocketMessage) => {
+      const isMine = user ? msg.senderId === user.id : false;
+      setMessages((prev) => {
+        // Avoid duplicate (optimistic already added)
+        if (prev.some((m) => m.id === String(msg.id))) return prev;
+        return [...prev, {
+          id: String(msg.id),
+          sender: msg.senderName,
+          senderAvatar: "👤",
+          senderRole: "member" as const,
+          content: msg.content,
+          time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          isMine,
+        }];
+      });
+    });
+    return cleanup;
+  }, [onMessage, user]);
+
+  // tRPC: load initial messages (no polling — socket handles real-time updates)
   const { data: serverMessages } = trpc.chat.getMessages.useQuery(
     { groupId, limit: 50 },
     {
       enabled: isValidGroup,
-      refetchInterval: 3000,
-      staleTime: 2000,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -183,11 +222,11 @@ export default function GroupChatRoom() {
         senderRole: "member" as const,
         content: m.content,
         time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-        isMine: false, // server doesn't know current user without auth context here
+        isMine: user ? m.senderId === user.id : false,
       }));
       return [...mapped, ...localOnly];
     });
-  }, [serverMessages]);
+  }, [serverMessages, user]);
 
   // tRPC: save message to backend (non-blocking, optimistic UI)
   const saveMessage = trpc.chat.saveMessage.useMutation({
@@ -204,11 +243,14 @@ export default function GroupChatRoom() {
     const mentionMatches = input.match(/@([\w.]+)/g);
     const mentions = mentionMatches ? mentionMatches.map((m) => m.slice(1)) : undefined;
 
+    const senderName = user?.name ?? user?.username ?? "cryptowhale.eth";
+    const senderAvatar = user?.avatar ?? "🦊";
+
     const newMsg: GroupMessage = {
       id: Date.now().toString(),
-      sender: "cryptowhale.eth",
-      senderAvatar: "🦊",
-      senderRole: "owner",
+      sender: senderName,
+      senderAvatar,
+      senderRole: "member",
       content: input,
       time: now,
       isMine: true,
@@ -217,14 +259,18 @@ export default function GroupChatRoom() {
     };
     // Optimistic update
     setMessages((prev) => [...prev, newMsg]);
+    const msgContent = input;
     setInput("");
     setReplyTo(null);
     setShowMentionMenu(false);
-    // Persist to backend if valid group
-    if (isValidGroup) {
-      saveMessage.mutate({ groupId, content: input });
+    // Send via Socket.IO (real-time broadcast to all group members)
+    if (isValidGroup && connected) {
+      socketSend({ groupId, content: msgContent });
+    } else if (isValidGroup) {
+      // Fallback: persist via tRPC if socket not connected
+      saveMessage.mutate({ groupId, content: msgContent });
     }
-  }, [input, replyTo, groupId, isValidGroup]);
+  }, [input, replyTo, groupId, isValidGroup, connected, socketSend, user]);
 
   const handleReaction = (msgId: string, emoji: string) => {
     setMessages((prev) =>

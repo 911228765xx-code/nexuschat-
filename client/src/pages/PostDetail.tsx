@@ -402,7 +402,7 @@ export default function PostDetail() {
   // tRPC: load real comments
   const { data: serverComments } = trpc.posts.getComments.useQuery(
     { postId: numericPostId, limit: 50 },
-    { enabled: isNumericId, refetchInterval: 10000 }
+    { enabled: isNumericId, refetchInterval: 30000 }
   );
 
   // Merge server post into local state

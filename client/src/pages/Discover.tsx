@@ -352,6 +352,23 @@ export default function Discover() {
     }));
   }, [searchData]);
 
+  // ─── tRPC: Leaderboard users (replaces mockUsers) ───
+  const { data: leaderboardData } = trpc.user.leaderboard.useQuery(
+    { limit: 20 },
+    { staleTime: 60_000 }
+  );
+  const realUsers: TrendingUser[] = useMemo(() => {
+    if (!leaderboardData || leaderboardData.length === 0) return mockUsers;
+    return leaderboardData.map((u) => ({
+      id: String(u.id),
+      name: u.displayName,
+      avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
+      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
+      followers: u.npPoints ?? 0,
+      isVerified: (u.npPoints ?? 0) >= 1000,
+    }));
+  }, [leaderboardData]);
+
   // ─── tRPC: Follow/Unfollow ───
   const followMutation = trpc.follow.follow.useMutation({
     onSuccess: (_, vars) => {
@@ -1231,7 +1248,7 @@ export default function Discover() {
         {/* ─── Users Tab ─── */}
         {activeTab === "users" && debouncedQuery.length < 2 && (
           <div className="px-4 py-3 space-y-3">
-            {mockUsers.map((user, index) => (
+            {realUsers.map((user, index) => (
               <motion.div
                 key={user.id}
                 initial={{ opacity: 0, y: 8 }}
