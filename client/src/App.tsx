@@ -29,8 +29,12 @@ import TokenDetail from "./pages/TokenDetail";
 import PostDetail from "./pages/PostDetail";
 import Watchlist from "./pages/Watchlist";
 import { AppProvider } from "./contexts/AppContext";
+import { usePriceAlertSocket } from "./hooks/usePriceAlertSocket";
 
 function AppContent() {
+  // Connect Socket.IO for real-time price alert push notifications
+  usePriceAlertSocket();
+
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");

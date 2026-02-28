@@ -11,6 +11,7 @@
 import { getDb } from "./db";
 import { priceAlerts, notifications } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { emitToUser } from "./socket";
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
@@ -87,6 +88,16 @@ async function checkAlerts() {
       fromUserAvatar: "🔔",
       content,
       isRead: false,
+    });
+
+    // 3. Push real-time Socket.IO notification to the user (if online)
+    emitToUser(alert.userId, "price_alert", {
+      alertId: alert.id,
+      tokenSymbol: alert.tokenSymbol,
+      condition: alert.condition,
+      targetPrice: target,
+      currentPrice,
+      content,
     });
 
     console.log(

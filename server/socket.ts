@@ -10,6 +10,20 @@ interface ChatMessage {
   mediaUrl?: string;
 }
 
+// ─── User-level socket registry (for targeted push notifications) ─────────────
+let _io: SocketIOServer | null = null;
+const userSockets = new Map<number, Set<string>>(); // userId → Set<socketId>
+
+/** Emit an event to all sockets belonging to a specific user */
+export function emitToUser(userId: number, event: string, data: unknown): void {
+  if (!_io) return;
+  const sids = userSockets.get(userId);
+  if (!sids || sids.size === 0) return;
+  for (const sid of Array.from(sids)) {
+    _io.to(sid).emit(event, data);
+  }
+}
+
 export function initSocketIO(httpServer: HttpServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -20,12 +34,12 @@ export function initSocketIO(httpServer: HttpServer) {
     path: "/api/socket.io",
   });
 
+  _io = io;
+
   // Auth middleware
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth?.token || socket.handshake.headers?.cookie;
       // For now, allow all connections (auth via cookie handled at HTTP level)
-      // In production, verify JWT here
       (socket as any).userId = socket.handshake.auth?.userId;
       (socket as any).userName = socket.handshake.auth?.userName;
       next();
@@ -35,10 +49,24 @@ export function initSocketIO(httpServer: HttpServer) {
   });
 
   io.on("connection", (socket) => {
-    const userId = (socket as any).userId;
+    const userId = (socket as any).userId as number | undefined;
     const userName = (socket as any).userName || "Anonymous";
 
     console.log(`[Socket.io] User connected: ${userId} (${socket.id})`);
+
+    // Register user socket for targeted notifications
+    if (userId) {
+      if (!userSockets.has(userId)) userSockets.set(userId, new Set());
+      userSockets.get(userId)!.add(socket.id);
+    }
+
+    // Client can also register after connection (e.g., after auth resolves)
+    socket.on("register_user", (uid: number) => {
+      if (!uid || typeof uid !== "number") return;
+      if (!userSockets.has(uid)) userSockets.set(uid, new Set());
+      userSockets.get(uid)!.add(socket.id);
+      (socket as any).userId = uid;
+    });
 
     // Join a chat room
     socket.on("join_group", (groupId: number) => {
@@ -67,7 +95,7 @@ export function initSocketIO(httpServer: HttpServer) {
         // Save to database
         const [result] = await db.insert(messages).values({
           groupId: data.groupId,
-          senderId: parseInt(userId),
+          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
           content: data.content,
           messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
           mediaUrl: data.mediaUrl ?? undefined,
@@ -79,7 +107,7 @@ export function initSocketIO(httpServer: HttpServer) {
         const outgoingMessage = {
           id: messageId,
           groupId: data.groupId,
-          senderId: parseInt(userId),
+          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
           senderName: userName,
           content: data.content,
           messageType: data.messageType || "text",
@@ -106,6 +134,12 @@ export function initSocketIO(httpServer: HttpServer) {
 
     socket.on("disconnect", () => {
       console.log(`[Socket.io] User disconnected: ${userId} (${socket.id})`);
+      // Clean up user socket registry
+      const uid = (socket as any).userId as number | undefined;
+      if (uid && userSockets.has(uid)) {
+        userSockets.get(uid)!.delete(socket.id);
+        if (userSockets.get(uid)!.size === 0) userSockets.delete(uid);
+      }
     });
   });
 
