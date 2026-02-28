@@ -273,12 +273,50 @@ export default function Discover() {
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
 
+  // ─── Search history (localStorage) ───
+  const HISTORY_KEY = "nexuschat_search_history";
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+
+  const addToHistory = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed || trimmed.length < 2) return;
+    setSearchHistory((prev) => {
+      const filtered = prev.filter((h) => h !== trimmed);
+      const next = [trimmed, ...filtered].slice(0, 5);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const removeFromHistory = useCallback((query: string) => {
+    setSearchHistory((prev) => {
+      const next = prev.filter((h) => h !== query);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    localStorage.removeItem(HISTORY_KEY);
+    setSearchHistory([]);
+  }, []);
+
   // ─── Debounced search query ───
   const [debouncedQuery, setDebouncedQuery] = useState("");
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    const timer = setTimeout(() => {
+      const trimmed = searchQuery.trim();
+      setDebouncedQuery(trimmed);
+      if (trimmed.length >= 2) addToHistory(trimmed);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, addToHistory]);
 
   // ─── tRPC: Search posts ───
   const { data: searchData, isFetching: isSearching } = trpc.posts.search.useQuery(
@@ -674,6 +712,43 @@ export default function Discover() {
           )}
         </div>
 
+        {/* Search History Panel — shown when input focused and no query */}
+        {searchQuery === "" && searchHistory.length > 0 && (
+          <div className="pb-2 border-b border-border/20">
+            <div className="flex items-center justify-between px-4 pt-1 pb-1">
+              <span className="text-[11px] text-muted-foreground font-medium">Recent Searches</span>
+              <button
+                onClick={clearHistory}
+                className="text-[11px] text-muted-foreground/60 hover:text-neon-cyan transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="flex flex-col">
+              {searchHistory.map((h) => (
+                <div
+                  key={h}
+                  className="flex items-center gap-2 px-4 py-1.5 hover:bg-secondary/30 transition-colors"
+                >
+                  <Search size={12} className="text-muted-foreground/50 shrink-0" />
+                  <button
+                    className="flex-1 text-left text-sm text-foreground/80 truncate"
+                    onClick={() => setSearchQuery(h)}
+                  >
+                    {h}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeFromHistory(h); }}
+                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tabs: Moments / Communities / Users */}
         <div className="flex gap-0 pb-0">
           {(["moments", "communities", "users"] as const).map((tab) => (
@@ -721,7 +796,11 @@ export default function Discover() {
             ) : (
               <div className="space-y-0">
                 {searchResults.map((post) => (
-                  <article key={post.id} className="px-4 py-4 border-b border-border/10">
+                  <article
+                    key={post.id}
+                    className="px-4 py-4 border-b border-border/10 cursor-pointer hover:bg-secondary/20 transition-colors active:bg-secondary/40"
+                    onClick={() => setLocation(`/app/post/${post.id}`)}
+                  >
                     <div className="flex items-start gap-3">
                       <Avatar className="w-10 h-10 shrink-0">
                         <AvatarFallback className="bg-secondary text-base">{post.author.avatar}</AvatarFallback>
@@ -732,7 +811,7 @@ export default function Discover() {
                           <span className="text-[10px] text-muted-foreground font-mono truncate">{post.author.handle}</span>
                           <span className="ml-auto text-[10px] text-muted-foreground/50 shrink-0">{post.timestamp}</span>
                         </div>
-                        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{post.content}</p>
+                        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line line-clamp-3">{post.content}</p>
                         {post.tags && post.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {post.tags.map((tag) => (
