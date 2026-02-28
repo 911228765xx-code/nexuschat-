@@ -28,6 +28,7 @@ import Settings from "./pages/Settings";
 import TokenDetail from "./pages/TokenDetail";
 import PostDetail from "./pages/PostDetail";
 import Watchlist from "./pages/Watchlist";
+import DMChat from "./pages/DMChat";
 import { AppProvider } from "./contexts/AppContext";
 import { usePriceAlertSocket } from "./hooks/usePriceAlertSocket";
 
@@ -52,6 +53,11 @@ function AppContent() {
         <Route path="/app/group/:id">
           <AppLayout hideNav>
             <GroupChatRoom />
+          </AppLayout>
+        </Route>
+        <Route path="/app/dm/:userId">
+          <AppLayout hideNav>
+            <DMChat />
           </AppLayout>
         </Route>
         <Route path="/app/chat/:id">

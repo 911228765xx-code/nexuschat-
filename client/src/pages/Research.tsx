@@ -892,6 +892,29 @@ function ChangeIndicator({ value, size = "sm" }: { value: number; size?: "sm" | 
   );
 }
 
+// ==================== Realtime Price Component ====================
+function RealtimePrice({ symbol, fallback, fallbackNum }: { symbol: string; fallback: string; fallbackNum: number }) {
+  const { data, isLoading } = trpc.research.getPrice.useQuery(
+    { symbol },
+    { staleTime: 60_000, refetchInterval: 120_000 }
+  );
+  if (isLoading) return <span className="text-sm font-mono font-semibold text-muted-foreground animate-pulse">{fallback}</span>;
+  if (!data?.price) return <span className="text-sm font-mono font-semibold">{fallback}</span>;
+  const price = data.price;
+  const formatted = price < 0.01 ? `$${price.toFixed(8)}` : price < 1 ? `$${price.toFixed(4)}` : price < 1000 ? `$${price.toFixed(2)}` : `$${price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const change = data.priceChange24h;
+  return (
+    <div className="text-right">
+      <p className="text-sm font-mono font-semibold">{formatted}</p>
+      {change !== undefined && change !== null && (
+        <p className={`text-[11px] font-mono ${change >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+          {change >= 0 ? "+" : ""}{change.toFixed(2)}%
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ==================== Main Component ====================
 
 export default function Research() {
@@ -1388,10 +1411,7 @@ export default function Research() {
                       <span className="text-[10px] text-muted-foreground">{report.chain}</span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-semibold">{report.price}</p>
-                    <ChangeIndicator value={report.change24h} size="xs" />
-                  </div>
+                  <RealtimePrice symbol={report.token} fallback={report.price} fallbackNum={report.priceNum} />
                 </div>
 
                 {/* Mini K-line chart */}

@@ -5,6 +5,8 @@
  * Cyberpunk Noir风格
  */
 import { useState, useMemo } from "react";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Search, UserPlus, Star, Copy, Edit3, ArrowLeft, X, Check, MoreVertical,
   Users, FolderPlus, Clock, UserCheck, UserX, ChevronDown, ChevronRight,
@@ -85,7 +87,32 @@ const mockRequests: FriendRequest[] = [
 /* ─── Component ─── */
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { isAuthenticated } = useAuth();
+
+  // tRPC: get real following list
+  const { data: followingData, refetch: refetchFollowing } = trpc.follow.getFollowing.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+
+  // Map real following data to Contact shape, fall back to mock if not authenticated
+  const realContacts: Contact[] = (followingData ?? []).map(u => ({
+    id: String(u.id),
+    name: u.name ?? u.username ?? `User #${u.id}`,
+    avatar: u.name?.slice(0, 1).toUpperCase() ?? "U",
+    address: `@${u.username ?? u.id}`,
+    ens: undefined,
+    note: u.bio ?? undefined,
+    isVerified: false,
+    isFavorite: false,
+    lastActive: "Recently",
+    group: (u.name ?? u.username ?? "U").slice(0, 1).toUpperCase(),
+    tags: [],
+  }));
+
   const [contacts, setContacts] = useState(mockContacts);
+  // Use real data when authenticated
+  const displayContacts = isAuthenticated && realContacts.length > 0 ? realContacts : contacts;
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addAddress, setAddAddress] = useState("");
@@ -114,7 +141,7 @@ export default function Contacts() {
   const pendingOutgoing = requests.filter((r) => r.status === "pending" && r.direction === "outgoing");
 
   const filteredContacts = useMemo(() => {
-    let list = contacts;
+    let list = displayContacts;
     if (activeGroupFilter) {
       list = list.filter((c) => c.tags.includes(activeGroupFilter));
     }
@@ -140,7 +167,7 @@ export default function Contacts() {
   }, {});
 
   const sortedLetters = Object.keys(grouped).sort();
-  const favoriteContacts = contacts.filter((c) => c.isFavorite);
+  const favoriteContacts = displayContacts.filter((c) => c.isFavorite);
 
   const toggleFavorite = (id: string) => {
     setContacts((prev) =>

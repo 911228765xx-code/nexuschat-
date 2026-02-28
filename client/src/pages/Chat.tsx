@@ -82,6 +82,12 @@ export default function Chat() {
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
 
+  // tRPC: real DM conversations
+  const { data: dmConversations } = trpc.chat.listDMConversations.useQuery(
+    undefined,
+    { enabled: isAuthenticated, refetchInterval: 30_000, staleTime: 15_000 }
+  );
+
   // tRPC: public groups list
   const { data: publicGroupsData } = trpc.chat.listGroups.useQuery(
     { limit: 5 },
@@ -108,8 +114,28 @@ export default function Chat() {
   // Use real count if available, fallback to local
   const unreadNotificationCount = notifCountData?.count ?? localUnreadCount;
 
+  // Merge real DM conversations into the list
+  const mergedConversations = [
+    ...conversations,
+    ...(dmConversations ?? []).map(dm => ({
+      id: `dm-${dm.userId}`,
+      name: dm.name,
+      avatar: dm.avatar ? dm.avatar.slice(0, 2).toUpperCase() : dm.name?.slice(0, 1) ?? "U",
+      lastMessage: dm.lastMessage,
+      time: new Date(dm.lastMessageAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      unread: 0,
+      isGroup: false,
+      isOnline: false,
+      isPinned: false,
+      isMuted: false,
+      isTokenGated: false,
+      isVerified: false,
+      _dmUserId: dm.userId,
+    })),
+  ].filter((conv, idx, arr) => arr.findIndex(c => c.id === conv.id) === idx);
+
   // Sort: pinned first, then by time
-  const sortedConversations = [...conversations].sort((a, b) => {
+  const sortedConversations = [...mergedConversations].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
     return 0;
@@ -313,7 +339,7 @@ export default function Chat() {
           const isPinned = conv.isPinned;
           const isLast = index === filtered.length - 1;
           return (
-            <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : `/app/chat/${conv.id}`}>
+            <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : (conv as any)._dmUserId ? `/app/dm/${(conv as any)._dmUserId}` : `/app/chat/${conv.id}`}>
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}

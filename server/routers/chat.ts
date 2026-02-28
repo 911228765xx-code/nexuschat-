@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, lt, sql, or, ne } from "drizzle-orm";
 
 export const chatRouter = router({
   // List public groups
@@ -133,6 +133,119 @@ export const chatRouter = router({
       });
       return { messageId: (result as any).insertId };
     }),
+
+  // ─── DM: Send a direct message ─────────────────────────────────────────────
+  sendDM: protectedProcedure
+    .input(z.object({
+      receiverId: z.number(),
+      content: z.string().min(1).max(4000),
+      messageType: z.enum(["text", "image", "file"]).default("text"),
+      mediaUrl: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [result] = await db.insert(messages).values({
+        senderId: ctx.user.id,
+        receiverId: input.receiverId,
+        groupId: null,
+        content: input.content,
+        messageType: input.messageType as "text" | "image" | "file" | "system",
+        mediaUrl: input.mediaUrl ?? undefined,
+      });
+      return { messageId: (result as any).insertId };
+    }),
+
+  // ─── DM: Get message history between two users ────────────────────────────
+  getDMHistory: protectedProcedure
+    .input(z.object({
+      otherUserId: z.number(),
+      limit: z.number().default(50),
+      before: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const myId = ctx.user.id;
+      const otherId = input.otherUserId;
+      const conditions = [
+        or(
+          and(eq(messages.senderId, myId), eq(messages.receiverId, otherId)),
+          and(eq(messages.senderId, otherId), eq(messages.receiverId, myId))
+        )!,
+        eq(messages.isDeleted, false),
+      ];
+      if (input.before) conditions.push(lt(messages.id, input.before));
+      const rows = await db
+        .select({
+          id: messages.id,
+          content: messages.content,
+          messageType: messages.messageType,
+          mediaUrl: messages.mediaUrl,
+          createdAt: messages.createdAt,
+          senderId: messages.senderId,
+          receiverId: messages.receiverId,
+          senderName: users.name,
+          senderAvatar: users.avatar,
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.senderId, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(messages.createdAt))
+        .limit(input.limit);
+      return rows.reverse();
+    }),
+
+  // ─── DM: List all DM conversations for current user ───────────────────────
+  listDMConversations: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const myId = ctx.user.id;
+    // Get all DM messages involving current user
+    const dmMessages = await db
+      .select({
+        id: messages.id,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        senderId: messages.senderId,
+        receiverId: messages.receiverId,
+      })
+      .from(messages)
+      .where(
+        and(
+          or(
+            eq(messages.senderId, myId),
+            eq(messages.receiverId, myId)
+          )!,
+          eq(messages.isDeleted, false),
+          // DM messages have no groupId
+          sql`${messages.groupId} IS NULL`,
+        )
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(200);
+    // Group by conversation partner
+    const convMap = new Map<number, typeof dmMessages[0]>();
+    for (const msg of dmMessages) {
+      const partnerId = msg.senderId === myId ? msg.receiverId! : msg.senderId;
+      if (!convMap.has(partnerId)) convMap.set(partnerId, msg);
+    }
+    if (convMap.size === 0) return [];
+    // Fetch partner user info
+    const partnerIds = Array.from(convMap.keys());
+    const partnerUsers = await db
+      .select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(partnerIds.map(id => sql`${id}`), sql`, `)})`);
+    return partnerUsers.map(u => ({
+      userId: u.id,
+      name: u.name ?? u.username ?? "User",
+      avatar: u.avatar,
+      lastMessage: convMap.get(u.id)?.content ?? "",
+      lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
+      isMine: convMap.get(u.id)?.senderId === myId,
+    }));
+  }),
 
   // Get user's joined groups
   myGroups: protectedProcedure.query(async ({ ctx }) => {
