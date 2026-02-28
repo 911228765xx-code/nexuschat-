@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { posts, postLikes, postComments, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { createNotification } from "./notificationsRouter";
 
 export const postsRouter = router({
   // ─── List posts (public feed) ──────────────────────────────────────────────
@@ -122,6 +123,29 @@ export const postsRouter = router({
           .update(posts)
           .set({ likeCount: sql`likeCount + 1` })
           .where(eq(posts.id, input.postId));
+        // Notify post author
+        const [post] = await db
+          .select({ authorId: posts.authorId })
+          .from(posts)
+          .where(eq(posts.id, input.postId))
+          .limit(1);
+        if (post) {
+          const [liker] = await db
+            .select({ name: users.name, avatar: users.avatar })
+            .from(users)
+            .where(eq(users.id, ctx.user.id))
+            .limit(1);
+          await createNotification({
+            db,
+            targetUserId: post.authorId,
+            fromUserId: ctx.user.id,
+            fromUserName: liker?.name ?? ctx.user.name ?? "Someone",
+            fromUserAvatar: liker?.avatar ?? "👍",
+            type: "like",
+            content: "liked your post",
+            postId: input.postId,
+          });
+        }
         return { liked: true };
       }
     }),
@@ -223,6 +247,30 @@ export const postsRouter = router({
         .update(posts)
         .set({ commentCount: sql`commentCount + 1` })
         .where(eq(posts.id, input.postId));
+
+      // Notify post author
+      const [post] = await db
+        .select({ authorId: posts.authorId })
+        .from(posts)
+        .where(eq(posts.id, input.postId))
+        .limit(1);
+      if (post) {
+        const [commenter] = await db
+          .select({ name: users.name, avatar: users.avatar })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1);
+        await createNotification({
+          db,
+          targetUserId: post.authorId,
+          fromUserId: ctx.user.id,
+          fromUserName: commenter?.name ?? ctx.user.name ?? "Someone",
+          fromUserAvatar: commenter?.avatar ?? "💬",
+          type: "comment",
+          content: `commented: "${input.content.slice(0, 50)}${input.content.length > 50 ? '...' : ''}"`,
+          postId: input.postId,
+        });
+      }
 
       return { commentId: (result as any).insertId as number };
     }),

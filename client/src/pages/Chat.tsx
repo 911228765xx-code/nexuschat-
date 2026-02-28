@@ -82,6 +82,13 @@ export default function Chat() {
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
 
+  // tRPC: public groups list
+  const { data: publicGroupsData } = trpc.chat.listGroups.useQuery(
+    { limit: 5 },
+    { staleTime: 60_000 }
+  );
+  const joinGroupMutation = trpc.chat.joinGroup.useMutation();
+
   // tRPC: real unread notification count (poll every 30s)
   const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
     undefined,
@@ -397,6 +404,45 @@ export default function Chat() {
                 <ChevronRight size={16} className="text-neon-cyan/60 shrink-0" />
               </motion.div>
             </Link>
+            {/* Discover Public Groups */}
+            {publicGroupsData && publicGroupsData.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] text-muted-foreground/50 font-mono uppercase tracking-widest px-1 mb-2">Discover Groups</p>
+                <div className="space-y-2">
+                  {publicGroupsData.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20 border border-border/10 hover:border-neon-purple/20 transition-all cursor-pointer"
+                      onClick={() => {
+                        if (!isAuthenticated) return;
+                        joinGroupMutation.mutate(
+                          { groupId: group.id },
+                          {
+                            onSuccess: (res) => {
+                              if (res.alreadyMember) {
+                                window.location.href = `/app/group/${group.id}`;
+                              } else {
+                                window.location.href = `/app/group/${group.id}`;
+                              }
+                            },
+                          }
+                        );
+                      }}
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-neon-purple/15 flex items-center justify-center shrink-0">
+                        <Users size={16} className="text-neon-purple" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{group.name}</p>
+                        <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
+                      </div>
+                      <ChevronRight size={14} className="text-neon-purple/50 shrink-0" />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* End marker */}
             <div className="flex items-center gap-3 py-2">
               <div className="h-px flex-1 bg-border/10" />

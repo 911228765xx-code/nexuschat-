@@ -4,6 +4,7 @@
  * 新增：创建策略表单、跟单配置面板、PnL日历热力图、交易员对比、价格Ticker、平仓确认
  */
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { trpc } from "@/lib/trpc";
 import {
   TrendingUp, Plus, Play, Pause, Zap, ArrowUpRight, ArrowDownRight,
   Settings, AlertTriangle, X, Calendar, BarChart3,
@@ -276,6 +277,22 @@ type MarketSort = "return" | "winRate" | "followers" | "sharpe";
 type ModalType = "none" | "strategy" | "trader" | "createStrategy" | "copyConfig" | "closePosition" | "compare" | "notifications";
 
 export default function Trading() {
+  // ─── Real-time prices from CoinGecko ──────────────────────────────────────
+  const { data: livePrices } = trpc.trading.getPrices.useQuery(
+    { symbols: ["BTC", "ETH", "SOL", "ARB", "LINK", "AVAX"] },
+    { refetchInterval: 30_000, staleTime: 25_000 }
+  );
+
+  // Merge live prices into priceTicker (fallback to mock if API unavailable)
+  const displayTicker = useMemo(() => {
+    if (!livePrices || livePrices.every(p => p.price === 0)) return priceTicker;
+    return livePrices.map(p => ({
+      symbol: p.symbol,
+      price: p.price,
+      change: p.change,
+    }));
+  }, [livePrices]);
+
   const [activeTab, setActiveTab] = useState<MainTab>("strategies");
   const [strategies, setStrategies] = useState(mockStrategies);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
@@ -310,7 +327,7 @@ export default function Trading() {
   // Ticker animation
   useEffect(() => {
     const timer = setInterval(() => {
-      setTickerOffset(prev => (prev + 1) % (priceTicker.length * 120));
+      setTickerOffset(prev => (prev + 1) % (displayTicker.length * 120));
     }, 50);
     return () => clearInterval(timer);
   }, []);
@@ -429,7 +446,7 @@ export default function Trading() {
       {/* Price Ticker */}
       <div className="bg-background/80 border-b border-border/20 overflow-hidden h-7 flex items-center">
         <div className="flex items-center gap-6 animate-ticker whitespace-nowrap" style={{ transform: `translateX(-${tickerOffset}px)` }}>
-          {[...priceTicker, ...priceTicker].map((coin, i) => (
+          {[...displayTicker, ...displayTicker].map((coin, i) => (
             <span key={`${coin.symbol}-${i}`} className="flex items-center gap-1.5 text-[11px]">
               <span className="font-mono font-medium text-foreground">{coin.symbol}</span>
               <span className="font-mono text-muted-foreground">${coin.price.toLocaleString()}</span>

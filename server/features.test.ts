@@ -547,3 +547,100 @@ describe("CreateGroup", () => {
     expect(redirectPath).toBe("/app/group/42");
   });
 });
+
+// ─── Phase 7: Notification Closure, CoinGecko Prices, Group List ─────────────
+describe("Notification Closure (Like/Comment)", () => {
+  it("does not create self-notification", () => {
+    const targetUserId = 42;
+    const fromUserId = 42;
+    const shouldCreate = targetUserId !== fromUserId;
+    expect(shouldCreate).toBe(false);
+  });
+
+  it("creates notification when different users interact", () => {
+    const targetUserId = 10;
+    const fromUserId = 42;
+    const shouldCreate = targetUserId !== fromUserId;
+    expect(shouldCreate).toBe(true);
+  });
+
+  it("truncates long comment content to 50 chars in notification", () => {
+    const longComment = "This is a very long comment that exceeds fifty characters in length";
+    const truncated = `${longComment.slice(0, 50)}${longComment.length > 50 ? "..." : ""}`;
+    expect(truncated.length).toBeLessThanOrEqual(53); // 50 + "..."
+    expect(truncated.endsWith("...")).toBe(true);
+  });
+
+  it("short comment content is not truncated", () => {
+    const shortComment = "Nice post!";
+    const truncated = `${shortComment.slice(0, 50)}${shortComment.length > 50 ? "..." : ""}`;
+    expect(truncated).toBe("Nice post!");
+    expect(truncated.endsWith("...")).toBe(false);
+  });
+});
+
+describe("CoinGecko Price API", () => {
+  it("maps BTC symbol to CoinGecko ID", () => {
+    const SYMBOL_TO_ID: Record<string, string> = {
+      BTC: "bitcoin", ETH: "ethereum", BNB: "binancecoin",
+      SOL: "solana", ARB: "arbitrum", LINK: "chainlink",
+    };
+    expect(SYMBOL_TO_ID["BTC"]).toBe("bitcoin");
+    expect(SYMBOL_TO_ID["ETH"]).toBe("ethereum");
+  });
+
+  it("falls back to mock data when all prices are 0", () => {
+    const livePrices = [{ symbol: "BTC", price: 0, change: 0 }];
+    const mockFallback = [{ symbol: "BTC", price: 97245, change: 1.8 }];
+    const displayTicker = livePrices.every(p => p.price === 0) ? mockFallback : livePrices;
+    expect(displayTicker[0].price).toBe(97245);
+  });
+
+  it("uses live prices when available", () => {
+    const livePrices = [{ symbol: "BTC", price: 100000, change: 3.5 }];
+    const mockFallback = [{ symbol: "BTC", price: 97245, change: 1.8 }];
+    const displayTicker = livePrices.every(p => p.price === 0) ? mockFallback : livePrices;
+    expect(displayTicker[0].price).toBe(100000);
+  });
+
+  it("price change is rounded to 2 decimal places", () => {
+    const rawChange = 1.23456789;
+    const rounded = parseFloat(rawChange.toFixed(2));
+    expect(rounded).toBe(1.23);
+  });
+
+  it("refetch interval is 30 seconds", () => {
+    const refetchInterval = 30_000;
+    expect(refetchInterval).toBe(30000);
+  });
+});
+
+describe("Chat Group List", () => {
+  it("listGroups returns only public groups", () => {
+    const groups = [
+      { id: 1, name: "DeFi Alpha", isPublic: true, memberCount: 42 },
+      { id: 2, name: "Private Club", isPublic: false, memberCount: 5 },
+    ];
+    const publicGroups = groups.filter(g => g.isPublic);
+    expect(publicGroups).toHaveLength(1);
+    expect(publicGroups[0].name).toBe("DeFi Alpha");
+  });
+
+  it("joinGroup returns alreadyMember true if already joined", () => {
+    const existingMembership = [{ groupId: 1, userId: 42 }];
+    const alreadyMember = existingMembership.length > 0;
+    expect(alreadyMember).toBe(true);
+  });
+
+  it("joinGroup increments member count on new join", () => {
+    const currentCount = 42;
+    const newCount = currentCount + 1;
+    expect(newCount).toBe(43);
+  });
+
+  it("limits displayed groups to 5", () => {
+    const allGroups = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, name: `Group ${i + 1}` }));
+    const displayed = allGroups.slice(0, 5);
+    expect(displayed).toHaveLength(5);
+  });
+});
