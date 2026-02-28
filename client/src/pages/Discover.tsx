@@ -64,108 +64,7 @@ interface MomentPost {
 /* ─── Mock Data ─── */
 // Mock communities removed — now using real data from chat.listGroups
 
-const mockUsers: TrendingUser[] = [
-  { id: "1", name: "vitalik.eth", avatar: "V", bio: "Ethereum co-founder", followers: 5200000, isVerified: true },
-  { id: "2", name: "punk6529.eth", avatar: "P", bio: "NFT collector & thought leader", followers: 890000, isVerified: true },
-  { id: "3", name: "cobie.eth", avatar: "C", bio: "Crypto trader & analyst", followers: 720000, isVerified: true },
-  { id: "4", name: "0xSisyphus", avatar: "S", bio: "DeFi researcher", followers: 340000, isVerified: false },
-];
-
-const mockComments: Record<string, Comment[]> = {
-  "1": [
-    { id: "c1", author: { name: "alice.eth", avatar: "A" }, content: "This is huge! Can't wait for the full rollout 🔥", timestamp: "1h ago", likes: 42, isLiked: false },
-    { id: "c2", author: { name: "bob_trader", avatar: "B" }, content: "L2 fees dropping will bring so many new users to DeFi", timestamp: "1h ago", likes: 18, isLiked: true },
-    { id: "c3", author: { name: "defi_dev.eth", avatar: "D" }, content: "Already testing on Holesky. The blob transactions are working great!", timestamp: "45m ago", likes: 8, isLiked: false },
-  ],
-  "2": [
-    { id: "c4", author: { name: "crypto_analyst", avatar: "C" }, content: "Which wallet? Can you share the address?", timestamp: "3h ago", likes: 15, isLiked: false },
-    { id: "c5", author: { name: "on_chain_sleuth", avatar: "O" }, content: "I tracked it too. Multiple wallets, all funded from the same source.", timestamp: "2h ago", likes: 31, isLiked: false },
-  ],
-  "3": [
-    { id: "c6", author: { name: "art_collector", avatar: "🎭" }, content: "Beautiful work! Just minted #42. The generative patterns are mesmerizing.", timestamp: "5h ago", likes: 7, isLiked: false },
-  ],
-  "4": [
-    { id: "c7", author: { name: "newbie_trader", avatar: "N" }, content: "What exchange do you use for copy trading?", timestamp: "7h ago", likes: 5, isLiked: false },
-    { id: "c8", author: { name: "risk_manager", avatar: "R" }, content: "340% ROI is impressive but what's the max drawdown?", timestamp: "6h ago", likes: 22, isLiked: false },
-    { id: "c9", author: { name: "trader_pro.eth", avatar: "📊" }, content: "@risk_manager Max drawdown was 12%. I use strict position sizing.", timestamp: "5h ago", likes: 35, isLiked: true },
-  ],
-  "5": [
-    { id: "c10", author: { name: "sol_builder", avatar: "◎" }, content: "The Firedancer client is a game changer for reliability!", timestamp: "10h ago", likes: 11, isLiked: false },
-  ],
-};
-
-const mockMoments: MomentPost[] = [
-  {
-    id: "1",
-    author: { name: "vitalik.eth", avatar: "V", isVerified: true, handle: "0x71C7...3a9b" },
-    content: "Excited about the latest Ethereum upgrade! The transition to full danksharding is progressing well. Layer 2 fees are about to drop significantly. 🚀\n\nThis is a huge milestone for the ecosystem.",
-    timestamp: "2h ago",
-    likes: 12400,
-    comments: 892,
-    reposts: 3200,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Ethereum", "#Danksharding"],
-    commentList: mockComments["1"] || [],
-    showComments: false,
-  },
-  {
-    id: "2",
-    author: { name: "defi_whale.eth", avatar: "🐋", isVerified: true, handle: "0xA3F2...8c1d" },
-    content: "Just spotted a massive $ETH accumulation by a new whale wallet. 15,000 ETH purchased in the last 24 hours. On-chain data doesn't lie. 👀\n\nSmart money is loading up.",
-    timestamp: "4h ago",
-    likes: 5670,
-    comments: 423,
-    reposts: 1890,
-    isLiked: true,
-    isBookmarked: false,
-    tags: ["#OnChain", "#WhaleAlert"],
-    commentList: mockComments["2"] || [],
-    showComments: false,
-  },
-  {
-    id: "3",
-    author: { name: "nft_artist.eth", avatar: "🎨", isVerified: false, handle: "0xB9E4...2f7a" },
-    content: "Just minted my new generative art collection on-chain. Each piece is fully stored on Ethereum — no IPFS dependency. True digital permanence. ✨\n\nLink in bio for early access.",
-    timestamp: "6h ago",
-    likes: 2340,
-    comments: 187,
-    reposts: 560,
-    isLiked: false,
-    isBookmarked: true,
-    tags: ["#NFT", "#GenerativeArt", "#OnChainArt"],
-    commentList: mockComments["3"] || [],
-    showComments: false,
-  },
-  {
-    id: "4",
-    author: { name: "trader_pro.eth", avatar: "📊", isVerified: true, handle: "0xD5C1...9e3b" },
-    content: "My copy trading strategy hit 340% ROI this quarter. Key insight: focus on BTC/ETH pairs during high volatility windows, use tight stop losses.\n\nFull breakdown thread below 🧵",
-    timestamp: "8h ago",
-    likes: 8920,
-    comments: 1240,
-    reposts: 4100,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Trading", "#CopyTrading", "#Alpha"],
-    commentList: mockComments["4"] || [],
-    showComments: false,
-  },
-  {
-    id: "5",
-    author: { name: "solana_dev.sol", avatar: "◎", isVerified: true, handle: "0xF8A2...1b4c" },
-    content: "Solana just processed 65,000 TPS in the latest stress test without a single hiccup. The network reliability improvements are real.\n\nBuilding on Solana has never been better. 🔥",
-    timestamp: "12h ago",
-    likes: 4560,
-    comments: 367,
-    reposts: 1230,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Solana", "#L1"],
-    commentList: mockComments["5"] || [],
-    showComments: false,
-  },
-];
+// All mock data removed — now using real data from backend
 
 /* ─── Like Animation Particles ─── */
 function LikeParticles({ show }: { show: boolean }) {
@@ -191,74 +90,16 @@ function LikeParticles({ show }: { show: boolean }) {
   );
 }
 
-/* ─── Extra Mock Data Generator ─── */
-const extraAuthors = [
-  { name: "whale_watcher.eth", avatar: "🐋", isVerified: true, handle: "0xC4D2...7f1a" },
-  { name: "nft_degen.eth", avatar: "🎭", isVerified: false, handle: "0xE8B1...3c9d" },
-  { name: "yield_farmer", avatar: "🌾", isVerified: true, handle: "0xA1F3...8e2b" },
-  { name: "alpha_hunter.sol", avatar: "🎯", isVerified: true, handle: "0xD7C5...1a4f" },
-  { name: "mev_bot.eth", avatar: "🤖", isVerified: false, handle: "0xB2E4...6d8c" },
-  { name: "dao_governor", avatar: "🏛️", isVerified: true, handle: "0xF9A6...2b7e" },
-  { name: "layer2_maxi", avatar: "⚡", isVerified: false, handle: "0x3C8D...9f1a" },
-  { name: "defi_scientist", avatar: "🧪", isVerified: true, handle: "0x7E2B...4c6d" },
-  { name: "crypto_punk.eth", avatar: "👾", isVerified: true, handle: "0x1A5F...8e3b" },
-  { name: "zk_researcher", avatar: "🔐", isVerified: false, handle: "0x6D9C...2a7f" },
-];
+// Extra mock data generators removed — now using real backend pagination
 
-const extraContents = [
-  "Just deployed a new lending protocol on Arbitrum. APY optimization through dynamic interest rate curves. Early depositors getting 15% boost. 🏦\n\nAudit by Trail of Bits complete.",
-  "The merge between AI agents and DeFi is happening faster than expected. Autonomous trading bots now manage $2B+ in TVL across chains. 🤖💰",
-  "Hot take: L2s will eventually settle on a shared sequencer model. Decentralization at the base layer, efficiency at the execution layer. The endgame is clear.",
-  "New governance proposal for our DAO: allocate 5% of treasury to public goods funding. If you hold tokens, please vote! Every voice matters. 🗳️",
-  "Just bridged 50 ETH to zkSync Era. The UX improvements in the latest update are incredible — feels like using a native L1. Zero-knowledge proofs FTW! ⚡",
-  "Unpopular opinion: Most NFT collections will go to zero, but the technology itself will revolutionize digital ownership. Focus on utility, not speculation.",
-  "Breaking: Major CEX just listed our token! 6 months of building in silence, and now the market is finally noticing. LFG! 🚀\n\nFundamentals always win.",
-  "Deep dive into Eigenlayer restaking economics: the risk-reward profile is asymmetric in favor of early restakers. Here's my analysis thread 🧵",
-  "Built a MEV protection system using Flashbots. Saved users $1.2M in the first week alone. Open-sourcing the code next month. 🛡️",
-  "The next bull run will be driven by RWA tokenization. Real estate, bonds, commodities — all on-chain. Traditional finance is not ready for this disruption.",
-  "Attended ETHDenver and the energy was unreal. Met 50+ builders working on privacy-preserving DeFi. The future of finance is private by default. 🏔️",
-  "Staking rewards just hit 8.2% APR on our validator. Running since the Beacon Chain genesis — 847 days of perfect uptime. Consistency is key. ✅",
-  "New research paper: 'Optimal AMM Design for Concentrated Liquidity'. Found that dynamic fee tiers can reduce IL by up to 40%. Link in bio. 📊",
-  "The intersection of gaming and DeFi is massively underexplored. Imagine earning yield while playing — not through ponzinomics, but real economic activity.",
-  "Just completed my first ZK circuit! Proving that I'm over 18 without revealing my age. Privacy is a fundamental right, and ZK makes it possible. 🔒",
-];
 
-const extraTags = [
-  ["#DeFi", "#Arbitrum"], ["#AI", "#Trading"], ["#L2", "#Sequencer"],
-  ["#DAO", "#Governance"], ["#zkSync", "#ZKProofs"], ["#NFT", "#DigitalOwnership"],
-  ["#CEX", "#Listing"], ["#Eigenlayer", "#Restaking"], ["#MEV", "#Flashbots"],
-  ["#RWA", "#Tokenization"], ["#ETHDenver", "#Privacy"], ["#Staking", "#Validator"],
-  ["#AMM", "#Research"], ["#Gaming", "#GameFi"], ["#ZK", "#Privacy"],
-];
-
-function generateMorePosts(page: number, pageSize: number = 5): MomentPost[] {
-  return Array.from({ length: pageSize }, (_, i) => {
-    const idx = (page * pageSize + i) % extraContents.length;
-    const authorIdx = (page * pageSize + i) % extraAuthors.length;
-    const timeHours = 12 + page * 6 + i * 2;
-    return {
-      id: `gen-${page}-${i}`,
-      author: extraAuthors[authorIdx],
-      content: extraContents[idx],
-      timestamp: `${timeHours}h ago`,
-      likes: Math.floor(Math.random() * 8000) + 200,
-      comments: Math.floor(Math.random() * 500) + 10,
-      reposts: Math.floor(Math.random() * 2000) + 50,
-      isLiked: Math.random() > 0.7,
-      isBookmarked: Math.random() > 0.85,
-      tags: extraTags[idx],
-      commentList: [],
-      showComments: false,
-    };
-  });
-}
 
 /* ─── Component ─── */
 export default function Discover() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState<"moments" | "communities" | "users">("moments");
-  const [moments, setMoments] = useState(mockMoments);
+  const [moments, setMoments] = useState<MomentPost[]>([]);
   const [showCompose, setShowCompose] = useState(false);
   const [composeText, setComposeText] = useState("");
   const [commentInputId, setCommentInputId] = useState<string | null>(null);
@@ -386,7 +227,7 @@ export default function Discover() {
     { staleTime: 60_000 }
   );
   const realUsers: TrendingUser[] = useMemo(() => {
-    if (!leaderboardData || leaderboardData.length === 0) return mockUsers;
+    if (!leaderboardData || leaderboardData.length === 0) return [];
     return leaderboardData.map((u) => ({
       id: String(u.id),
       name: u.displayName,
@@ -430,41 +271,59 @@ export default function Discover() {
     },
   });
 
-  // ─── tRPC: Fetch posts from backend (with images) ───
+  // ─── Pagination State ───
+  const [page, setPage] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  // ─── tRPC: Fetch posts from backend (with pagination) ───
+  const PAGE_SIZE = 20;
   const { data: serverPostsData } = trpc.posts.list.useQuery(
-    { limit: 30, offset: 0 },
+    { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
     { staleTime: 10_000, refetchOnWindowFocus: false }
   );
 
-  // Merge server posts into moments (server posts take priority, preserve local optimistic)
+  // Map server posts to MomentPost format
+  const mapServerPost = useCallback((p: NonNullable<typeof serverPostsData>["posts"][number]): MomentPost => ({
+    id: String(p.id),
+    author: {
+      name: p.authorName ?? "Anonymous",
+      avatar: p.authorAvatar ?? "👤",
+      isVerified: false,
+      handle: p.authorUsername ? `@${p.authorUsername}` : (p.authorWallet ? `${p.authorWallet.slice(0, 6)}...${p.authorWallet.slice(-4)}` : "unknown"),
+    },
+    content: p.content,
+    images: p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls : undefined,
+    tags: p.tags ?? [],
+    timestamp: new Date(p.createdAt).toLocaleDateString("zh-CN"),
+    likes: p.likeCount,
+    comments: p.commentCount,
+    reposts: p.shareCount,
+    isLiked: p.isLiked,
+    isBookmarked: false,
+    commentList: [],
+    showComments: false,
+  }), []);
+
+  // Merge server posts into moments (append on page change, replace on page 0)
   useEffect(() => {
-    if (!serverPostsData?.posts || serverPostsData.posts.length === 0) return;
-    const serverMapped: MomentPost[] = serverPostsData.posts.map((p) => ({
-      id: String(p.id),
-      author: {
-        name: p.authorName ?? "Anonymous",
-        avatar: p.authorAvatar ?? "👤",
-        isVerified: false,
-        handle: p.authorUsername ? `@${p.authorUsername}` : (p.authorWallet ? `${p.authorWallet.slice(0, 6)}...${p.authorWallet.slice(-4)}` : "unknown"),
-      },
-      content: p.content,
-      images: p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls : undefined,
-      tags: p.tags ?? [],
-      timestamp: new Date(p.createdAt).toLocaleDateString("zh-CN"),
-      likes: p.likeCount,
-      comments: p.commentCount,
-      reposts: p.shareCount,
-      isLiked: p.isLiked,
-      isBookmarked: false,
-      commentList: [],
-      showComments: false,
-    }));
+    if (!serverPostsData?.posts) return;
+    const serverMapped = serverPostsData.posts.map(mapServerPost);
+    if (!serverPostsData.hasMore) setHasMore(false);
     setMoments((prev) => {
-      // Keep local-only optimistic posts (timestamp-based IDs > 1.7T)
-      const localOnly = prev.filter((m) => Number(m.id) > 1_700_000_000_000);
-      return [...serverMapped, ...localOnly];
+      if (page === 0) {
+        // First page: replace all (keep local optimistic)
+        const localOnly = prev.filter((m) => Number(m.id) > 1_700_000_000_000);
+        return [...serverMapped, ...localOnly];
+      } else {
+        // Subsequent pages: append, dedup by id
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newPosts = serverMapped.filter((m) => !existingIds.has(m.id));
+        return [...prev, ...newPosts];
+      }
     });
-  }, [serverPostsData]);
+    setIsLoadingMore(false);
+  }, [serverPostsData, page, mapServerPost]);
 
   // ─── tRPC: Create post mutation ───
   const createPost = trpc.posts.create.useMutation({
@@ -497,32 +356,17 @@ export default function Discover() {
     },
   });
 
-  // ─── Infinite Scroll State ───
-  const [page, setPage] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  // ─── Infinite Scroll State (remaining) ───
   const [isRefreshing, setIsRefreshing] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const MAX_PAGES = 6; // Total ~35 posts
 
   // ─── Intersection Observer for infinite scroll ───
   const handleLoadMore = useCallback(() => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
-    // Simulate network delay
-    setTimeout(() => {
-      const nextPage = page + 1;
-      if (nextPage >= MAX_PAGES) {
-        setHasMore(false);
-      } else {
-        const newPosts = generateMorePosts(nextPage);
-        setMoments(prev => [...prev, ...newPosts]);
-        setPage(nextPage);
-      }
-      setIsLoadingMore(false);
-    }, 800 + Math.random() * 600);
-  }, [isLoadingMore, hasMore, page]);
+    setPage((prev) => prev + 1);
+  }, [isLoadingMore, hasMore]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -542,7 +386,7 @@ export default function Discover() {
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     setTimeout(() => {
-      setMoments(mockMoments);
+      utils.posts.list.invalidate();
       setPage(0);
       setHasMore(true);
       setIsRefreshing(false);

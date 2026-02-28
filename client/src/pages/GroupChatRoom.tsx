@@ -47,34 +47,12 @@ const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "�
 
 // Mock members removed — now using real data from chat.getGroupMembers
 
-const mockAnnouncement = {
-  content: "Welcome to DeFi Alpha Hunters! 🚀 Rules: 1) No financial advice 2) Share alpha respectfully 3) DYOR always. Token gate: Hold ≥0.1 ETH to participate.",
-  author: "cryptowhale.eth",
-  time: "2h ago",
-};
+// Mock messages and announcement removed — now using real data from backend
 
-const mockGroupMessages: GroupMessage[] = [
-  { id: "g1", sender: "vitalik.eth", senderAvatar: "V", senderRole: "admin", content: "Hey everyone, just saw the new Uniswap v4 hooks proposal. Thoughts?", time: "10:15", isMine: false },
-  { id: "g2", sender: "defi_alpha.eth", senderAvatar: "🔑", senderRole: "member", content: "The singleton pool architecture is a game changer. Gas savings could be massive.", time: "10:17", isMine: false, reactions: { "🔥": 3 } },
-  { id: "g3", sender: "cryptowhale.eth", senderAvatar: "🦊", senderRole: "owner", content: "@vitalik.eth Absolutely. The custom hooks open up so many possibilities for MEV protection too.", time: "10:18", isMine: true, mentions: ["vitalik.eth"] },
-  { id: "g4", sender: "alice.eth", senderAvatar: "A", senderRole: "admin", content: "I've been testing some hook implementations. The TWAMM hook is particularly interesting for large orders.", time: "10:20", isMine: false, reactions: { "👍": 2, "💎": 1 } },
-  { id: "g5", sender: "nft_collector.eth", senderAvatar: "🎨", senderRole: "member", content: "What about the impact on existing LPs? Any migration path?", time: "10:22", isMine: false },
-  { id: "g6", sender: "vitalik.eth", senderAvatar: "V", senderRole: "admin", content: "Good question @nft_collector.eth. There will be a gradual migration period. Existing v3 positions remain valid.", time: "10:24", isMine: false, mentions: ["nft_collector.eth"], replyTo: { sender: "nft_collector.eth", content: "What about the impact on existing LPs?" } },
-  { id: "g7", sender: "whale_hunter.eth", senderAvatar: "🐋", senderRole: "member", content: "Just bridged 50 ETH to Arbitrum for the new yield farms. The APYs are insane right now 🤑", time: "10:26", isMine: false, reactions: { "🚀": 2 } },
-  { id: "g8", sender: "NexusBot", senderAvatar: "🤖", senderRole: "member", content: "📊 **Group Alpha Alert**\n\n🔥 Trending: Uniswap v4 hooks\n📈 UNI +5.2% in last 4h\n💰 TVL increase: +$120M\n\n> Multiple group members discussing Uni v4. Sentiment: Very Bullish", time: "10:28", isMine: false, isAI: true },
-  { id: "g9", sender: "defi_alpha.eth", senderAvatar: "🔑", senderRole: "member", content: "@cryptowhale.eth should we set up a dedicated channel for v4 hook research?", time: "10:30", isMine: false, mentions: ["cryptowhale.eth"] },
-  { id: "g10", sender: "cryptowhale.eth", senderAvatar: "🦊", senderRole: "owner", content: "Great idea! I'll create a sub-topic for it. Everyone interested can opt in.", time: "10:32", isMine: true },
-];
-
-const pinnedMessage: GroupMessage = {
-  id: "pinned1",
-  sender: "cryptowhale.eth",
-  senderAvatar: "🦊",
-  senderRole: "owner",
-  content: "📌 Weekly alpha call this Friday at 8PM UTC. Topic: Uniswap v4 deep dive. Don't miss it!",
-  time: "Yesterday",
-  isMine: true,
-  isPinned: true,
+const defaultAnnouncement = {
+  content: "Welcome! Please follow the group rules and be respectful.",
+  author: "Admin",
+  time: "",
 };
 
 export default function GroupChatRoom() {
@@ -83,7 +61,7 @@ export default function GroupChatRoom() {
   const { t } = useI18n();
   const groupId = id ? parseInt(id, 10) : NaN;
   const isValidGroup = !isNaN(groupId);
-  const [messages, setMessages] = useState(mockGroupMessages);
+  const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
@@ -108,10 +86,12 @@ export default function GroupChatRoom() {
     status: "online" as const,
     address: m.username ?? "",
   }));
-  const [announcement, setAnnouncement] = useState(mockAnnouncement);
+  const [announcement, setAnnouncement] = useState(defaultAnnouncement);
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
-  const [editAnnouncementText, setEditAnnouncementText] = useState(mockAnnouncement.content);
+  const [editAnnouncementText, setEditAnnouncementText] = useState(defaultAnnouncement.content);
   const [memberActionTarget, setMemberActionTarget] = useState<GroupMember | null>(null);
+  // Pinned message (could be loaded from backend in future)
+  const [pinnedMessage] = useState<GroupMessage | null>(null);
   const announcementInputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -373,7 +353,7 @@ export default function GroupChatRoom() {
             >
               <Pin size={14} className="text-neon-cyan shrink-0 rotate-45" />
               <p className={`text-xs text-foreground flex-1 ${showPinnedExpand ? "" : "truncate"}`}>
-                {pinnedMessage.content}
+                {pinnedMessage?.content}
               </p>
               <ChevronDown size={14} className={`text-muted-foreground shrink-0 transition-transform ${showPinnedExpand ? "rotate-180" : ""}`} />
             </div>
@@ -381,9 +361,9 @@ export default function GroupChatRoom() {
               <div className="px-3 py-2 bg-neon-cyan/5 border-b border-neon-cyan/10">
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                   <Crown size={10} className="text-amber-400" />
-                  <span>{pinnedMessage.sender}</span>
+                  <span>{pinnedMessage?.sender}</span>
                   <span>·</span>
-                  <span>{pinnedMessage.time}</span>
+                  <span>{pinnedMessage?.time}</span>
                 </div>
               </div>
             )}

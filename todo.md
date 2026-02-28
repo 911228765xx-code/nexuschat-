@@ -74,3 +74,13 @@
 - [x] Discover.tsx Communities Tab 移除 mockCommunities，完全使用 chat.listGroups
 - [x] GroupChatRoom.tsx 移除 mockMembers，完全使用 chat.getGroupMembers
 - [x] 97 个测试全部通过，TypeScript 0 错误
+
+## v23 Mock 数据清理（第二轮）
+
+- [x] GroupChatRoom 群聊消息移除 mockGroupMessages，使用空初始值 + 后端加载
+- [x] ChatRoom DM 消息移除 mockMessages，使用空初始值 + 后端加载
+- [x] Discover Moments 移除 mockMoments/mockComments/generateMorePosts，接入后端分页
+- [x] Discover Users Tab 移除 mockUsers，完全使用 leaderboard 数据
+- [x] Trading 移除 mockPositions fallback，重命名 mockTraders/mockStrategies 为 demoTraders/demoStrategies
+- [x] Wallet 移除 mockTokens/mockNFTs/mockTransactions，完全使用 BSC 链上数据
+- [x] 97 个测试全部通过，TypeScript 0 错误

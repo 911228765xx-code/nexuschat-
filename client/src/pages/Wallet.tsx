@@ -51,41 +51,7 @@ interface Transaction {
   chain: string;
 }
 
-/* ─── Mock Data ─── */
-const mockTokens: Token[] = [
-  { id: "1", symbol: "ETH", name: "Ethereum", icon: "⟠", balance: 2.4523, value: 9428.34, price: 3842.50, change24h: 2.4, chain: "Ethereum" },
-  { id: "2", symbol: "USDT", name: "Tether", icon: "₮", balance: 1280.50, value: 1280.50, price: 1.00, change24h: 0.01, chain: "Ethereum" },
-  { id: "3", symbol: "USDC", name: "USD Coin", icon: "◉", balance: 850.00, value: 850.00, price: 1.00, change24h: -0.01, chain: "Ethereum" },
-  { id: "4", symbol: "BTC", name: "Bitcoin", icon: "₿", balance: 0.0853, value: 5752.18, price: 67432.10, change24h: 1.8, chain: "Bitcoin" },
-  { id: "5", symbol: "SOL", name: "Solana", icon: "◎", balance: 34.2, value: 4104.00, price: 120.00, change24h: 5.2, chain: "Solana" },
-  { id: "6", symbol: "MATIC", name: "Polygon", icon: "⬡", balance: 520.0, value: 416.00, price: 0.80, change24h: -1.3, chain: "Polygon" },
-  { id: "7", symbol: "ARB", name: "Arbitrum", icon: "🔵", balance: 280.0, value: 308.00, price: 1.10, change24h: 3.7, chain: "Arbitrum" },
-  { id: "8", symbol: "UNI", name: "Uniswap", icon: "🦄", balance: 45.0, value: 337.50, price: 7.50, change24h: -0.8, chain: "Ethereum" },
-  { id: "9", symbol: "AAVE", name: "Aave", icon: "👻", balance: 3.5, value: 350.00, price: 100.00, change24h: 4.1, chain: "Ethereum" },
-  { id: "10", symbol: "LINK", name: "Chainlink", icon: "⬡", balance: 120.0, value: 1680.00, price: 14.00, change24h: 2.9, chain: "Ethereum" },
-];
-
-const mockNFTs: NFT[] = [
-  { id: "1", name: "Bored Ape #7832", collection: "BAYC", image: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=300&h=300&fit=crop", floorPrice: 28.5, chain: "Ethereum", rarity: "Rare" },
-  { id: "2", name: "Azuki #4521", collection: "Azuki", image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&h=300&fit=crop", floorPrice: 8.2, chain: "Ethereum", rarity: "Uncommon" },
-  { id: "3", name: "Pudgy Penguin #1234", collection: "Pudgy Penguins", image: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=300&h=300&fit=crop", floorPrice: 12.1, chain: "Ethereum" },
-  { id: "4", name: "DeGod #8901", collection: "DeGods", image: "https://images.unsplash.com/photo-1635322966219-b75ed372eb01?w=300&h=300&fit=crop", floorPrice: 5.4, chain: "Solana", rarity: "Legendary" },
-  { id: "5", name: "Milady #5678", collection: "Milady Maker", image: "https://images.unsplash.com/photo-1614854262318-831574f15f1f?w=300&h=300&fit=crop", floorPrice: 3.8, chain: "Ethereum" },
-  { id: "6", name: "Moonbird #2345", collection: "Moonbirds", image: "https://images.unsplash.com/photo-1633957897986-70e83293f3ff?w=300&h=300&fit=crop", floorPrice: 2.1, chain: "Ethereum", rarity: "Epic" },
-];
-
-const mockTransactions: Transaction[] = [
-  { id: "1", type: "receive", token: "ETH", tokenIcon: "⟠", amount: "+0.5 ETH", value: "$1,921.25", from: "0x71C7...3a9b", to: "You", time: "2m ago", status: "confirmed", hash: "0xabc...123", chain: "Ethereum" },
-  { id: "2", type: "send", token: "USDT", tokenIcon: "₮", amount: "-200 USDT", value: "$200.00", from: "You", to: "vitalik.eth", time: "15m ago", status: "confirmed", hash: "0xdef...456", chain: "Ethereum" },
-  { id: "3", type: "swap", token: "ETH → USDC", tokenIcon: "⟠", amount: "0.3 ETH → 1,152 USDC", value: "$1,152.75", from: "Uniswap V3", to: "", time: "1h ago", status: "confirmed", hash: "0xghi...789", chain: "Ethereum" },
-  { id: "4", type: "stake", token: "ETH", tokenIcon: "⟠", amount: "1.0 ETH", value: "$3,842.50", from: "You", to: "Lido Finance", time: "3h ago", status: "confirmed", hash: "0xjkl...012", chain: "Ethereum" },
-  { id: "5", type: "mint", token: "NFT", tokenIcon: "🎨", amount: "Azuki #4521", value: "0.8 ETH", from: "Azuki Contract", to: "You", time: "5h ago", status: "confirmed", hash: "0xmno...345", chain: "Ethereum" },
-  { id: "6", type: "receive", token: "SOL", tokenIcon: "◎", amount: "+10.5 SOL", value: "$1,260.00", from: "0x8F2a...7c1d", to: "You", time: "8h ago", status: "confirmed", hash: "0xpqr...678", chain: "Solana" },
-  { id: "7", type: "approve", token: "UNI", tokenIcon: "🦄", amount: "Unlimited UNI", value: "-", from: "You", to: "Uniswap Router", time: "12h ago", status: "confirmed", hash: "0xstu...901", chain: "Ethereum" },
-  { id: "8", type: "send", token: "MATIC", tokenIcon: "⬡", amount: "-100 MATIC", value: "$80.00", from: "You", to: "0x5B6c...1e3f", time: "1d ago", status: "confirmed", hash: "0xvwx...234", chain: "Polygon" },
-  { id: "9", type: "swap", token: "USDC → ARB", tokenIcon: "◉", amount: "500 USDC → 454 ARB", value: "$500.00", from: "1inch", to: "", time: "2d ago", status: "confirmed", hash: "0xyza...567", chain: "Arbitrum" },
-  { id: "10", type: "receive", token: "LINK", tokenIcon: "⬡", amount: "+50 LINK", value: "$700.00", from: "Chainlink Staking", to: "You", time: "3d ago", status: "confirmed", hash: "0xbcd...890", chain: "Ethereum" },
-];
+// Mock data removed — now using real BSC chain data from backend
 
 /* ─── Tab types ─── */
 type WalletTab = "tokens" | "nfts" | "history";
@@ -130,7 +96,7 @@ export default function Wallet() {
 
   // ─── Merge real data with mock fallback ───
   const displayTokens = useMemo(() => {
-    if (!isValidBscAddress || (!bnbData && !tokenData)) return mockTokens;
+    if (!isValidBscAddress || (!bnbData && !tokenData)) return [];
     const result: Token[] = [];
     if (bnbData && parseFloat(bnbData.bnbBalanceFormatted) > 0) {
       result.push({
@@ -162,11 +128,11 @@ export default function Wallet() {
         });
       });
     }
-    return result.length > 0 ? result : mockTokens;
+    return result;
   }, [bnbData, tokenData, isValidBscAddress]);
 
   const displayTxs = useMemo((): Transaction[] => {
-    if (!txData || txData.length === 0) return mockTransactions;
+    if (!txData || txData.length === 0) return [];
     return txData.map((tx) => ({
       id: tx.hash,
       type: (tx.isIncoming ? "receive" : "send") as Transaction["type"],
@@ -185,14 +151,15 @@ export default function Wallet() {
 
   // Use real data when available, fallback to mock
   const totalBalance = displayTokens.reduce((sum, t) => sum + t.value, 0);
-  const totalNFTValue = mockNFTs.reduce((sum, n) => sum + n.floorPrice, 0);
+  const nfts: NFT[] = []; // NFT data not yet available from backend
+  const totalNFTValue = nfts.reduce((sum, n) => sum + n.floorPrice, 0);
   const totalChange = displayTokens.reduce((sum, t) => sum + (t.value * t.change24h / 100), 0);
   const totalChangePercent = totalBalance > 0 ? (totalChange / totalBalance) * 100 : 0;
 
   const chains = ["All", "BSC", "Ethereum", "Solana", "Polygon", "Arbitrum"];
 
   const filteredTokens = selectedChain === "All" ? displayTokens : displayTokens.filter(t => t.chain === selectedChain);
-  const filteredNFTs = selectedChain === "All" ? mockNFTs : mockNFTs.filter(n => n.chain === selectedChain);
+  const filteredNFTs = selectedChain === "All" ? nfts : nfts.filter(n => n.chain === selectedChain);
   const filteredTxs = selectedChain === "All" ? displayTxs : displayTxs.filter(tx => tx.chain === selectedChain);
   const isLoadingData = bnbLoading || tokensLoading;
 
@@ -587,7 +554,7 @@ export default function Wallet() {
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Token</label>
                 <select value={sendToken} onChange={(e) => setSendToken(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
-                  {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance}</option>)}
+                  {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance}</option>)}
                 </select>
               </div>
               <div>
@@ -646,7 +613,7 @@ export default function Wallet() {
                 <label className="text-xs text-muted-foreground mb-1 block">From</label>
                 <div className="flex items-center gap-2">
                   <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                    {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                    {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
                   </select>
                   <input type="number" value={swapAmount} onChange={(e) => setSwapAmount(e.target.value)} placeholder="0.00" className="flex-1 h-9 rounded-lg bg-transparent text-right text-sm font-mono focus:outline-none" />
                 </div>
@@ -656,7 +623,7 @@ export default function Wallet() {
                 <label className="text-xs text-muted-foreground mb-1 block">To</label>
                 <div className="flex items-center gap-2">
                   <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                    {mockTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                    {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
                   </select>
                   <span className="flex-1 text-right text-sm font-mono text-muted-foreground">{swapAmount ? (parseFloat(swapAmount) * 1.05).toFixed(4) : "0.00"}</span>
                 </div>

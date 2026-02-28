@@ -59,7 +59,7 @@ interface PnlDay {
   date: string; day: number; pnl: number; trades: number;
 }
 
-/* ─── Mock Data ─── */
+/* ─── Demo Data (no backend yet for traders/strategies) ─── */
 const priceTicker = [
   { symbol: "BTC", price: 97245, change: 1.8 },
   { symbol: "ETH", price: 3842.5, change: 2.4 },
@@ -69,7 +69,7 @@ const priceTicker = [
   { symbol: "AVAX", price: 42.8, change: -0.8 },
 ];
 
-const mockTraders: Trader[] = [
+const demoTraders: Trader[] = [
   {
     id: "tr1", name: "CryptoKing", avatar: "👑", badge: "gold",
     followers: 2845, totalReturn: 342.5, winRate: 78, trades30d: 156,
@@ -150,7 +150,7 @@ const mockTraders: Trader[] = [
   },
 ];
 
-const mockStrategies: Strategy[] = [
+const demoStrategies: Strategy[] = [
   {
     id: "1", name: "BTC MA Breakout", signalSource: "CryptoKing",
     pair: "BTC/USDT", amount: "$100/trade", status: "running",
@@ -220,26 +220,7 @@ const mockStrategies: Strategy[] = [
   },
 ];
 
-const mockPositions: Position[] = [
-  {
-    id: "p1", pair: "BTC/USDT", side: "long", entryPrice: 96850, currentPrice: 97245,
-    amount: 0.001, leverage: 5, unrealizedPnl: 1.98, unrealizedPnlPercent: 2.04,
-    strategy: "BTC MA Breakout", openTime: "2h 15m ago",
-    stopLossPrice: 95200, takeProfitPrice: 99500, liquidationPrice: 82000,
-  },
-  {
-    id: "p2", pair: "ETH/USDT", side: "long", entryPrice: 3810, currentPrice: 3842.5,
-    amount: 0.015, leverage: 3, unrealizedPnl: 0.49, unrealizedPnlPercent: 0.85,
-    strategy: "ETH RSI Oversold", openTime: "45m ago",
-    stopLossPrice: 3720, takeProfitPrice: 4100, liquidationPrice: 2850,
-  },
-  {
-    id: "p3", pair: "BTC/USDT", side: "short", entryPrice: 97500, currentPrice: 97245,
-    amount: 0.0005, leverage: 10, unrealizedPnl: 0.13, unrealizedPnlPercent: 0.26,
-    strategy: "BTC MA Breakout", openTime: "12m ago",
-    stopLossPrice: 98200, takeProfitPrice: 95800, liquidationPrice: 107000,
-  },
-];
+// mockPositions removed — now using real positions from backend
 
 const allTrades = [
   { id: "1", pair: "BTC/USDT", side: "buy" as const, amount: "$100", price: "$97,432", profit: 12.5, time: "14:30", date: "Today", strategy: "BTC MA Breakout" },
@@ -294,7 +275,7 @@ export default function Trading() {
   }, [livePrices]);
 
   const [activeTab, setActiveTab] = useState<MainTab>("strategies");
-  const [strategies, setStrategies] = useState(mockStrategies);
+  const [strategies, setStrategies] = useState(demoStrategies);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
   const [detailTab, setDetailTab] = useState<DetailTab>("chart");
@@ -318,7 +299,7 @@ export default function Trading() {
     }));
   }, [chartData]);
   const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
-  const [traders, setTraders] = useState(mockTraders);
+  const [traders, setTraders] = useState(demoTraders);
   const [marketSort, setMarketSort] = useState<MarketSort>("return");
   const [showFilters, setShowFilters] = useState(false);
   const [riskFilter, setRiskFilter] = useState<"all" | "low" | "medium" | "high">("all");
@@ -423,8 +404,8 @@ export default function Trading() {
   const totalProfit = strategies.reduce((s, st) => s + st.totalProfit, 0);
   const totalTrades = strategies.reduce((s, st) => s + st.trades, 0);
   const avgWinRate = Math.round(strategies.reduce((s, st) => s + st.winRate, 0) / strategies.length);
-  // Use real positions if available, fallback to mock
-  const displayPositions: Position[] = realPositions.length > 0 ? realPositions.map(p => ({
+  // Use real positions from backend
+  const displayPositions: Position[] = realPositions.map(p => ({
     id: String(p.id),
     pair: p.pair,
     side: p.side as "long" | "short",
@@ -439,7 +420,7 @@ export default function Trading() {
     stopLossPrice: p.stopLossPrice ? parseFloat(p.stopLossPrice) : null,
     takeProfitPrice: p.takeProfitPrice ? parseFloat(p.takeProfitPrice) : null,
     liquidationPrice: p.liquidationPrice ? parseFloat(p.liquidationPrice) : null,
-  })) : mockPositions;
+  }));
   const totalUnrealizedPnl = displayPositions.reduce((s, p) => s + p.unrealizedPnl, 0);
 
   const sortedTraders = useMemo(() => {
