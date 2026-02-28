@@ -299,7 +299,42 @@ export default function Trading() {
     }));
   }, [chartData]);
   const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
+  // Load real traders from backend, fallback to demo data
+  const { data: backendTraders } = trpc.copyTrading.listTraders.useQuery(undefined, { staleTime: 30_000 });
+  const { data: followedTraderIds } = trpc.copyTrading.myFollowedTraders.useQuery(undefined, { staleTime: 30_000 });
+  const followedSet = useMemo(() => new Set(followedTraderIds ?? []), [followedTraderIds]);
+  const trpcUtils = trpc.useUtils();
+
+  const realTraders: Trader[] = useMemo(() => {
+    if (!backendTraders || backendTraders.length === 0) return demoTraders;
+    return backendTraders.map(t => ({
+      id: String(t.id),
+      name: t.displayName,
+      avatar: t.avatar ?? "🤖",
+      badge: t.badge as Trader["badge"],
+      followers: t.followerCount ?? 0,
+      totalReturn: parseFloat(t.totalReturn ?? "0"),
+      winRate: t.winRate ?? 0,
+      trades30d: t.trades30d ?? 0,
+      maxDrawdown: parseFloat(t.maxDrawdown ?? "0"),
+      sharpeRatio: 0,
+      riskLevel: t.riskLevel as Trader["riskLevel"],
+      isFollowing: followedSet.has(t.id),
+      profitHistory: [],
+      topPairs: t.topPairs ?? [],
+      avgHoldTime: "N/A",
+      description: t.description ?? "",
+      weeklyReturns: [],
+      consistency: 0,
+      avgTradeSize: "N/A",
+    }));
+  }, [backendTraders, followedSet]);
+
   const [traders, setTraders] = useState(demoTraders);
+  // Sync real traders when loaded
+  useEffect(() => {
+    if (realTraders.length > 0) setTraders(realTraders);
+  }, [realTraders]);
   const [marketSort, setMarketSort] = useState<MarketSort>("return");
   const [showFilters, setShowFilters] = useState(false);
   const [riskFilter, setRiskFilter] = useState<"all" | "low" | "medium" | "high">("all");
@@ -447,7 +482,18 @@ export default function Trading() {
     });
   };
 
+  const toggleFollowMutation = trpc.copyTrading.toggleFollow.useMutation({
+    onSuccess: () => {
+      trpcUtils.copyTrading.myFollowedTraders.invalidate();
+      trpcUtils.copyTrading.listTraders.invalidate();
+    },
+  });
   const toggleFollow = (traderId: string) => {
+    const numId = parseInt(traderId, 10);
+    if (!isNaN(numId)) {
+      toggleFollowMutation.mutate({ traderId: numId });
+    }
+    // Optimistic update
     setTraders(prev => prev.map(tr => {
       if (tr.id !== traderId) return tr;
       const nf = !tr.isFollowing;

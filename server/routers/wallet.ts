@@ -3,6 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
 // BscScan API base URL (free tier, no API key needed for basic queries)
 const BSCSCAN_API = "https://api.bscscan.com/api";
@@ -82,20 +83,16 @@ export const walletRouter = router({
       const bnb = Number(BigInt(data.result)) / 1e18;
       const bnbFormatted = bnb.toFixed(4);
 
-      // Fetch BNB price in USD from CoinGecko
+      // Fetch BNB price in USD from CoinGecko (cached)
       let usdValue: string | null = null;
-      try {
-        const priceRes = await fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd",
-          { signal: AbortSignal.timeout(5000) }
-        );
-        if (priceRes.ok) {
-          const priceData = await priceRes.json();
-          const bnbPrice = (priceData as any)?.binancecoin?.usd ?? 0;
-          usdValue = (bnb * bnbPrice).toFixed(2);
-        }
-      } catch {
-        // Price fetch failed, skip
+      const bnbPriceData = await cachedFetch<any>(
+        "bnb-usd-price",
+        "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd",
+        TTL.prices,
+        (res) => res.json(),
+      );
+      if (bnbPriceData?.binancecoin?.usd) {
+        usdValue = (bnb * bnbPriceData.binancecoin.usd).toFixed(2);
       }
 
       return { bnbBalance: data.result, bnbBalanceFormatted: bnbFormatted, usdValue };

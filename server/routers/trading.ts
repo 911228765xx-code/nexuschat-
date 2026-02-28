@@ -3,6 +3,7 @@ import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { priceAlerts, tradingPositions } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
 // CoinGecko free API - no key required
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
@@ -20,19 +21,6 @@ const SYMBOL_TO_ID: Record<string, string> = {
   MATIC: "matic-network",
   DOT: "polkadot",
 };
-
-async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(id);
-    return res;
-  } catch (e) {
-    clearTimeout(id);
-    throw e;
-  }
-}
 
 export const tradingRouter = router({
   // ─── Get live prices for ticker symbols ──────────────────────────────────
@@ -53,28 +41,27 @@ export const tradingRouter = router({
         return symbols.map((s) => ({ symbol: s, price: 0, change: 0, volume: 0, marketCap: 0 }));
       }
 
-      try {
-        const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`;
-        const res = await fetchWithTimeout(url);
-        if (!res.ok) throw new Error(`CoinGecko API error: ${res.status}`);
-        const data = await res.json() as Record<string, { usd: number; usd_24h_change: number; usd_24h_vol: number; usd_market_cap: number }>;
+      const cacheKey = `prices:${ids}`;
+      const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`;
 
-        return symbols.map((symbol) => {
-          const id = SYMBOL_TO_ID[symbol.toUpperCase()];
-          const coin = id ? data[id] : null;
-          return {
-            symbol: symbol.toUpperCase(),
-            price: coin?.usd ?? 0,
-            change: coin ? parseFloat((coin.usd_24h_change ?? 0).toFixed(2)) : 0,
-            volume: coin?.usd_24h_vol ?? 0,
-            marketCap: coin?.usd_market_cap ?? 0,
-          };
-        });
-      } catch (err) {
-        // Return zeros on error — frontend will show stale/mock data
-        console.error("[TradingRouter] CoinGecko fetch failed:", err);
-        return symbols.map((s) => ({ symbol: s, price: 0, change: 0, volume: 0, marketCap: 0 }));
-      }
+      const data = await cachedFetch<Record<string, { usd: number; usd_24h_change: number; usd_24h_vol: number; usd_market_cap: number }>>(
+        cacheKey,
+        url,
+        TTL.prices,
+        (res) => res.json(),
+      );
+
+      return symbols.map((symbol) => {
+        const id = SYMBOL_TO_ID[symbol.toUpperCase()];
+        const coin = id && data ? data[id] : null;
+        return {
+          symbol: symbol.toUpperCase(),
+          price: coin?.usd ?? 0,
+          change: coin ? parseFloat((coin.usd_24h_change ?? 0).toFixed(2)) : 0,
+          volume: coin?.usd_24h_vol ?? 0,
+          marketCap: coin?.usd_market_cap ?? 0,
+        };
+      });
     }),
 
   // ─── Get detailed chart data for a single coin ────────────────────────────
@@ -89,44 +76,48 @@ export const tradingRouter = router({
       const id = SYMBOL_TO_ID[input.symbol.toUpperCase()];
       if (!id) return { prices: [], symbol: input.symbol };
 
-      try {
-        const url = `${COINGECKO_BASE}/coins/${id}/market_chart?vs_currency=usd&days=${input.days}&interval=${input.days <= 1 ? "hourly" : "daily"}`;
-        const res = await fetchWithTimeout(url);
-        if (!res.ok) throw new Error(`CoinGecko chart error: ${res.status}`);
-        const data = await res.json() as { prices: [number, number][] };
+      const cacheKey = `chart:${id}:${input.days}`;
+      const url = `${COINGECKO_BASE}/coins/${id}/market_chart?vs_currency=usd&days=${input.days}&interval=${input.days <= 1 ? "hourly" : "daily"}`;
 
-        return {
-          symbol: input.symbol.toUpperCase(),
-          prices: data.prices.map(([timestamp, price]) => ({
-            time: new Date(timestamp).toISOString(),
-            price: parseFloat(price.toFixed(4)),
-          })),
-        };
-      } catch (err) {
-        console.error("[TradingRouter] CoinGecko chart fetch failed:", err);
-        return { prices: [], symbol: input.symbol };
-      }
+      const data = await cachedFetch<{ prices: [number, number][] }>(
+        cacheKey,
+        url,
+        TTL.chart,
+        (res) => res.json(),
+      );
+
+      if (!data) return { prices: [], symbol: input.symbol };
+
+      return {
+        symbol: input.symbol.toUpperCase(),
+        prices: data.prices.map(([timestamp, price]) => ({
+          time: new Date(timestamp).toISOString(),
+          price: parseFloat(price.toFixed(4)),
+        })),
+      };
     }),
 
   // ─── Get trending coins ────────────────────────────────────────────────────
   getTrending: publicProcedure.query(async () => {
-    try {
-      const url = `${COINGECKO_BASE}/search/trending`;
-      const res = await fetchWithTimeout(url);
-      if (!res.ok) throw new Error(`CoinGecko trending error: ${res.status}`);
-      const data = await res.json() as { coins: { item: { id: string; symbol: string; name: string; thumb: string; price_btc: number } }[] };
+    const cacheKey = "trending";
+    const url = `${COINGECKO_BASE}/search/trending`;
 
-      return data.coins.slice(0, 7).map((c) => ({
-        id: c.item.id,
-        symbol: c.item.symbol.toUpperCase(),
-        name: c.item.name,
-        thumb: c.item.thumb,
-        priceBtc: c.item.price_btc,
-      }));
-    } catch (err) {
-      console.error("[TradingRouter] CoinGecko trending fetch failed:", err);
-      return [];
-    }
+    const data = await cachedFetch<{ coins: { item: { id: string; symbol: string; name: string; thumb: string; price_btc: number } }[] }>(
+      cacheKey,
+      url,
+      TTL.trending,
+      (res) => res.json(),
+    );
+
+    if (!data) return [];
+
+    return data.coins.slice(0, 7).map((c) => ({
+      id: c.item.id,
+      symbol: c.item.symbol.toUpperCase(),
+      name: c.item.name,
+      thumb: c.item.thumb,
+      priceBtc: c.item.price_btc,
+    }));
   }),
 
   // ─── Price Alerts CRUD ─────────────────────────────────────────────────────

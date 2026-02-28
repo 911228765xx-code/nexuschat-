@@ -259,6 +259,26 @@ export const friendRequests = mysqlTable(
 export type FriendRequest = typeof friendRequests.$inferSelect;
 export type InsertFriendRequest = typeof friendRequests.$inferInsert;
 
+// ─── Contact Metadata (favorites, notes, tags) ──────────────────────────────
+export const contactMetadata = mysqlTable(
+  "contact_metadata",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    contactId: int("contactId").notNull(),
+    isFavorite: boolean("isFavorite").default(false).notNull(),
+    note: text("note"),
+    tags: text("tags"), // JSON array of strings
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_contact_meta_user").on(t.userId, t.contactId),
+  ]
+);
+
+export type ContactMetadata = typeof contactMetadata.$inferSelect;
+
 // ─── User Watchlist ───────────────────────────────────────────────────────────
 export const userWatchlist = mysqlTable(
   "user_watchlist",
@@ -304,3 +324,72 @@ export const tradingPositions = mysqlTable(
 );
 export type TradingPosition = typeof tradingPositions.$inferSelect;
 export type InsertTradingPosition = typeof tradingPositions.$inferInsert;
+
+// ─── Copy Traders (users who share their trading strategies) ─────────────────
+export const copyTraders = mysqlTable(
+  "copy_traders",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    displayName: varchar("displayName", { length: 100 }).notNull(),
+    avatar: varchar("avatar", { length: 10 }).default("🤖"),
+    badge: mysqlEnum("badge", ["gold", "silver", "bronze", "none"]).default("none").notNull(),
+    description: text("description"),
+    riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high"]).default("medium").notNull(),
+    totalReturn: varchar("totalReturn", { length: 30 }).default("0"),
+    winRate: int("winRate").default(0),
+    trades30d: int("trades30d").default(0),
+    maxDrawdown: varchar("maxDrawdown", { length: 30 }).default("0"),
+    topPairs: text("topPairs"), // JSON array
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_copy_traders_user").on(t.userId),
+  ]
+);
+export type CopyTrader = typeof copyTraders.$inferSelect;
+
+// ─── Copy Trader Follows ─────────────────────────────────────────────────────
+export const copyTraderFollows = mysqlTable(
+  "copy_trader_follows",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    traderId: int("traderId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_ct_follows_user").on(t.userId),
+    index("idx_ct_follows_trader").on(t.traderId),
+  ]
+);
+
+// ─── Trading Strategies ──────────────────────────────────────────────────────
+export const tradingStrategies = mysqlTable(
+  "trading_strategies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    type: mysqlEnum("type", ["grid", "dca", "momentum", "arbitrage", "custom"]).default("custom").notNull(),
+    pair: varchar("pair", { length: 30 }),
+    riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high"]).default("medium").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    totalReturn: varchar("totalReturn", { length: 30 }).default("0"),
+    winRate: int("winRate").default(0),
+    totalTrades: int("totalTrades").default(0),
+    maxDrawdown: varchar("maxDrawdown", { length: 30 }).default("0"),
+    stopLoss: varchar("stopLoss", { length: 30 }),
+    takeProfit: varchar("takeProfit", { length: 30 }),
+    maxPosition: varchar("maxPosition", { length: 30 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_strategies_user").on(t.userId),
+  ]
+);
+export type TradingStrategy = typeof tradingStrategies.$inferSelect;

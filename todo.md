@@ -92,3 +92,10 @@
 - [x] Settings mockApiKey 重命名为 demoApiKey
 - [x] 全项目 mock 数据清理完成（所有 mock 变量已移除或重命名为 demo）
 - [x] 97 个测试全部通过，TypeScript 0 错误
+
+## v25 功能完善
+
+- [x] CoinGecko API 缓存优化（内存缓存 + 指数退避重试 + TTL 分级 + 过期缓存 fallback）
+- [x] Contacts 收藏/备注/标签持久化（contactMetadata 表 + toggleFavorite/updateNote/updateTags 接口 + 前端接入）
+- [x] Trading 跟单系统后端化（copy_traders/copy_trader_follows/trading_strategies 表 + CRUD 接口 + 前端接入）
+- [x] 97 个测试全部通过，TypeScript 0 错误

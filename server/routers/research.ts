@@ -5,36 +5,45 @@ import { researchReports, priceAlerts } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
-// Fetch token data from CoinGecko (free API)
-async function fetchTokenData(symbol: string) {
-  try {
-    const searchRes = await fetch(
-      `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`
-    );
-    const searchData = await searchRes.json() as any;
-    const coin = searchData.coins?.[0];
-    if (!coin) return null;
+import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
-    const detailRes = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&community_data=false&developer_data=false`
-    );
-    const detail = await detailRes.json() as any;
-    return {
-      id: coin.id,
-      name: detail.name,
-      symbol: detail.symbol?.toUpperCase(),
-      price: detail.market_data?.current_price?.usd,
-      priceChange24h: detail.market_data?.price_change_percentage_24h,
-      marketCap: detail.market_data?.market_cap?.usd,
-      volume24h: detail.market_data?.total_volume?.usd,
-      ath: detail.market_data?.ath?.usd,
-      description: detail.description?.en?.slice(0, 500),
-      categories: detail.categories?.slice(0, 3),
-    };
-  } catch (e) {
-    console.error("CoinGecko fetch error:", e);
-    return null;
-  }
+// Fetch token data from CoinGecko (free API) with caching
+async function fetchTokenData(symbol: string) {
+  const cacheKey = `token:search:${symbol.toLowerCase()}`;
+  const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
+
+  const searchData = await cachedFetch<any>(
+    cacheKey,
+    searchUrl,
+    TTL.search,
+    (res) => res.json(),
+  );
+  const coin = searchData?.coins?.[0];
+  if (!coin) return null;
+
+  const detailCacheKey = `token:detail:${coin.id}`;
+  const detailUrl = `https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&community_data=false&developer_data=false`;
+
+  const detail = await cachedFetch<any>(
+    detailCacheKey,
+    detailUrl,
+    TTL.tokenDetail,
+    (res) => res.json(),
+  );
+  if (!detail) return null;
+
+  return {
+    id: coin.id,
+    name: detail.name,
+    symbol: detail.symbol?.toUpperCase(),
+    price: detail.market_data?.current_price?.usd,
+    priceChange24h: detail.market_data?.price_change_percentage_24h,
+    marketCap: detail.market_data?.market_cap?.usd,
+    volume24h: detail.market_data?.total_volume?.usd,
+    ath: detail.market_data?.ath?.usd,
+    description: detail.description?.en?.slice(0, 500),
+    categories: detail.categories?.slice(0, 3),
+  };
 }
 
 export const researchRouter = router({

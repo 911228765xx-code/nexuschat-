@@ -66,6 +66,7 @@ const defaultGroups: ContactGroup[] = [
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
   const { isAuthenticated } = useAuth();
+  const trpcUtils = trpc.useUtils();
 
   // tRPC: get real following list
   const { data: followingData, refetch: refetchFollowing } = trpc.follow.getFollowing.useQuery(
@@ -73,20 +74,40 @@ export default function Contacts() {
     { enabled: isAuthenticated, staleTime: 30_000 }
   );
 
-  // Map real following data to Contact shape, fall back to mock if not authenticated
-  const realContacts: Contact[] = (followingData ?? []).map(u => ({
-    id: String(u.id),
-    name: u.name ?? u.username ?? `User #${u.id}`,
-    avatar: u.name?.slice(0, 1).toUpperCase() ?? "U",
-    address: `@${u.username ?? u.id}`,
-    ens: undefined,
-    note: u.bio ?? undefined,
-    isVerified: false,
-    isFavorite: false,
-    lastActive: "Recently",
-    group: (u.name ?? u.username ?? "U").slice(0, 1).toUpperCase(),
-    tags: [],
-  }));
+  // Load contact metadata (favorites, notes, tags) from backend
+  const { data: contactMetaList } = trpc.contacts.listContactMeta.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+  const metaMap = useMemo(() => {
+    const map = new Map<number, { isFavorite: boolean; note: string; tags: string[] }>();
+    for (const m of contactMetaList ?? []) {
+      map.set(m.contactId, {
+        isFavorite: m.isFavorite,
+        note: m.note ?? "",
+        tags: m.tags ? (JSON.parse(m.tags) as string[]) : [],
+      });
+    }
+    return map;
+  }, [contactMetaList]);
+
+  // Map real following data to Contact shape with metadata
+  const realContacts: Contact[] = (followingData ?? []).map(u => {
+    const meta = metaMap.get(u.id);
+    return {
+      id: String(u.id),
+      name: u.name ?? u.username ?? `User #${u.id}`,
+      avatar: u.name?.slice(0, 1).toUpperCase() ?? "U",
+      address: `@${u.username ?? u.id}`,
+      ens: undefined,
+      note: meta?.note || u.bio || undefined,
+      isVerified: false,
+      isFavorite: meta?.isFavorite ?? false,
+      lastActive: "Recently",
+      group: (u.name ?? u.username ?? "U").slice(0, 1).toUpperCase(),
+      tags: meta?.tags ?? [],
+    };
+  });
 
   // Use real data from backend (friends list)
   const displayContacts = realContacts;
@@ -215,18 +236,33 @@ export default function Contacts() {
   const sortedLetters = Object.keys(grouped).sort();
   const favoriteContacts = displayContacts.filter((c) => c.isFavorite);
 
+  const toggleFavoriteMutation = trpc.contacts.toggleFavorite.useMutation({
+    onSuccess: (data) => {
+      if (selectedContact) {
+        setSelectedContact((prev) => prev ? { ...prev, isFavorite: data.isFavorite ?? false } : null);
+      }
+      trpcUtils.contacts.listContactMeta.invalidate();
+    },
+  });
   const toggleFavorite = (id: string) => {
-    // TODO: persist favorite to backend
-    if (selectedContact?.id === id) {
-      setSelectedContact((prev) => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      toggleFavoriteMutation.mutate({ contactId: numId });
     }
-    toast(t("contacts.featureComingSoon") || "Feature coming soon");
   };
 
+  const updateNoteMutation = trpc.contacts.updateNote.useMutation({
+    onSuccess: () => {
+      trpcUtils.contacts.listContactMeta.invalidate();
+      toast(t("contacts.noteSaved") || "Note saved");
+    },
+  });
   const saveNote = (id: string) => {
-    // TODO: persist note to backend
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      updateNoteMutation.mutate({ contactId: numId, note: editNoteText });
+    }
     setEditingNote(null);
-    toast(t("contacts.noteSaved") || "Note saved");
   };
 
   const handleAddContact = () => {
@@ -252,9 +288,20 @@ export default function Contacts() {
     }
   };
 
+  const updateTagsMutation = trpc.contacts.updateTags.useMutation({
+    onSuccess: () => {
+      trpcUtils.contacts.listContactMeta.invalidate();
+    },
+  });
   const toggleContactTag = (contactId: string, tagId: string) => {
-    // TODO: persist tags to backend
-    toast(t("contacts.featureComingSoon") || "Feature coming soon");
+    const numId = parseInt(contactId, 10);
+    if (isNaN(numId)) return;
+    const meta = metaMap.get(numId);
+    const currentTags = meta?.tags ?? [];
+    const newTags = currentTags.includes(tagId)
+      ? currentTags.filter((t) => t !== tagId)
+      : [...currentTags, tagId];
+    updateTagsMutation.mutate({ contactId: numId, tags: newTags });
   };
 
   const addNewGroup = () => {

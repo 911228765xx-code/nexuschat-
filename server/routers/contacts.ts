@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { friendRequests, users } from "../../drizzle/schema";
+import { friendRequests, users, contactMetadata } from "../../drizzle/schema";
 import { and, eq, or, desc } from "drizzle-orm";
 
 export const contactsRouter = router({
@@ -189,4 +189,140 @@ export const contactsRouter = router({
       createdAt: r.createdAt,
     }));
   }),
+
+  // ─── Get metadata for a contact ──────────────────────────────────────────
+  getContactMeta: protectedProcedure
+    .input(z.object({ contactId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db
+        .select()
+        .from(contactMetadata)
+        .where(
+          and(
+            eq(contactMetadata.userId, ctx.user.id),
+            eq(contactMetadata.contactId, input.contactId)
+          )
+        )
+        .limit(1);
+      const row = rows[0];
+      if (!row) return { isFavorite: false, note: "", tags: [] as string[] };
+      return {
+        isFavorite: row.isFavorite,
+        note: row.note ?? "",
+        tags: row.tags ? (JSON.parse(row.tags) as string[]) : ([] as string[]),
+      };
+    }),
+
+  // ─── List all metadata for the user (for batch display) ────────────────
+  listContactMeta: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(contactMetadata)
+      .where(eq(contactMetadata.userId, ctx.user.id));
+  }),
+
+  // ─── Toggle favorite ─────────────────────────────────────────────────
+  toggleFavorite: protectedProcedure
+    .input(z.object({ contactId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+
+      const existing = await db
+        .select()
+        .from(contactMetadata)
+        .where(
+          and(
+            eq(contactMetadata.userId, ctx.user.id),
+            eq(contactMetadata.contactId, input.contactId)
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(contactMetadata)
+          .set({ isFavorite: !existing[0].isFavorite })
+          .where(eq(contactMetadata.id, existing[0].id));
+        return { success: true, isFavorite: !existing[0].isFavorite };
+      } else {
+        await db.insert(contactMetadata).values({
+          userId: ctx.user.id,
+          contactId: input.contactId,
+          isFavorite: true,
+        });
+        return { success: true, isFavorite: true };
+      }
+    }),
+
+  // ─── Update note ─────────────────────────────────────────────────────
+  updateNote: protectedProcedure
+    .input(z.object({ contactId: z.number().int().positive(), note: z.string().max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+
+      const existing = await db
+        .select()
+        .from(contactMetadata)
+        .where(
+          and(
+            eq(contactMetadata.userId, ctx.user.id),
+            eq(contactMetadata.contactId, input.contactId)
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(contactMetadata)
+          .set({ note: input.note })
+          .where(eq(contactMetadata.id, existing[0].id));
+      } else {
+        await db.insert(contactMetadata).values({
+          userId: ctx.user.id,
+          contactId: input.contactId,
+          note: input.note,
+        });
+      }
+      return { success: true };
+    }),
+
+  // ─── Update tags ─────────────────────────────────────────────────────
+  updateTags: protectedProcedure
+    .input(z.object({ contactId: z.number().int().positive(), tags: z.array(z.string().max(30)).max(10) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+
+      const tagsJson = JSON.stringify(input.tags);
+      const existing = await db
+        .select()
+        .from(contactMetadata)
+        .where(
+          and(
+            eq(contactMetadata.userId, ctx.user.id),
+            eq(contactMetadata.contactId, input.contactId)
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(contactMetadata)
+          .set({ tags: tagsJson })
+          .where(eq(contactMetadata.id, existing[0].id));
+      } else {
+        await db.insert(contactMetadata).values({
+          userId: ctx.user.id,
+          contactId: input.contactId,
+          tags: tagsJson,
+        });
+      }
+      return { success: true };
+    }),
 });
