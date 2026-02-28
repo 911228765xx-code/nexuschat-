@@ -27,6 +27,13 @@ export default function Profile() {
     staleTime: 30_000,
   });
 
+  // ─── Real follow counts ───
+  const { data: me } = trpc.auth.me.useQuery();
+  const { data: followCounts } = trpc.follow.getCounts.useQuery(
+    { userId: me?.id ?? 0 },
+    { enabled: !!me?.id, retry: false, staleTime: 30_000 }
+  );
+
   const menuSections = [
     {
       title: t("profile.activity"),
@@ -119,8 +126,8 @@ export default function Profile() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: t("profile.points"), value: statsLoading ? "..." : (stats?.npPoints ?? 0).toLocaleString(), sub: "NP", color: "text-neon-cyan" },
-              { label: t("profile.tradingProfit"), value: statsLoading ? "..." : `${stats?.postCount ?? 0}`, sub: t("profile.posts") || "Posts", color: "text-neon-green" },
-              { label: t("profile.invites"), value: statsLoading ? "..." : `#${(stats?.rank ?? 9999).toLocaleString()}`, sub: t("profile.rank") || "Rank", color: "text-neon-purple" },
+              { label: "Followers", value: followCounts ? followCounts.followers.toLocaleString() : (statsLoading ? "..." : "0"), sub: "followers", color: "text-neon-green" },
+              { label: "Following", value: followCounts ? followCounts.following.toLocaleString() : (statsLoading ? "..." : "0"), sub: "following", color: "text-neon-purple" },
             ].map((stat) => (
               <div key={stat.label} className="text-center p-2.5 rounded-xl bg-background/40">
                 <p className="text-[10px] text-muted-foreground">{stat.label}</p>

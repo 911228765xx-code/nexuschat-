@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
+import { getDb } from "../db";
+import { priceAlerts } from "../../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 
 // CoinGecko free API - no key required
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
@@ -125,4 +128,62 @@ export const tradingRouter = router({
       return [];
     }
   }),
+
+  // ─── Price Alerts CRUD ─────────────────────────────────────────────────────
+  createAlert: protectedProcedure
+    .input(
+      z.object({
+        tokenSymbol: z.string().min(1).max(20),
+        tokenId: z.string().min(1).max(100),
+        targetPrice: z.string().min(1),
+        condition: z.enum(["above", "below"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { id: 0, success: false };
+      const [result] = await db.insert(priceAlerts).values({
+        userId: ctx.user.id,
+        tokenSymbol: input.tokenSymbol.toUpperCase(),
+        tokenId: input.tokenId,
+        targetPrice: input.targetPrice,
+        condition: input.condition,
+      });
+      return { id: (result as any).insertId ?? 0, success: true };
+    }),
+
+  listAlerts: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const alerts = await db
+      .select()
+      .from(priceAlerts)
+      .where(eq(priceAlerts.userId, ctx.user.id))
+      .orderBy(desc(priceAlerts.createdAt))
+      .limit(50);
+    return alerts;
+  }),
+
+  deleteAlert: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db
+        .delete(priceAlerts)
+        .where(and(eq(priceAlerts.id, input.id), eq(priceAlerts.userId, ctx.user.id)));
+      return { success: true };
+    }),
+
+  toggleAlert: protectedProcedure
+    .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db
+        .update(priceAlerts)
+        .set({ isActive: input.isActive })
+        .where(and(eq(priceAlerts.id, input.id), eq(priceAlerts.userId, ctx.user.id)));
+      return { success: true };
+    }),
 });

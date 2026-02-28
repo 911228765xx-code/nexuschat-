@@ -271,7 +271,7 @@ const generatePnlCalendar = (): PnlDay[] => {
   return days;
 };
 
-type MainTab = "strategies" | "market" | "positions" | "calendar" | "logs";
+type MainTab = "strategies" | "market" | "positions" | "calendar" | "logs" | "alerts";
 type DetailTab = "chart" | "trades" | "risk" | "stats";
 type MarketSort = "return" | "winRate" | "followers" | "sharpe";
 type ModalType = "none" | "strategy" | "trader" | "createStrategy" | "copyConfig" | "closePosition" | "compare" | "notifications";
@@ -343,6 +343,25 @@ export default function Trading() {
     proportion: "10", maxPerTrade: "200", stopLoss: "5",
     takeProfit: "15", maxDailyLoss: "50", slippage: "0.5",
   });
+
+  // ─── Price Alerts (real backend) ────────────────────────────────────────
+  const { data: alertsData, refetch: refetchAlerts } = trpc.trading.listAlerts.useQuery(
+    undefined,
+    { staleTime: 30_000 }
+  );
+  const realAlerts = alertsData ?? [];
+
+  const createAlertMutation = trpc.trading.createAlert.useMutation({
+    onSuccess: () => { refetchAlerts(); toast.success("Price alert created!"); },
+    onError: () => toast.error("Failed to create alert"),
+  });
+  const deleteAlertMutation = trpc.trading.deleteAlert.useMutation({
+    onSuccess: () => { refetchAlerts(); toast.success("Alert deleted"); },
+    onError: () => toast.error("Failed to delete alert"),
+  });
+
+  // New alert form state
+  const [newAlert, setNewAlert] = useState({ symbol: "BNB", targetPrice: "", direction: "above" as "above" | "below" });
 
   // Ticker animation
   useEffect(() => {
@@ -457,6 +476,7 @@ export default function Trading() {
     { key: "positions", label: t("trading.positions") || "Positions", icon: <Activity size={13} /> },
     { key: "calendar", label: "PnL Cal", icon: <Calendar size={13} /> },
     { key: "logs", label: t("trading.tradeHistory"), icon: <Clock size={13} /> },
+    { key: "alerts", label: "Alerts", icon: <Bell size={13} /> },
   ];
 
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
@@ -1058,6 +1078,122 @@ export default function Trading() {
                     </div>
                   </motion.div>
                 ))}
+              </motion.div>
+            )}
+
+            {/* ═══ TAB: Price Alerts ═══ */}
+            {activeTab === "alerts" && (
+              <motion.div key="alerts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                {/* Create Alert Form */}
+                <div className="p-4 rounded-2xl bg-card/50 border border-border/30">
+                  <h4 className="text-sm font-semibold font-display mb-3 flex items-center gap-2">
+                    <Bell size={14} className="text-neon-cyan" /> Set Price Alert
+                  </h4>
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">Token</label>
+                        <select
+                          value={newAlert.symbol}
+                          onChange={(e) => setNewAlert(prev => ({ ...prev, symbol: e.target.value }))}
+                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                        >
+                          {["BTC", "ETH", "BNB", "SOL", "ARB", "LINK", "AVAX", "CAKE"].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">Direction</label>
+                        <select
+                          value={newAlert.direction}
+                          onChange={(e) => setNewAlert(prev => ({ ...prev, direction: e.target.value as "above" | "below" }))}
+                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                        >
+                          <option value="above">Price Above ↑</option>
+                          <option value="below">Price Below ↓</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">Target Price (USD)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 100000"
+                        value={newAlert.targetPrice}
+                        onChange={(e) => setNewAlert(prev => ({ ...prev, targetPrice: e.target.value }))}
+                        className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                      />
+                    </div>
+                    <button
+                      disabled={!newAlert.targetPrice || createAlertMutation.isPending}
+                      onClick={() => {
+                        if (!newAlert.targetPrice) return;
+                        const symbolToId: Record<string, string> = {
+                          BTC: "bitcoin", ETH: "ethereum", BNB: "binancecoin",
+                          SOL: "solana", ARB: "arbitrum", LINK: "chainlink",
+                          AVAX: "avalanche-2", CAKE: "pancakeswap-token",
+                        };
+                        createAlertMutation.mutate({
+                          tokenSymbol: newAlert.symbol,
+                          tokenId: symbolToId[newAlert.symbol] ?? newAlert.symbol.toLowerCase(),
+                          targetPrice: newAlert.targetPrice,
+                          condition: newAlert.direction,
+                        });
+                        setNewAlert(prev => ({ ...prev, targetPrice: "" }));
+                      }}
+                      className="w-full h-9 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {createAlertMutation.isPending ? "Creating..." : "+ Create Alert"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Alerts List */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-medium text-muted-foreground">Active Alerts ({realAlerts.length})</h4>
+                  </div>
+                  {realAlerts.length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Bell size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No alerts yet</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">Set a price alert above to get notified</p>
+                    </div>
+                  ) : (
+                    realAlerts.map((alert) => (
+                      <motion.div
+                        key={alert.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/20 border border-border/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            alert.condition === "above" ? "bg-neon-green/10" : "bg-neon-red/10"
+                          }`}>
+                            {alert.condition === "above"
+                              ? <ArrowUpRight size={14} className="text-neon-green" />
+                              : <ArrowDownRight size={14} className="text-destructive" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold font-mono">{alert.tokenSymbol}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {alert.condition === "above" ? "Above" : "Below"} ${parseFloat(alert.targetPrice).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => deleteAlertMutation.mutate({ id: alert.id })}
+                          disabled={deleteAlertMutation.isPending}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-destructive/10 transition-colors"
+                        >
+                          <X size={13} className="text-muted-foreground hover:text-destructive" />
+                        </button>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

@@ -324,4 +324,59 @@ export const postsRouter = router({
 
       return { success: true };
     }),
+
+  // ─── Search posts ───────────────────────────────────────────────────────
+  search: publicProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(100),
+        limit: z.number().min(1).max(50).default(20),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { posts: [] };
+
+      const keyword = `%${input.query}%`;
+      const rows = await db
+        .select({
+          id: posts.id,
+          content: posts.content,
+          mediaUrls: posts.mediaUrls,
+          tags: posts.tags,
+          likeCount: posts.likeCount,
+          commentCount: posts.commentCount,
+          shareCount: posts.shareCount,
+          isPinned: posts.isPinned,
+          createdAt: posts.createdAt,
+          authorId: posts.authorId,
+          authorName: users.name,
+          authorAvatar: users.avatar,
+          authorUsername: users.username,
+          authorWallet: users.walletAddress,
+        })
+        .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .where(sql`${posts.content} LIKE ${keyword} OR ${posts.tags} LIKE ${keyword}`)
+        .orderBy(desc(posts.createdAt))
+        .limit(input.limit);
+
+      let likedPostIds = new Set<number>();
+      if (ctx.user) {
+        const likes = await db
+          .select({ postId: postLikes.postId })
+          .from(postLikes)
+          .where(eq(postLikes.userId, ctx.user.id));
+        likedPostIds = new Set(likes.map((l) => l.postId));
+      }
+
+      return {
+        posts: rows.map((p) => ({
+          ...p,
+          mediaUrls: p.mediaUrls ? (JSON.parse(p.mediaUrls) as string[]) : [],
+          tags: p.tags ? (JSON.parse(p.tags) as string[]) : [],
+          isLiked: likedPostIds.has(p.id),
+        })),
+      };
+    }),
 });
