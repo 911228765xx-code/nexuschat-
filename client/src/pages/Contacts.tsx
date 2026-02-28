@@ -123,7 +123,40 @@ export default function Contacts() {
   const [, navigate] = useLocation();
   const { t } = useI18n();
 
-  // Friend requests state
+  // tRPC: real friend requests
+  const { data: incomingRequests, refetch: refetchIncoming } = trpc.contacts.listIncoming.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+  const acceptRequestMutation = trpc.contacts.acceptRequest.useMutation({
+    onSuccess: () => {
+      refetchIncoming();
+      refetchFollowing();
+      toast.success(t("contacts.requestAccepted") || "Friend request accepted!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const rejectRequestMutation = trpc.contacts.rejectRequest.useMutation({
+    onSuccess: () => {
+      refetchIncoming();
+      toast(t("contacts.requestRejected") || "Request rejected");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  // Map real incoming requests to FriendRequest shape
+  const realIncomingRequests: FriendRequest[] = (incomingRequests ?? []).map(r => ({
+    id: String(r.id),
+    from: {
+      name: r.displayName,
+      avatar: r.displayName.slice(0, 1).toUpperCase(),
+      address: `User #${r.senderId}`,
+    },
+    message: "Wants to connect with you",
+    timestamp: new Date(r.createdAt).toLocaleDateString(),
+    status: "pending" as FriendRequestStatus,
+    direction: "incoming" as const,
+  }));
+  // Friend requests state (merge real + mock for outgoing)
   const [requests, setRequests] = useState(mockRequests);
   const [showRequests, setShowRequests] = useState(false);
   const [requestTab, setRequestTab] = useState<"incoming" | "outgoing">("incoming");
@@ -137,7 +170,9 @@ export default function Contacts() {
   const [newGroupIcon, setNewGroupIcon] = useState("📁");
   const [assigningGroupTo, setAssigningGroupTo] = useState<string | null>(null);
 
-  const pendingIncoming = requests.filter((r) => r.status === "pending" && r.direction === "incoming");
+  // Use real incoming requests when authenticated, fallback to mock
+  const displayIncoming = isAuthenticated ? realIncomingRequests : requests.filter((r) => r.status === "pending" && r.direction === "incoming");
+  const pendingIncoming = displayIncoming;
   const pendingOutgoing = requests.filter((r) => r.status === "pending" && r.direction === "outgoing");
 
   const filteredContacts = useMemo(() => {
@@ -210,6 +245,12 @@ export default function Contacts() {
   };
 
   const acceptRequest = (id: string) => {
+    // Try real tRPC mutation first
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId) && isAuthenticated) {
+      acceptRequestMutation.mutate({ requestId: numId });
+      return;
+    }
     const req = requests.find((r) => r.id === id);
     if (!req) return;
     setRequests((prev) =>
@@ -233,10 +274,16 @@ export default function Contacts() {
   };
 
   const rejectRequest = (id: string) => {
+    // Try real tRPC mutation first
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId) && isAuthenticated) {
+      rejectRequestMutation.mutate({ requestId: numId });
+      return;
+    }
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: "rejected" as FriendRequestStatus } : r))
     );
-    toast(t("contacts.requestRejected") || "Request declined");
+    toast(t("contacts.requestRejected") || "Request rejected");
   };
 
   const toggleContactTag = (contactId: string, tagId: string) => {

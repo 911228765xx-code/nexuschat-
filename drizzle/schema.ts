@@ -238,3 +238,42 @@ export const userFollows = mysqlTable(
 
 export type UserFollow = typeof userFollows.$inferSelect;
 export type InsertUserFollow = typeof userFollows.$inferInsert;
+
+// ─── Friend Requests ──────────────────────────────────────────────────────────
+export const friendRequests = mysqlTable(
+  "friend_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    senderId: int("senderId").notNull(),
+    receiverId: int("receiverId").notNull(),
+    status: mysqlEnum("status", ["pending", "accepted", "rejected"]).default("pending").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_friend_req_receiver").on(t.receiverId, t.status),
+    index("idx_friend_req_sender").on(t.senderId),
+  ]
+);
+
+export type FriendRequest = typeof friendRequests.$inferSelect;
+export type InsertFriendRequest = typeof friendRequests.$inferInsert;
+
+// ─── User Watchlist ───────────────────────────────────────────────────────────
+export const userWatchlist = mysqlTable(
+  "user_watchlist",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    tokenId: varchar("tokenId", { length: 100 }).notNull(),
+    tokenSymbol: varchar("tokenSymbol", { length: 20 }).notNull(),
+    tokenName: varchar("tokenName", { length: 100 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_watchlist_user").on(t.userId),
+  ]
+);
+
+export type UserWatchlistItem = typeof userWatchlist.$inferSelect;
+export type InsertUserWatchlistItem = typeof userWatchlist.$inferInsert;

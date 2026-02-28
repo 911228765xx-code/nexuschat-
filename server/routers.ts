@@ -10,6 +10,8 @@ import { userRouter } from "./routers/user";
 import { notificationsRouter } from "./routers/notificationsRouter";
 import { tradingRouter } from "./routers/trading";
 import { followRouter } from "./routers/follow";
+import { contactsRouter } from "./routers/contacts";
+import { watchlistRouter } from "./routers/watchlist";
 
 export const appRouter = router({
   system: systemRouter,
@@ -29,6 +31,8 @@ export const appRouter = router({
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
+  contacts: contactsRouter,
+  watchlist: watchlistRouter,
 });
 
 export type AppRouter = typeof appRouter;

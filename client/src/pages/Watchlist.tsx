@@ -2,10 +2,12 @@
  * Watchlist — 自选股管理页面
  * 支持价格预警设置、批量管理、排序筛选、快速跳转代币详情
  * Design: Cyberpunk dark theme with neon accents
+ * v2: 接入 watchlist tRPC 接口，实现数据库持久化（跨设备同步）
  */
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Star, Bell, BellOff, Trash2, Plus, Search,
   ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown,
@@ -45,9 +47,73 @@ const availableTokens = [
   { token: "AAVE", icon: "👻", price: "$285.50", category: "DeFi" },
 ];
 
+// Token metadata map for DB-backed items
+const TOKEN_META: Record<string, { icon: string; category: string; name: string }> = {
+  BTC: { icon: "₿", category: "L1", name: "Bitcoin" },
+  ETH: { icon: "Ξ", category: "L1", name: "Ethereum" },
+  SOL: { icon: "◎", category: "L1", name: "Solana" },
+  ARB: { icon: "🔵", category: "L2", name: "Arbitrum" },
+  LINK: { icon: "⬡", category: "DeFi", name: "Chainlink" },
+  RENDER: { icon: "🎨", category: "AI", name: "Render" },
+  AVAX: { icon: "🔺", category: "L1", name: "Avalanche" },
+  PEPE: { icon: "🐸", category: "Meme", name: "Pepe" },
+  DOGE: { icon: "🐕", category: "Meme", name: "Dogecoin" },
+  MATIC: { icon: "🟣", category: "L2", name: "Polygon" },
+  UNI: { icon: "🦄", category: "DeFi", name: "Uniswap" },
+  AAVE: { icon: "👻", category: "DeFi", name: "Aave" },
+};
+
 export default function Watchlist() {
   const { t } = useI18n();
   const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const utils = trpc.useUtils();
+
+  // ─── tRPC: load watchlist from DB when authenticated ────────────────────────
+  const { data: dbWatchlist } = trpc.watchlist.getWatchlist.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+
+  // tRPC mutations for add/remove
+  const addTokenMutation = trpc.watchlist.addToken.useMutation({
+    onSuccess: (res) => {
+      utils.watchlist.getWatchlist.invalidate();
+      if (!res.alreadyExists) toast.success(t("research.addedToWatchlist") || "Added to watchlist");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeTokenMutation = trpc.watchlist.removeToken.useMutation({
+    onSuccess: () => {
+      utils.watchlist.getWatchlist.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Build WatchItem list from DB data
+  const dbItems: WatchItem[] = useMemo(() => {
+    if (!dbWatchlist) return [];
+    return dbWatchlist.map(row => {
+      const meta = TOKEN_META[row.tokenSymbol] ?? { icon: "🪙", category: "Other", name: row.tokenName };
+      return {
+        id: String(row.id),
+        token: row.tokenSymbol,
+        icon: meta.icon,
+        price: "—",
+        priceNum: 0,
+        change24h: 0,
+        change7d: 0,
+        aiScore: 7.0,
+        signal: "neutral" as const,
+        alertEnabled: false,
+        alertPrice: "",
+        category: meta.category,
+        marketCap: "—",
+        volume24h: "—",
+      };
+    });
+  }, [dbWatchlist]);
+
   const [watchlist, setWatchlist] = useState(initialWatchlist);
   const [sortKey, setSortKey] = useState<SortKey>("aiScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -58,6 +124,21 @@ export default function Watchlist() {
   const [addSearch, setAddSearch] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+
+  // Sync DB items into local state when authenticated
+  useEffect(() => {
+    if (isAuthenticated && dbWatchlist !== undefined) {
+      // Preserve alert settings from existing local state when syncing
+      setWatchlist(prev => {
+        if (dbItems.length === 0) return [];
+        const alertMap = new Map(prev.map(w => [w.token, { alertEnabled: w.alertEnabled, alertPrice: w.alertPrice }]));
+        return dbItems.map(item => {
+          const alert = alertMap.get(item.token);
+          return alert ? { ...item, ...alert } : item;
+        });
+      });
+    }
+  }, [isAuthenticated, dbItems, dbWatchlist]);
 
   const signalColor = (s: string) => s === "strongBuy" ? "text-neon-green" : s === "buy" ? "text-neon-green/80" : s === "neutral" ? "text-yellow-500" : s === "sell" ? "text-neon-red/80" : "text-neon-red";
   const signalBg = (s: string) => s === "strongBuy" ? "bg-neon-green/10" : s === "buy" ? "bg-neon-green/8" : s === "neutral" ? "bg-yellow-500/10" : s === "sell" ? "bg-neon-red/8" : "bg-neon-red/10";
@@ -109,12 +190,22 @@ export default function Watchlist() {
   };
 
   const handleRemove = (id: string) => {
+    const item = watchlist.find(w => w.id === id);
+    // Optimistic remove
     setWatchlist(prev => prev.filter(w => w.id !== id));
-    toast.info(t("research.removedFromWatchlist"));
+    if (isAuthenticated && item) {
+      removeTokenMutation.mutate({ tokenId: item.token.toLowerCase() });
+    } else {
+      toast.info(t("research.removedFromWatchlist"));
+    }
   };
 
   const handleBulkRemove = () => {
+    const toRemove = watchlist.filter(w => selectedItems.has(w.id));
     setWatchlist(prev => prev.filter(w => !selectedItems.has(w.id)));
+    if (isAuthenticated) {
+      toRemove.forEach(item => removeTokenMutation.mutate({ tokenId: item.token.toLowerCase() }));
+    }
     toast.info(`${selectedItems.size} ${t("research.tokensRemoved")}`);
     setSelectedItems(new Set());
     setIsEditing(false);
@@ -128,8 +219,24 @@ export default function Watchlist() {
       signal: "neutral", alertEnabled: false, alertPrice: "", category: token.category,
       marketCap: "—", volume24h: "—",
     };
-    setWatchlist(prev => [...prev, newItem]);
-    toast.success(`${token.token} ${t("research.addedToWatchlist")}`);
+    if (isAuthenticated) {
+      // Persist to DB; invalidate will sync list
+      const meta = TOKEN_META[token.token] ?? { name: token.token };
+      addTokenMutation.mutate({
+        tokenId: token.token.toLowerCase(),
+        tokenSymbol: token.token,
+        tokenName: meta.name ?? token.token,
+      });
+      // Optimistic local add
+      setWatchlist(prev => {
+        if (prev.some(w => w.token === token.token)) return prev;
+        return [...prev, newItem];
+      });
+    } else {
+      setWatchlist(prev => [...prev, newItem]);
+      toast.success(`${token.token} ${t("research.addedToWatchlist")}`);
+    }
+    setShowAddModal(false);
   };
 
   // tRPC: real-time prices from CoinGecko (refresh every 60s)
@@ -170,7 +277,10 @@ export default function Watchlist() {
                 <Star size={16} className="text-yellow-500" fill="currentColor" />
                 {t("research.watchlist")}
               </h1>
-              <p className="text-[10px] text-muted-foreground">{watchlist.length} {t("research.tokens")} · {alertCount} {t("research.alerts")}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {watchlist.length} {t("research.tokens")} · {alertCount} {t("research.alerts")}
+                {isAuthenticated && <span className="ml-1 text-neon-cyan/60">· Synced</span>}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -258,64 +368,68 @@ export default function Watchlist() {
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0 ${
                       selectedItems.has(item.id) ? "bg-neon-red border-neon-red" : "border-muted-foreground/30"
                     }`}>
-                    {selectedItems.has(item.id) && <Check size={10} className="text-white" />}
+                    {selectedItems.has(item.id) && <Check size={11} className="text-white" />}
                   </button>
                 )}
 
-                {/* Token info */}
-                <button onClick={() => !isEditing && setLocation(`/app/research/${item.token.toLowerCase()}`)}
-                  className="flex items-center gap-3 flex-1 text-left">
-                  <div className="w-10 h-10 rounded-xl bg-neon-purple/15 flex items-center justify-center text-xl border border-neon-purple/20 shrink-0">
-                    {item.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold font-display">{item.token}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground font-mono">{item.category}</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
-                        {signalLabel(item.signal)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-xs font-mono font-semibold">{item.price}</span>
-                      <span className={`text-[10px] font-mono flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
-                        {item.change24h >= 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
-                        {item.change24h >= 0 ? "+" : ""}{item.change24h}%
-                      </span>
-                      <span className={`text-[10px] font-mono ${item.change7d >= 0 ? "text-neon-green/70" : "text-neon-red/70"}`}>
-                        7d: {item.change7d >= 0 ? "+" : ""}{item.change7d}%
-                      </span>
-                    </div>
-                  </div>
-                </button>
+                {/* Token Icon */}
+                <div className="w-9 h-9 rounded-xl bg-secondary/60 flex items-center justify-center text-lg shrink-0">
+                  {item.icon}
+                </div>
 
-                {/* AI Score & Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-center">
-                    <p className={`text-sm font-mono font-bold ${item.aiScore >= 8 ? "text-neon-green" : item.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red"}`}>
-                      {item.aiScore}
-                    </p>
-                    <p className="text-[8px] text-muted-foreground">AI</p>
+                {/* Token Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-bold font-mono">{item.token}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
+                      {signalLabel(item.signal)}
+                    </span>
                   </div>
-                  {!isEditing && (
-                    <div className="flex flex-col gap-1">
-                      <button onClick={(e) => {
-                        e.stopPropagation();
-                        if (item.alertEnabled) handleRemoveAlert(item.id);
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground">{item.category}</span>
+                    <span className="text-[10px] text-muted-foreground">·</span>
+                    <span className="text-[10px] text-muted-foreground">{item.marketCap}</span>
+                  </div>
+                </div>
+
+                {/* Price & Change */}
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold font-mono">{item.price}</p>
+                  <div className="flex items-center justify-end gap-1 mt-0.5">
+                    <span className={`text-[10px] font-mono font-medium flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                      {item.change24h >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                      {Math.abs(item.change24h).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {!isEditing && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        if (editingAlert === item.id) { setEditingAlert(null); setAlertInput(""); }
                         else { setEditingAlert(item.id); setAlertInput(item.alertPrice); }
                       }}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          item.alertEnabled ? "text-neon-cyan bg-neon-cyan/10" : "text-muted-foreground hover:bg-secondary/40"
-                        }`}>
-                        {item.alertEnabled ? <Bell size={13} fill="currentColor" /> : <BellOff size={13} />}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleRemove(item.id); }}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-neon-red hover:bg-neon-red/10 transition-colors">
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )}
+                      className={`p-1.5 rounded-lg transition-colors ${item.alertEnabled ? "text-neon-cyan bg-neon-cyan/10" : "text-muted-foreground hover:bg-secondary/40"}`}>
+                      {item.alertEnabled ? <Bell size={13} /> : <BellOff size={13} />}
+                    </button>
+                    <button onClick={() => handleRemove(item.id)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:bg-neon-red/10 hover:text-neon-red transition-colors">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Score bar */}
+              <div className="flex items-center gap-2 mt-2">
+                <Sparkles size={10} className="text-neon-purple shrink-0" />
+                <div className="flex-1 h-1 rounded-full bg-secondary/60">
+                  <div className="h-full rounded-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all"
+                    style={{ width: `${(item.aiScore / 10) * 100}%` }} />
                 </div>
+                <span className="text-[10px] font-mono text-neon-purple shrink-0">{item.aiScore.toFixed(1)}</span>
               </div>
 
               {/* Alert Input */}
@@ -333,10 +447,16 @@ export default function Watchlist() {
                         className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-[10px] font-medium hover:bg-neon-cyan/30 transition-colors">
                         <Check size={12} />
                       </button>
-                      <button onClick={() => setEditingAlert(null)}
+                      <button onClick={() => { setEditingAlert(null); setAlertInput(""); }}
                         className="px-2 h-7 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
                         <X size={12} />
                       </button>
+                      {item.alertEnabled && (
+                        <button onClick={() => handleRemoveAlert(item.id)}
+                          className="px-2 h-7 rounded-lg text-neon-red/70 hover:bg-neon-red/10 transition-colors">
+                          <BellOff size={12} />
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -374,14 +494,12 @@ export default function Watchlist() {
                   <X size={16} />
                 </button>
               </div>
-
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input type="text" value={addSearch} onChange={(e) => setAddSearch(e.target.value)}
                   placeholder={t("research.searchTokens")}
                   className="w-full h-9 pl-8 pr-3 rounded-xl bg-secondary/50 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
               </div>
-
               <div className="space-y-1.5 overflow-y-auto max-h-[40vh]">
                 {filteredAvailable.length === 0 ? (
                   <p className="text-center text-xs text-muted-foreground py-8">{t("research.noTokensFound")}</p>
