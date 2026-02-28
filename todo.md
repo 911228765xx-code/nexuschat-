@@ -97,5 +97,8 @@
 
 - [x] CoinGecko API 缓存优化（内存缓存 + 指数退避重试 + TTL 分级 + 过期缓存 fallback）
 - [x] Contacts 收藏/备注/标签持久化（contactMetadata 表 + toggleFavorite/updateNote/updateTags 接口 + 前端接入）
-- [x] Trading 跟单系统后端化（copy_traders/copy_trader_follows/trading_strategies 表 + CRUD 接口 + 前端接入）
-- [x] 97 个测试全部通过，TypeScript 0 错误
+- [x] Trading 跟单系统后端化（copy_traders/copy_trader_follows/trading_strategies 表 + CRUD 接口 + 前端接入）- [x] 114 个测试全部通过，TypeScript 0 错误
+
+## v27 修复
+
+- [x] 修复 Reown analytics 域名白名单错误（Origin not found on Allowlist）——拦截 XHR 屏蔽 analytics 请求
