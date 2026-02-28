@@ -47,7 +47,7 @@ export default function Settings() {
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
-  const mockApiKey = "nx_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
+  const demoApiKey = "nx_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"; // Demo placeholder
 
   // Privacy states
   const [showWallet, setShowWallet] = useState(false);
@@ -158,7 +158,7 @@ export default function Settings() {
             </div>
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary/30 border border-border/20">
               <code className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                {apiKeyVisible ? mockApiKey : "nx_sk_••••••••••••••••••••••••••••"}
+                {apiKeyVisible ? demoApiKey : "nx_sk_••••••••••••••••••••••••••••"}
               </code>
               <button
                 onClick={() => setApiKeyVisible(!apiKeyVisible)}
@@ -167,7 +167,7 @@ export default function Settings() {
                 {apiKeyVisible ? <EyeOff size={14} className="text-muted-foreground" /> : <Eye size={14} className="text-muted-foreground" />}
               </button>
               <button
-                onClick={() => { navigator.clipboard.writeText(mockApiKey); toast.success(t("settings.apiKeyCopied")); }}
+                onClick={() => { navigator.clipboard.writeText(demoApiKey); toast.success(t("settings.apiKeyCopied")); }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
               >
                 <Copy size={14} className="text-muted-foreground" />

@@ -43,8 +43,21 @@ interface PostData {
   tags?: string[];
 }
 
-/* ─── Mock Data ─── */
-const mockPostsData: Record<string, PostData> = {
+// Default empty post for loading state
+const emptyPost: PostData = {
+  id: "0",
+  author: { name: "Loading...", avatar: "", isVerified: false, handle: "" },
+  content: "",
+  timestamp: "",
+  likes: 0,
+  comments: 0,
+  reposts: 0,
+  isLiked: false,
+  isBookmarked: false,
+};
+
+/* ─── Demo Data (fallback for non-numeric IDs) ─── */
+const demoPostsData: Record<string, PostData> = {
   "1": {
     id: "1",
     author: { name: "vitalik.eth", avatar: "V", isVerified: true, handle: "0x71C7...3a9b", bio: "Ethereum co-founder. Building the future of decentralized internet.", followers: 5200000 },
@@ -107,7 +120,7 @@ const mockPostsData: Record<string, PostData> = {
   },
 };
 
-const mockCommentsData: Record<string, Comment[]> = {
+const demoCommentsData: Record<string, Comment[]> = {
   "1": [
     {
       id: "c1",
@@ -386,9 +399,9 @@ export default function PostDetail() {
   const isNumericId = !isNaN(numericPostId);
   const { user } = useAuth();
 
-  // Fallback to mock data for non-numeric IDs (demo mode)
-  const postData = mockPostsData[postId] || mockPostsData["1"];
-  const initialComments = mockCommentsData[postId] || mockCommentsData["1"] || [];
+  // Use empty defaults for numeric IDs (real data), demo data for non-numeric IDs
+  const postData = isNumericId ? emptyPost : (demoPostsData[postId] || emptyPost);
+  const initialComments = isNumericId ? [] : (demoCommentsData[postId] || []);
 
   const [post, setPost] = useState<PostData>(postData);
   const [comments, setComments] = useState<Comment[]>(initialComments);

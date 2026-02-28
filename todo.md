@@ -84,3 +84,11 @@
 - [x] Trading 移除 mockPositions fallback，重命名 mockTraders/mockStrategies 为 demoTraders/demoStrategies
 - [x] Wallet 移除 mockTokens/mockNFTs/mockTransactions，完全使用 BSC 链上数据
 - [x] 97 个测试全部通过，TypeScript 0 错误
+
+## v24 功能完善与 mock 清理（第三轮）
+
+- [x] Research mockReports 重命名为 demoReports（后端 LLM 生成接口已完善）
+- [x] PostDetail mockPostsData/mockCommentsData 改为 demoPostsData/demoCommentsData，数字 ID 使用后端真实数据
+- [x] Settings mockApiKey 重命名为 demoApiKey
+- [x] 全项目 mock 数据清理完成（所有 mock 变量已移除或重命名为 demo）
+- [x] 97 个测试全部通过，TypeScript 0 错误

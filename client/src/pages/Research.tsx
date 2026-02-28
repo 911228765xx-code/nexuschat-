@@ -128,7 +128,7 @@ type TimeRange = "7d" | "30d" | "1y";
 type SortBy = "aiScore" | "change24h" | "marketCap" | "volume";
 type FilterCategory = "all" | "L1" | "L2" | "DeFi" | "AI" | "Meme";
 
-// ==================== Mock Data ====================
+// ==================== Demo Data (pre-built showcase reports) ====================
 
 const generatePriceHistory = (base: number, volatility: number, trend: number, points: number, labels: string[]) => {
   let price = base * (1 - trend * 0.3);
@@ -143,7 +143,7 @@ const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const days30 = Array.from({ length: 30 }, (_, i) => `${i + 1}`);
 const days7 = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const mockReports: ResearchReport[] = [
+const demoReports: ResearchReport[] = [
   {
     id: "1",
     token: "BTC",
@@ -973,7 +973,7 @@ export default function Research() {
     onError: (err) => {
       setIsSearching(false);
       if (err.message.includes("10001") || err.message.includes("login")) {
-        const found = mockReports.find(r => r.token.toLowerCase() === searchQuery.trim().toLowerCase());
+        const found = demoReports.find(r => r.token.toLowerCase() === searchQuery.trim().toLowerCase());
         if (found) {
           setExpandedId(found.id);
           setFilterCategory("all");
@@ -1004,7 +1004,7 @@ export default function Research() {
   }, [t]);
 
   const filteredReports = useMemo(() => {
-    let reports = [...mockReports];
+    let reports = [...demoReports];
 
     // Filter by category
     if (filterCategory !== "all") {
@@ -1046,10 +1046,10 @@ export default function Research() {
 
   // Market overview stats
   const marketStats = useMemo(() => {
-    const avgScore = (mockReports.reduce((s, r) => s + r.aiScore, 0) / mockReports.length).toFixed(1);
-    const bullish = mockReports.filter(r => r.socialSentiment.trend === "bullish").length;
-    const avgFearGreed = Math.round(mockReports.reduce((s, r) => s + r.socialSentiment.fearGreedIndex, 0) / mockReports.length);
-    return { avgScore, bullish, total: mockReports.length, avgFearGreed };
+    const avgScore = (demoReports.reduce((s, r) => s + r.aiScore, 0) / demoReports.length).toFixed(1);
+    const bullish = demoReports.filter(r => r.socialSentiment.trend === "bullish").length;
+    const avgFearGreed = Math.round(demoReports.reduce((s, r) => s + r.socialSentiment.fearGreedIndex, 0) / demoReports.length);
+    return { avgScore, bullish, total: demoReports.length, avgFearGreed };
   }, []);
 
   return (
@@ -1170,7 +1170,7 @@ export default function Research() {
         {/* Hot tokens */}
         <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">
           {hotTokens.map((token) => {
-            const report = mockReports.find(r => r.token === token);
+            const report = demoReports.find(r => r.token === token);
             const isPositive = report && report.change24h >= 0;
             return (
               <button
@@ -2058,7 +2058,7 @@ export default function Research() {
       {/* ─── Share to Moments Modal ─── */}
       <AnimatePresence>
         {showShareModal && (() => {
-          const report = mockReports.find(r => r.id === showShareModal);
+          const report = demoReports.find(r => r.id === showShareModal);
           if (!report) return null;
           const isPositive = report.change24h >= 0;
           return (
