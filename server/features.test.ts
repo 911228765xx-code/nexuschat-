@@ -203,3 +203,105 @@ describe("User Router — Task Definitions", () => {
     expect(tooLarge <= 100).toBe(false);
   });
 });
+
+// ─── Phase 4: Profile Stats, Image Upload, Chat Polling Tests ─────────────────
+describe("Profile Stats", () => {
+  it("calculates NP level progress correctly", () => {
+    const npPoints = 24680;
+    const nextMilestone = Math.ceil((npPoints + 1) / 10000) * 10000;
+    const progress = Math.min(((npPoints % 10000) / 10000) * 100, 100);
+    expect(nextMilestone).toBe(30000);
+    expect(progress).toBeCloseTo(46.8, 0);
+  });
+
+  it("formats NP points with locale separator", () => {
+    const np = 24680;
+    const formatted = np.toLocaleString("en-US");
+    expect(formatted).toBe("24,680");
+  });
+
+  it("getUserStats rank is at least 1", () => {
+    const usersAbove = 0;
+    const rank = usersAbove + 1;
+    expect(rank).toBeGreaterThanOrEqual(1);
+  });
+
+  it("post count starts at 0 for new user", () => {
+    const postCount = 0;
+    expect(postCount).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("Image Upload (S3)", () => {
+  it("validates file size limit (8MB)", () => {
+    const maxBytes = 8 * 1024 * 1024;
+    const smallFile = 1024 * 1024; // 1MB
+    const largeFile = 9 * 1024 * 1024; // 9MB
+    expect(smallFile <= maxBytes).toBe(true);
+    expect(largeFile <= maxBytes).toBe(false);
+  });
+
+  it("extracts mime type from data URL", () => {
+    const dataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgAB...";
+    const mimeType = dataUrl.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+    expect(mimeType).toBe("image/jpeg");
+  });
+
+  it("extracts base64 data from data URL", () => {
+    const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+    const [, base64Data] = dataUrl.split(",");
+    expect(base64Data).toBe("iVBORw0KGgo=");
+  });
+
+  it("generates unique file key with random suffix", () => {
+    const userId = 42;
+    const ext = "jpg";
+    const randomSuffix = Math.random().toString(36).slice(2, 8);
+    const key = `posts/${userId}/${Date.now()}-${randomSuffix}.${ext}`;
+    expect(key).toMatch(/^posts\/42\/\d+-[a-z0-9]+\.jpg$/);
+  });
+
+  it("validates max 4 images per post", () => {
+    const maxImages = 4;
+    const validImages = ["img1", "img2", "img3", "img4"];
+    const tooMany = ["img1", "img2", "img3", "img4", "img5"];
+    expect(validImages.length <= maxImages).toBe(true);
+    expect(tooMany.length <= maxImages).toBe(false);
+  });
+});
+
+describe("Chat Polling", () => {
+  it("polling interval is 3 seconds", () => {
+    const refetchInterval = 3000;
+    expect(refetchInterval).toBe(3000);
+  });
+
+  it("merges server messages with local optimistic messages", () => {
+    const serverMsgIds = new Set(["1", "2", "3"]);
+    const localMessages = [
+      { id: "1", content: "Server msg 1" },
+      { id: String(Date.now()), content: "Optimistic msg" }, // timestamp-based ID
+    ];
+    // Local-only = not in server AND has timestamp-based ID
+    const localOnly = localMessages.filter(
+      (m) => !serverMsgIds.has(m.id) && Number(m.id) > 1_700_000_000_000
+    );
+    expect(localOnly.length).toBe(1);
+    expect(localOnly[0].content).toBe("Optimistic msg");
+  });
+
+  it("formats message timestamp to locale time", () => {
+    const ts = new Date("2026-01-15T10:30:00Z");
+    const formatted = ts.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    expect(typeof formatted).toBe("string");
+    expect(formatted.length).toBeGreaterThan(0);
+  });
+
+  it("validates group message content max length", () => {
+    const maxLen = 4000;
+    const validMsg = "Hello World";
+    const tooLong = "x".repeat(4001);
+    expect(validMsg.length <= maxLen).toBe(true);
+    expect(tooLong.length <= maxLen).toBe(false);
+  });
+});

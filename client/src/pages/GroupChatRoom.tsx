@@ -157,6 +157,38 @@ export default function GroupChatRoom() {
     (m) => m.name.toLowerCase().includes(mentionFilter) && m.name !== "cryptowhale.eth"
   );
 
+  // tRPC: poll messages from backend every 3s
+  const { data: serverMessages } = trpc.chat.getMessages.useQuery(
+    { groupId, limit: 50 },
+    {
+      enabled: isValidGroup,
+      refetchInterval: 3000,
+      staleTime: 2000,
+    }
+  );
+
+  // Merge server messages with local optimistic messages
+  useEffect(() => {
+    if (!serverMessages || serverMessages.length === 0) return;
+    setMessages((prev) => {
+      // Build a set of server message IDs (numeric)
+      const serverIds = new Set(serverMessages.map((m) => String(m.id)));
+      // Keep local-only optimistic messages (those with timestamp-based IDs not in server)
+      const localOnly = prev.filter((m) => !serverIds.has(m.id) && isNaN(Number(m.id)) === false && Number(m.id) > 1_700_000_000_000);
+      // Map server messages to GroupMessage format
+      const mapped: GroupMessage[] = serverMessages.map((m) => ({
+        id: String(m.id),
+        sender: m.senderName ?? "Unknown",
+        senderAvatar: m.senderAvatar ?? "👤",
+        senderRole: "member" as const,
+        content: m.content,
+        time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        isMine: false, // server doesn't know current user without auth context here
+      }));
+      return [...mapped, ...localOnly];
+    });
+  }, [serverMessages]);
+
   // tRPC: save message to backend (non-blocking, optimistic UI)
   const saveMessage = trpc.chat.saveMessage.useMutation({
     onError: (err) => {

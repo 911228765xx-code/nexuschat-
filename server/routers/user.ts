@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { users, userTasks, posts } from "../../drizzle/schema";
+import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 
 // ─── Task definitions ─────────────────────────────────────────────────────────
 export const TASK_DEFINITIONS: Record<
@@ -211,6 +211,44 @@ export const userRouter = router({
 
       return _completeTask(ctx.user.id, input.taskType, db);
     }),
+
+  // ─── Get user stats (posts count, tasks completed, rank) ───────────────────────────
+  getUserStats: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Count posts by this user
+    const [postCountRow] = await db
+      .select({ count: count() })
+      .from(posts)
+      .where(eq(posts.authorId, ctx.user.id));
+
+    // Count completed tasks
+    const [taskCountRow] = await db
+      .select({ count: count() })
+      .from(userTasks)
+      .where(eq(userTasks.userId, ctx.user.id));
+
+    // Get user's NP points
+    const [userRow] = await db
+      .select({ npPoints: users.npPoints })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
+
+    // Calculate rank (users with more NP points + 1)
+    const [rankRow] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(sql`npPoints > ${userRow?.npPoints ?? 0}`);
+
+    return {
+      postCount: postCountRow?.count ?? 0,
+      taskCount: taskCountRow?.count ?? 0,
+      npPoints: userRow?.npPoints ?? 0,
+      rank: (rankRow?.count ?? 0) + 1,
+    };
+  }),
 });
 
 // ─── Internal helper ──────────────────────────────────────────────────────────

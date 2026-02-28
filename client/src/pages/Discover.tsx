@@ -5,7 +5,7 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { motion, AnimatePresence } from "framer-motion";
@@ -280,6 +280,16 @@ export default function Discover() {
   const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
+  // ─── tRPC: Upload media mutation ───
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const uploadMedia = trpc.posts.uploadMedia.useMutation({
+    onError: (err) => {
+      if (!err.message.includes("10001")) {
+        toast.error("图片上传失败: " + err.message);
+      }
+    },
+  });
+
   // ─── tRPC: Create post mutation ───
   const createPost = trpc.posts.create.useMutation({
     onSuccess: (data) => {
@@ -482,8 +492,36 @@ export default function Discover() {
     );
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!composeText.trim()) return;
+
+    // Upload images to S3 first (if any)
+    let uploadedUrls: string[] = [];
+    if (composeImages.length > 0) {
+      setUploadingImages(true);
+      try {
+        const uploads = await Promise.all(
+          composeImages.map(async (dataUrl) => {
+            // Extract base64 data and mime type from data URL
+            const [header, base64Data] = dataUrl.split(",");
+            const mimeType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+            const ext = mimeType.split("/")[1] ?? "jpg";
+            const result = await uploadMedia.mutateAsync({
+              fileData: base64Data,
+              fileName: `photo.${ext}`,
+              mimeType,
+            });
+            return result.url;
+          })
+        );
+        uploadedUrls = uploads;
+      } catch (err) {
+        setUploadingImages(false);
+        return; // Stop if upload fails
+      }
+      setUploadingImages(false);
+    }
+
     const newPost: MomentPost = {
       id: Date.now().toString(),
       author: { name: "me.eth", avatar: "🦊", isVerified: false, handle: "0x71C7...3a9b" },
@@ -500,11 +538,13 @@ export default function Discover() {
     // Optimistic UI update
     setMoments((prev) => [newPost, ...prev]);
     setComposeText("");
+    setComposeImages([]);
     setShowCompose(false);
     toast(t("discover.postPublished") || "Post published! 🎉");
-    // Persist to backend
+    // Persist to backend with real S3 URLs
     createPost.mutate({
       content: composeText,
+      mediaUrls: uploadedUrls.length > 0 ? uploadedUrls : undefined,
       tags: composeText.match(/#(\w+)/g)?.map((t) => t.slice(1)) ?? [],
     });
   };
@@ -1045,14 +1085,15 @@ export default function Discover() {
                 <h3 className="text-sm font-semibold font-display">{t("discover.newPost") || "New Post"}</h3>
                 <button
                   onClick={handlePublish}
-                  disabled={!composeText.trim()}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    composeText.trim()
+                  disabled={!composeText.trim() || uploadingImages}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    composeText.trim() && !uploadingImages
                       ? "bg-neon-cyan text-background hover:opacity-90"
                       : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                   }`}
                 >
-                  {t("discover.publish") || "Publish"}
+                  {uploadingImages && <Loader2 size={12} className="animate-spin" />}
+                  {uploadingImages ? "上传中..." : (t("discover.publish") || "Publish")}
                 </button>
               </div>
 

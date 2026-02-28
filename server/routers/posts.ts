@@ -3,6 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { posts, postLikes, postComments, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { storagePut } from "../storage";
 
 export const postsRouter = router({
   // ─── List posts (public feed) ──────────────────────────────────────────────
@@ -174,6 +175,31 @@ export const postsRouter = router({
         .where(eq(posts.id, input.postId));
 
       return { commentId: (result as any).insertId as number };
+    }),
+
+  // ─── Upload media to S3 ────────────────────────────────────────────────
+  uploadMedia: protectedProcedure
+    .input(
+      z.object({
+        // base64-encoded file content
+        fileData: z.string().max(10_000_000), // ~7.5MB base64
+        fileName: z.string().max(200),
+        mimeType: z.string().max(100),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { fileData, fileName, mimeType } = input;
+      // Decode base64
+      const buffer = Buffer.from(fileData, "base64");
+      if (buffer.length > 8 * 1024 * 1024) {
+        throw new Error("文件大小超过 8MB 限制");
+      }
+      // Sanitize filename and add random suffix
+      const ext = fileName.split(".").pop() ?? "jpg";
+      const randomSuffix = Math.random().toString(36).slice(2, 8);
+      const key = `posts/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
+      const { url } = await storagePut(key, buffer, mimeType);
+      return { url, key };
     }),
 
   // ─── Delete post ──────────────────────────────────────────────────────────

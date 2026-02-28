@@ -3,7 +3,7 @@
  * 身份卡片、核心数据、功能入口、主题切换、设置
  * v1.9: AppContext全局状态接入
  */
-import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3 } from "lucide-react";
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
+import { trpc } from "@/lib/trpc";
 
 export default function Profile() {
   const { t } = useI18n();
@@ -19,6 +20,12 @@ export default function Profile() {
 
   // ✅ AppContext全局状态
   const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
+
+  // ─── Real stats from backend ───
+  const { data: stats, isLoading: statsLoading } = trpc.user.getUserStats.useQuery(undefined, {
+    retry: false,
+    staleTime: 30_000,
+  });
 
   const menuSections = [
     {
@@ -111,9 +118,9 @@ export default function Profile() {
           {/* Core Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: t("profile.points"), value: "24,680", sub: "NP", color: "text-neon-cyan" },
-              { label: t("profile.tradingProfit"), value: "+$342.80", sub: "", color: "text-neon-green" },
-              { label: t("profile.invites"), value: "47", sub: "", color: "text-neon-purple" },
+              { label: t("profile.points"), value: statsLoading ? "..." : (stats?.npPoints ?? 0).toLocaleString(), sub: "NP", color: "text-neon-cyan" },
+              { label: t("profile.tradingProfit"), value: statsLoading ? "..." : `${stats?.postCount ?? 0}`, sub: t("profile.posts") || "Posts", color: "text-neon-green" },
+              { label: t("profile.invites"), value: statsLoading ? "..." : `#${(stats?.rank ?? 9999).toLocaleString()}`, sub: t("profile.rank") || "Rank", color: "text-neon-purple" },
             ].map((stat) => (
               <div key={stat.label} className="text-center p-2.5 rounded-xl bg-background/40">
                 <p className="text-[10px] text-muted-foreground">{stat.label}</p>
@@ -130,12 +137,12 @@ export default function Profile() {
         <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-medium">{t("profile.level")}</span>
-            <span className="text-[10px] text-muted-foreground font-mono">24,680 / 30,000 NP</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{(stats?.npPoints ?? 0).toLocaleString()} / {Math.ceil(((stats?.npPoints ?? 0) + 1) / 10000) * 10000} NP</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: "82%" }}
+              animate={{ width: stats ? `${Math.min(((stats.npPoints % 10000) / 10000) * 100, 100)}%` : "0%" }}
               transition={{ duration: 1, delay: 0.3 }}
               className="h-full rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple"
             />
