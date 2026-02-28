@@ -2,16 +2,17 @@
  * EditProfile — 个人资料编辑页
  * 头像上传、ENS绑定、Bio编辑、社交链接管理
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, Camera, Check, X, Link as LinkIcon, Globe, Copy,
-  Shield, Sparkles, ExternalLink, Plus, Trash2, Save
+  Shield, Sparkles, ExternalLink, Plus, Trash2, Save, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 interface SocialLink {
   id: string;
@@ -43,22 +44,52 @@ export default function EditProfile() {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [displayName, setDisplayName] = useState("cryptowhale.eth");
-  const [bio, setBio] = useState("Web3 builder & DeFi enthusiast. Building the future of decentralized communication.");
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
   const [avatar, setAvatar] = useState("🦊");
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [avatarTab, setAvatarTab] = useState<"emoji" | "nft">("emoji");
-  const [ensName, setEnsName] = useState("cryptowhale.eth");
-  const [ensVerified, setEnsVerified] = useState(true);
-  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([
-    { id: "1", platform: "Twitter / X", url: "https://x.com/cryptowhale", icon: "𝕏" },
-    { id: "2", platform: "GitHub", url: "https://github.com/cryptowhale", icon: "⌨️" },
-  ]);
+  const [ensName, setEnsName] = useState("");
+  const [ensVerified, setEnsVerified] = useState(false);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [showAddSocial, setShowAddSocial] = useState(false);
   const [newSocialPlatform, setNewSocialPlatform] = useState("");
   const [newSocialUrl, setNewSocialUrl] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+
+  // ─── tRPC: load real profile ───────────────────────────────────────────────
+  const { data: profileData, isLoading: profileLoading } = trpc.user.getProfile.useQuery(undefined, {
+    retry: false,
+  });
+
+  // Populate form from real data
+  useEffect(() => {
+    if (profileData) {
+      setDisplayName(profileData.name ?? "");
+      setBio(profileData.bio ?? "");
+      setAvatar(profileData.avatar ?? "🦊");
+      setEnsName(profileData.username ?? "");
+    }
+  }, [profileData]);
+
+  // ─── tRPC: update profile ─────────────────────────────────────────────────
+  const utils = trpc.useUtils();
+  const updateProfile = trpc.user.updateProfile.useMutation({
+    onSuccess: () => {
+      utils.user.getProfile.invalidate();
+      toast.success(t("editProfile.saved") || "Profile saved successfully!");
+      setHasChanges(false);
+      setTimeout(() => setLocation("/app/profile"), 500);
+    },
+    onError: (err) => {
+      if (err.message.includes("10001")) {
+        toast.error("请先登录后再编辑资料");
+      } else {
+        toast.error("保存失败: " + err.message);
+      }
+    },
+  });
 
   const markChanged = () => { if (!hasChanges) setHasChanges(true); };
 
@@ -117,9 +148,12 @@ export default function EditProfile() {
   };
 
   const handleSave = () => {
-    toast.success(t("editProfile.saved") || "Profile saved successfully!");
-    setHasChanges(false);
-    setTimeout(() => setLocation("/app/profile"), 500);
+    updateProfile.mutate({
+      name: displayName || undefined,
+      username: ensName || undefined,
+      bio: bio || undefined,
+      avatar: avatarImage ?? avatar,
+    });
   };
 
   const handleVerifyENS = () => {

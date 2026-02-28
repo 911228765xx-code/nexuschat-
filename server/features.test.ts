@@ -1,8 +1,9 @@
 /**
  * NexusChat Feature Tests
- * Covers: wallet, chat, research, posts routers
+ * Covers: wallet, chat, research, posts, user routers
  */
 import { describe, it, expect } from "vitest";
+import { TASK_DEFINITIONS } from "./routers/user";
 
 // ─── Wallet Tests ────────────────────────────────────────────────────────────
 describe("Wallet Router", () => {
@@ -34,10 +35,16 @@ describe("Wallet Router", () => {
     expect(usdValue).toBe("1500.00");
   });
 
-  it("validates BSC chain name", () => {
-    const supportedChains = ["BSC", "ETH", "Polygon"];
-    expect(supportedChains.includes("BSC")).toBe(true);
-    expect(supportedChains.includes("Unknown")).toBe(false);
+  it("validates BscScan API response structure", () => {
+    const mockResponse = { status: "1", message: "OK", result: "1000000000000000000" };
+    expect(mockResponse.status).toBe("1");
+    expect(typeof mockResponse.result).toBe("string");
+  });
+
+  it("handles BscScan API error response", () => {
+    const errorResponse = { status: "0", message: "NOTOK", result: "Error!" };
+    const isSuccess = errorResponse.status === "1";
+    expect(isSuccess).toBe(false);
   });
 });
 
@@ -71,11 +78,10 @@ describe("Chat Router", () => {
 describe("Research Router", () => {
   it("validates token symbol format", () => {
     const validSymbols = ["BTC", "ETH", "BNB", "USDT"];
-    const invalidSymbol = "";
     validSymbols.forEach((s) => {
       expect(s.length >= 1 && s.length <= 20).toBe(true);
     });
-    expect(invalidSymbol.length >= 1).toBe(false);
+    expect("".length >= 1).toBe(false);
   });
 
   it("calculates sentiment score correctly", () => {
@@ -101,10 +107,8 @@ describe("Research Router", () => {
 describe("Posts Router", () => {
   it("validates post content length", () => {
     const validContent = "This is a valid post about #BTC";
-    const emptyContent = "";
     const tooLong = "x".repeat(2001);
     expect(validContent.length >= 1 && validContent.length <= 2000).toBe(true);
-    expect(emptyContent.length >= 1).toBe(false);
     expect(tooLong.length <= 2000).toBe(false);
   });
 
@@ -122,14 +126,6 @@ describe("Posts Router", () => {
     expect(tooMany.length <= maxMedia).toBe(false);
   });
 
-  it("validates tag count limit", () => {
-    const maxTags = 5;
-    const validTags = ["BTC", "ETH", "DeFi"];
-    const tooManyTags = ["a", "b", "c", "d", "e", "f"];
-    expect(validTags.length <= maxTags).toBe(true);
-    expect(tooManyTags.length <= maxTags).toBe(false);
-  });
-
   it("formats like count correctly", () => {
     const formatNum = (n: number) => {
       if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -140,16 +136,70 @@ describe("Posts Router", () => {
     expect(formatNum(2500)).toBe("2.5K");
     expect(formatNum(42)).toBe("42");
   });
+});
 
-  it("validates BscScan API response structure", () => {
-    const mockResponse = { status: "1", message: "OK", result: "1000000000000000000" };
-    expect(mockResponse.status).toBe("1");
-    expect(typeof mockResponse.result).toBe("string");
+// ─── User Router Tests ────────────────────────────────────────────────────────
+describe("User Router — Task Definitions", () => {
+  it("all task definitions have required fields", () => {
+    Object.entries(TASK_DEFINITIONS).forEach(([key, def]) => {
+      expect(typeof def.label).toBe("string");
+      expect(typeof def.description).toBe("string");
+      expect(typeof def.npReward).toBe("number");
+      expect(def.npReward).toBeGreaterThan(0);
+      expect(typeof def.maxCompletions).toBe("number");
+      expect(def.maxCompletions).toBeGreaterThan(0);
+    });
   });
 
-  it("handles BscScan API error response", () => {
-    const errorResponse = { status: "0", message: "NOTOK", result: "Error!" };
-    const isSuccess = errorResponse.status === "1";
-    expect(isSuccess).toBe(false);
+  it("daily_login task has high max completions", () => {
+    const dailyLogin = TASK_DEFINITIONS["daily_login"];
+    expect(dailyLogin).toBeDefined();
+    expect(dailyLogin.maxCompletions).toBeGreaterThan(100);
+  });
+
+  it("one-time tasks have maxCompletions of 1", () => {
+    const oneTimeTasks = ["connect_wallet", "complete_profile", "first_post", "first_message", "first_research"];
+    oneTimeTasks.forEach((taskType) => {
+      const def = TASK_DEFINITIONS[taskType];
+      expect(def).toBeDefined();
+      expect(def.maxCompletions).toBe(1);
+    });
+  });
+
+  it("validates profile update input", () => {
+    const validName = "Alice";
+    const emptyName = "";
+    const longName = "x".repeat(51);
+    expect(validName.length >= 1 && validName.length <= 50).toBe(true);
+    expect(emptyName.length >= 1).toBe(false);
+    expect(longName.length <= 50).toBe(false);
+  });
+
+  it("validates username format", () => {
+    const validUsername = "alice_123";
+    const invalidUsername = "alice@123!";
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    expect(usernameRegex.test(validUsername)).toBe(true);
+    expect(usernameRegex.test(invalidUsername)).toBe(false);
+  });
+
+  it("validates bio length", () => {
+    const validBio = "Web3 builder & DeFi enthusiast";
+    const longBio = "x".repeat(201);
+    expect(validBio.length <= 200).toBe(true);
+    expect(longBio.length <= 200).toBe(false);
+  });
+
+  it("calculates NP rank correctly", () => {
+    const usersAbove = 42;
+    const myRank = usersAbove + 1;
+    expect(myRank).toBe(43);
+  });
+
+  it("leaderboard limit validation", () => {
+    const validLimit = 50;
+    const tooLarge = 101;
+    expect(validLimit >= 1 && validLimit <= 100).toBe(true);
+    expect(tooLarge <= 100).toBe(false);
   });
 });

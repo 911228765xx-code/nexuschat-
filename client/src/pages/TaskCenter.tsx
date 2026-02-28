@@ -2,16 +2,17 @@
  * TaskCenter — 任务中心
  * 每日签到、社交任务、成长任务、积分获取
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, CheckCircle2, Circle, Gift, Flame, Star,
   Calendar, MessageCircle, Heart, Share2, Users, Wallet,
-  Shield, TrendingUp, Sparkles, ChevronRight, Zap, Clock
+  Shield, TrendingUp, Sparkles, ChevronRight, Zap, Clock, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 interface Task {
   id: string;
@@ -32,8 +33,49 @@ export default function TaskCenter() {
   const [, setLocation] = useLocation();
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<"daily" | "growth" | "history">("daily");
-  const [checkinDay, setCheckinDay] = useState(3); // 已签到3天
+  const [checkinDay, setCheckinDay] = useState(3);
   const [todayChecked, setTodayChecked] = useState(false);
+
+  // ─── Real task data from backend ───
+  const utils = trpc.useUtils();
+  const { data: taskStatus, isLoading: tasksLoading } = trpc.user.getTaskStatus.useQuery(undefined, {
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const completeTask = trpc.user.completeTask.useMutation({
+    onSuccess: (result, variables) => {
+      if (result.alreadyCompleted) {
+        toast.info("任务已完成，不可重复领取");
+      } else if (result.success) {
+        toast.success(`任务完成！+${result.npEarned} NP`);
+        utils.user.getTaskStatus.invalidate();
+        utils.user.myRank.invalidate();
+        // Handle daily_login specially
+        if (variables.taskType === "daily_login") {
+          setTodayChecked(true);
+          setCheckinDay(prev => Math.min(prev + 1, 7));
+        }
+      }
+    },
+    onError: (err) => {
+      if (err.message.includes("10001")) {
+        toast.error("请先登录后再领取任务奖励");
+      } else {
+        toast.error("领取失败: " + err.message);
+      }
+    },
+  });
+
+  // Merge real task status with mock UI tasks
+  const realTaskMap = useMemo(() => {
+    const map: Record<string, { isCompleted: boolean; completions: number }> = {};
+    taskStatus?.forEach((ts) => {
+      map[ts.taskType] = { isCompleted: ts.isCompleted, completions: ts.completions };
+    });
+    return map;
+  }, [taskStatus]);
+
   const [tasks, setTasks] = useState<Task[]>([
     {
       id: "d1", title: t("tasks.sendMessage"), desc: t("tasks.sendMessageDesc"),
@@ -90,18 +132,36 @@ export default function TaskCenter() {
 
   const handleCheckin = () => {
     if (todayChecked) return;
-    setTodayChecked(true);
+    // Try real backend first
+    completeTask.mutate({ taskType: "daily_login" });
+    // Optimistic UI update
     const reward = CHECKIN_REWARDS[checkinDay] || 10;
-    setCheckinDay(prev => Math.min(prev + 1, 7));
     toast.success(`${t("tasks.checkinSuccess")} +${reward} NP`);
   };
 
+  // Map task IDs to backend task types
+  const TASK_ID_TO_TYPE: Record<string, string> = {
+    "g1": "complete_profile",
+    "g3": "connect_wallet",
+    "g5": "invite_friend",
+    "d3": "first_research",
+  };
+
   const handleClaim = (taskId: string) => {
+    // Optimistic UI update
     setTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, claimed: true } : t
     ));
     const task = tasks.find(t => t.id === taskId);
-    if (task) toast.success(`${t("tasks.claimed")} +${task.reward} NP`);
+    if (task) {
+      // Try to complete backend task if mapped
+      const backendTaskType = TASK_ID_TO_TYPE[taskId];
+      if (backendTaskType) {
+        completeTask.mutate({ taskType: backendTaskType });
+      } else {
+        toast.success(`${t("tasks.claimed")} +${task.reward} NP`);
+      }
+    }
   };
 
   return (

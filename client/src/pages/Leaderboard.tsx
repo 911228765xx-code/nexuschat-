@@ -6,12 +6,13 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, Trophy, Medal, Crown, Star, Users,
-  TrendingUp, Sparkles, ChevronDown, Flame
+  TrendingUp, Sparkles, ChevronDown, Flame, Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
+import { trpc } from "@/lib/trpc";
 
 interface LeaderboardEntry {
   rank: number;
@@ -78,12 +79,42 @@ export default function Leaderboard() {
   const [activeTab, setActiveTab] = useState<"points" | "invites" | "profit">("points");
   const [timeRange, setTimeRange] = useState<"week" | "month" | "all">("week");
 
+  // ─── Real leaderboard data ───
+  const { data: lbData, isLoading: lbLoading } = trpc.user.leaderboard.useQuery(
+    { limit: 50 },
+    { staleTime: 60_000 }
+  );
+  const { data: myRankData } = trpc.user.myRank.useQuery(undefined, {
+    retry: false,
+  });
+
   const data = useMemo(() => {
+    if (activeTab === "points" && lbData && lbData.length > 0) {
+      const list: LeaderboardEntry[] = lbData.map((u) => ({
+        rank: u.rank,
+        name: u.displayName,
+        avatar: u.avatar ?? "👤",
+        value: `${(u.npPoints ?? 0).toLocaleString()} NP`,
+        valueNum: u.npPoints ?? 0,
+        change: "+0",
+        badge: u.rank === 1 ? "🏆" : u.rank === 2 ? "🥈" : u.rank === 3 ? "🥉" : undefined,
+      }));
+      const myEntry: LeaderboardEntry = {
+        rank: myRankData?.rank ?? 9999,
+        name: profile.displayName,
+        avatar: profile.avatar,
+        value: `${(myRankData?.npPoints ?? 0).toLocaleString()} NP`,
+        valueNum: myRankData?.npPoints ?? 0,
+        change: "+0",
+        isMe: true,
+      };
+      return { list, me: myEntry };
+    }
+
+    // Fallback to mock data for invites/profit tabs
     const base = activeTab === "points" ? POINTS_DATA
       : activeTab === "invites" ? INVITE_DATA
       : PROFIT_DATA;
-
-    // Add "me" entry
     const myEntry: LeaderboardEntry = {
       rank: activeTab === "points" ? 1247 : activeTab === "invites" ? 892 : 456,
       name: profile.displayName,
@@ -93,9 +124,8 @@ export default function Leaderboard() {
       change: activeTab === "points" ? "+180" : activeTab === "invites" ? "+2" : "+1.2%",
       isMe: true,
     };
-
     return { list: base, me: myEntry };
-  }, [activeTab, profile]);
+  }, [activeTab, profile, lbData, myRankData]);
 
   const getTabColor = () => {
     return activeTab === "points" ? "neon-purple" : activeTab === "invites" ? "neon-green" : "neon-cyan";

@@ -6,6 +6,7 @@ import { walletRouter } from "./routers/wallet";
 import { chatRouter } from "./routers/chat";
 import { researchRouter } from "./routers/research";
 import { postsRouter } from "./routers/posts";
+import { userRouter } from "./routers/user";
 
 export const appRouter = router({
   system: systemRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   chat: chatRouter,
   research: researchRouter,
   posts: postsRouter,
+  user: userRouter,
 });
 
 export type AppRouter = typeof appRouter;
