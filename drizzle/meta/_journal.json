@@ -15,6 +15,13 @@
       "when": 1772272209057,
       "tag": "0001_steady_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1772276607993,
+      "tag": "0002_magenta_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

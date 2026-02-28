@@ -6,6 +6,7 @@
  */
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   Bell, BellOff, Settings, UserPlus, AtSign, TrendingUp,
   Shield, Sparkles, ChevronRight, Check, CheckCheck,
@@ -31,17 +32,50 @@ export default function Notifications() {
   const [showSettings, setShowSettings] = useState(false);
   const { t } = useI18n();
 
-  // ✅ AppContext全局状态
+  // AppContext for local mock notifications (fallback)
   const {
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
+    notifications: localNotifications,
+    markNotificationRead: localMarkRead,
+    markAllNotificationsRead: localMarkAllRead,
     handleNotificationAction,
     clearAllNotifications,
     notificationSettings,
     updateNotificationSettings,
     addContact,
   } = useApp();
+
+  // tRPC: load real notifications from backend
+  const utils = trpc.useUtils();
+  const { data: serverData } = trpc.notifications.list.useQuery(
+    { limit: 50, unreadOnly: false },
+    { refetchInterval: 15000 }
+  );
+  const markReadMutation = trpc.notifications.markRead.useMutation({
+    onSuccess: () => utils.notifications.list.invalidate(),
+  });
+  const markAllReadMutation = trpc.notifications.markRead.useMutation({
+    onSuccess: () => utils.notifications.list.invalidate(),
+  });
+
+  // Map server notifications to local format for rendering
+  const serverNotifications = useMemo(() => {
+    if (!serverData?.notifications?.length) return [];
+    return serverData.notifications.map((n) => ({
+      id: String(n.id),
+      type: n.type === "like" || n.type === "comment" ? "social" : n.type === "follow" ? "friend_request" : n.type,
+      title: n.fromUserName ?? "System",
+      message: n.content,
+      avatar: n.fromUserAvatar ?? "🔔",
+      time: new Date(n.createdAt).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      read: n.isRead,
+      actionable: false,
+      actionTaken: false,
+      _serverId: n.id,
+    }));
+  }, [serverData]);
+
+  // Merge: server notifications first, then local mock (for demo)
+  const notifications = serverNotifications.length > 0 ? serverNotifications : localNotifications;
 
   const filtered = useMemo(() =>
     activeFilter === "all"
@@ -50,16 +84,28 @@ export default function Notifications() {
     [activeFilter, notifications]
   );
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = serverData?.unreadCount ?? notifications.filter(n => !n.read).length;
 
   const markAllRead = () => {
-    markAllNotificationsRead();
+    if (serverNotifications.length > 0) {
+      markAllReadMutation.mutate({});
+    } else {
+      localMarkAllRead();
+    }
     toast.success(t("notifications.allMarkedRead"));
   };
 
   const clearAll = () => {
     clearAllNotifications();
     toast.success(t("notifications.allCleared"));
+  };
+
+  const handleMarkRead = (notif: typeof notifications[0]) => {
+    if ((notif as any)._serverId) {
+      markReadMutation.mutate({ notificationId: (notif as any)._serverId });
+    } else {
+      localMarkRead(notif.id);
+    }
   };
 
   const acceptFriendRequest = (notification: typeof notifications[0]) => {
@@ -199,7 +245,7 @@ export default function Notifications() {
                 className={`group relative flex items-start gap-3 px-4 py-3.5 border-b border-border/10 transition-colors cursor-pointer ${
                   !notification.read ? "bg-neon-cyan/[0.06] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-neon-cyan before:rounded-r hover:bg-neon-cyan/[0.09]" : "hover:bg-secondary/20"
                 }`}
-                onClick={() => markNotificationRead(notification.id)}
+                onClick={() => handleMarkRead(notification)}
               >
                 {/* Avatar with type badge */}
                 <div className="relative shrink-0">
@@ -230,17 +276,17 @@ export default function Notifications() {
                       </p>
 
                       {/* Signal metadata */}
-                      {notification.type === "signal" && notification.data && (
+                      {notification.type === "signal" && (notification as any).data && (
                         <div className="flex items-center gap-2 mt-1.5">
                           <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-secondary/40">
-                            {notification.data.token as string}
+                            {((notification as any).data.token) as string}
                           </span>
                           <span className="text-[10px] font-mono text-neon-green">
-                            {notification.data.change as string}
+                            {((notification as any).data.change) as string}
                           </span>
                           <span className="text-[10px] flex items-center gap-0.5 text-neon-purple">
                             <Sparkles size={8} />
-                            {notification.data.score as string}
+                            {((notification as any).data.score) as string}
                           </span>
                         </div>
                       )}

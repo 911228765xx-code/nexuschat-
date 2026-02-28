@@ -4,6 +4,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Search, Check, Camera, Shield, Lock, Users,
   X, ChevronRight, Sparkles, Crown, Coins, Plus
@@ -99,6 +100,16 @@ export default function CreateGroup() {
     );
   };
 
+  const createGroupMutation = trpc.chat.createGroup.useMutation({
+    onSuccess: (data) => {
+      toast.success(t("group.created") || "Group created successfully!");
+      setLocation(`/app/group/${data.groupId}`);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to create group");
+    },
+  });
+
   const handleCreate = () => {
     if (!groupName.trim()) {
       toast.error(t("group.nameRequired") || "Group name is required");
@@ -108,8 +119,14 @@ export default function CreateGroup() {
       toast.error(t("group.minMembers") || "Select at least 2 members");
       return;
     }
-    toast.success(t("group.created") || "Group created successfully!");
-    setLocation("/app/chat");
+    createGroupMutation.mutate({
+      name: groupName.trim(),
+      description: groupDesc.trim() || undefined,
+      isPublic: !tokenGate.enabled,
+      isTokenGated: tokenGate.enabled,
+      tokenGateAmount: tokenGate.enabled ? tokenGate.minAmount : undefined,
+      tokenGateContract: tokenGate.enabled ? tokenGate.contractAddress : undefined,
+    });
   };
 
   const selectedContacts = mockContacts.filter((c) => selected.includes(c.id));
@@ -158,9 +175,10 @@ export default function CreateGroup() {
           {step === "permissions" && (
             <button
               onClick={handleCreate}
-              className="px-4 py-1.5 rounded-xl bg-neon-cyan text-background text-xs font-bold hover:bg-neon-cyan/90 transition-colors"
+              disabled={createGroupMutation.isPending}
+              className="px-4 py-1.5 rounded-xl bg-neon-cyan text-background text-xs font-bold hover:bg-neon-cyan/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {t("group.create") || "Create"}
+              {createGroupMutation.isPending ? "Creating..." : (t("group.create") || "Create")}
             </button>
           )}
         </div>

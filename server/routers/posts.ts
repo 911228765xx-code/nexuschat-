@@ -126,7 +126,57 @@ export const postsRouter = router({
       }
     }),
 
-  // ─── Get comments for a post ───────────────────────────────────────────────
+  // ─── Get single post by ID ──────────────────────────────────────────────────────────────────
+  getById: publicProcedure
+    .input(z.object({ postId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return null;
+
+      const [row] = await db
+        .select({
+          id: posts.id,
+          content: posts.content,
+          mediaUrls: posts.mediaUrls,
+          tags: posts.tags,
+          likeCount: posts.likeCount,
+          commentCount: posts.commentCount,
+          shareCount: posts.shareCount,
+          isPinned: posts.isPinned,
+          createdAt: posts.createdAt,
+          authorId: posts.authorId,
+          authorName: users.name,
+          authorAvatar: users.avatar,
+          authorUsername: users.username,
+          authorWallet: users.walletAddress,
+        })
+        .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .where(eq(posts.id, input.postId))
+        .limit(1);
+
+      if (!row) return null;
+
+      // Check if current user liked this post
+      let isLiked = false;
+      if (ctx.user) {
+        const like = await db
+          .select({ postId: postLikes.postId })
+          .from(postLikes)
+          .where(and(eq(postLikes.postId, input.postId), eq(postLikes.userId, ctx.user.id)))
+          .limit(1);
+        isLiked = like.length > 0;
+      }
+
+      return {
+        ...row,
+        mediaUrls: row.mediaUrls ? (JSON.parse(row.mediaUrls) as string[]) : [],
+        tags: row.tags ? (JSON.parse(row.tags) as string[]) : [],
+        isLiked,
+      };
+    }),
+
+  // ─── Get comments for a post ─────────────────────────────────────────────────────
   getComments: publicProcedure
     .input(z.object({ postId: z.number(), limit: z.number().default(20) }))
     .query(async ({ input }) => {

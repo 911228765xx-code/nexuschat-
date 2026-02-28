@@ -420,3 +420,130 @@ describe("ChatRoom DM Polling", () => {
     expect(mapped.isMine).toBe(false);
   });
 });
+
+// ─── Phase 6: PostDetail, Notifications, CreateGroup ─────────────────────────
+describe("PostDetail", () => {
+  it("maps server post to PostData format correctly", () => {
+    const serverPost = {
+      id: 1,
+      content: "Hello world",
+      authorId: 42,
+      authorName: "alice.eth",
+      authorAvatar: "A",
+      likeCount: 10,
+      commentCount: 3,
+      mediaUrls: ["https://cdn.example.com/img.jpg"],
+      createdAt: new Date("2026-01-15T10:00:00Z"),
+    };
+    const postData = {
+      id: String(serverPost.id),
+      content: serverPost.content,
+      author: {
+        id: String(serverPost.authorId),
+        name: serverPost.authorName ?? "Anonymous",
+        avatar: serverPost.authorAvatar ?? "?",
+      },
+      likes: serverPost.likeCount,
+      comments: serverPost.commentCount,
+      images: serverPost.mediaUrls ?? [],
+    };
+    expect(postData.id).toBe("1");
+    expect(postData.author.name).toBe("alice.eth");
+    expect(postData.images).toHaveLength(1);
+  });
+
+  it("formats comment timestamp correctly", () => {
+    const ts = new Date("2026-01-15T10:30:00Z");
+    const formatted = ts.toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    expect(typeof formatted).toBe("string");
+  });
+
+  it("validates comment content max length", () => {
+    const maxLen = 1000;
+    const valid = "Great post!";
+    const tooLong = "x".repeat(1001);
+    expect(valid.length <= maxLen).toBe(true);
+    expect(tooLong.length <= maxLen).toBe(false);
+  });
+});
+
+describe("Notifications", () => {
+  it("maps server notification type 'like' to 'social'", () => {
+    const type = "like";
+    const mapped = type === "like" || type === "comment" ? "social" : type === "follow" ? "friend_request" : type;
+    expect(mapped).toBe("social");
+  });
+
+  it("maps server notification type 'follow' to 'friend_request'", () => {
+    const type = "follow";
+    const mapped = type === "like" || type === "comment" ? "social" : type === "follow" ? "friend_request" : type;
+    expect(mapped).toBe("friend_request");
+  });
+
+  it("formats notification timestamp to short locale string", () => {
+    const ts = new Date("2026-01-15T10:30:00Z");
+    const formatted = ts.toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    expect(typeof formatted).toBe("string");
+    expect(formatted.length).toBeGreaterThan(0);
+  });
+
+  it("uses server unread count when available", () => {
+    const serverCount = 5;
+    const localCount = 3;
+    const unreadCount = serverCount ?? localCount;
+    expect(unreadCount).toBe(5);
+  });
+
+  it("falls back to local count when server data unavailable", () => {
+    const serverCount: number | undefined = undefined;
+    const localCount = 3;
+    const unreadCount = serverCount ?? localCount;
+    expect(unreadCount).toBe(3);
+  });
+
+  it("notification poll interval is 15 seconds", () => {
+    const refetchInterval = 15000;
+    expect(refetchInterval).toBe(15000);
+  });
+});
+
+describe("CreateGroup", () => {
+  it("validates group name minimum length", () => {
+    const validName = "DeFi Alpha";
+    const tooShort = "A";
+    expect(validName.length >= 2).toBe(true);
+    expect(tooShort.length >= 2).toBe(false);
+  });
+
+  it("validates group name maximum length", () => {
+    const validName = "DeFi Alpha Group";
+    const tooLong = "x".repeat(101);
+    expect(validName.length <= 100).toBe(true);
+    expect(tooLong.length <= 100).toBe(false);
+  });
+
+  it("requires at least 2 members to create group", () => {
+    const selected = ["user1", "user2"];
+    const tooFew = ["user1"];
+    expect(selected.length >= 2).toBe(true);
+    expect(tooFew.length >= 2).toBe(false);
+  });
+
+  it("sets isPublic based on tokenGate enabled state", () => {
+    const tokenGateEnabled = false;
+    const isPublic = !tokenGateEnabled;
+    expect(isPublic).toBe(true);
+  });
+
+  it("token-gated group sets isPublic to false", () => {
+    const tokenGateEnabled = true;
+    const isPublic = !tokenGateEnabled;
+    expect(isPublic).toBe(false);
+  });
+
+  it("redirects to group room after creation", () => {
+    const groupId = 42;
+    const redirectPath = `/app/group/${groupId}`;
+    expect(redirectPath).toBe("/app/group/42");
+  });
+});

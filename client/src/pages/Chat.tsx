@@ -5,6 +5,7 @@
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   Search, Plus, Users, Lock, Shield, X, Clock, ArrowUp,
   Pin, BellOff, Bell, Trash2, Archive, MoreHorizontal, Filter,
@@ -81,6 +82,12 @@ export default function Chat() {
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
 
+  // tRPC: real unread notification count (poll every 30s)
+  const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
+    undefined,
+    { refetchInterval: 30000, enabled: isAuthenticated }
+  );
+
   // ✅ AppContext全局状态
   const {
     conversations,
@@ -88,8 +95,11 @@ export default function Chat() {
     muteConversation,
     deleteConversation,
     markConversationRead,
-    unreadNotificationCount,
+    unreadNotificationCount: localUnreadCount,
   } = useApp();
+
+  // Use real count if available, fallback to local
+  const unreadNotificationCount = notifCountData?.count ?? localUnreadCount;
 
   // Sort: pinned first, then by time
   const sortedConversations = [...conversations].sort((a, b) => {

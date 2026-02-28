@@ -3,8 +3,10 @@
  * 完整评论流 + 引用/转发功能
  * Cyberpunk Noir: 深色背景 + 霓虹强调色
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Heart, MessageSquare, Repeat2, Share2, Bookmark,
   Star, MoreHorizontal, Send, AtSign, X, Quote, ChevronDown,
@@ -380,11 +382,74 @@ export default function PostDetail() {
   const { t } = useI18n();
 
   const postId = id || "1";
+  const numericPostId = parseInt(postId, 10);
+  const isNumericId = !isNaN(numericPostId);
+  const { user } = useAuth();
+
+  // Fallback to mock data for non-numeric IDs (demo mode)
   const postData = mockPostsData[postId] || mockPostsData["1"];
   const initialComments = mockCommentsData[postId] || mockCommentsData["1"] || [];
 
   const [post, setPost] = useState<PostData>(postData);
   const [comments, setComments] = useState<Comment[]>(initialComments);
+
+  // tRPC: load real post data
+  const { data: serverPost } = trpc.posts.getById.useQuery(
+    { postId: numericPostId },
+    { enabled: isNumericId }
+  );
+
+  // tRPC: load real comments
+  const { data: serverComments } = trpc.posts.getComments.useQuery(
+    { postId: numericPostId, limit: 50 },
+    { enabled: isNumericId, refetchInterval: 10000 }
+  );
+
+  // Merge server post into local state
+  useEffect(() => {
+    if (!serverPost) return;
+    setPost({
+      id: String(serverPost.id),
+      author: {
+        name: serverPost.authorName ?? "Anonymous",
+        handle: serverPost.authorUsername ? `@${serverPost.authorUsername}` : "@anon",
+        avatar: serverPost.authorAvatar ?? "🦊",
+        isVerified: false,
+        followers: 0,
+      },
+      content: serverPost.content,
+      timestamp: new Date(serverPost.createdAt).toLocaleString("zh-CN"),
+      likes: serverPost.likeCount,
+      comments: serverPost.commentCount,
+      reposts: serverPost.shareCount,
+      isLiked: serverPost.isLiked,
+      isBookmarked: false,
+      images: serverPost.mediaUrls.length > 0 ? serverPost.mediaUrls : undefined,
+      tags: serverPost.tags,
+    });
+  }, [serverPost]);
+
+  // Merge server comments into local state
+  useEffect(() => {
+    if (!serverComments || serverComments.length === 0) return;
+    const mapped: Comment[] = serverComments.map((c) => ({
+      id: String(c.id),
+      author: {
+        name: c.authorName ?? "Anonymous",
+        avatar: c.authorAvatar ?? "🦊",
+        isVerified: false,
+      },
+      content: c.content,
+      timestamp: new Date(c.createdAt).toLocaleString("zh-CN"),
+      likes: 0,
+      isLiked: false,
+    }));
+    setComments(mapped);
+  }, [serverComments]);
+
+  // tRPC mutations
+  const toggleLikeMutation = trpc.posts.toggleLike.useMutation();
+  const addCommentMutation = trpc.posts.addComment.useMutation();
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [showRepostModal, setShowRepostModal] = useState(false);
@@ -402,7 +467,12 @@ export default function PostDetail() {
   };
 
   const toggleLike = () => {
+    // Optimistic update
     setPost(p => ({ ...p, isLiked: !p.isLiked, likes: p.isLiked ? p.likes - 1 : p.likes + 1 }));
+    // Persist to backend
+    if (isNumericId) {
+      toggleLikeMutation.mutate({ postId: numericPostId });
+    }
   };
 
   const toggleBookmark = () => {
@@ -418,16 +488,22 @@ export default function PostDetail() {
 
   const submitComment = () => {
     if (!commentText.trim()) return;
+    const content = replyTo ? `@${replyTo.author.name} ${commentText}` : commentText;
+    // Optimistic update
     const newComment: Comment = {
       id: `new-${Date.now()}`,
-      author: { name: "me.eth", avatar: "🦊", isVerified: false },
-      content: replyTo ? `@${replyTo.author.name} ${commentText}` : commentText,
+      author: { name: user?.name ?? "me.eth", avatar: user?.avatar ?? "🦊", isVerified: false },
+      content,
       timestamp: "Just now",
       likes: 0,
       isLiked: false,
     };
     setComments(prev => [...prev, newComment]);
     setPost(p => ({ ...p, comments: p.comments + 1 }));
+    // Persist to backend
+    if (isNumericId) {
+      addCommentMutation.mutate({ postId: numericPostId, content });
+    }
     setCommentText("");
     setReplyTo(null);
     toast("Comment posted! 💬");

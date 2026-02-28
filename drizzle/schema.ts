@@ -199,3 +199,24 @@ export const userTasks = mysqlTable(
 );
 
 export type UserTask = typeof userTasks.$inferSelect;
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+export const notifications = mysqlTable(
+  "notifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),           // recipient
+    type: mysqlEnum("type", ["like", "comment", "follow", "mention", "system"]).notNull(),
+    fromUserId: int("fromUserId"),             // who triggered it (null for system)
+    fromUserName: varchar("fromUserName", { length: 100 }),
+    fromUserAvatar: varchar("fromUserAvatar", { length: 200 }),
+    postId: int("postId"),                     // related post (optional)
+    content: varchar("content", { length: 500 }).notNull(),
+    isRead: boolean("isRead").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_notif_user").on(t.userId, t.isRead, t.createdAt)]
+);
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
