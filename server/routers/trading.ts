@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { priceAlerts } from "../../drizzle/schema";
+import { priceAlerts, tradingPositions } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 // CoinGecko free API - no key required
@@ -184,6 +184,67 @@ export const tradingRouter = router({
         .update(priceAlerts)
         .set({ isActive: input.isActive })
         .where(and(eq(priceAlerts.id, input.id), eq(priceAlerts.userId, ctx.user.id)));
+      return { success: true };
+    }),
+
+  // ─── Trading Positions CRUD ───────────────────────────────────────────────
+  listPositions: protectedProcedure
+    .input(z.object({ status: z.enum(["open", "closed", "all"]).default("open") }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conditions = [eq(tradingPositions.userId, ctx.user.id)];
+      if (input.status !== "all") {
+        conditions.push(eq(tradingPositions.status, input.status));
+      }
+      return db
+        .select()
+        .from(tradingPositions)
+        .where(and(...conditions))
+        .orderBy(desc(tradingPositions.createdAt))
+        .limit(100);
+    }),
+
+  openPosition: protectedProcedure
+    .input(z.object({
+      pair: z.string().max(30),
+      side: z.enum(["long", "short"]),
+      entryPrice: z.string(),
+      amount: z.string(),
+      leverage: z.number().int().min(1).max(100).default(1),
+      stopLossPrice: z.string().optional(),
+      takeProfitPrice: z.string().optional(),
+      liquidationPrice: z.string().optional(),
+      strategyName: z.string().max(100).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false, id: null };
+      const [result] = await db.insert(tradingPositions).values({
+        userId: ctx.user.id,
+        pair: input.pair,
+        side: input.side,
+        entryPrice: input.entryPrice,
+        amount: input.amount,
+        leverage: input.leverage,
+        stopLossPrice: input.stopLossPrice ?? null,
+        takeProfitPrice: input.takeProfitPrice ?? null,
+        liquidationPrice: input.liquidationPrice ?? null,
+        strategyName: input.strategyName ?? null,
+        status: "open",
+      });
+      return { success: true, id: (result as any).insertId ?? null };
+    }),
+
+  closePosition: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db
+        .update(tradingPositions)
+        .set({ status: "closed", closedAt: new Date() })
+        .where(and(eq(tradingPositions.id, input.id), eq(tradingPositions.userId, ctx.user.id)));
       return { success: true };
     }),
 });

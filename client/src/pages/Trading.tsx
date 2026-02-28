@@ -344,6 +344,17 @@ export default function Trading() {
     takeProfit: "15", maxDailyLoss: "50", slippage: "0.5",
   });
 
+  // ─── Positions (real backend) ──────────────────────────────────────────
+  const { data: positionsData, refetch: refetchPositions } = trpc.trading.listPositions.useQuery(
+    { status: "open" },
+    { staleTime: 30_000, refetchInterval: 60_000 }
+  );
+  const realPositions = positionsData ?? [];
+  const closePositionMutation = trpc.trading.closePosition.useMutation({
+    onSuccess: () => { refetchPositions(); toast.success("Position closed"); },
+    onError: (err) => toast.error("Failed to close: " + err.message),
+  });
+
   // ─── Price Alerts (real backend) ────────────────────────────────────────
   const { data: alertsData, refetch: refetchAlerts } = trpc.trading.listAlerts.useQuery(
     undefined,
@@ -376,7 +387,24 @@ export default function Trading() {
   const totalProfit = strategies.reduce((s, st) => s + st.totalProfit, 0);
   const totalTrades = strategies.reduce((s, st) => s + st.trades, 0);
   const avgWinRate = Math.round(strategies.reduce((s, st) => s + st.winRate, 0) / strategies.length);
-  const totalUnrealizedPnl = mockPositions.reduce((s, p) => s + p.unrealizedPnl, 0);
+  // Use real positions if available, fallback to mock
+  const displayPositions: Position[] = realPositions.length > 0 ? realPositions.map(p => ({
+    id: String(p.id),
+    pair: p.pair,
+    side: p.side as "long" | "short",
+    entryPrice: parseFloat(p.entryPrice),
+    currentPrice: parseFloat(p.entryPrice),
+    amount: parseFloat(p.amount),
+    leverage: p.leverage,
+    unrealizedPnl: 0,
+    unrealizedPnlPercent: 0,
+    strategy: p.strategyName ?? "",
+    openTime: new Date(p.createdAt).toLocaleString(),
+    stopLossPrice: p.stopLossPrice ? parseFloat(p.stopLossPrice) : null,
+    takeProfitPrice: p.takeProfitPrice ? parseFloat(p.takeProfitPrice) : null,
+    liquidationPrice: p.liquidationPrice ? parseFloat(p.liquidationPrice) : null,
+  })) : mockPositions;
+  const totalUnrealizedPnl = displayPositions.reduce((s, p) => s + p.unrealizedPnl, 0);
 
   const sortedTraders = useMemo(() => {
     let filtered = riskFilter === "all" ? [...traders] : traders.filter(tr => tr.riskLevel === riskFilter);
@@ -464,9 +492,22 @@ export default function Trading() {
 
   const handleClosePosition = () => {
     if (closePosition) {
-      toast.success(`Position ${closePosition.pair} ${closePosition.side.toUpperCase()} closed at market price`);
-      setModalType("none");
-      setClosePosition(null);
+      const posId = parseInt(closePosition.id);
+      if (!isNaN(posId)) {
+        // Real position from DB
+        closePositionMutation.mutate({ id: posId }, {
+          onSuccess: () => {
+            toast.success(`Position ${closePosition.pair} ${closePosition.side.toUpperCase()} closed`);
+            setModalType("none");
+            setClosePosition(null);
+          },
+        });
+      } else {
+        // Mock position fallback
+        toast.success(`Position ${closePosition.pair} ${closePosition.side.toUpperCase()} closed at market price`);
+        setModalType("none");
+        setClosePosition(null);
+      }
     }
   };
 
@@ -815,13 +856,13 @@ export default function Trading() {
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium flex items-center gap-1.5"><Activity size={14} className="text-neon-cyan" /> Live Positions</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green font-mono">{mockPositions.length} Open</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green font-mono">{displayPositions.length} Open</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { label: "Unrealized PnL", value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red" },
-                      { label: "Long", value: `${mockPositions.filter(p => p.side === "long").length}`, color: "text-neon-green" },
-                      { label: "Short", value: `${mockPositions.filter(p => p.side === "short").length}`, color: "text-neon-red" },
+                      { label: "Long", value: `${displayPositions.filter(p => p.side === "long").length}`, color: "text-neon-green" },
+                      { label: "Short", value: `${displayPositions.filter(p => p.side === "short").length}`, color: "text-neon-red" },
                     ].map((item) => (
                       <div key={item.label} className="text-center">
                         <p className="text-[10px] text-muted-foreground">{item.label}</p>
@@ -832,7 +873,10 @@ export default function Trading() {
                 </div>
 
                 {/* Position Cards */}
-                {mockPositions.map((pos, index) => (
+                {displayPositions.length === 0 && (
+                  <div className="py-12 text-center text-muted-foreground text-sm">No open positions</div>
+                )}
+                {displayPositions.map((pos, index) => (
                   <motion.div
                     key={pos.id}
                     initial={{ opacity: 0, y: 8 }}

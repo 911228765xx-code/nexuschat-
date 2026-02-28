@@ -47,3 +47,12 @@
 - [x] Settings.tsx handleLogout 接入 trpc.auth.logout 真正清除 session
 - [x] Contacts.tsx 添加联系人改为用户搜索 + sendRequest 接入
 - [x] Notifications.tsx system 类型价格预警映射为 signal Tab
+
+## 后续三项优化（v20）
+
+- [ ] Discover Communities Tab 接入 chat.listGroups 真实群组数据
+- [ ] Discover Communities Tab 支持 joinGroup tRPC 加入群组
+- [ ] Trading 新建 positions 表（schema + migration）
+- [ ] Trading 新增 trading.getPositions/addPosition/removePosition 后端接口
+- [ ] Trading.tsx Positions Tab 接入真实后端数据
+- [ ] GroupChatRoom 成员列表接入 chat.getGroupMembers

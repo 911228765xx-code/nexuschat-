@@ -278,4 +278,26 @@ export const chatRouter = router({
       .where(eq(groupMembers.userId, ctx.user.id))
       .orderBy(desc(chatGroups.updatedAt));
   }),
+
+  // Get members of a group
+  getGroupMembers: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select({
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatar: users.avatar,
+          role: groupMembers.role,
+          joinedAt: groupMembers.joinedAt,
+        })
+        .from(groupMembers)
+        .innerJoin(users, eq(groupMembers.userId, users.id))
+        .where(eq(groupMembers.groupId, input.groupId))
+        .orderBy(groupMembers.role, groupMembers.joinedAt)
+        .limit(200);
+    }),
 });

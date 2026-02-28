@@ -8,6 +8,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -272,6 +273,40 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
+  const { isAuthenticated } = useAuth();
+  // ─── tRPC: Real groups from backend ───
+  const { data: groupsData, refetch: refetchGroups } = trpc.chat.listGroups.useQuery(
+    { limit: 30 },
+    { staleTime: 30_000 }
+  );
+  const joinGroupMutation = trpc.chat.joinGroup.useMutation({
+    onSuccess: (result, vars) => {
+      refetchGroups();
+      const id = String(vars.groupId);
+      setJoinedCommunities(prev => { const n = new Set(prev); n.add(id); return n; });
+      if (result.alreadyMember) {
+        toast(t("discover.alreadyMember") || "Already a member");
+      } else {
+        toast.success(t("discover.joinedCommunity") || "Joined!");
+      }
+    },
+    onError: (err) => { if (!err.message.includes("10001")) toast.error("Join failed: " + err.message); },
+  });
+  // Map real groups to Community shape
+  const realCommunities: Community[] = useMemo(() => {
+    if (!groupsData || groupsData.length === 0) return [];
+    return groupsData.map(g => ({
+      id: String(g.id),
+      name: g.name,
+      avatar: g.avatar ?? g.name.charAt(0).toUpperCase(),
+      members: g.memberCount,
+      description: g.description ?? "",
+      isTokenGated: g.isTokenGated,
+      gateToken: g.tokenGateAmount && g.tokenGateAmount !== "0" ? `≥${g.tokenGateAmount}` : undefined,
+      category: "Community",
+      isHot: g.memberCount > 100,
+    }));
+  }, [groupsData]);
 
   // ─── Search history (localStorage) ───
   const HISTORY_KEY = "nexuschat_search_history";
@@ -522,9 +557,13 @@ export default function Discover() {
     }, 1000);
   }, [t]);
 
-  const categories = ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
+  // Use real communities when available, fallback to mock
+  const displayCommunities = realCommunities.length > 0 ? realCommunities : mockCommunities;
+  const categories = realCommunities.length > 0
+    ? ["All", ...Array.from(new Set(displayCommunities.map(c => c.category)))]
+    : ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
 
-  const filteredCommunities = mockCommunities.filter(
+  const filteredCommunities = displayCommunities.filter(
     (c) =>
       (activeCategory === "All" || c.category === activeCategory) &&
       c.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1223,20 +1262,33 @@ export default function Discover() {
                     </div>
                     <button
                       onClick={() => {
-                        setJoinedCommunities(prev => {
-                          const next = new Set(prev);
-                          if (next.has(community.id)) next.delete(community.id); else next.add(community.id);
-                          return next;
-                        });
-                        toast.success(joinedCommunities.has(community.id) ? (t("discover.leftCommunity") || "Left community") : (t("discover.joinedCommunity") || "Joined!"));
+                        const numId = parseInt(community.id, 10);
+                        if (isAuthenticated && !isNaN(numId)) {
+                          if (!joinedCommunities.has(community.id)) {
+                            joinGroupMutation.mutate({ groupId: numId });
+                          } else {
+                            setLocation(`/app/group/${community.id}`);
+                          }
+                        } else {
+                          setJoinedCommunities(prev => {
+                            const next = new Set(prev);
+                            if (next.has(community.id)) next.delete(community.id); else next.add(community.id);
+                            return next;
+                          });
+                          toast.success(joinedCommunities.has(community.id) ? (t("discover.leftCommunity") || "Left community") : (t("discover.joinedCommunity") || "Joined!"));
+                        }
                       }}
+                      disabled={joinGroupMutation.isPending}
                       className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         joinedCommunities.has(community.id)
                           ? "bg-secondary/60 text-muted-foreground border-border/30 hover:bg-secondary/80"
                           : "bg-neon-cyan/15 text-neon-cyan border-neon-cyan/20 hover:bg-neon-cyan/25"
                       }`}
                     >
-                      {joinedCommunities.has(community.id) ? (t("discover.joined") || "Joined") : t("discover.join")}
+                      {joinGroupMutation.isPending && !joinedCommunities.has(community.id)
+                        ? <Loader2 size={12} className="animate-spin" />
+                        : joinedCommunities.has(community.id) ? (t("discover.joined") || "Joined") : t("discover.join")
+                      }
                     </button>
                   </div>
                 </motion.div>

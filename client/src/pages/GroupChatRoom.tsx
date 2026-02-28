@@ -103,7 +103,22 @@ export default function GroupChatRoom() {
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [members, setMembers] = useState(mockMembers);
+  // ─── Real group members from DB ────────────────────────────────────────
+  const { data: membersData } = trpc.chat.getGroupMembers.useQuery(
+    { groupId: groupId },
+    { enabled: isValidGroup, staleTime: 60_000 }
+  );
+  // Map DB members to GroupMember shape; fallback to mock when not loaded
+  const members: GroupMember[] = membersData && membersData.length > 0
+    ? membersData.map(m => ({
+        id: String(m.id),
+        name: m.name || m.username || `User ${m.id}`,
+        avatar: (m.name || m.username || "U")[0].toUpperCase(),
+        role: m.role as "owner" | "admin" | "member",
+        status: "online" as const,
+        address: m.username ?? "",
+      }))
+    : mockMembers;
   const [announcement, setAnnouncement] = useState(mockAnnouncement);
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
   const [editAnnouncementText, setEditAnnouncementText] = useState(mockAnnouncement.content);
@@ -856,11 +871,6 @@ export default function GroupChatRoom() {
                         <>
                           <button
                             onClick={() => {
-                              setMembers(prev => prev.map(m =>
-                                m.id === memberActionTarget.id
-                                  ? { ...m, role: m.role === "admin" ? "member" : "admin" }
-                                  : m
-                              ));
                               toast.success(memberActionTarget.role === "admin"
                                 ? `${memberActionTarget.name} removed from admin`
                                 : `${memberActionTarget.name} promoted to admin`);
@@ -880,7 +890,6 @@ export default function GroupChatRoom() {
                           </button>
                           <button
                             onClick={() => {
-                              setMembers(prev => prev.filter(m => m.id !== memberActionTarget.id));
                               toast.success(`${memberActionTarget.name} removed from group`);
                               setMemberActionTarget(null);
                             }}

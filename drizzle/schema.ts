@@ -277,3 +277,30 @@ export const userWatchlist = mysqlTable(
 
 export type UserWatchlistItem = typeof userWatchlist.$inferSelect;
 export type InsertUserWatchlistItem = typeof userWatchlist.$inferInsert;
+
+// ─── Trading Positions ────────────────────────────────────────────────
+export const tradingPositions = mysqlTable(
+  "trading_positions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    pair: varchar("pair", { length: 30 }).notNull(),
+    side: mysqlEnum("side", ["long", "short"]).notNull(),
+    entryPrice: varchar("entryPrice", { length: 30 }).notNull(),
+    amount: varchar("amount", { length: 30 }).notNull(),
+    leverage: int("leverage").default(1).notNull(),
+    stopLossPrice: varchar("stopLossPrice", { length: 30 }),
+    takeProfitPrice: varchar("takeProfitPrice", { length: 30 }),
+    liquidationPrice: varchar("liquidationPrice", { length: 30 }),
+    strategyName: varchar("strategyName", { length: 100 }),
+    status: mysqlEnum("status", ["open", "closed"]).default("open").notNull(),
+    closedAt: timestamp("closedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_positions_user").on(t.userId, t.status),
+  ]
+);
+export type TradingPosition = typeof tradingPositions.$inferSelect;
+export type InsertTradingPosition = typeof tradingPositions.$inferInsert;
