@@ -1,148 +1,155 @@
 /**
  * NexusChat Feature Tests
- * Tests for wallet, chat, and research tRPC routers
+ * Covers: wallet, chat, research, posts routers
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
-// ─── Wallet Router Tests ──────────────────────────────────────────────────────
+// ─── Wallet Tests ────────────────────────────────────────────────────────────
 describe("Wallet Router", () => {
-  it("validates BSC wallet address format", () => {
-    const validAddress = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
-    const invalidAddress = "not-a-wallet";
-    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
-    expect(addressRegex.test(validAddress)).toBe(true);
-    expect(addressRegex.test(invalidAddress)).toBe(false);
+  it("validates BSC address format", () => {
+    const validAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18";
+    const invalidAddress = "not-an-address";
+    const bscRegex = /^0x[a-fA-F0-9]{40}$/;
+    expect(bscRegex.test(validAddress)).toBe(true);
+    expect(bscRegex.test(invalidAddress)).toBe(false);
   });
 
-  it("accepts BSC chain identifier", () => {
+  it("formats BNB balance correctly", () => {
+    const wei = "1000000000000000000"; // 1 BNB in wei
+    const bnb = Number(BigInt(wei)) / 1e18;
+    expect(bnb.toFixed(4)).toBe("1.0000");
+  });
+
+  it("formats token balance with decimals", () => {
+    const rawBalance = "1000000"; // 1 USDT with 6 decimals
+    const decimals = 6;
+    const formatted = (parseFloat(rawBalance) / Math.pow(10, decimals)).toFixed(4);
+    expect(formatted).toBe("1.0000");
+  });
+
+  it("calculates USD value from BNB balance", () => {
+    const bnbBalance = 2.5;
+    const bnbPrice = 600;
+    const usdValue = (bnbBalance * bnbPrice).toFixed(2);
+    expect(usdValue).toBe("1500.00");
+  });
+
+  it("validates BSC chain name", () => {
     const supportedChains = ["BSC", "ETH", "Polygon"];
-    expect(supportedChains).toContain("BSC");
-  });
-
-  it("formats wallet balance correctly", () => {
-    const rawBalance = "1234567890123456789"; // 1.23 BNB in wei
-    const formatted = (parseFloat(rawBalance) / 1e18).toFixed(4);
-    expect(parseFloat(formatted)).toBeGreaterThan(0);
-    expect(formatted).toMatch(/^\d+\.\d{4}$/);
+    expect(supportedChains.includes("BSC")).toBe(true);
+    expect(supportedChains.includes("Unknown")).toBe(false);
   });
 });
 
-// ─── Chat Router Tests ────────────────────────────────────────────────────────
+// ─── Chat Tests ───────────────────────────────────────────────────────────────
 describe("Chat Router", () => {
   it("validates message content length", () => {
-    const validMsg = "Hello, Web3!";
+    const validMsg = "Hello, world!";
     const emptyMsg = "";
-    const tooLongMsg = "x".repeat(4001);
-
-    expect(validMsg.length).toBeGreaterThan(0);
-    expect(validMsg.length).toBeLessThanOrEqual(4000);
-    expect(emptyMsg.length).toBe(0);
-    expect(tooLongMsg.length).toBeGreaterThan(4000);
+    const longMsg = "x".repeat(5001);
+    expect(validMsg.length >= 1 && validMsg.length <= 5000).toBe(true);
+    expect(emptyMsg.length >= 1).toBe(false);
+    expect(longMsg.length <= 5000).toBe(false);
   });
 
-  it("validates group ID is a positive integer", () => {
-    const validGroupId = 1;
-    const invalidGroupId = -1;
-    const nanGroupId = NaN;
-
-    expect(validGroupId).toBeGreaterThan(0);
-    expect(invalidGroupId).toBeLessThan(0);
-    expect(isNaN(nanGroupId)).toBe(true);
+  it("validates chat room ID format", () => {
+    const validId = "room-123";
+    const emptyId = "";
+    expect(validId.length > 0).toBe(true);
+    expect(emptyId.length > 0).toBe(false);
   });
 
-  it("supports all message types", () => {
-    const messageTypes = ["text", "image", "file", "system"];
-    expect(messageTypes).toContain("text");
-    expect(messageTypes).toContain("image");
-    expect(messageTypes).toContain("file");
-    expect(messageTypes).toContain("system");
-  });
-
-  it("extracts @mentions from message content", () => {
-    const message = "Hey @alice.eth and @bob.eth, check this out!";
-    const mentionMatches = message.match(/@([\w.]+)/g);
-    const mentions = mentionMatches ? mentionMatches.map(m => m.slice(1)) : [];
-    expect(mentions).toHaveLength(2);
-    expect(mentions).toContain("alice.eth");
-    expect(mentions).toContain("bob.eth");
+  it("formats message timestamp correctly", () => {
+    const ts = Date.now();
+    const date = new Date(ts);
+    expect(date instanceof Date).toBe(true);
+    expect(isNaN(date.getTime())).toBe(false);
   });
 });
 
-// ─── Research Router Tests ────────────────────────────────────────────────────
+// ─── Research Tests ───────────────────────────────────────────────────────────
 describe("Research Router", () => {
   it("validates token symbol format", () => {
-    const validSymbols = ["BTC", "ETH", "BNB", "SOL"];
+    const validSymbols = ["BTC", "ETH", "BNB", "USDT"];
     const invalidSymbol = "";
-
-    validSymbols.forEach(sym => {
-      expect(sym.length).toBeGreaterThan(0);
-      expect(sym.length).toBeLessThanOrEqual(20);
+    validSymbols.forEach((s) => {
+      expect(s.length >= 1 && s.length <= 20).toBe(true);
     });
-    expect(invalidSymbol.length).toBe(0);
+    expect(invalidSymbol.length >= 1).toBe(false);
   });
 
-  it("determines sentiment from report content", () => {
-    const bullishContent = "代币表现强劲，看涨信号明显，利好消息不断";
-    const bearishContent = "市场看跌，风险较高，建议谨慎";
-    const neutralContent = "市场中性，等待更多数据确认";
+  it("calculates sentiment score correctly", () => {
+    const bullishSignals = 7;
+    const totalSignals = 10;
+    const score = Math.round((bullishSignals / totalSignals) * 100);
+    expect(score).toBe(70);
+  });
 
-    const getSentiment = (content: string) => {
-      if (content.includes("看涨") || content.includes("利好")) return "bullish";
-      if (content.includes("看跌") || content.includes("风险较高")) return "bearish";
-      return "neutral";
+  it("determines market sentiment label", () => {
+    const getSentiment = (score: number) => {
+      if (score >= 70) return "bullish";
+      if (score >= 40) return "neutral";
+      return "bearish";
     };
-
-    expect(getSentiment(bullishContent)).toBe("bullish");
-    expect(getSentiment(bearishContent)).toBe("bearish");
-    expect(getSentiment(neutralContent)).toBe("neutral");
-  });
-
-  it("determines risk level from report content", () => {
-    const highRiskContent = "该代币存在高风险，流动性不足";
-    const lowRiskContent = "该代币低风险，基本面稳健";
-    const mediumRiskContent = "中等风险，需要关注市场变化";
-
-    const getRiskLevel = (content: string) => {
-      if (content.includes("高风险")) return "high";
-      if (content.includes("低风险")) return "low";
-      return "medium";
-    };
-
-    expect(getRiskLevel(highRiskContent)).toBe("high");
-    expect(getRiskLevel(lowRiskContent)).toBe("low");
-    expect(getRiskLevel(mediumRiskContent)).toBe("medium");
-  });
-
-  it("calculates NXC cost for report generation", () => {
-    const reportCost = 10; // NXC tokens per report
-    expect(reportCost).toBe(10);
-    expect(typeof reportCost).toBe("number");
-  });
-
-  it("formats market cap correctly", () => {
-    const marketCapRaw = 1_000_000_000; // $1B
-    const formatted = `$${(marketCapRaw / 1e6).toFixed(2)}M`;
-    expect(formatted).toBe("$1000.00M");
-
-    const smallCap = 50_000_000; // $50M
-    const formattedSmall = `$${(smallCap / 1e6).toFixed(2)}M`;
-    expect(formattedSmall).toBe("$50.00M");
+    expect(getSentiment(80)).toBe("bullish");
+    expect(getSentiment(55)).toBe("neutral");
+    expect(getSentiment(20)).toBe("bearish");
   });
 });
 
-// ─── Wagmi/Wallet Config Tests ────────────────────────────────────────────────
-describe("BSC Wallet Config", () => {
-  it("BSC chain ID is correct", () => {
-    const BSC_CHAIN_ID = 56;
-    const BSC_TESTNET_CHAIN_ID = 97;
-    expect(BSC_CHAIN_ID).toBe(56);
-    expect(BSC_TESTNET_CHAIN_ID).toBe(97);
+// ─── Posts Tests ──────────────────────────────────────────────────────────────
+describe("Posts Router", () => {
+  it("validates post content length", () => {
+    const validContent = "This is a valid post about #BTC";
+    const emptyContent = "";
+    const tooLong = "x".repeat(2001);
+    expect(validContent.length >= 1 && validContent.length <= 2000).toBe(true);
+    expect(emptyContent.length >= 1).toBe(false);
+    expect(tooLong.length <= 2000).toBe(false);
   });
 
-  it("wallet address truncation works correctly", () => {
-    const address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
-    const truncated = `${address.slice(0, 6)}...${address.slice(-4)}`;
-    expect(truncated).toBe("0x71C7...976F");
-    expect(truncated.length).toBeLessThan(address.length);
+  it("extracts hashtags from post content", () => {
+    const content = "Bullish on #BTC and #ETH today! #DeFi";
+    const tags = content.match(/#(\w+)/g)?.map((t) => t.slice(1)) ?? [];
+    expect(tags).toEqual(["BTC", "ETH", "DeFi"]);
+  });
+
+  it("validates media URL count limit", () => {
+    const maxMedia = 4;
+    const validUrls = ["url1", "url2", "url3", "url4"];
+    const tooMany = ["url1", "url2", "url3", "url4", "url5"];
+    expect(validUrls.length <= maxMedia).toBe(true);
+    expect(tooMany.length <= maxMedia).toBe(false);
+  });
+
+  it("validates tag count limit", () => {
+    const maxTags = 5;
+    const validTags = ["BTC", "ETH", "DeFi"];
+    const tooManyTags = ["a", "b", "c", "d", "e", "f"];
+    expect(validTags.length <= maxTags).toBe(true);
+    expect(tooManyTags.length <= maxTags).toBe(false);
+  });
+
+  it("formats like count correctly", () => {
+    const formatNum = (n: number) => {
+      if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+      if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+      return n.toString();
+    };
+    expect(formatNum(1500000)).toBe("1.5M");
+    expect(formatNum(2500)).toBe("2.5K");
+    expect(formatNum(42)).toBe("42");
+  });
+
+  it("validates BscScan API response structure", () => {
+    const mockResponse = { status: "1", message: "OK", result: "1000000000000000000" };
+    expect(mockResponse.status).toBe("1");
+    expect(typeof mockResponse.result).toBe("string");
+  });
+
+  it("handles BscScan API error response", () => {
+    const errorResponse = { status: "0", message: "NOTOK", result: "Error!" };
+    const isSuccess = errorResponse.status === "1";
+    expect(isSuccess).toBe(false);
   });
 });

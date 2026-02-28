@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -277,6 +278,38 @@ export default function Discover() {
   const { t } = useI18n();
   const [, setLocation] = useLocation();
   const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
+  const utils = trpc.useUtils();
+
+  // ─── tRPC: Create post mutation ───
+  const createPost = trpc.posts.create.useMutation({
+    onSuccess: (data) => {
+      // Prepend real post to feed (optimistic already done)
+      utils.posts.list.invalidate();
+    },
+    onError: (err) => {
+      if (!err.message.includes("10001")) {
+        toast.error("发布失败: " + err.message);
+      }
+    },
+  });
+
+  // ─── tRPC: Toggle like mutation ───
+  const toggleLikeMutation = trpc.posts.toggleLike.useMutation({
+    onError: (err) => {
+      if (!err.message.includes("10001")) {
+        console.warn("[Discover] like failed:", err.message);
+      }
+    },
+  });
+
+  // ─── tRPC: Add comment mutation ───
+  const addCommentMutation = trpc.posts.addComment.useMutation({
+    onError: (err) => {
+      if (!err.message.includes("10001")) {
+        toast.error("评论失败: " + err.message);
+      }
+    },
+  });
 
   // ─── Infinite Scroll State ───
   const [page, setPage] = useState(0);
@@ -352,17 +385,22 @@ export default function Discover() {
   }, [commentInputId]);
 
   const toggleLike = (id: string) => {
+    // Optimistic UI update
     setMoments((prev) =>
       prev.map((m) => {
         if (m.id !== id) return m;
         if (!m.isLiked) {
-          // Trigger particle animation
           setLikeAnimations((a) => ({ ...a, [id]: true }));
           setTimeout(() => setLikeAnimations((a) => ({ ...a, [id]: false })), 700);
         }
         return { ...m, isLiked: !m.isLiked, likes: m.isLiked ? m.likes - 1 : m.likes + 1 };
       })
     );
+    // Persist to backend (numeric IDs only)
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      toggleLikeMutation.mutate({ postId: numId });
+    }
   };
 
   const toggleBookmark = (id: string) => {
@@ -410,6 +448,7 @@ export default function Discover() {
       likes: 0,
       isLiked: false,
     };
+    // Optimistic UI update
     setMoments((prev) =>
       prev.map((m) =>
         m.id === postId
@@ -419,6 +458,11 @@ export default function Discover() {
     );
     setCommentText("");
     toast(t("discover.commentSent") || "Comment posted! 💬");
+    // Persist to backend
+    const numId = parseInt(postId, 10);
+    if (!isNaN(numId)) {
+      addCommentMutation.mutate({ postId: numId, content: commentText });
+    }
   };
 
   const toggleCommentLike = (postId: string, commentId: string) => {
@@ -453,10 +497,16 @@ export default function Discover() {
       commentList: [],
       showComments: false,
     };
+    // Optimistic UI update
     setMoments((prev) => [newPost, ...prev]);
     setComposeText("");
     setShowCompose(false);
     toast(t("discover.postPublished") || "Post published! 🎉");
+    // Persist to backend
+    createPost.mutate({
+      content: composeText,
+      tags: composeText.match(/#(\w+)/g)?.map((t) => t.slice(1)) ?? [],
+    });
   };
 
   return (

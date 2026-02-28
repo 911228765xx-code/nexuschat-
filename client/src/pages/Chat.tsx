@@ -16,6 +16,8 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import PullToRefresh from "@/components/PullToRefresh";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
 
 interface SearchResult {
   id: string;
@@ -75,6 +77,9 @@ export default function Chat() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
+
+  // ─── Auth state ───
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   // ✅ AppContext全局状态
   const {
@@ -190,6 +195,21 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Login prompt banner */}
+      {!authLoading && !isAuthenticated && (
+        <div className="bg-neon-cyan/10 border-b border-neon-cyan/20 px-4 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Lock size={14} className="text-neon-cyan shrink-0" />
+            <span className="text-xs text-neon-cyan truncate">登录后可使用加密消息和持久化历史</span>
+          </div>
+          <button
+            onClick={() => window.location.href = getLoginUrl()}
+            className="shrink-0 text-xs font-semibold text-neon-cyan border border-neon-cyan/40 px-3 py-1 rounded-full hover:bg-neon-cyan/10 transition-colors"
+          >
+            立即登录
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center justify-between h-14">

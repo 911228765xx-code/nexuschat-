@@ -6,6 +6,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
 import {
   Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp,
   Sparkles, Share2, Check, ExternalLink, AlertTriangle, Activity,
@@ -913,6 +915,9 @@ export default function Research() {
   const [showAiReport, setShowAiReport] = useState(false);
   const [aiReportToken, setAiReportToken] = useState<string>("");
 
+  // ─── Auth state ───
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
   // tRPC AI report generation
   const generateReport = trpc.research.generate.useMutation({
     onSuccess: (data) => {
@@ -1005,6 +1010,21 @@ export default function Research() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Login prompt banner for AI report */}
+      {!authLoading && !isAuthenticated && (
+        <div className="bg-neon-purple/10 border-b border-neon-purple/20 px-4 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles size={14} className="text-neon-purple shrink-0" />
+            <span className="text-xs text-neon-purple truncate">登录后可使用 AI 生成专业投研报告</span>
+          </div>
+          <button
+            onClick={() => window.location.href = getLoginUrl()}
+            className="shrink-0 text-xs font-semibold text-neon-purple border border-neon-purple/40 px-3 py-1 rounded-full hover:bg-neon-purple/10 transition-colors"
+          >
+            立即登录
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center justify-between h-14">

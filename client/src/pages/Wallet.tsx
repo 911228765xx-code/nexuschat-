@@ -3,13 +3,15 @@
  * 代币持仓列表、NFT画廊、交易历史记录
  * 三个Tab切换 + 总资产概览
  */
-import { useState } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+import { useWallet } from "@/contexts/WalletContext";
 
 /* ─── Types ─── */
 interface Token {
@@ -102,22 +104,97 @@ export default function Wallet() {
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
   const [sendAmount, setSendAmount] = useState("");
   const [sendAddress, setSendAddress] = useState("");
-  const [sendToken, setSendToken] = useState("ETH");
-  const [swapFrom, setSwapFrom] = useState("ETH");
+  const [sendToken, setSendToken] = useState("BNB");
+  const [swapFrom, setSwapFrom] = useState("BNB");
   const [swapTo, setSwapTo] = useState("USDT");
   const [swapAmount, setSwapAmount] = useState("");
-  const walletAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18";
 
-  const totalBalance = mockTokens.reduce((sum, t) => sum + t.value, 0);
+  // ─── Real wallet from WalletContext ───
+  const { address: connectedAddress } = useWallet();
+  const walletAddress = connectedAddress || "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18";
+
+  // ─── BscScan API queries ───
+  const isValidBscAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
+  const { data: bnbData, isLoading: bnbLoading } = trpc.wallet.getBalance.useQuery(
+    { address: walletAddress },
+    { enabled: isValidBscAddress, staleTime: 30_000 }
+  );
+  const { data: tokenData, isLoading: tokensLoading } = trpc.wallet.getTokenBalances.useQuery(
+    { address: walletAddress },
+    { enabled: isValidBscAddress, staleTime: 60_000 }
+  );
+  const { data: txData, isLoading: txLoading } = trpc.wallet.getTransactions.useQuery(
+    { address: walletAddress, page: 1, offset: 20 },
+    { enabled: isValidBscAddress && activeTab === "history", staleTime: 30_000 }
+  );
+
+  // ─── Merge real data with mock fallback ───
+  const displayTokens = useMemo(() => {
+    if (!isValidBscAddress || (!bnbData && !tokenData)) return mockTokens;
+    const result: Token[] = [];
+    if (bnbData && parseFloat(bnbData.bnbBalanceFormatted) > 0) {
+      result.push({
+        id: "bnb",
+        symbol: "BNB",
+        name: "BNB",
+        icon: "⬡",
+        balance: parseFloat(bnbData.bnbBalanceFormatted),
+        value: bnbData.usdValue ? parseFloat(bnbData.usdValue) : 0,
+        price: bnbData.usdValue && parseFloat(bnbData.bnbBalanceFormatted) > 0
+          ? parseFloat(bnbData.usdValue) / parseFloat(bnbData.bnbBalanceFormatted)
+          : 0,
+        change24h: 0,
+        chain: "BSC",
+      });
+    }
+    if (tokenData) {
+      tokenData.forEach((tk) => {
+        result.push({
+          id: tk.contractAddress,
+          symbol: tk.symbol,
+          name: tk.name,
+          icon: tk.symbol.charAt(0),
+          balance: parseFloat(tk.balanceFormatted),
+          value: 0,
+          price: 0,
+          change24h: 0,
+          chain: "BSC",
+        });
+      });
+    }
+    return result.length > 0 ? result : mockTokens;
+  }, [bnbData, tokenData, isValidBscAddress]);
+
+  const displayTxs = useMemo((): Transaction[] => {
+    if (!txData || txData.length === 0) return mockTransactions;
+    return txData.map((tx) => ({
+      id: tx.hash,
+      type: (tx.isIncoming ? "receive" : "send") as Transaction["type"],
+      token: "BNB",
+      tokenIcon: "⬡",
+      amount: `${tx.isIncoming ? "+" : "-"}${tx.valueFormatted} BNB`,
+      value: "",
+      from: tx.from,
+      to: tx.to,
+      time: new Date(tx.timestamp).toLocaleString(),
+      status: (tx.isError ? "failed" : "confirmed") as Transaction["status"],
+      hash: tx.hash,
+      chain: "BSC",
+    }));
+  }, [txData]);
+
+  // Use real data when available, fallback to mock
+  const totalBalance = displayTokens.reduce((sum, t) => sum + t.value, 0);
   const totalNFTValue = mockNFTs.reduce((sum, n) => sum + n.floorPrice, 0);
-  const totalChange = mockTokens.reduce((sum, t) => sum + (t.value * t.change24h / 100), 0);
-  const totalChangePercent = (totalChange / totalBalance) * 100;
+  const totalChange = displayTokens.reduce((sum, t) => sum + (t.value * t.change24h / 100), 0);
+  const totalChangePercent = totalBalance > 0 ? (totalChange / totalBalance) * 100 : 0;
 
-  const chains = ["All", "Ethereum", "Solana", "Polygon", "Arbitrum", "Bitcoin"];
+  const chains = ["All", "BSC", "Ethereum", "Solana", "Polygon", "Arbitrum"];
 
-  const filteredTokens = selectedChain === "All" ? mockTokens : mockTokens.filter(t => t.chain === selectedChain);
+  const filteredTokens = selectedChain === "All" ? displayTokens : displayTokens.filter(t => t.chain === selectedChain);
   const filteredNFTs = selectedChain === "All" ? mockNFTs : mockNFTs.filter(n => n.chain === selectedChain);
-  const filteredTxs = selectedChain === "All" ? mockTransactions : mockTransactions.filter(tx => tx.chain === selectedChain);
+  const filteredTxs = selectedChain === "All" ? displayTxs : displayTxs.filter(tx => tx.chain === selectedChain);
+  const isLoadingData = bnbLoading || tokensLoading;
 
   const txTypeIcon = (type: Transaction["type"]) => {
     switch (type) {

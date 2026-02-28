@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { walletRouter } from "./routers/wallet";
 import { chatRouter } from "./routers/chat";
 import { researchRouter } from "./routers/research";
+import { postsRouter } from "./routers/posts";
 
 export const appRouter = router({
   system: systemRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   wallet: walletRouter,
   chat: chatRouter,
   research: researchRouter,
+  posts: postsRouter,
 });
 
 export type AppRouter = typeof appRouter;
