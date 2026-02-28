@@ -296,7 +296,27 @@ export default function Trading() {
   const [activeTab, setActiveTab] = useState<MainTab>("strategies");
   const [strategies, setStrategies] = useState(mockStrategies);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
+
   const [detailTab, setDetailTab] = useState<DetailTab>("chart");
+
+  // ─── Real K-line chart data for selected strategy ─────────────────────────
+  const chartSymbol = selectedStrategy?.pair?.split("/")[0] ?? "BTC";
+  const { data: chartData } = trpc.trading.getChart.useQuery(
+    { symbol: chartSymbol, days: 30 },
+    { enabled: !!selectedStrategy && detailTab === "chart", staleTime: 5 * 60_000 }
+  );
+
+  // Convert CoinGecko chart data to profitHistory format for recharts
+  const liveChartData = useMemo(() => {
+    if (!chartData || chartData.prices.length === 0) return null;
+    const prices = chartData.prices;
+    const basePrice = prices[0].price;
+    return prices.map((p, i) => ({
+      date: new Date(p.time).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      profit: parseFloat(((p.price - basePrice) / basePrice * 100).toFixed(2)),
+      benchmark: parseFloat(((i / prices.length) * 5).toFixed(2)),
+    }));
+  }, [chartData]);
   const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
   const [traders, setTraders] = useState(mockTraders);
   const [marketSort, setMarketSort] = useState<MarketSort>("return");
@@ -1088,7 +1108,7 @@ export default function Trading() {
                       </div>
                       <div className="h-[160px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={selectedStrategy.profitHistory}>
+                          <AreaChart data={liveChartData ?? selectedStrategy.profitHistory}>
                             <defs>
                               <linearGradient id="stratDetailGrad" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="var(--neon-green)" stopOpacity={0.3} />

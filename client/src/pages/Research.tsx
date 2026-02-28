@@ -918,6 +918,13 @@ export default function Research() {
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
 
+  // tRPC: report history
+  const [showHistory, setShowHistory] = useState(false);
+  const { data: reportHistory, refetch: refetchHistory } = trpc.research.getHistory.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+
   // tRPC AI report generation
   const generateReport = trpc.research.generate.useMutation({
     onSuccess: (data) => {
@@ -925,6 +932,7 @@ export default function Research() {
       setShowAiReport(true);
       setIsSearching(false);
       toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
+      refetchHistory();
     },
     onError: (err) => {
       setIsSearching(false);
@@ -1076,6 +1084,52 @@ export default function Research() {
             {isSearching ? <RefreshCw size={14} className="animate-spin" /> : t("research.analyze")}
           </button>
         </div>
+
+        {/* History Reports Button */}
+        {isAuthenticated && reportHistory && reportHistory.length > 0 && (
+          <div className="pb-3">
+            <button
+              onClick={() => setShowHistory(prev => !prev)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#a855f7]/10 border border-[#a855f7]/20 text-xs text-[#a855f7] hover:bg-[#a855f7]/15 transition-all"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={13} />
+                历史研究报告 ({reportHistory.length})
+              </span>
+              <span>{showHistory ? "▲" : "▼"}</span>
+            </button>
+            {showHistory && (
+              <div className="mt-2 space-y-1.5 max-h-52 overflow-y-auto">
+                {reportHistory.map((report) => (
+                  <button
+                    key={report.id}
+                    onClick={() => {
+                      setAiReportContent(report.reportContent);
+                      setAiReportToken(report.tokenSymbol);
+                      setShowAiReport(true);
+                      setShowHistory(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/30 border border-border/15 hover:border-[#a855f7]/30 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-[#a855f7]">{report.tokenSymbol}</span>
+                      {report.sentiment && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          report.sentiment === 'bullish' ? 'bg-neon-green/15 text-neon-green' :
+                          report.sentiment === 'bearish' ? 'bg-neon-red/15 text-neon-red' :
+                          'bg-muted/30 text-muted-foreground'
+                        }`}>{report.sentiment}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(report.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Hot tokens */}
         <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">

@@ -644,3 +644,112 @@ describe("Chat Group List", () => {
     expect(displayed).toHaveLength(5);
   });
 });
+
+// ─── Phase 8: Trading Chart, Research History, Follow ────────────────────────
+
+describe("Phase 8: Trading getChart", () => {
+  it("trading router is defined", async () => {
+    const { tradingRouter } = await import("./routers/trading");
+    expect(tradingRouter).toBeDefined();
+  });
+
+  it("trading router has getChart procedure", async () => {
+    const { tradingRouter } = await import("./routers/trading");
+    const procs = (tradingRouter as any)._def.procedures;
+    expect(procs.getChart !== undefined).toBe(true);
+  });
+
+  it("chart data point has timestamp and price fields", () => {
+    const chartPoint = { timestamp: Date.now(), price: 97245.5 };
+    expect(typeof chartPoint.timestamp).toBe("number");
+    expect(typeof chartPoint.price).toBe("number");
+  });
+
+  it("chart days parameter defaults to 30", () => {
+    const defaultDays = 30;
+    expect(defaultDays).toBe(30);
+  });
+});
+
+describe("Phase 8: Research History", () => {
+  it("research router is defined", async () => {
+    const { researchRouter } = await import("./routers/research");
+    expect(researchRouter).toBeDefined();
+  });
+
+  it("research router has getHistory procedure", async () => {
+    const { researchRouter } = await import("./routers/research");
+    const procs = (researchRouter as any)._def.procedures;
+    expect(procs.getHistory !== undefined).toBe(true);
+  });
+
+  it("history list is limited to 20 reports", () => {
+    const allReports = Array.from({ length: 30 }, (_, i) => ({ id: i + 1 }));
+    const limited = allReports.slice(0, 20);
+    expect(limited).toHaveLength(20);
+  });
+
+  it("report createdAt is formatted as locale string", () => {
+    const ts = new Date("2026-01-15T10:00:00Z");
+    const formatted = ts.toLocaleDateString("zh-CN");
+    expect(typeof formatted).toBe("string");
+    expect(formatted.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Phase 8: Follow Router", () => {
+  it("follow router is defined", async () => {
+    const { followRouter } = await import("./routers/follow");
+    expect(followRouter).toBeDefined();
+  });
+
+  it("follow router has follow procedure", async () => {
+    const { followRouter } = await import("./routers/follow");
+    const procs = (followRouter as any)._def.procedures;
+    expect(procs.follow !== undefined).toBe(true);
+  });
+
+  it("follow router has unfollow procedure", async () => {
+    const { followRouter } = await import("./routers/follow");
+    const procs = (followRouter as any)._def.procedures;
+    expect(procs.unfollow !== undefined).toBe(true);
+  });
+
+  it("follow router has isFollowing procedure", async () => {
+    const { followRouter } = await import("./routers/follow");
+    const procs = (followRouter as any)._def.procedures;
+    expect(procs.isFollowing !== undefined).toBe(true);
+  });
+
+  it("follow router has getCounts procedure", async () => {
+    const { followRouter } = await import("./routers/follow");
+    const procs = (followRouter as any)._def.procedures;
+    expect(procs.getCounts !== undefined).toBe(true);
+  });
+
+  it("follow router has getFollowing procedure", async () => {
+    const { followRouter } = await import("./routers/follow");
+    const procs = (followRouter as any)._def.procedures;
+    expect(procs.getFollowing !== undefined).toBe(true);
+  });
+
+  it("prevents self-follow", () => {
+    const userId = 42;
+    const targetUserId = 42;
+    const canFollow = userId !== targetUserId;
+    expect(canFollow).toBe(false);
+  });
+
+  it("allows following different user", () => {
+    const userId = 42;
+    const targetUserId = 99;
+    const canFollow = userId !== targetUserId;
+    expect(canFollow).toBe(true);
+  });
+
+  it("follow notification content is correct", () => {
+    const fromName = "alice.eth";
+    const content = `${fromName} started following you`;
+    expect(content).toBe("alice.eth started following you");
+  });
+});

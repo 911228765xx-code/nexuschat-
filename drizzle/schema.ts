@@ -220,3 +220,21 @@ export const notifications = mysqlTable(
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+// ─── User Follows ─────────────────────────────────────────────────────────────
+export const userFollows = mysqlTable(
+  "user_follows",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    followerId: int("followerId").notNull(),   // who is following
+    followingId: int("followingId").notNull(), // who is being followed
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_follows_follower").on(t.followerId),
+    index("idx_follows_following").on(t.followingId),
+  ]
+);
+
+export type UserFollow = typeof userFollows.$inferSelect;
+export type InsertUserFollow = typeof userFollows.$inferInsert;

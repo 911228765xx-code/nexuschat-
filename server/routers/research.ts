@@ -190,6 +190,20 @@ ${marketContext}
       .orderBy(desc(priceAlerts.createdAt));
   }),
 
+  // Get user's research report history
+  getHistory: protectedProcedure
+    .input(z.object({ limit: z.number().default(20) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(researchReports)
+        .where(eq(researchReports.userId, ctx.user.id))
+        .orderBy(desc(researchReports.createdAt))
+        .limit(input?.limit ?? 20);
+    }),
+
   // Fetch live price from CoinGecko (public)
   getPrice: publicProcedure
     .input(z.object({ symbol: z.string() }))

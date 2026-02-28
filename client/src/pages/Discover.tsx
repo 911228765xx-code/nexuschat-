@@ -272,6 +272,22 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
+
+  // ─── tRPC: Follow/Unfollow ───
+  const followMutation = trpc.follow.follow.useMutation({
+    onSuccess: (_, vars) => {
+      setFollowedUsers(prev => { const n = new Set(prev); n.add(String(vars.targetUserId)); return n; });
+      toast.success(t("discover.followed") || "Followed!");
+    },
+    onError: (err) => { if (!err.message.includes("10001")) toast.error("Follow failed: " + err.message); },
+  });
+  const unfollowMutation = trpc.follow.unfollow.useMutation({
+    onSuccess: (_, vars) => {
+      setFollowedUsers(prev => { const n = new Set(prev); n.delete(String(vars.targetUserId)); return n; });
+      toast.success(t("discover.unfollowed") || "Unfollowed");
+    },
+    onError: (err) => { if (!err.message.includes("10001")) toast.error("Unfollow failed: " + err.message); },
+  });
   const commentInputRef = useRef<HTMLInputElement>(null);
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const [composeImages, setComposeImages] = useState<string[]>([]);
@@ -1048,12 +1064,22 @@ export default function Discover() {
                 </div>
                 <button
                   onClick={() => {
-                    setFollowedUsers(prev => {
-                      const next = new Set(prev);
-                      if (next.has(user.id)) next.delete(user.id); else next.add(user.id);
-                      return next;
-                    });
-                    toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
+                    const numId = parseInt(user.id, 10);
+                    if (!isNaN(numId)) {
+                      if (followedUsers.has(user.id)) {
+                        unfollowMutation.mutate({ targetUserId: numId });
+                      } else {
+                        followMutation.mutate({ targetUserId: numId });
+                      }
+                    } else {
+                      // Fallback for mock users with non-numeric IDs
+                      setFollowedUsers(prev => {
+                        const next = new Set(prev);
+                        if (next.has(user.id)) next.delete(user.id); else next.add(user.id);
+                        return next;
+                      });
+                      toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
+                    }
                   }}
                   className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                     followedUsers.has(user.id)
