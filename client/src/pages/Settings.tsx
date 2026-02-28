@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Shield, Globe, Lock, Eye, EyeOff, Key, Smartphone,
   ChevronRight, Moon, Sun, Bell, Info, ExternalLink, LogOut,
@@ -55,10 +56,20 @@ export default function Settings() {
   const [readReceipts, setReadReceipts] = useState(true);
   const [profileVisible, setProfileVisible] = useState(true);
 
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      toast.success(t("settings.loggedOut"));
+      setTimeout(() => setLocation("/"), 500);
+    },
+    onError: () => {
+      // Even if server call fails, clear local state and redirect
+      toast.success(t("settings.loggedOut"));
+      setTimeout(() => setLocation("/"), 500);
+    },
+  });
   const handleLogout = () => {
     setShowLogoutConfirm(false);
-    toast.success(t("settings.loggedOut"));
-    setTimeout(() => setLocation("/"), 500);
+    logoutMutation.mutate();
   };
 
   const renderToggle = (on: boolean, onChange: () => void) => (

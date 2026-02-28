@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, userTasks, posts } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte, count } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
 
 // ─── Task definitions ─────────────────────────────────────────────────────────
 export const TASK_DEFINITIONS: Record<
@@ -213,6 +213,38 @@ export const userRouter = router({
     }),
 
   // ─── Get user stats (posts count, tasks completed, rank) ───────────────────────────
+  // ─── Search users by name or username ──────────────────────────────────────
+  searchUsers: protectedProcedure
+    .input(z.object({ query: z.string().min(1).max(50) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const q = `%${input.query.trim()}%`;
+      const rows = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          username: users.username,
+          avatar: users.avatar,
+          bio: users.bio,
+        })
+        .from(users)
+        .where(
+          and(
+            ne(users.id, ctx.user.id),
+            or(like(users.name, q), like(users.username, q))
+          )
+        )
+        .limit(20);
+      return rows.map(u => ({
+        id: u.id,
+        name: u.name ?? u.username ?? `User #${u.id}`,
+        username: u.username,
+        avatar: u.avatar,
+        bio: u.bio,
+      }));
+    }),
+
   getUserStats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");

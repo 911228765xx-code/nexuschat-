@@ -3,6 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne } from "drizzle-orm";
+import { emitToUser } from "../socket";
 
 export const chatRouter = router({
   // List public groups
@@ -153,7 +154,18 @@ export const chatRouter = router({
         messageType: input.messageType as "text" | "image" | "file" | "system",
         mediaUrl: input.mediaUrl ?? undefined,
       });
-      return { messageId: (result as any).insertId };
+      const messageId = (result as any).insertId as number;
+      // Push real-time notification to recipient via Socket.IO
+      emitToUser(input.receiverId, "dm_message", {
+        messageId,
+        senderId: ctx.user.id,
+        senderName: ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`,
+        content: input.content,
+        messageType: input.messageType,
+        mediaUrl: input.mediaUrl ?? null,
+        createdAt: new Date().toISOString(),
+      });
+      return { messageId };
     }),
 
   // ─── DM: Get message history between two users ────────────────────────────

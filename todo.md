@@ -39,3 +39,11 @@
 ## 测试与交付
 - [x] 运行 pnpm test 确认全部通过（97 个测试全部通过）
 - [x] 保存检查点 v17.0
+
+## 三项优化（v19）
+- [x] 修复 DMChat Socket.IO 路径（"/ " → window.location.origin + /api/socket.io）
+- [x] DMChat 连接后注册 register_user
+- [x] sendDM 服务端调用 emitToUser 推送 dm_message 给接收方
+- [x] Settings.tsx handleLogout 接入 trpc.auth.logout 真正清除 session
+- [x] Contacts.tsx 添加联系人改为用户搜索 + sendRequest 接入
+- [x] Notifications.tsx system 类型价格预警映射为 signal Tab

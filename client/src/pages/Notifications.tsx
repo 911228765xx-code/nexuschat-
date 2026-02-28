@@ -60,18 +60,27 @@ export default function Notifications() {
   // Map server notifications to local format for rendering
   const serverNotifications = useMemo(() => {
     if (!serverData?.notifications?.length) return [];
-    return serverData.notifications.map((n) => ({
-      id: String(n.id),
-      type: n.type === "like" || n.type === "comment" ? "social" : n.type === "follow" ? "friend_request" : n.type,
-      title: n.fromUserName ?? "System",
-      message: n.content,
-      avatar: n.fromUserAvatar ?? "🔔",
-      time: new Date(n.createdAt).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
-      read: n.isRead,
-      actionable: false,
-      actionTaken: false,
-      _serverId: n.id,
-    }));
+    return serverData.notifications.map((n) => {
+      // Map DB types to frontend filter keys
+      let mappedType: string = n.type;
+      if (n.type === "like" || n.type === "comment") mappedType = "social";
+      else if (n.type === "follow") mappedType = "friend_request";
+      // Price alert notifications are stored as "system" type but should appear in Signals tab
+      else if (n.type === "system" && n.content.includes("Price Alert")) mappedType = "signal";
+      // else "system", "mention" stay as-is
+      return {
+        id: String(n.id),
+        type: mappedType,
+        title: n.fromUserName ?? "System",
+        message: n.content,
+        avatar: n.fromUserAvatar ?? "🔔",
+        time: new Date(n.createdAt).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+        read: n.isRead,
+        actionable: false,
+        actionTaken: false,
+        _serverId: n.id,
+      };
+    });
   }, [serverData]);
 
   // Merge: server notifications first, then local mock (for demo)

@@ -118,11 +118,30 @@ export default function Contacts() {
   const [addAddress, setAddAddress] = useState("");
   const [addNote, setAddNote] = useState("");
   const [addMessage, setAddMessage] = useState("");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserName, setSelectedUserName] = useState<string>("");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
   const [, navigate] = useLocation();
   const { t } = useI18n();
 
+  // tRPC: search users for adding contact
+  const { data: searchResults, isFetching: isSearching } = trpc.user.searchUsers.useQuery(
+    { query: userSearchQuery },
+    { enabled: isAuthenticated && userSearchQuery.trim().length >= 1, staleTime: 5_000 }
+  );
+  // tRPC: send friend request
+  const sendRequestMutation = trpc.contacts.sendRequest.useMutation({
+    onSuccess: () => {
+      setShowAddModal(false);
+      setUserSearchQuery("");
+      setSelectedUserId(null);
+      setSelectedUserName("");
+      toast.success(t("contacts.requestSent") || "Friend request sent! 📤");
+    },
+    onError: (e) => toast.error(e.message),
+  });
   // tRPC: real friend requests
   const { data: incomingRequests, refetch: refetchIncoming } = trpc.contacts.listIncoming.useQuery(
     undefined,
@@ -222,8 +241,13 @@ export default function Contacts() {
   };
 
   const handleAddContact = () => {
+    if (isAuthenticated && selectedUserId) {
+      // Real path: send via tRPC
+      sendRequestMutation.mutate({ receiverId: selectedUserId });
+      return;
+    }
+    // Fallback (not authenticated): local mock only
     if (!addAddress.trim()) return;
-    // Create as a friend request (outgoing)
     const newRequest: FriendRequest = {
       id: `r-${Date.now()}`,
       from: {
@@ -832,39 +856,83 @@ export default function Contacts() {
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.addressLabel") || "Wallet Address or ENS"}</label>
-                  <input
-                    autoFocus
-                    value={addAddress}
-                    onChange={(e) => setAddAddress(e.target.value)}
-                    placeholder="0x... or name.eth"
-                    className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all font-mono"
-                  />
+              {isAuthenticated ? (
+                /* Authenticated: search by username */
+                <div className="space-y-3">
+                  <div className="relative">
+                    <label className="text-[11px] text-muted-foreground font-medium mb-1 block">搜索用户名</label>
+                    <input
+                      autoFocus
+                      value={userSearchQuery}
+                      onChange={(e) => { setUserSearchQuery(e.target.value); setSelectedUserId(null); setSelectedUserName(""); }}
+                      placeholder="输入用户名或昵称..."
+                      className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+                    />
+                    {isSearching && <span className="absolute right-3 top-7 text-[10px] text-muted-foreground">搜索中...</span>}
+                  </div>
+                  {/* Search results */}
+                  {searchResults && searchResults.length > 0 && !selectedUserId && (
+                    <div className="rounded-xl border border-border/20 overflow-hidden max-h-48 overflow-y-auto">
+                      {searchResults.map(u => (
+                        <button
+                          key={u.id}
+                          onClick={() => { setSelectedUserId(u.id); setSelectedUserName(u.name); setUserSearchQuery(u.name); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition-colors text-left border-b border-border/10 last:border-0"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold shrink-0">
+                            {u.name.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{u.name}</p>
+                            {u.username && <p className="text-[10px] text-muted-foreground">@{u.username}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults && searchResults.length === 0 && userSearchQuery.length >= 1 && !isSearching && (
+                    <p className="text-xs text-muted-foreground text-center py-2">未找到用户</p>
+                  )}
+                  {/* Selected user confirmation */}
+                  {selectedUserId && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20">
+                      <div className="w-7 h-7 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold">
+                        {selectedUserName.slice(0, 1).toUpperCase()}
+                      </div>
+                      <p className="text-sm font-medium flex-1">{selectedUserName}</p>
+                      <button onClick={() => { setSelectedUserId(null); setSelectedUserName(""); setUserSearchQuery(""); }} className="text-muted-foreground hover:text-foreground">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.requestMessage") || "Message (optional)"}</label>
-                  <input
-                    value={addMessage}
-                    onChange={(e) => setAddMessage(e.target.value)}
-                    placeholder={t("contacts.requestPlaceholder") || "Say hi! Tell them why you want to connect..."}
-                    className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
-                  />
+              ) : (
+                /* Not authenticated: wallet address fallback */
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.addressLabel") || "Wallet Address or ENS"}</label>
+                    <input
+                      autoFocus
+                      value={addAddress}
+                      onChange={(e) => setAddAddress(e.target.value)}
+                      placeholder="0x... or name.eth"
+                      className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all font-mono"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button
                 onClick={handleAddContact}
-                disabled={!addAddress.trim()}
+                disabled={isAuthenticated ? !selectedUserId || sendRequestMutation.isPending : !addAddress.trim()}
                 className={`w-full h-11 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                  addAddress.trim()
+                  (isAuthenticated ? selectedUserId && !sendRequestMutation.isPending : addAddress.trim())
                     ? "bg-gradient-to-r from-neon-cyan to-neon-purple text-background hover:opacity-90"
                     : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                 }`}
               >
                 <UserPlus size={16} />
-                {t("contacts.sendRequest") || "Send Friend Request"}
+                {sendRequestMutation.isPending ? "发送中..." : (t("contacts.sendRequest") || "Send Friend Request")}
               </button>
             </motion.div>
           </motion.div>

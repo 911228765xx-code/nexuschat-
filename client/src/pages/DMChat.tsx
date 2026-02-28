@@ -85,9 +85,18 @@ export default function DMChat() {
 
   // Socket.IO: listen for incoming DMs
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const socket = io("/", { withCredentials: true });
+    if (!isAuthenticated || !user?.id) return;
+    const myUserId = user.id;
+    const socket = io(window.location.origin, {
+      path: "/api/socket.io",
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
     socketRef.current = socket;
+    // Register user ID so server can route dm_message events via emitToUser
+    socket.on("connect", () => {
+      socket.emit("register_user", myUserId);
+    });
     socket.on("dm_message", (data: { senderId: number; content: string; messageId: number; senderName: string }) => {
       if (data.senderId !== otherUserId) return;
       const newMsg: DMMessage = {
@@ -105,7 +114,7 @@ export default function DMChat() {
       });
     });
     return () => { socket.disconnect(); };
-  }, [isAuthenticated, otherUserId]);
+  }, [isAuthenticated, user?.id, otherUserId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
