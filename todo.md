@@ -16,9 +16,9 @@
 ## Contacts 页面
 - [x] schema.ts userFollows 表已存在，可作为联系人关系基础
 - [x] Contacts.tsx 接入 follow.getFollowing，已关注用户作为真实联系人展示
-- [ ] 独立 contacts/friendRequests 表（好友申请流程，需 db:push 迁移）
-- [ ] 新建 contacts.ts 路由（sendRequest, acceptRequest, rejectRequest, listRequests）
-- [ ] Contacts.tsx 好友申请 UI 接入真实接口（当前仍为 mock requests）
+- [x] 独立 contacts/friendRequests 表（好友申请流程，已 db:push 迁移）
+- [x] 新建 contacts.ts 路由（sendRequest, acceptRequest, rejectRequest, listIncoming, listOutgoing, listFriends）
+- [x] Contacts.tsx 好友申请 UI 接入真实接口（已移除所有 mock 数据）
 
 ## Research 预警
 - [x] Research.tsx 接入 research.createAlert
@@ -34,7 +34,7 @@
 
 ## Watchlist
 - [x] Watchlist.tsx 接入 trading.getPrices 实时价格（60s 刷新）
-- [ ] Watchlist 数据库持久化（跨设备同步，需 db:push 迁移）
+- [x] Watchlist 数据库持久化（schema + router + 前端已接入）
 
 ## 测试与交付
 - [x] 运行 pnpm test 确认全部通过（97 个测试全部通过）
@@ -50,12 +50,12 @@
 
 ## 后续三项优化（v20）
 
-- [ ] Discover Communities Tab 接入 chat.listGroups 真实群组数据
-- [ ] Discover Communities Tab 支持 joinGroup tRPC 加入群组
+- [x] Discover Communities Tab 接入 chat.listGroups 真实群组数据（已移除 mock 数据）
+- [x] Discover Communities Tab 支持 joinGroup tRPC 加入群组
 - [x] Trading 新建 positions 表（schema + migration）
 - [x] Trading 新增 trading.getPositions/addPosition/removePosition 后端接口
 - [x] Trading.tsx Positions Tab 接入真实后端数据
-- [ ] GroupChatRoom 成员列表接入 chat.getGroupMembers
+- [x] GroupChatRoom 成员列表接入 chat.getGroupMembers（已移除 mock 数据）
 
 ## v21 修复与功能完善
 
@@ -66,3 +66,11 @@
 - [x] CreateGroup.tsx 联系人列表从 mock 数据切换为 contacts.listFriends + user.searchUsers 真实数据
 - [x] Chat.tsx 全局搜索从 mock 数据切换为 trpc.user.searchUsers 真实用户搜索
 - [x] Chat.tsx 搜索结果点击导航至 DM 对话页面
+
+## v22 Mock 数据清理
+
+- [x] Contacts.tsx 移除所有 mockContacts 和 mockRequests，完全使用 listFriends + listIncoming + listOutgoing
+- [x] Contacts.tsx 新增 listOutgoing 后端接口，支持查看已发送的好友申请
+- [x] Discover.tsx Communities Tab 移除 mockCommunities，完全使用 chat.listGroups
+- [x] GroupChatRoom.tsx 移除 mockMembers，完全使用 chat.getGroupMembers
+- [x] 97 个测试全部通过，TypeScript 0 错误

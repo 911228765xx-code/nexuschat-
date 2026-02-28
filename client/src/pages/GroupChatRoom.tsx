@@ -45,16 +45,7 @@ interface GroupMessage {
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
 
-const mockMembers: GroupMember[] = [
-  { id: "1", name: "cryptowhale.eth", avatar: "🦊", role: "owner", status: "online", address: "0x71C7...3a9b" },
-  { id: "2", name: "vitalik.eth", avatar: "V", role: "admin", status: "online", address: "0x8F2a...7c1d" },
-  { id: "3", name: "alice.eth", avatar: "A", role: "admin", status: "away", address: "0x5B6c...1e3f" },
-  { id: "4", name: "defi_alpha.eth", avatar: "🔑", role: "member", status: "online", address: "0x7E8f...0a1b" },
-  { id: "5", name: "punk6529.eth", avatar: "P", role: "member", status: "offline", address: "0x3D4e...9f2a" },
-  { id: "6", name: "nft_collector.eth", avatar: "🎨", role: "member", status: "online", address: "0x4D5e...2c3d" },
-  { id: "7", name: "bob_dao.eth", avatar: "B", role: "member", status: "offline", address: "0x9A1b...4d5e" },
-  { id: "8", name: "whale_hunter.eth", avatar: "🐋", role: "member", status: "online", address: "0x2C3d...6f7g" },
-];
+// Mock members removed — now using real data from chat.getGroupMembers
 
 const mockAnnouncement = {
   content: "Welcome to DeFi Alpha Hunters! 🚀 Rules: 1) No financial advice 2) Share alpha respectfully 3) DYOR always. Token gate: Hold ≥0.1 ETH to participate.",
@@ -108,17 +99,15 @@ export default function GroupChatRoom() {
     { groupId: groupId },
     { enabled: isValidGroup, staleTime: 60_000 }
   );
-  // Map DB members to GroupMember shape; fallback to mock when not loaded
-  const members: GroupMember[] = membersData && membersData.length > 0
-    ? membersData.map(m => ({
-        id: String(m.id),
-        name: m.name || m.username || `User ${m.id}`,
-        avatar: (m.name || m.username || "U")[0].toUpperCase(),
-        role: m.role as "owner" | "admin" | "member",
-        status: "online" as const,
-        address: m.username ?? "",
-      }))
-    : mockMembers;
+  // Map DB members to GroupMember shape
+  const members: GroupMember[] = (membersData ?? []).map(m => ({
+    id: String(m.id),
+    name: m.name || m.username || `User ${m.id}`,
+    avatar: (m.name || m.username || "U")[0].toUpperCase(),
+    role: m.role as "owner" | "admin" | "member",
+    status: "online" as const,
+    address: m.username ?? "",
+  }));
   const [announcement, setAnnouncement] = useState(mockAnnouncement);
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
   const [editAnnouncementText, setEditAnnouncementText] = useState(mockAnnouncement.content);
@@ -170,7 +159,7 @@ export default function GroupChatRoom() {
     inputRef.current?.focus();
   };
 
-  const filteredMentionMembers = mockMembers.filter(
+  const filteredMentionMembers = members.filter(
     (m) => m.name.toLowerCase().includes(mentionFilter) && m.name !== "cryptowhale.eth"
   );
 
@@ -351,7 +340,7 @@ export default function GroupChatRoom() {
             <h2 className="text-sm font-semibold font-display truncate">DeFi Alpha Hunters</h2>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Users size={10} />
-              {mockMembers.length} {t("group.members")} · {onlineCount} {t("group.online")}
+              {members.length} {t("group.members")} · {onlineCount} {t("group.online")}
             </p>
           </div>
           <button
@@ -683,7 +672,7 @@ export default function GroupChatRoom() {
                   </div>
                   <div>
                     <h4 className="font-display font-bold text-base">DeFi Alpha Hunters</h4>
-                    <p className="text-xs text-muted-foreground">{mockMembers.length} {t("group.members")}</p>
+                    <p className="text-xs text-muted-foreground">{members.length} {t("group.members")}</p>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">

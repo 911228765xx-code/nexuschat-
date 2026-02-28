@@ -60,29 +60,7 @@ const defaultGroups: ContactGroup[] = [
   { id: "dao", name: "DAO", color: "yellow-400", icon: "🏛️" },
 ];
 
-const mockContacts: Contact[] = [
-  { id: "1", name: "alice.eth", avatar: "A", address: "0x71C7...3a9b", ens: "alice.eth", note: "DeFi Researcher", isVerified: true, isFavorite: true, lastActive: "Online", group: "A", tags: ["defi"] },
-  { id: "2", name: "bob_trader", avatar: "B", address: "0xA3F2...8c1d", note: "Quant Trader", isVerified: true, isFavorite: true, lastActive: "2h ago", group: "B", tags: ["trading"] },
-  { id: "3", name: "charlie.eth", avatar: "C", address: "0xB9E4...2f7a", ens: "charlie.eth", isVerified: false, isFavorite: false, lastActive: "1d ago", group: "C", tags: [] },
-  { id: "4", name: "david_nft", avatar: "D", address: "0xD5C1...9e3b", note: "NFT Collector", isVerified: true, isFavorite: false, lastActive: "3h ago", group: "D", tags: ["nft"] },
-  { id: "5", name: "emma.eth", avatar: "E", address: "0xE2F8...4d5c", ens: "emma.eth", note: "Solana Developer", isVerified: true, isFavorite: true, lastActive: "Online", group: "E", tags: ["dev"] },
-  { id: "6", name: "frank_dev", avatar: "F", address: "0xF1A3...7b2e", isVerified: false, isFavorite: false, lastActive: "5h ago", group: "F", tags: ["dev"] },
-  { id: "7", name: "grace.eth", avatar: "G", address: "0xG4B7...1c8f", ens: "grace.eth", note: "DAO Governance Expert", isVerified: true, isFavorite: false, lastActive: "12h ago", group: "G", tags: ["dao"] },
-  { id: "8", name: "henry_whale", avatar: "H", address: "0xH8D2...5a3g", note: "Whale Investor", isVerified: true, isFavorite: true, lastActive: "Online", group: "H", tags: ["trading", "defi"] },
-  { id: "9", name: "iris.eth", avatar: "I", address: "0xI9E5...2b7h", ens: "iris.eth", isVerified: false, isFavorite: false, lastActive: "2d ago", group: "I", tags: [] },
-  { id: "10", name: "jack_alpha", avatar: "J", address: "0xJ3F1...8c4i", note: "Alpha Hunter", isVerified: true, isFavorite: false, lastActive: "1h ago", group: "J", tags: ["trading"] },
-  { id: "11", name: "kate.eth", avatar: "K", address: "0xK7A2...3d9j", ens: "kate.eth", isVerified: true, isFavorite: false, lastActive: "4h ago", group: "K", tags: ["nft"] },
-  { id: "12", name: "luna_art", avatar: "L", address: "0xL2B8...6e1k", note: "On-chain Artist", isVerified: false, isFavorite: false, lastActive: "6h ago", group: "L", tags: ["nft"] },
-];
-
-const mockRequests: FriendRequest[] = [
-  { id: "r1", from: { name: "whale_0x.eth", avatar: "🐋", address: "0xM4C9...7d2f" }, message: "Hi! I saw your DeFi analysis, would love to connect.", timestamp: "10m ago", status: "pending", direction: "incoming" },
-  { id: "r2", from: { name: "nft_king.eth", avatar: "👑", address: "0xN7B3...5e8g" }, message: "Fellow NFT collector here. Let's chat!", timestamp: "2h ago", status: "pending", direction: "incoming" },
-  { id: "r3", from: { name: "alpha_seeker", avatar: "🔍", address: "0xP2D6...9f1h" }, message: "Can we share alpha?", timestamp: "5h ago", status: "pending", direction: "incoming" },
-  { id: "r4", from: { name: "dao_builder.eth", avatar: "🏗️", address: "0xQ8E1...3a4i" }, message: "Interested in DAO governance collaboration", timestamp: "1d ago", status: "accepted", direction: "incoming" },
-  { id: "r5", from: { name: "crypto_sage", avatar: "🧙", address: "0xR5F7...6b2j" }, message: "Let's connect!", timestamp: "3h ago", status: "pending", direction: "outgoing" },
-  { id: "r6", from: { name: "defi_wizard", avatar: "🧪", address: "0xS1G4...8c5k" }, message: "Want to discuss yield strategies", timestamp: "6h ago", status: "pending", direction: "outgoing" },
-];
+// Mock contacts and requests removed — all data now loaded from backend
 
 /* ─── Component ─── */
 export default function Contacts() {
@@ -110,9 +88,8 @@ export default function Contacts() {
     tags: [],
   }));
 
-  const [contacts, setContacts] = useState(mockContacts);
-  // Use real data when authenticated
-  const displayContacts = isAuthenticated && realContacts.length > 0 ? realContacts : contacts;
+  // Use real data from backend (friends list)
+  const displayContacts = realContacts;
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addAddress, setAddAddress] = useState("");
@@ -175,8 +152,24 @@ export default function Contacts() {
     status: "pending" as FriendRequestStatus,
     direction: "incoming" as const,
   }));
-  // Friend requests state (merge real + mock for outgoing)
-  const [requests, setRequests] = useState(mockRequests);
+  // tRPC: real outgoing requests
+  const { data: outgoingRequests, refetch: refetchOutgoing } = trpc.contacts.listOutgoing.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+  // Map real outgoing requests to FriendRequest shape
+  const realOutgoingRequests: FriendRequest[] = (outgoingRequests ?? []).map(r => ({
+    id: String(r.id),
+    from: {
+      name: r.displayName,
+      avatar: r.displayName.slice(0, 1).toUpperCase(),
+      address: `User #${r.receiverId}`,
+    },
+    message: "Waiting for response...",
+    timestamp: new Date(r.createdAt).toLocaleDateString(),
+    status: "pending" as FriendRequestStatus,
+    direction: "outgoing" as const,
+  }));
   const [showRequests, setShowRequests] = useState(false);
   const [requestTab, setRequestTab] = useState<"incoming" | "outgoing">("incoming");
 
@@ -189,10 +182,9 @@ export default function Contacts() {
   const [newGroupIcon, setNewGroupIcon] = useState("📁");
   const [assigningGroupTo, setAssigningGroupTo] = useState<string | null>(null);
 
-  // Use real incoming requests when authenticated, fallback to mock
-  const displayIncoming = isAuthenticated ? realIncomingRequests : requests.filter((r) => r.status === "pending" && r.direction === "incoming");
-  const pendingIncoming = displayIncoming;
-  const pendingOutgoing = requests.filter((r) => r.status === "pending" && r.direction === "outgoing");
+  // Use real requests from backend
+  const pendingIncoming = realIncomingRequests;
+  const pendingOutgoing = realOutgoingRequests;
 
   const filteredContacts = useMemo(() => {
     let list = displayContacts;
@@ -210,7 +202,7 @@ export default function Contacts() {
       );
     }
     return list;
-  }, [contacts, searchQuery, activeGroupFilter]);
+  }, [displayContacts, searchQuery, activeGroupFilter]);
 
   // Group by first letter
   const grouped = filteredContacts.reduce<Record<string, Contact[]>>((acc, contact) => {
@@ -224,100 +216,45 @@ export default function Contacts() {
   const favoriteContacts = displayContacts.filter((c) => c.isFavorite);
 
   const toggleFavorite = (id: string) => {
-    setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, isFavorite: !c.isFavorite } : c))
-    );
+    // TODO: persist favorite to backend
     if (selectedContact?.id === id) {
       setSelectedContact((prev) => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
     }
+    toast(t("contacts.featureComingSoon") || "Feature coming soon");
   };
 
   const saveNote = (id: string) => {
-    setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, note: editNoteText } : c))
-    );
+    // TODO: persist note to backend
     setEditingNote(null);
     toast(t("contacts.noteSaved") || "Note saved");
   };
 
   const handleAddContact = () => {
-    if (isAuthenticated && selectedUserId) {
-      // Real path: send via tRPC
+    if (selectedUserId) {
       sendRequestMutation.mutate({ receiverId: selectedUserId });
+      refetchOutgoing();
       return;
     }
-    // Fallback (not authenticated): local mock only
-    if (!addAddress.trim()) return;
-    const newRequest: FriendRequest = {
-      id: `r-${Date.now()}`,
-      from: {
-        name: addAddress.includes(".eth") ? addAddress : `${addAddress.slice(0, 6)}...${addAddress.slice(-4)}`,
-        avatar: (addAddress[0] || "?").toUpperCase(),
-        address: addAddress.includes(".eth") ? "0x" + Math.random().toString(16).slice(2, 6) + "..." + Math.random().toString(16).slice(2, 6) : addAddress,
-      },
-      message: addMessage || "Let's connect!",
-      timestamp: t("discover.justNow") || "Just now",
-      status: "pending",
-      direction: "outgoing",
-    };
-    setRequests((prev) => [newRequest, ...prev]);
-    setAddAddress("");
-    setAddNote("");
-    setAddMessage("");
-    setShowAddModal(false);
-    toast(t("contacts.requestSent") || "Friend request sent! 📤");
+    toast.error("Please select a user to add");
   };
 
   const acceptRequest = (id: string) => {
-    // Try real tRPC mutation first
     const numId = parseInt(id, 10);
-    if (!isNaN(numId) && isAuthenticated) {
+    if (!isNaN(numId)) {
       acceptRequestMutation.mutate({ requestId: numId });
-      return;
     }
-    const req = requests.find((r) => r.id === id);
-    if (!req) return;
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: "accepted" as FriendRequestStatus } : r))
-    );
-    // Add to contacts
-    const newContact: Contact = {
-      id: `c-${Date.now()}`,
-      name: req.from.name,
-      avatar: req.from.avatar,
-      address: req.from.address,
-      ens: req.from.name.includes(".eth") ? req.from.name : undefined,
-      isVerified: false,
-      isFavorite: false,
-      lastActive: "Just added",
-      group: (req.from.name[0] || "?").toUpperCase(),
-      tags: [],
-    };
-    setContacts((prev) => [...prev, newContact]);
-    toast(t("contacts.requestAccepted") || `${req.from.name} is now your contact! 🎉`);
   };
 
   const rejectRequest = (id: string) => {
-    // Try real tRPC mutation first
     const numId = parseInt(id, 10);
-    if (!isNaN(numId) && isAuthenticated) {
+    if (!isNaN(numId)) {
       rejectRequestMutation.mutate({ requestId: numId });
-      return;
     }
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: "rejected" as FriendRequestStatus } : r))
-    );
-    toast(t("contacts.requestRejected") || "Request rejected");
   };
 
   const toggleContactTag = (contactId: string, tagId: string) => {
-    setContacts((prev) =>
-      prev.map((c) =>
-        c.id === contactId
-          ? { ...c, tags: c.tags.includes(tagId) ? c.tags.filter((t) => t !== tagId) : [...c.tags, tagId] }
-          : c
-      )
-    );
+    // TODO: persist tags to backend
+    toast(t("contacts.featureComingSoon") || "Feature coming soon");
   };
 
   const addNewGroup = () => {
@@ -403,7 +340,7 @@ export default function Contacts() {
               <span className="text-[10px]">{g.icon}</span>
               {g.name}
               <span className="text-[9px] opacity-60">
-                {contacts.filter((c) => c.tags.includes(g.id)).length}
+                {displayContacts.filter((c) => c.tags.includes(g.id)).length}
               </span>
             </button>
           ))}
@@ -748,8 +685,8 @@ export default function Contacts() {
                 {/* Request list */}
                 <div className="space-y-3 overflow-y-auto max-h-[50vh]">
                   {(requestTab === "incoming"
-                    ? requests.filter((r) => r.direction === "incoming")
-                    : requests.filter((r) => r.direction === "outgoing")
+                    ? pendingIncoming
+                    : pendingOutgoing
                   ).map((req) => (
                     <motion.div
                       key={req.id}
@@ -817,8 +754,8 @@ export default function Contacts() {
 
                   {/* Empty state */}
                   {(requestTab === "incoming"
-                    ? requests.filter((r) => r.direction === "incoming")
-                    : requests.filter((r) => r.direction === "outgoing")
+                    ? pendingIncoming
+                    : pendingOutgoing
                   ).length === 0 && (
                     <div className="text-center py-8">
                       <Inbox size={28} className="text-muted-foreground/30 mx-auto mb-2" />

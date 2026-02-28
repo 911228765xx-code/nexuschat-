@@ -112,6 +112,40 @@ export const contactsRouter = router({
     }));
   }),
 
+  // ─── List pending outgoing requests ─────────────────────────────────────────
+  listOutgoing: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select({
+        id: friendRequests.id,
+        receiverId: friendRequests.receiverId,
+        createdAt: friendRequests.createdAt,
+        receiverName: users.name,
+        receiverUsername: users.username,
+        receiverAvatar: users.avatar,
+      })
+      .from(friendRequests)
+      .leftJoin(users, eq(users.id, friendRequests.receiverId))
+      .where(
+        and(
+          eq(friendRequests.senderId, ctx.user.id),
+          eq(friendRequests.status, "pending")
+        )
+      )
+      .orderBy(desc(friendRequests.createdAt))
+      .limit(50);
+
+    return rows.map((r) => ({
+      id: r.id,
+      receiverId: r.receiverId,
+      createdAt: r.createdAt,
+      displayName: r.receiverName ?? r.receiverUsername ?? `User #${r.receiverId}`,
+      avatar: r.receiverAvatar,
+    }));
+  }),
+
   // ─── List accepted friends ───────────────────────────────────────────────────
   listFriends: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();

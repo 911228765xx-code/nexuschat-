@@ -62,14 +62,7 @@ interface MomentPost {
 }
 
 /* ─── Mock Data ─── */
-const mockCommunities: Community[] = [
-  { id: "1", name: "BAYC Holders 🐵", avatar: "🐵", members: 8432, description: "Bored Ape Yacht Club official holders community", isTokenGated: true, gateToken: "BAYC NFT", category: "NFT", isHot: true },
-  { id: "2", name: "DeFi Alpha Club 🔒", avatar: "🔑", members: 3210, description: "Professional DeFi strategy sharing & discussion", isTokenGated: true, gateToken: "≥100 UNI", category: "DeFi", isHot: true },
-  { id: "3", name: "ETH Developers", avatar: "⟠", members: 12500, description: "Ethereum developer community", isTokenGated: false, category: "Dev" },
-  { id: "4", name: "Solana Ecosystem", avatar: "◎", members: 9800, description: "Solana ecosystem projects & alpha sharing", isTokenGated: false, category: "L1" },
-  { id: "5", name: "AI x Crypto", avatar: "🤖", members: 5600, description: "Exploring the intersection of AI and crypto", isTokenGated: false, category: "AI", isHot: true },
-  { id: "6", name: "Azuki Holders", avatar: "⛩️", members: 4200, description: "Azuki NFT holders exclusive community", isTokenGated: true, gateToken: "Azuki NFT", category: "NFT" },
-];
+// Mock communities removed — now using real data from chat.listGroups
 
 const mockUsers: TrendingUser[] = [
   { id: "1", name: "vitalik.eth", avatar: "V", bio: "Ethereum co-founder", followers: 5200000, isVerified: true },
@@ -557,11 +550,11 @@ export default function Discover() {
     }, 1000);
   }, [t]);
 
-  // Use real communities when available, fallback to mock
-  const displayCommunities = realCommunities.length > 0 ? realCommunities : mockCommunities;
-  const categories = realCommunities.length > 0
-    ? ["All", ...Array.from(new Set(displayCommunities.map(c => c.category)))]
-    : ["All", "NFT", "DeFi", "L1", "Dev", "AI"];
+  // Use real communities from backend
+  const displayCommunities = realCommunities;
+  const categories = ["All", ...Array.from(new Set(displayCommunities.map(c => c.category).filter(Boolean)))];
+  // Show empty state hint when no groups exist yet
+  const hasNoCommunities = displayCommunities.length === 0;
 
   const filteredCommunities = displayCommunities.filter(
     (c) =>
