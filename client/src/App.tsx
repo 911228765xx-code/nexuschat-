@@ -35,7 +35,7 @@ function AppContent() {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
   });
-
+  // make sure to consider if you need authentication for certain routes
   return (
     <>
       {showOnboarding && (

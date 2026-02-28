@@ -3,6 +3,7 @@
  * 群成员侧边栏、@提及成员、群公告置顶、群信息面板
  */
 import { useState, useRef, useEffect, useCallback } from "react";
+import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import {
   ArrowLeft, Send, Smile, MoreVertical, X, Reply, Users,
@@ -87,6 +88,8 @@ export default function GroupChatRoom() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { t } = useI18n();
+  const groupId = id ? parseInt(id, 10) : NaN;
+  const isValidGroup = !isNaN(groupId);
   const [messages, setMessages] = useState(mockGroupMessages);
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
@@ -154,6 +157,14 @@ export default function GroupChatRoom() {
     (m) => m.name.toLowerCase().includes(mentionFilter) && m.name !== "cryptowhale.eth"
   );
 
+  // tRPC: save message to backend (non-blocking, optimistic UI)
+  const saveMessage = trpc.chat.saveMessage.useMutation({
+    onError: (err) => {
+      // Only log, don't block UI
+      console.warn("[Chat] Failed to save message:", err.message);
+    },
+  });
+
   const handleSend = useCallback(() => {
     if (!input.trim()) return;
     const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -172,11 +183,16 @@ export default function GroupChatRoom() {
       mentions,
       ...(replyTo ? { replyTo: { sender: replyTo.sender, content: replyTo.content.slice(0, 60) } } : {}),
     };
+    // Optimistic update
     setMessages((prev) => [...prev, newMsg]);
     setInput("");
     setReplyTo(null);
     setShowMentionMenu(false);
-  }, [input, replyTo]);
+    // Persist to backend if valid group
+    if (isValidGroup) {
+      saveMessage.mutate({ groupId, content: input });
+    }
+  }, [input, replyTo, groupId, isValidGroup]);
 
   const handleReaction = (msgId: string, emoji: string) => {
     setMessages((prev) =>

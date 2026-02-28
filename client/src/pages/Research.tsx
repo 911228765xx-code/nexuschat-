@@ -5,6 +5,7 @@
  */
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp,
   Sparkles, Share2, Check, ExternalLink, AlertTriangle, Activity,
@@ -907,22 +908,42 @@ export default function Research() {
   const [shareSuccess, setShareSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<"chart" | "radar" | "volume" | "onchain" | "signal">("chart");
   const [showFilters, setShowFilters] = useState(false);
+  // AI Report state
+  const [aiReportContent, setAiReportContent] = useState<string | null>(null);
+  const [showAiReport, setShowAiReport] = useState(false);
+  const [aiReportToken, setAiReportToken] = useState<string>("");
+
+  // tRPC AI report generation
+  const generateReport = trpc.research.generate.useMutation({
+    onSuccess: (data) => {
+      setAiReportContent(data.reportContent);
+      setShowAiReport(true);
+      setIsSearching(false);
+      toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
+    },
+    onError: (err) => {
+      setIsSearching(false);
+      if (err.message.includes("10001") || err.message.includes("login")) {
+        const found = mockReports.find(r => r.token.toLowerCase() === searchQuery.trim().toLowerCase());
+        if (found) {
+          setExpandedId(found.id);
+          setFilterCategory("all");
+          toast.success(`${t("research.analysisComplete")} ${found.token}`);
+        } else {
+          toast.info(t("research.tokenNotFound"));
+        }
+      } else {
+        toast.error("AI 报告生成失败: " + err.message);
+      }
+    },
+  });
 
   const handleSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-      const found = mockReports.find(r => r.token.toLowerCase() === searchQuery.trim().toLowerCase());
-      if (found) {
-        setExpandedId(found.id);
-        setFilterCategory("all");
-        toast.success(`${t("research.analysisComplete")} ${found.token}`);
-      } else {
-        toast.info(t("research.tokenNotFound"));
-      }
-    }, 2000);
-  }, [searchQuery, t]);
+    setAiReportToken(searchQuery.trim().toUpperCase());
+    generateReport.mutate({ tokenSymbol: searchQuery.trim(), chain: "BSC" });
+  }, [searchQuery]);
 
   const toggleWatchlist = useCallback((id: string) => {
     setWatchlist(prev => {
@@ -1182,6 +1203,32 @@ export default function Research() {
           <span>Live</span>
         </div>
       </div>
+
+      {/* AI Report Modal */}
+      {showAiReport && aiReportContent && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowAiReport(false)} />
+          <div className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-[#a855f7]" />
+                <span className="font-bold text-white font-['Space_Grotesk']">AI 深度研究报告</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#a855f7]/20 text-[#a855f7] text-xs font-mono">{aiReportToken}</span>
+              </div>
+              <button onClick={() => setShowAiReport(false)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10">
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 prose prose-invert prose-sm max-w-none">
+              <pre className="whitespace-pre-wrap text-sm text-gray-200 font-sans leading-relaxed">{aiReportContent}</pre>
+            </div>
+            <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between">
+              <p className="text-xs text-gray-500">本报告仅供参考，不构成投资建议</p>
+              <button onClick={() => { navigator.clipboard.writeText(aiReportContent); toast.success("已复制报告"); }} className="text-xs text-[#00d4ff] hover:underline">复制内容</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading state */}
       <AnimatePresence>

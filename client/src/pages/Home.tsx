@@ -3,6 +3,7 @@
  * Cyberpunk Noir: 深色背景 + 霓虹强调色 + 毛玻璃效果
  * 多语言支持 + 钱包连接弹窗
  */
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -26,6 +27,10 @@ const fadeUp = {
 };
 
 export default function Home() {
+  // The userAuth hooks provides authentication state
+  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
+  let { user, loading, error, isAuthenticated, logout } = useAuth();
+
   const [, setLocation] = useLocation();
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);

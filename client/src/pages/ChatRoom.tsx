@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus, Copy, Forward, Star, Trash2 } from "lucide-react";
 import EnhancedInput from "@/components/EnhancedInput";
 import SwipeMessage from "@/components/SwipeMessage";
@@ -140,6 +141,11 @@ export default function ChatRoom() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // tRPC: save DM message (non-blocking)
+  const saveMessage = trpc.chat.saveMessage.useMutation({
+    onError: (err) => console.warn("[ChatRoom] save failed:", err.message),
+  });
+
   const handleSend = useCallback(() => {
     if (!input.trim() && !imagePreview) return;
     const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -164,6 +170,10 @@ export default function ChatRoom() {
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readStatus: "read" as const } : m));
     }, 2500);
     setMessages((prev) => [...prev, newMsg]);
+    // Persist to backend (best-effort, group 0 = DM placeholder)
+    if (input.trim()) {
+      saveMessage.mutate({ groupId: 0, content: input });
+    }
     setInput("");
     setReplyTo(null);
     setImagePreview(null);
