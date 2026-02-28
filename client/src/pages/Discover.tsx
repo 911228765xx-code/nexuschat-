@@ -4,7 +4,7 @@
  * 增强互动：点赞动画、评论输入框与评论列表
  * Cyberpunk Noir风格
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -272,6 +272,47 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
+
+  // ─── Debounced search query ───
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // ─── tRPC: Search posts ───
+  const { data: searchData, isFetching: isSearching } = trpc.posts.search.useQuery(
+    { query: debouncedQuery, limit: 30 },
+    {
+      enabled: debouncedQuery.length >= 2,
+      staleTime: 10_000,
+    }
+  );
+
+  // Map search results to MomentPost format
+  const searchResults: MomentPost[] = useMemo(() => {
+    if (!searchData?.posts) return [];
+    return searchData.posts.map((p) => ({
+      id: String(p.id),
+      author: {
+        name: p.authorName ?? "Anonymous",
+        avatar: p.authorAvatar ?? "👤",
+        isVerified: false,
+        handle: p.authorUsername ? `@${p.authorUsername}` : (p.authorWallet ? `${p.authorWallet.slice(0, 6)}...${p.authorWallet.slice(-4)}` : "unknown"),
+      },
+      content: p.content,
+      images: p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls : undefined,
+      tags: p.tags ?? [],
+      timestamp: new Date(p.createdAt).toLocaleDateString("zh-CN"),
+      likes: p.likeCount,
+      comments: p.commentCount,
+      reposts: p.shareCount,
+      isLiked: p.isLiked,
+      isBookmarked: false,
+      commentList: [],
+      showComments: false,
+    }));
+  }, [searchData]);
 
   // ─── tRPC: Follow/Unfollow ───
   const followMutation = trpc.follow.follow.useMutation({
@@ -612,14 +653,25 @@ export default function Discover() {
 
         {/* Search */}
         <div className="relative pb-3">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
+          {isSearching
+            ? <Loader2 size={15} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-neon-cyan animate-spin" />
+            : <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
+          }
           <input
             type="text"
-            placeholder={t("discover.search")}
+            placeholder={t("discover.search") || "Search posts, tags..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+            className="w-full h-9 pl-9 pr-8 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Tabs: Moments / Communities / Users */}
@@ -641,8 +693,69 @@ export default function Discover() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
+        {/* ─── Search Results Overlay ─── */}
+        {debouncedQuery.length >= 2 && (
+          <div className="pb-4">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {isSearching
+                  ? "Searching..."
+                  : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for “${debouncedQuery}”`
+                }
+              </span>
+              {!isSearching && searchResults.length > 0 && (
+                <span className="text-[10px] text-neon-cyan/70">Backend search</span>
+              )}
+            </div>
+            {isSearching ? (
+              <div className="flex items-center justify-center py-12 gap-2">
+                <Loader2 size={20} className="text-neon-cyan animate-spin" />
+                <span className="text-sm text-muted-foreground">Searching posts...</span>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Search size={36} className="text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No posts found for “{debouncedQuery}”</p>
+                <p className="text-xs text-muted-foreground/60">Try different keywords or hashtags</p>
+              </div>
+            ) : (
+              <div className="space-y-0">
+                {searchResults.map((post) => (
+                  <article key={post.id} className="px-4 py-4 border-b border-border/10">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="w-10 h-10 shrink-0">
+                        <AvatarFallback className="bg-secondary text-base">{post.author.avatar}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-sm font-semibold font-display truncate">{post.author.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono truncate">{post.author.handle}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground/50 shrink-0">{post.timestamp}</span>
+                        </div>
+                        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{post.content}</p>
+                        {post.tags && post.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {post.tags.map((tag) => (
+                              <span key={tag} className="text-[11px] text-neon-cyan/80">#{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 mt-2 text-muted-foreground">
+                          <span className="flex items-center gap-1 text-xs"><Heart size={12} /> {post.likes}</span>
+                          <span className="flex items-center gap-1 text-xs"><MessageSquare size={12} /> {post.comments}</span>
+                          <span className="flex items-center gap-1 text-xs"><Repeat2 size={12} /> {post.reposts}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ─── Moments Tab ─── */}
-        {activeTab === "moments" && (
+        {activeTab === "moments" && debouncedQuery.length < 2 && (
           <div className="pb-4">
             {/* Compose button */}
             <div className="px-4 py-3">
@@ -961,7 +1074,7 @@ export default function Discover() {
         )}
 
         {/* ─── Communities Tab ─── */}
-        {activeTab === "communities" && (
+        {activeTab === "communities" && debouncedQuery.length < 2 && (
           <>
             <div className="flex gap-2 px-4 py-3 overflow-x-auto">
               {categories.map((cat) => (
@@ -1037,7 +1150,7 @@ export default function Discover() {
         )}
 
         {/* ─── Users Tab ─── */}
-        {activeTab === "users" && (
+        {activeTab === "users" && debouncedQuery.length < 2 && (
           <div className="px-4 py-3 space-y-3">
             {mockUsers.map((user, index) => (
               <motion.div
