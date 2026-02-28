@@ -2,7 +2,7 @@
  * CreateGroup — 创建群聊页面
  * 联系人选择、群名/头像设置、Token门控权限管理
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -33,18 +33,7 @@ interface TokenGate {
 
 const AVATAR_EMOJIS = ["🚀", "💎", "🔥", "🐵", "🦊", "🐋", "⚡", "🌊", "🎯", "🏆", "🎮", "🌈"];
 
-const mockContacts: Contact[] = [
-  { id: "1", name: "vitalik.eth", avatar: "V", address: "0x71C7...3a9b", isOnline: true, group: "DeFi" },
-  { id: "2", name: "satoshi.btc", avatar: "S", address: "0x8F2a...7c1d", isOnline: false, group: "DeFi" },
-  { id: "3", name: "punk6529.eth", avatar: "P", address: "0x3D4e...9f2a", isOnline: true, group: "NFT" },
-  { id: "4", name: "alice.eth", avatar: "A", address: "0x5B6c...1e3f", isOnline: true, group: "DeFi" },
-  { id: "5", name: "bob_dao.eth", avatar: "B", address: "0x9A1b...4d5e", isOnline: false, group: "DAO" },
-  { id: "6", name: "whale_hunter.eth", avatar: "🐋", address: "0x2C3d...6f7g", isOnline: true, group: "Trading" },
-  { id: "7", name: "defi_alpha.eth", avatar: "🔑", address: "0x7E8f...0a1b", isOnline: false, group: "DeFi" },
-  { id: "8", name: "nft_collector.eth", avatar: "🎨", address: "0x4D5e...2c3d", isOnline: true, group: "NFT" },
-  { id: "9", name: "dao_builder.eth", avatar: "🏗️", address: "0x6F7g...8h9i", isOnline: false, group: "DAO" },
-  { id: "10", name: "crypto_dev.eth", avatar: "💻", address: "0x1A2b...3c4d", isOnline: true, group: "Dev" },
-];
+// mockContacts removed — real data loaded from backend via contacts.listFriends + user.searchUsers
 
 type Step = "select" | "configure" | "permissions";
 
@@ -70,13 +59,52 @@ export default function CreateGroup() {
   const [allowInvite, setAllowInvite] = useState(true);
   const [muteNewMembers, setMuteNewMembers] = useState(false);
 
+  // ─── Load real contacts from backend ────────────────────────────────────
+  const { data: friendsData } = trpc.contacts.listFriends.useQuery(undefined, { staleTime: 60_000 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const { data: searchResults } = trpc.user.searchUsers.useQuery(
+    { query: debouncedSearch },
+    { enabled: debouncedSearch.length >= 1, staleTime: 15_000 }
+  );
+
+  // Merge friends + search results into Contact[] format
+  const realContacts: Contact[] = useMemo(() => {
+    const friendContacts: Contact[] = (friendsData ?? []).map(f => ({
+      id: String(f.userId),
+      name: f.displayName,
+      avatar: f.avatar ?? f.displayName.charAt(0).toUpperCase(),
+      address: "",
+      isOnline: false,
+      group: "Friends",
+    }));
+    if (!debouncedSearch || !searchResults) return friendContacts;
+    // Merge search results, avoiding duplicates
+    const friendIds = new Set(friendContacts.map(c => c.id));
+    const searchContacts: Contact[] = searchResults
+      .filter(u => !friendIds.has(String(u.id)))
+      .map(u => ({
+        id: String(u.id),
+        name: u.name,
+        avatar: u.avatar ?? u.name.charAt(0).toUpperCase(),
+        address: "",
+        isOnline: false,
+        group: "Search Results",
+      }));
+    return [...friendContacts, ...searchContacts];
+  }, [friendsData, searchResults, debouncedSearch]);
+
   const filteredContacts = useMemo(() => {
-    if (!search.trim()) return mockContacts;
+    if (!search.trim()) return realContacts;
     const q = search.toLowerCase();
-    return mockContacts.filter(
+    return realContacts.filter(
       (c) => c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, realContacts]);
 
   const groupedContacts = useMemo(() => {
     const groups: Record<string, Contact[]> = {};
@@ -129,7 +157,7 @@ export default function CreateGroup() {
     });
   };
 
-  const selectedContacts = mockContacts.filter((c) => selected.includes(c.id));
+  const selectedContacts = realContacts.filter((c) => selected.includes(c.id));
 
   const stepTitles: Record<Step, string> = {
     select: t("group.selectMembers") || "Select Members",

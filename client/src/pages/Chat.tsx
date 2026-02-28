@@ -30,50 +30,19 @@ interface SearchResult {
   highlight: string;
 }
 
-const mockSearchResults: SearchResult[] = [
-  {
-    id: "s1", chatName: "vitalik.eth", chatAvatar: "V",
-    message: "ETH 2.0 staking yield is now at 4.2%, which is very competitive compared to traditional finance",
-    sender: "vitalik.eth", time: "Today 14:32",
-    highlight: "staking yield",
-  },
-  {
-    id: "s2", chatName: "BAYC Holders 🐵", chatAvatar: "🐵",
-    message: "The new staking mechanism for BAYC holders will launch next week with enhanced rewards",
-    sender: "Alice", time: "Today 10:15",
-    highlight: "staking",
-  },
-  {
-    id: "s3", chatName: "0xDeFi...3a9b", chatAvatar: "D",
-    message: "Lido staking TVL just crossed $20B, bullish signal for the ecosystem",
-    sender: "0xDeFi...3a9b", time: "Yesterday 22:08",
-    highlight: "staking TVL",
-  },
-  {
-    id: "s4", chatName: "DeFi Alpha 🔒", chatAvatar: "🔑",
-    message: "New liquid staking derivative protocol launching on Arbitrum, early APY looks insane",
-    sender: "Bob", time: "Feb 24",
-    highlight: "staking derivative",
-  },
-  {
-    id: "s5", chatName: "satoshi.btc", chatAvatar: "S",
-    message: "Bitcoin staking via Babylon protocol is gaining traction, worth watching",
-    sender: "satoshi.btc", time: "Feb 23",
-    highlight: "staking",
-  },
-];
+// Mock search results removed — now using real user search via trpc.user.searchUsers
 
 const searchFilters = ["All", "Messages", "Files", "Links", "Media"];
 const timeFilters = ["Any Time", "Today", "This Week", "This Month"];
 
 export default function Chat() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [activeTimeFilter, setActiveTimeFilter] = useState("Any Time");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  // isSearching and searchResults now derived from trpc query below
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -145,28 +114,29 @@ export default function Chat() {
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Global search handler
-  const handleGlobalSearch = useCallback(() => {
-    if (!globalSearch.trim()) return;
-    setIsSearching(true);
-    setSearchResults([]);
-    setTimeout(() => {
-      setSearchResults(mockSearchResults.filter(r =>
-        r.message.toLowerCase().includes(globalSearch.toLowerCase()) ||
-        r.chatName.toLowerCase().includes(globalSearch.toLowerCase())
-      ));
-      setIsSearching(false);
-    }, 800);
+  // ─── Real user search via backend ────────────────────────────────────
+  const [debouncedGlobalSearch, setDebouncedGlobalSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedGlobalSearch(globalSearch), 400);
+    return () => clearTimeout(timer);
   }, [globalSearch]);
 
-  useEffect(() => {
-    if (globalSearch.trim().length >= 2) {
-      const timer = setTimeout(handleGlobalSearch, 400);
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults([]);
-    }
-  }, [globalSearch, handleGlobalSearch]);
+  const { data: userSearchData, isFetching: isUserSearching } = trpc.user.searchUsers.useQuery(
+    { query: debouncedGlobalSearch },
+    { enabled: isAuthenticated && debouncedGlobalSearch.trim().length >= 2, staleTime: 15_000 }
+  );
+
+  // Convert user search results to SearchResult format
+  const searchResults: SearchResult[] = (userSearchData ?? []).map(u => ({
+    id: `user-${u.id}`,
+    chatName: u.name,
+    chatAvatar: u.avatar ?? u.name.charAt(0).toUpperCase(),
+    message: u.bio ?? "Start a conversation",
+    sender: u.name,
+    time: "",
+    highlight: debouncedGlobalSearch,
+  }));
+  const isSearching = isUserSearching;
 
   // Long press for context menu
   const handleTouchStart = (id: string, e: React.TouchEvent | React.MouseEvent) => {
@@ -617,6 +587,9 @@ export default function Chat() {
                         onClick={() => {
                           setShowSearchPanel(false);
                           setGlobalSearch("");
+                          // Navigate to DM with this user
+                          const userId = result.id.replace("user-", "");
+                          setLocation(`/app/dm/${userId}`);
                         }}
                       >
                         <Avatar className="w-10 h-10 shrink-0">

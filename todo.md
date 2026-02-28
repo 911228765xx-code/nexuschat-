@@ -52,7 +52,17 @@
 
 - [ ] Discover Communities Tab 接入 chat.listGroups 真实群组数据
 - [ ] Discover Communities Tab 支持 joinGroup tRPC 加入群组
-- [ ] Trading 新建 positions 表（schema + migration）
-- [ ] Trading 新增 trading.getPositions/addPosition/removePosition 后端接口
-- [ ] Trading.tsx Positions Tab 接入真实后端数据
+- [x] Trading 新建 positions 表（schema + migration）
+- [x] Trading 新增 trading.getPositions/addPosition/removePosition 后端接口
+- [x] Trading.tsx Positions Tab 接入真实后端数据
 - [ ] GroupChatRoom 成员列表接入 chat.getGroupMembers
+
+## v21 修复与功能完善
+
+- [x] 修复 vite.config.ts 中 vitePluginDisableReownAnalytics 插件导致的 Rollup 构建错误
+- [x] 运行时禁用 Reown analytics（wagmi.ts 中 OptionsController.setFeatures）
+- [x] Trading.tsx Positions Tab 添加 Open Position 表单（Long/Short、Pair、Amount、Leverage、SL/TP）
+- [x] Trading.tsx openPosition 表单接入 trpc.trading.openPosition mutation
+- [x] CreateGroup.tsx 联系人列表从 mock 数据切换为 contacts.listFriends + user.searchUsers 真实数据
+- [x] Chat.tsx 全局搜索从 mock 数据切换为 trpc.user.searchUsers 真实用户搜索
+- [x] Chat.tsx 搜索结果点击导航至 DM 对话页面

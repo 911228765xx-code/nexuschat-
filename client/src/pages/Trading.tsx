@@ -355,7 +355,43 @@ export default function Trading() {
     onError: (err) => toast.error("Failed to close: " + err.message),
   });
 
-  // ─── Price Alerts (real backend) ────────────────────────────────────────
+  // ─── Open Position Form ──────────────────────────────────────────────
+  const [openForm, setOpenForm] = useState({
+    pair: "BTC/USDT",
+    side: "long" as "long" | "short",
+    amount: "100",
+    leverage: 5,
+    stopLoss: "",
+    takeProfit: "",
+  });
+  const openPositionMutation = trpc.trading.openPosition.useMutation({
+    onSuccess: () => {
+      refetchPositions();
+      toast.success("Position opened!");
+      setOpenForm(f => ({ ...f, amount: "100", stopLoss: "", takeProfit: "" }));
+    },
+    onError: (err) => toast.error("Failed to open: " + err.message),
+  });
+  const handleOpenPosition = () => {
+    const sym = openForm.pair.split("/")[0];
+    const currentPrice = displayTicker.find(t => t.symbol === sym)?.price ?? 0;
+    if (!currentPrice) { toast.error("Price not available"); return; }
+    const liqOffset = openForm.side === "long" ? (1 - 1 / openForm.leverage) : (1 + 1 / openForm.leverage);
+    const liquidationPrice = (currentPrice * liqOffset).toFixed(2);
+    openPositionMutation.mutate({
+      pair: openForm.pair,
+      side: openForm.side,
+      entryPrice: currentPrice.toString(),
+      amount: openForm.amount,
+      leverage: openForm.leverage,
+      stopLossPrice: openForm.stopLoss || undefined,
+      takeProfitPrice: openForm.takeProfit || undefined,
+      liquidationPrice,
+      strategyName: "Manual",
+    });
+  };
+
+  // ─── Price Alerts (real backend) ──────────────────────────────────────────
   const { data: alertsData, refetch: refetchAlerts } = trpc.trading.listAlerts.useQuery(
     undefined,
     { staleTime: 30_000 }
@@ -949,6 +985,122 @@ export default function Trading() {
                     </div>
                   </motion.div>
                 ))}
+
+                {/* ─── Open Position Form ─── */}
+                <div className="p-3 rounded-2xl bg-card/50 border border-neon-cyan/20">
+                  <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <Plus size={14} className="text-neon-cyan" /> Open New Position
+                  </h4>
+                  {/* Side Toggle */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <button
+                      onClick={() => setOpenForm(f => ({ ...f, side: "long" }))}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                        openForm.side === "long"
+                          ? "bg-neon-green/20 text-neon-green border border-neon-green/30"
+                          : "bg-secondary/30 text-muted-foreground border border-border/20"
+                      }`}
+                    >
+                      ▲ Long
+                    </button>
+                    <button
+                      onClick={() => setOpenForm(f => ({ ...f, side: "short" }))}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                        openForm.side === "short"
+                          ? "bg-neon-red/20 text-neon-red border border-neon-red/30"
+                          : "bg-secondary/30 text-muted-foreground border border-border/20"
+                      }`}
+                    >
+                      ▼ Short
+                    </button>
+                  </div>
+                  {/* Pair & Amount */}
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">Pair</label>
+                      <select
+                        value={openForm.pair}
+                        onChange={(e) => setOpenForm(f => ({ ...f, pair: e.target.value }))}
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                      >
+                        {["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT", "LINK/USDT", "AVAX/USDT"].map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">Amount (USDT)</label>
+                      <input
+                        type="number"
+                        value={openForm.amount}
+                        onChange={(e) => setOpenForm(f => ({ ...f, amount: e.target.value }))}
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        placeholder="100"
+                      />
+                    </div>
+                  </div>
+                  {/* Leverage */}
+                  <div className="mb-2">
+                    <label className="text-[10px] text-muted-foreground mb-1 block">Leverage: {openForm.leverage}x</label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      value={openForm.leverage}
+                      onChange={(e) => setOpenForm(f => ({ ...f, leverage: parseInt(e.target.value) }))}
+                      className="w-full h-1.5 accent-neon-cyan"
+                    />
+                    <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
+                      <span>1x</span><span>10x</span><span>25x</span><span>50x</span>
+                    </div>
+                  </div>
+                  {/* SL / TP */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">Stop Loss</label>
+                      <input
+                        type="number"
+                        value={openForm.stopLoss}
+                        onChange={(e) => setOpenForm(f => ({ ...f, stopLoss: e.target.value }))}
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">Take Profit</label>
+                      <input
+                        type="number"
+                        value={openForm.takeProfit}
+                        onChange={(e) => setOpenForm(f => ({ ...f, takeProfit: e.target.value }))}
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                  {/* Current Price Info */}
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-3 px-1">
+                    <span>Entry Price</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      ${(displayTicker.find(t => t.symbol === openForm.pair.split("/")[0])?.price ?? 0).toLocaleString()}
+                    </span>
+                  </div>
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleOpenPosition}
+                    disabled={openPositionMutation.isPending || !openForm.amount}
+                    className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      openForm.side === "long"
+                        ? "bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
+                        : "bg-neon-red/20 text-neon-red border border-neon-red/30 hover:bg-neon-red/30"
+                    } disabled:opacity-50`}
+                  >
+                    {openPositionMutation.isPending
+                      ? "Opening..."
+                      : openForm.side === "long"
+                        ? `Buy Long ${openForm.pair}`
+                        : `Sell Short ${openForm.pair}`}
+                  </button>
+                </div>
 
                 {/* Margin Info */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">

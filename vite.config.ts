@@ -150,7 +150,25 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// Disable Reown/WalletConnect analytics to prevent domain allowlist errors
+// Note: Only replace analytics:true in source files during dev transform.
+// Do NOT modify method bodies with regex (nested braces break the pattern).
+function vitePluginDisableReownAnalytics(): Plugin {
+  return {
+    name: "disable-reown-analytics",
+    transform(code, id) {
+      // Only apply to appkit-controllers source files (not pre-bundled chunks)
+      if (id.includes("appkit-controllers") && !id.includes("node_modules/.vite")) {
+        return {
+          code: code.replace(/analytics:\s*true/g, "analytics: false"),
+          map: null,
+        };
+      }
+    },
+  };
+}
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginDisableReownAnalytics()];
 
 export default defineConfig({
   plugins,
