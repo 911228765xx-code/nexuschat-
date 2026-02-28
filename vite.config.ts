@@ -163,6 +163,18 @@ export default defineConfig({
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
+  define: {
+    // Inject platform-injected VITE_ env vars that are in process.env but not in .env files
+    "import.meta.env.VITE_WALLETCONNECT_PROJECT_ID": JSON.stringify(
+      process.env.VITE_WALLETCONNECT_PROJECT_ID || ""
+    ),
+    "import.meta.env.VITE_FRONTEND_FORGE_API_KEY": JSON.stringify(
+      process.env.VITE_FRONTEND_FORGE_API_KEY || ""
+    ),
+    "import.meta.env.VITE_FRONTEND_FORGE_API_URL": JSON.stringify(
+      process.env.VITE_FRONTEND_FORGE_API_URL || ""
+    ),
+  },
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
