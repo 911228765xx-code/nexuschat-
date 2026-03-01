@@ -168,6 +168,7 @@ export default function Trading() {
       refetchStrategies();
       toast.success("Strategy saved!");
       setModalType("none");
+      setEditingStrategyId(null);
       setNewStrategy({ name: "", pair: "BTC/USDT", amount: "100", signalSource: "", stopLoss: "5", takeProfit: "15", maxPosition: "500", dailyLossLimit: "50", leverage: "3", riskLevel: "low" });
     },
     onError: (err) => toast.error("Failed to save strategy: " + err.message),
@@ -180,6 +181,17 @@ export default function Trading() {
     },
     onError: (err) => toast.error("Failed to toggle: " + err.message),
   });
+  const deleteStrategyMutation = trpc.copyTrading.deleteStrategy.useMutation({
+    onSuccess: () => {
+      refetchStrategies();
+      toast.success("Strategy deleted");
+      setModalType("none");
+      setSelectedStrategy(null);
+    },
+    onError: (err) => toast.error("Failed to delete: " + err.message),
+  });
+  const [editingStrategyId, setEditingStrategyId] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const realStrategies: Strategy[] = useMemo(() => {
     if (!backendStrategies || backendStrategies.length === 0) return [];
     return backendStrategies.map(s => ({
@@ -428,6 +440,7 @@ export default function Trading() {
       return;
     }
     upsertStrategyMutation.mutate({
+      ...(editingStrategyId ? { id: editingStrategyId } : {}),
       name: newStrategy.name,
       description: newStrategy.signalSource || undefined,
       type: "custom",
@@ -1333,7 +1346,7 @@ export default function Trading() {
                     <h3 className="font-bold font-display text-base">{selectedStrategy.name}</h3>
                     <p className="text-[11px] text-muted-foreground">{selectedStrategy.pair} · {selectedStrategy.signalSource} · {selectedStrategy.amount}</p>
                   </div>
-                  <button onClick={() => { setModalType("none"); setSelectedStrategy(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
+                  <button onClick={() => { setModalType("none"); setSelectedStrategy(null); setShowDeleteConfirm(false); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
                 </div>
                 <div className="flex gap-1 mt-2">
                   {(["chart", "stats", "risk", "trades"] as DetailTab[]).map((tab) => (
@@ -1508,17 +1521,53 @@ export default function Trading() {
                 )}
               </div>
 
-              <div className="px-4 py-3 border-t border-border/30 flex gap-3 shrink-0">
-                <button onClick={() => { setModalType("createStrategy"); toast.info("Edit mode: modify your strategy parameters"); }}
-                  className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
-                  <Settings size={14} /> {t("trading.editStrategy")}
-                </button>
-                <button onClick={() => toggleStrategyStatus(selectedStrategy.id)}
-                  className={`flex-1 h-10 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                    selectedStrategy.status === "running" ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-neon-green/10 text-neon-green border border-neon-green/20"
-                  }`}>
-                  {selectedStrategy.status === "running" ? <><Pause size={14} /> {t("trading.pauseStrategy")}</> : <><Play size={14} /> {t("trading.resumeStrategy")}</>}
-                </button>
+              <div className="px-4 py-3 border-t border-border/30 flex flex-col gap-2 shrink-0">
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    const sid = parseInt(selectedStrategy.id);
+                    setEditingStrategyId(isNaN(sid) ? null : sid);
+                    setNewStrategy({
+                      name: selectedStrategy.name,
+                      pair: selectedStrategy.pair,
+                      amount: selectedStrategy.amount.replace("$", ""),
+                      signalSource: selectedStrategy.signalSource === "Manual" ? "" : selectedStrategy.signalSource,
+                      stopLoss: String(selectedStrategy.stopLoss),
+                      takeProfit: String(selectedStrategy.takeProfit),
+                      maxPosition: String(selectedStrategy.maxPosition),
+                      dailyLossLimit: String(selectedStrategy.dailyLossLimit),
+                      leverage: "3",
+                      riskLevel: selectedStrategy.riskLevel,
+                    });
+                    setModalType("createStrategy");
+                  }}
+                    className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
+                    <Settings size={14} /> {t("trading.editStrategy")}
+                  </button>
+                  <button onClick={() => toggleStrategyStatus(selectedStrategy.id)}
+                    className={`flex-1 h-10 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                      selectedStrategy.status === "running" ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-neon-green/10 text-neon-green border border-neon-green/20"
+                    }`}>
+                    {selectedStrategy.status === "running" ? <><Pause size={14} /> {t("trading.pauseStrategy")}</> : <><Play size={14} /> {t("trading.resumeStrategy")}</>}
+                  </button>
+                </div>
+                {!showDeleteConfirm ? (
+                  <button onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full h-9 rounded-xl bg-destructive/8 text-destructive border border-destructive/20 text-sm font-medium hover:bg-destructive/15 transition-colors flex items-center justify-center gap-2">
+                    <X size={14} /> {t("trading.deleteStrategy")}
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 h-9 rounded-xl bg-secondary text-muted-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">
+                      {t("trading.cancel")}
+                    </button>
+                    <button onClick={() => { deleteStrategyMutation.mutate({ id: parseInt(selectedStrategy.id) }); setShowDeleteConfirm(false); }}
+                      disabled={deleteStrategyMutation.isPending}
+                      className="flex-1 h-9 rounded-xl bg-destructive text-white text-sm font-medium hover:bg-destructive/90 transition-colors">
+                      {t("trading.confirmDelete")}
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -1549,10 +1598,10 @@ export default function Trading() {
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: "ROI", value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
-                    { label: "Win Rate", value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
-                    { label: "Followers", value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
-                    { label: "Sharpe", value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
+                    { label: t("trading.roi"), value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
+                    { label: t("trading.winRate"), value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
+                    { label: t("trading.followers"), value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
+                    { label: t("trading.sharpe"), value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
                   ].map((m) => (
                     <div key={m.label} className="text-center p-1.5 rounded-xl bg-secondary/30">
                       <p className="text-[9px] text-muted-foreground">{m.label}</p>
@@ -1563,7 +1612,7 @@ export default function Trading() {
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">8-Week Performance</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.weekPerf")}</h4>
                   <div className="h-[140px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={selectedTrader.profitHistory}>
@@ -1584,7 +1633,7 @@ export default function Trading() {
 
                 {/* Weekly Returns */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">Weekly Returns</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.weeklyReturns")}</h4>
                   <div className="flex gap-1 items-end h-[60px]">
                     {selectedTrader.weeklyReturns.map((ret, i) => (
                       <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
@@ -1600,13 +1649,13 @@ export default function Trading() {
                 {/* Details */}
                 <div className="space-y-2">
                   {[
-                    { label: "30d Trades", value: `${selectedTrader.trades30d}` },
-                    { label: "Max Drawdown", value: `${selectedTrader.maxDrawdown}%` },
-                    { label: "Avg Hold Time", value: selectedTrader.avgHoldTime },
-                    { label: "Avg Trade Size", value: selectedTrader.avgTradeSize },
-                    { label: "Consistency", value: `${selectedTrader.consistency}%` },
-                    { label: "Top Pairs", value: selectedTrader.topPairs.join(", ") },
-                    { label: "Risk Level", value: selectedTrader.riskLevel.charAt(0).toUpperCase() + selectedTrader.riskLevel.slice(1) },
+                    { label: t("trading.trades30d"), value: `${selectedTrader.trades30d}` },
+                    { label: t("trading.maxDrawdown"), value: `${selectedTrader.maxDrawdown}%` },
+                    { label: t("trading.avgHoldTime"), value: selectedTrader.avgHoldTime },
+                    { label: t("trading.avgTradeSize"), value: selectedTrader.avgTradeSize },
+                    { label: t("trading.consistency"), value: `${selectedTrader.consistency}%` },
+                    { label: t("trading.topPairs"), value: selectedTrader.topPairs.join(", ") },
+                    { label: t("trading.riskLevel"), value: selectedTrader.riskLevel === "low" ? t("trading.lowRisk") : selectedTrader.riskLevel === "medium" ? t("trading.medRisk") : t("trading.highRisk") },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between p-2 rounded-xl bg-secondary/20">
                       <span className="text-[11px] text-muted-foreground">{item.label}</span>
@@ -1622,11 +1671,11 @@ export default function Trading() {
                     selectedTrader.isFollowing ? "bg-secondary text-muted-foreground border border-border" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20"
                   }`}>
                   <Eye size={14} />
-                  {selectedTrader.isFollowing ? "Unfollow" : "Follow"}
+                  {selectedTrader.isFollowing ? t("trading.unfollow") : t("trading.follow")}
                 </button>
                 <button onClick={() => { setCopyTrader(selectedTrader); setModalType("copyConfig"); setSelectedTrader(null); }}
                   className="flex-1 h-10 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  <Copy size={14} /> Copy Trade
+                  <Copy size={14} /> {t("trading.copyTrade")}
                 </button>
               </div>
             </motion.div>
@@ -1643,8 +1692,8 @@ export default function Trading() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-t-3xl bg-card border-t border-border overflow-hidden max-h-[85vh] flex flex-col">
               <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between shrink-0">
-                <h3 className="font-bold font-display text-base">Create Strategy</h3>
-                <button onClick={() => setModalType("none")} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
+                <h3 className="font-bold font-display text-base">{editingStrategyId ? t("trading.editStrategy") : t("trading.createStrategy")}</h3>
+                <button onClick={() => { setModalType("none"); setEditingStrategyId(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {/* Name */}
