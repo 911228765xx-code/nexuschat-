@@ -267,3 +267,10 @@
 - [x] 后端：vizData 新增 priceHistory30d 字段（含 SMA7/SMA14 计算）
 - [x] 前端：可视化仪表盘嵌入 Recharts ComposedChart 迷你图（价格面积图 + SMA7/SMA14 虚线 + 图例 + Tooltip）
 - [x] 147 个测试全部通过，0 TS 错误，端点 401 认证正常
+
+## v47 我的策略接通后端
+
+- [x] 前端接入 trpc.copyTrading.myStrategies 查询，映射后端字段到前端 Strategy 接口，页面加载时自动同步
+- [x] handleCreateStrategy 调用 trpc.copyTrading.upsertStrategy mutation 写入数据库，按鈕显示加载状态
+- [x] toggleStrategyStatus 乐观更新本地状态 + 调用 trpc.copyTrading.toggleStrategy 持久化
+- [x] 147 个测试全部通过，0 TS 错误

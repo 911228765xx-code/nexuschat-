@@ -157,6 +157,64 @@ export default function Trading() {
   useEffect(() => {
     if (realTraders.length > 0) setTraders(realTraders);
   }, [realTraders]);
+
+  // ─── My Strategies (real backend) ─────────────────────────────────────────
+  const { data: backendStrategies, refetch: refetchStrategies } = trpc.copyTrading.myStrategies.useQuery(
+    undefined,
+    { staleTime: 30_000 }
+  );
+  const upsertStrategyMutation = trpc.copyTrading.upsertStrategy.useMutation({
+    onSuccess: () => {
+      refetchStrategies();
+      toast.success("Strategy saved!");
+      setModalType("none");
+      setNewStrategy({ name: "", pair: "BTC/USDT", amount: "100", signalSource: "", stopLoss: "5", takeProfit: "15", maxPosition: "500", dailyLossLimit: "50", leverage: "3", riskLevel: "low" });
+    },
+    onError: (err) => toast.error("Failed to save strategy: " + err.message),
+  });
+  const toggleStrategyMutation = trpc.copyTrading.toggleStrategy.useMutation({
+    onSuccess: (data, variables) => {
+      refetchStrategies();
+      const s = strategies.find(s => s.id === String(variables.id));
+      if (s) toast.success(data.isActive ? `${s.name} resumed` : `${s.name} paused`);
+    },
+    onError: (err) => toast.error("Failed to toggle: " + err.message),
+  });
+  const realStrategies: Strategy[] = useMemo(() => {
+    if (!backendStrategies || backendStrategies.length === 0) return [];
+    return backendStrategies.map(s => ({
+      id: String(s.id),
+      name: s.name,
+      signalSource: s.description ?? "Manual",
+      pair: s.pair ?? "BTC/USDT",
+      amount: s.maxPosition ? `$${s.maxPosition}` : "$100",
+      status: s.isActive ? "running" as const : "paused" as const,
+      totalProfit: parseFloat(s.totalReturn ?? "0"),
+      profitPercent: parseFloat(s.totalReturn ?? "0"),
+      trades: s.totalTrades ?? 0,
+      winRate: s.winRate ?? 0,
+      maxDrawdown: parseFloat(s.maxDrawdown ?? "0"),
+      createdAt: new Date(s.createdAt).toLocaleDateString(),
+      avgHoldTime: "N/A",
+      sharpeRatio: 0,
+      profitFactor: 0,
+      maxConsecutiveLoss: 0,
+      avgProfit: 0,
+      avgLoss: 0,
+      riskLevel: s.riskLevel as Strategy["riskLevel"],
+      stopLoss: parseFloat(s.stopLoss ?? "5"),
+      takeProfit: parseFloat(s.takeProfit ?? "15"),
+      maxPosition: parseFloat(s.maxPosition ?? "500"),
+      dailyLossLimit: 50,
+      notifications: { onTrade: true, onStopLoss: true, onTakeProfit: true, dailySummary: false },
+      profitHistory: [],
+      recentTrades: [],
+    }));
+  }, [backendStrategies]);
+  // Sync real strategies when loaded
+  useEffect(() => {
+    setStrategies(realStrategies);
+  }, [realStrategies]);
   const [marketSort, setMarketSort] = useState<MarketSort>("return");
   const [showFilters, setShowFilters] = useState(false);
   const [riskFilter, setRiskFilter] = useState<"all" | "low" | "medium" | "high">("all");
@@ -296,16 +354,19 @@ export default function Trading() {
   }, [traders, marketSort, riskFilter]);
 
   const toggleStrategyStatus = (id: string) => {
+    const numId = parseInt(id);
+    if (isNaN(numId)) return;
+    // Optimistic update
     setStrategies(prev => prev.map(s => {
       if (s.id !== id) return s;
-      const ns = s.status === "running" ? "paused" as const : "running" as const;
-      toast.success(ns === "running" ? `${s.name} resumed` : `${s.name} paused`);
-      return { ...s, status: ns };
+      return { ...s, status: s.status === "running" ? "paused" as const : "running" as const };
     }));
     setSelectedStrategy(prev => {
       if (!prev || prev.id !== id) return prev;
       return { ...prev, status: prev.status === "running" ? "paused" as const : "running" as const };
     });
+    // Persist to backend
+    toggleStrategyMutation.mutate({ id: numId });
   };
 
   const toggleFollowMutation = trpc.copyTrading.toggleFollow.useMutation({
@@ -362,13 +423,20 @@ export default function Trading() {
   };
 
   const handleCreateStrategy = () => {
-    if (!newStrategy.name || !newStrategy.signalSource) {
-      toast.error("Please fill in strategy name and signal source");
+    if (!newStrategy.name) {
+      toast.error("Please fill in strategy name");
       return;
     }
-    toast.success(`Strategy "${newStrategy.name}" created successfully!`);
-    setModalType("none");
-    setNewStrategy({ name: "", pair: "BTC/USDT", amount: "100", signalSource: "", stopLoss: "5", takeProfit: "15", maxPosition: "500", dailyLossLimit: "50", leverage: "3", riskLevel: "low" });
+    upsertStrategyMutation.mutate({
+      name: newStrategy.name,
+      description: newStrategy.signalSource || undefined,
+      type: "custom",
+      pair: newStrategy.pair,
+      riskLevel: newStrategy.riskLevel,
+      stopLoss: newStrategy.stopLoss,
+      takeProfit: newStrategy.takeProfit,
+      maxPosition: newStrategy.maxPosition,
+    });
   };
 
   const handleCopyTrade = () => {
@@ -1661,8 +1729,13 @@ export default function Trading() {
               </div>
               <div className="px-4 py-3 border-t border-border/30 shrink-0">
                 <button onClick={handleCreateStrategy}
-                  className="w-full h-11 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                  <Zap size={16} /> Create Strategy
+                  disabled={upsertStrategyMutation.isPending}
+                  className="w-full h-11 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {upsertStrategyMutation.isPending ? (
+                    <><span className="w-4 h-4 border-2 border-neon-green/40 border-t-neon-green rounded-full animate-spin" /> Saving...</>
+                  ) : (
+                    <><Zap size={16} /> Create Strategy</>
+                  )}
                 </button>
               </div>
             </motion.div>
