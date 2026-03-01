@@ -325,4 +325,71 @@ export const tradingRouter = router({
         trades: dailyMap[i + 1].trades,
       }));
     }),
+
+  // ─── Market Overview (global stats + Fear & Greed) ──────────────────────
+  getMarketOverview: publicProcedure.query(async () => {
+    // 1. CoinGecko global data: total market cap, BTC dominance, 24h change
+    const globalData = await cachedFetch<{
+      data: {
+        total_market_cap: Record<string, number>;
+        market_cap_change_percentage_24h_usd: number;
+        market_cap_percentage: Record<string, number>;
+      };
+    }>("global", `${COINGECKO_BASE}/global`, TTL.prices, (res) => res.json());
+
+    // 2. Alternative.me Fear & Greed Index
+    const fgData = await cachedFetch<{ data: { value: string; value_classification: string }[] }>(
+      "fear-greed",
+      "https://api.alternative.me/fng/?limit=1",
+      TTL.prices,
+      (res) => res.json(),
+    );
+
+    // 3. Get top coin prices to compute avg AI score proxy (avg 24h change)
+    const topIds = ["bitcoin", "ethereum", "solana", "binancecoin", "arbitrum", "chainlink", "avalanche-2", "polkadot"];
+    const pricesData = await cachedFetch<Record<string, { usd_24h_change: number }>>(
+      "overview-prices",
+      `${COINGECKO_BASE}/simple/price?ids=${topIds.join(",")}&vs_currencies=usd&include_24hr_change=true`,
+      TTL.prices,
+      (res) => res.json(),
+    );
+
+    const g = globalData?.data;
+    const totalMarketCap = g?.total_market_cap?.usd ?? 0;
+    const marketCapChange24h = g?.market_cap_change_percentage_24h_usd ?? 0;
+    const btcDominance = g?.market_cap_percentage?.btc ?? 0;
+
+    const fearGreedValue = fgData?.data?.[0] ? parseInt(fgData.data[0].value, 10) : 0;
+    const fearGreedLabel = fgData?.data?.[0]?.value_classification ?? "N/A";
+
+    // Count bullish tokens (positive 24h change)
+    let bullish = 0;
+    let total = 0;
+    const changes: number[] = [];
+    if (pricesData) {
+      for (const id of topIds) {
+        const coin = pricesData[id];
+        if (coin) {
+          total++;
+          if (coin.usd_24h_change > 0) bullish++;
+          changes.push(coin.usd_24h_change);
+        }
+      }
+    }
+    const avg24hChange = changes.length > 0 ? changes.reduce((a, b) => a + b, 0) / changes.length : 0;
+    // AI Score proxy: map fear & greed (0-100) to 1-10 scale
+    const aiScoreAvg = fearGreedValue > 0 ? Math.round(fearGreedValue / 10 * 10) / 10 : 0;
+
+    return {
+      totalMarketCap,
+      marketCapChange24h: Math.round(marketCapChange24h * 100) / 100,
+      btcDominance: Math.round(btcDominance * 10) / 10,
+      fearGreedValue,
+      fearGreedLabel,
+      bullish,
+      total,
+      avg24hChange: Math.round(avg24hChange * 100) / 100,
+      aiScoreAvg,
+    };
+  }),
 });

@@ -175,3 +175,9 @@
 - [x] A3: Settings LOGIN_DEVICES mock 数据替换为当前会话显示
 - [x] A4: 批量为 mutation 应用 rateLimitWrite（44 个 mutation 全部覆盖）
 - [x] A5: z.string() 输入添加 .max() 长度限制（所有 router 文件已补全）
+
+## v36 数据真实化
+
+- [x] TokenDetail 接入 CoinGecko 全部 5 个时间框架（1h/4h/1d/1w/1m）真实历史价格
+- [x] Research 市场概览卡片接入真实数据（CoinGecko Global API + Alternative.me Fear & Greed Index）
+- [x] Market Overview Bar 全部 6 个指标实时化：AI Score、Bullish/Total、Fear & Greed、BTC Dom、Mkt Cap、24h Avg

@@ -385,10 +385,24 @@ export default function Research() {
     }
   };
 
-  // Market overview stats
+  // Market overview stats from CoinGecko + Fear & Greed API
+  const { data: marketOverview } = trpc.trading.getMarketOverview.useQuery(undefined, {
+    staleTime: 120_000,
+    refetchInterval: 300_000,
+  });
   const marketStats = useMemo(() => {
-    return { avgScore: "—", bullish: 0, total: 0, avgFearGreed: 0 };
-  }, []);
+    if (!marketOverview) return { avgScore: "—", bullish: 0, total: 0, avgFearGreed: 0, btcDominance: 0, totalMarketCap: 0, avg24hChange: 0, fearGreedLabel: "" };
+    return {
+      avgScore: marketOverview.aiScoreAvg > 0 ? marketOverview.aiScoreAvg.toFixed(1) : "—",
+      bullish: marketOverview.bullish,
+      total: marketOverview.total,
+      avgFearGreed: marketOverview.fearGreedValue,
+      btcDominance: marketOverview.btcDominance,
+      totalMarketCap: marketOverview.totalMarketCap,
+      avg24hChange: marketOverview.avg24hChange,
+      fearGreedLabel: marketOverview.fearGreedLabel,
+    };
+  }, [marketOverview]);
 
   return (
     <div className="flex flex-col h-full">
@@ -605,8 +619,8 @@ export default function Research() {
           <div className="flex flex-col leading-none">
             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">{t("research.fearGreed")}</span>
             <span className={`text-[12px] font-mono font-bold leading-tight ${marketStats.avgFearGreed >= 60 ? "text-neon-green" : marketStats.avgFearGreed >= 40 ? "text-yellow-400" : "text-neon-red"}`}>
-              {marketStats.avgFearGreed}
-              <span className="text-[8px] ml-0.5 opacity-70">{marketStats.avgFearGreed >= 60 ? "Greed" : marketStats.avgFearGreed >= 40 ? "Neutral" : "Fear"}</span>
+              {marketStats.avgFearGreed || "—"}
+              <span className="text-[8px] ml-0.5 opacity-70">{marketStats.fearGreedLabel || ""}</span>
             </span>
           </div>
         </div>
@@ -616,7 +630,7 @@ export default function Research() {
           <CircleDot size={11} className="text-amber-400" />
           <div className="flex flex-col leading-none">
             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">BTC Dom</span>
-            <span className="text-[12px] font-mono font-bold text-amber-400 leading-tight">52.4<span className="text-[8px] text-amber-400/60">%</span></span>
+            <span className="text-[12px] font-mono font-bold text-amber-400 leading-tight">{marketStats.btcDominance || "—"}<span className="text-[8px] text-amber-400/60">%</span></span>
           </div>
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
@@ -625,7 +639,7 @@ export default function Research() {
           <Globe size={11} className="text-muted-foreground" />
           <div className="flex flex-col leading-none">
             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">Mkt Cap</span>
-            <span className="text-[12px] font-mono font-bold text-foreground leading-tight">$2.4<span className="text-[8px] text-muted-foreground">T</span></span>
+            <span className="text-[12px] font-mono font-bold text-foreground leading-tight">${marketStats.totalMarketCap > 0 ? (marketStats.totalMarketCap / 1e12).toFixed(2) : "—"}<span className="text-[8px] text-muted-foreground">T</span></span>
           </div>
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
@@ -634,7 +648,7 @@ export default function Research() {
           <ArrowUpRight size={11} className="text-neon-green" />
           <div className="flex flex-col leading-none">
             <span className="text-[8px] text-muted-foreground uppercase tracking-wider font-medium">24h Avg</span>
-            <span className="text-[12px] font-mono font-bold text-neon-green leading-tight">+3.2<span className="text-[8px] text-neon-green/60">%</span></span>
+            <span className={`text-[12px] font-mono font-bold leading-tight ${marketStats.avg24hChange >= 0 ? "text-neon-green" : "text-neon-red"}`}>{marketStats.avg24hChange >= 0 ? "+" : ""}{marketStats.avg24hChange || "—"}<span className={`text-[8px] ${marketStats.avg24hChange >= 0 ? "text-neon-green/60" : "text-neon-red/60"}`}>%</span></span>
           </div>
         </div>
         <div className="ml-auto shrink-0 flex items-center gap-1 text-[9px] text-muted-foreground/60 font-mono">

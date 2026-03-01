@@ -444,22 +444,39 @@ export default function TokenDetail() {
   );
   const livePriceData = livePrice?.[0];
 
-  // tRPC: real chart data (7 days)
-  const { data: chartData } = trpc.trading.getChart.useQuery(
-    { symbol: token, days: 7 },
-    { staleTime: 60_000 }
+  // tRPC: real chart data for all timeframes via CoinGecko
+  const timeframeDaysMap: Record<ChartTimeframe, number> = { "1h": 1, "4h": 1, "1d": 1, "1w": 7, "1m": 30 };
+  const chartDays = timeframeDaysMap[chartTimeframe];
+  const { data: chartData, isLoading: chartLoading } = trpc.trading.getChart.useQuery(
+    { symbol: token, days: chartDays },
+    { staleTime: 60_000, placeholderData: (prev: any) => prev }
   );
   const realChartPrices = (chartData?.prices ?? []) as unknown as [number, number][];
 
   const getPriceData = useCallback(() => {
-    if (!data) return [];
-    // Use real CoinGecko data for 1w timeframe when available
-    if (chartTimeframe === "1w" && realChartPrices.length > 0) {
-      return realChartPrices.map((item: [number, number]) => ({
-        time: new Date(item[0]).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    if (realChartPrices.length > 0) {
+      let points = realChartPrices;
+      // For 1h: take last ~12 points; 4h: take every 4th point; 1d: all hourly; 1w/1m: all daily
+      if (chartTimeframe === "1h") {
+        points = points.slice(-12);
+      } else if (chartTimeframe === "4h") {
+        // CoinGecko returns hourly for days<=1, take every 4th for 4h candles
+        const filtered: [number, number][] = [];
+        for (let i = 0; i < points.length; i += 4) filtered.push(points[i]);
+        points = filtered;
+      }
+      const fmt: Intl.DateTimeFormatOptions = chartTimeframe === "1m"
+        ? { month: "short", day: "numeric" }
+        : chartTimeframe === "1w"
+          ? { month: "short", day: "numeric" }
+          : { hour: "2-digit", minute: "2-digit" };
+      return points.map((item: [number, number]) => ({
+        time: new Date(item[0]).toLocaleDateString("en-US", fmt),
         price: item[1],
       }));
     }
+    // Fallback to static data if CoinGecko unavailable
+    if (!data) return [];
     switch (chartTimeframe) {
       case "1h": return data.priceHistory1h;
       case "4h": return data.priceHistory4h;
