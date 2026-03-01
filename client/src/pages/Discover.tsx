@@ -244,15 +244,17 @@ export default function Discover() {
   );
   const realUsers: TrendingUser[] = useMemo(() => {
     if (!leaderboardData || leaderboardData.length === 0) return [];
-    return leaderboardData.map((u) => ({
-      id: String(u.id),
-      name: u.displayName,
-      avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
-      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
-      followers: u.npPoints ?? 0,
-      isVerified: (u.npPoints ?? 0) >= 1000,
-    }));
-  }, [leaderboardData]);
+    return leaderboardData
+      .filter((u) => !currentUser || u.id !== currentUser.id) // Exclude self from users list
+      .map((u) => ({
+        id: String(u.id),
+        name: u.displayName,
+        avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
+        bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
+        followers: u.npPoints ?? 0,
+        isVerified: (u.npPoints ?? 0) >= 1000,
+      }));
+  }, [leaderboardData, currentUser]);
 
   // ─── tRPC: Follow/Unfollow ───
   const followMutation = trpc.follow.follow.useMutation({

@@ -208,3 +208,4 @@
   - 自己的帖子显示删除按钮，别人的帖子显示举报按钮
   - PostDetail.tsx 同样添加删除功能
   - 新增中英文 i18n 翻译
+- [x] 修复 Discover Users Tab "Cannot follow yourself" 错误（realUsers 列表过滤掉 currentUser.id）
