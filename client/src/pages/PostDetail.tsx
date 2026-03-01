@@ -10,7 +10,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Heart, MessageSquare, Repeat2, Share2, Bookmark,
   Star, MoreHorizontal, Send, AtSign, X, Quote, ChevronDown,
-  CheckCircle2, Copy, ExternalLink, BarChart3, TrendingUp, TrendingDown, Minus, FileText
+  CheckCircle2, Copy, ExternalLink, BarChart3, TrendingUp, TrendingDown, Minus, FileText, Trash2
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { motion, AnimatePresence } from "framer-motion";
@@ -309,6 +309,17 @@ export default function PostDetail() {
     toast("Comment posted! 💬");
   };
 
+  // ─── tRPC: Delete post mutation ───
+  const deletePostMutation = trpc.posts.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Post deleted");
+      setLocation("/app/discover");
+    },
+    onError: (err) => {
+      if (!err.message.includes("10001")) toast.error(err.message || "Failed to delete post");
+    },
+  });
+
   const repostMutation = trpc.posts.repost.useMutation({
     onSuccess: () => {
       setPost(p => ({ ...p, reposts: p.reposts + 1 }));
@@ -378,16 +389,28 @@ export default function PostDetail() {
               className="fixed top-14 right-4 z-50 w-48 rounded-2xl bg-card border border-border/40 shadow-2xl overflow-hidden py-1"
             >
               {[
-                { icon: Copy, label: "Copy link", action: () => { navigator.clipboard.writeText(window.location.href); toast.success("Link copied"); setShowMoreMenu(false); } },
-                { icon: ExternalLink, label: "Open in browser", action: () => { toast.info("Opening in browser..."); setShowMoreMenu(false); } },
-                { icon: X, label: "Not interested", action: () => { toast("Post hidden"); setShowMoreMenu(false); setLocation("/app/discover"); } },
+                { icon: Copy, label: "Copy link", action: () => { navigator.clipboard.writeText(window.location.href); toast.success("Link copied"); setShowMoreMenu(false); }, className: "" },
+                { icon: ExternalLink, label: "Open in browser", action: () => { toast.info("Opening in browser..."); setShowMoreMenu(false); }, className: "" },
+                { icon: X, label: "Not interested", action: () => { toast("Post hidden"); setShowMoreMenu(false); setLocation("/app/discover"); }, className: "" },
+                // Delete option (only for own posts)
+                ...(user && serverPost && serverPost.authorId === user.id ? [{
+                  icon: Trash2,
+                  label: "Delete post",
+                  action: () => {
+                    if (window.confirm("Are you sure you want to delete this post?")) {
+                      deletePostMutation.mutate({ postId: numericPostId });
+                    }
+                    setShowMoreMenu(false);
+                  },
+                  className: "text-red-400 hover:bg-red-500/10",
+                }] : []),
               ].map((item) => (
                 <button
                   key={item.label}
                   onClick={item.action}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/60 transition-colors text-left"
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/60 transition-colors text-left ${item.className}`}
                 >
-                  <item.icon size={15} className="text-muted-foreground" />
+                  <item.icon size={15} className={item.className.includes("red") ? "text-red-400" : "text-muted-foreground"} />
                   <span className="text-sm">{item.label}</span>
                 </button>
               ))}

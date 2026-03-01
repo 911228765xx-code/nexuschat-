@@ -199,3 +199,12 @@
 - [x] ChatRoom 轮询间隔从 3s 提升到 10s（Socket.IO 已处理实时消息）
 - [x] 添加 usePrefetchRoutes hook，空闲时预加载 5 个主 Tab 页面 chunk
 - [x] 每个 Route 独立 Suspense 边界，避免全局 loading spinner 闪烁
+
+## v39 Bug 修复
+
+- [x] 修复动态区（Discover）无法删帖的问题
+  - MomentPost 接口新增 authorId 字段，mapServerPost 映射 authorId
+  - MoreHorizontal 按钮改为下拉菜单（复制链接 / 删除帖子 / 举报）
+  - 自己的帖子显示删除按钮，别人的帖子显示举报按钮
+  - PostDetail.tsx 同样添加删除功能
+  - 新增中英文 i18n 翻译
