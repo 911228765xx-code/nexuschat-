@@ -17,7 +17,7 @@ import {
   ArrowUp, ArrowDown, Signal
 } from "lucide-react";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown as Streamdown } from "@/components/LazyStreamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -293,36 +293,75 @@ export default function Research() {
     },
     onError: (err) => toast.error("分享失败: " + err.message),
   });
-  // tRPC AI report generation
-  const generateReport = trpc.research.generate.useMutation({
-    onSuccess: (data) => {
-      setAiReportContent(data.reportContent);
-      setAiReportId(data.reportId ?? null);
-      setAiReportSentiment(data.sentiment ?? "neutral");
-      setAiReportRisk(data.riskLevel ?? "medium");
-      setAiReportPrice(data.tokenData?.price ?? null);
-      setAiReportMcap(data.tokenData?.marketCap ? String(data.tokenData.marketCap) : null);
-      setShowAiReport(true);
-      setIsSearching(false);
-      toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
-      refetchHistory();
-    },
-    onError: (err) => {
-      setIsSearching(false);
-      if (err.message.includes("10001") || err.message.includes("login")) {
-        toast.info("请登录后使用 AI 研究报告功能");
-      } else {
-        toast.error("AI 报告生成失败: " + err.message);
-      }
-    },
-  });
-
-  const handleSearch = useCallback(() => {
+  // SSE streaming research report
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
+    if (!isAuthenticated) {
+      toast.info("请登录后使用 AI 研究报告功能");
+      return;
+    }
+    const sym = searchQuery.trim().toUpperCase();
     setIsSearching(true);
-    setAiReportToken(searchQuery.trim().toUpperCase());
-    generateReport.mutate({ tokenSymbol: searchQuery.trim(), chain: "BSC" });
-  }, [searchQuery]);
+    setAiReportToken(sym);
+    setAiReportContent("");
+    setShowAiReport(true);
+    setAiReportSentiment("neutral");
+    setAiReportRisk("medium");
+    setAiReportPrice(null);
+    setAiReportMcap(null);
+    setAiReportId(null);
+
+    try {
+      const res = await fetch("/api/research/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tokenSymbol: sym, mode: "quick" }),
+      });
+      if (!res.ok || !res.body) {
+        if (res.status === 401) { toast.info("请登录后使用 AI 研究报告功能"); setShowAiReport(false); setIsSearching(false); return; }
+        if (res.status === 429) { toast.error("请求过于频繁，请稍后再试"); setShowAiReport(false); setIsSearching(false); return; }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            if (json.token) setAiReportContent(prev => (prev ?? "") + json.token);
+            if (json.done) {
+              setIsSearching(false);
+              if (json.vizData) {
+                if (json.vizData.sentiment) setAiReportSentiment(json.vizData.sentiment);
+                if (json.vizData.riskLevel) setAiReportRisk(json.vizData.riskLevel);
+              }
+              if (json.meta) {
+                if (json.meta.price) setAiReportPrice(String(json.meta.price));
+                if (json.meta.marketCap) setAiReportMcap(String(json.meta.marketCap));
+              }
+              refetchHistory();
+              toast.success(`AI 研究报告已生成: ${json.meta?.tokenName ?? sym}`);
+            }
+            if (json.error) { toast.error("报告生成失败: " + json.error); setIsSearching(false); }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err: any) {
+      toast.error("AI 报告生成失败: " + (err.message ?? "未知错误"));
+      setShowAiReport(false);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchQuery, isAuthenticated]);
 
   const toggleWatchlist = useCallback((id: string) => {
     setWatchlist(prev => {

@@ -481,26 +481,64 @@ export default function TokenDetail() {
     toast.success(`${t("research.alertSet")} ${token} @ $${alertPrice}`);
   }, [alertPrice, token, t]);
 
-  const handleSendChat = useCallback(() => {
+  const handleSendChat = useCallback(async () => {
     if (!chatInput.trim() || isAiTyping) return;
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`, role: "user", content: chatInput.trim(), timestamp: new Date(),
     };
+    const history = chatMessages.slice(-10).map(m => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content }));
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput("");
     setIsAiTyping(true);
 
-    setTimeout(() => {
-      const responses = aiChatResponses[token] || aiChatResponses.DEFAULT;
-      const idx = chatResponseIndex.current % responses.length;
-      chatResponseIndex.current++;
-      const aiMsg: ChatMessage = {
-        id: `a-${Date.now()}`, role: "ai", content: responses[idx], timestamp: new Date(),
-      };
-      setChatMessages(prev => [...prev, aiMsg]);
+    // Streaming AI chat via SSE
+    const aiMsgId = `a-${Date.now()}`;
+    const aiMsg: ChatMessage = { id: aiMsgId, role: "ai", content: "", timestamp: new Date() };
+    setChatMessages(prev => [...prev, aiMsg]);
+
+    try {
+      const res = await fetch("/api/token-chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token, message: userMsg.content, history }),
+      });
+      if (!res.ok || !res.body) throw new Error("Stream failed");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let firstToken = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            if (json.token) {
+              if (firstToken) { setIsAiTyping(false); firstToken = false; }
+              setChatMessages(prev => prev.map(m =>
+                m.id === aiMsgId ? { ...m, content: m.content + json.token } : m
+              ));
+            }
+            if (json.done || json.error) break;
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err: any) {
+      setChatMessages(prev => prev.map(m =>
+        m.id === aiMsgId ? { ...m, content: "AI 服务暂时不可用，请稍后重试。" } : m
+      ));
+    } finally {
       setIsAiTyping(false);
-    }, 1500 + Math.random() * 1500);
-  }, [chatInput, isAiTyping, token]);
+    }
+  }, [chatInput, isAiTyping, token, chatMessages]);
 
   // Merge real price into display values
   const displayPrice = livePriceData ? `$${livePriceData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : data?.price ?? "N/A";

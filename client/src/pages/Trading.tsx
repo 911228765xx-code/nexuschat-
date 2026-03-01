@@ -5,6 +5,7 @@
  */
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   TrendingUp, Plus, Play, Pause, Zap, ArrowUpRight, ArrowDownRight,
   Settings, AlertTriangle, X, Calendar, BarChart3,
@@ -99,6 +100,57 @@ export default function Trading() {
   const [activeTab, setActiveTab] = useState<MainTab>("strategies");
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
+
+  // ─── Backend strategies ──────────────────────────────────────────────────
+  const { isAuthenticated } = useAuth();
+  const { data: backendStrategies, refetch: refetchStrategies } = trpc.copyTrading.myStrategies.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000 }
+  );
+  const upsertStrategyMutation = trpc.copyTrading.upsertStrategy.useMutation({
+    onSuccess: () => { refetchStrategies(); toast.success("Strategy saved!"); },
+    onError: (err) => toast.error("Failed to save: " + err.message),
+  });
+  const toggleStrategyMutation = trpc.copyTrading.toggleStrategy.useMutation({
+    onSuccess: (data) => {
+      refetchStrategies();
+      toast.success(data.isActive ? "Strategy resumed" : "Strategy paused");
+    },
+    onError: (err) => toast.error("Failed to toggle: " + err.message),
+  });
+  const deleteStrategyMutation = trpc.copyTrading.deleteStrategy.useMutation({
+    onSuccess: () => { refetchStrategies(); toast.success("Strategy deleted"); },
+    onError: (err) => toast.error("Failed to delete: " + err.message),
+  });
+  // Sync backend strategies to local state
+  useEffect(() => {
+    if (backendStrategies && backendStrategies.length > 0) {
+      const mapped: Strategy[] = backendStrategies.map(s => ({
+        id: String(s.id),
+        name: s.name,
+        signalSource: s.description ?? "",
+        pair: s.pair ?? "BTC/USDT",
+        amount: s.maxPosition ?? "100",
+        status: s.isActive ? "running" as const : "paused" as const,
+        totalProfit: parseFloat(s.totalReturn ?? "0"),
+        profitPercent: parseFloat(s.totalReturn ?? "0"),
+        trades: s.totalTrades ?? 0,
+        winRate: s.winRate ?? 0,
+        maxDrawdown: parseFloat(s.maxDrawdown ?? "0"),
+        createdAt: new Date(s.createdAt).toLocaleDateString(),
+        avgHoldTime: "N/A", sharpeRatio: 0, profitFactor: 0,
+        maxConsecutiveLoss: 0, avgProfit: 0, avgLoss: 0,
+        riskLevel: (s.riskLevel ?? "low") as "low" | "medium" | "high",
+        stopLoss: parseFloat(s.stopLoss ?? "5"),
+        takeProfit: parseFloat(s.takeProfit ?? "15"),
+        maxPosition: parseFloat(s.maxPosition ?? "500"),
+        dailyLossLimit: 50,
+        notifications: { onTrade: true, onStopLoss: true, onTakeProfit: true, dailySummary: false },
+        profitHistory: [], recentTrades: [],
+      }));
+      setStrategies(mapped);
+    }
+  }, [backendStrategies]);
 
   const [detailTab, setDetailTab] = useState<DetailTab>("chart");
 
@@ -296,10 +348,14 @@ export default function Trading() {
   }, [traders, marketSort, riskFilter]);
 
   const toggleStrategyStatus = (id: string) => {
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      toggleStrategyMutation.mutate({ id: numId });
+    }
+    // Optimistic update
     setStrategies(prev => prev.map(s => {
       if (s.id !== id) return s;
       const ns = s.status === "running" ? "paused" as const : "running" as const;
-      toast.success(ns === "running" ? `${s.name} resumed` : `${s.name} paused`);
       return { ...s, status: ns };
     }));
     setSelectedStrategy(prev => {
@@ -362,13 +418,35 @@ export default function Trading() {
   };
 
   const handleCreateStrategy = () => {
-    if (!newStrategy.name || !newStrategy.signalSource) {
-      toast.error("Please fill in strategy name and signal source");
+    if (!newStrategy.name) {
+      toast.error("Please fill in strategy name");
       return;
     }
-    toast.success(`Strategy "${newStrategy.name}" created successfully!`);
-    setModalType("none");
-    setNewStrategy({ name: "", pair: "BTC/USDT", amount: "100", signalSource: "", stopLoss: "5", takeProfit: "15", maxPosition: "500", dailyLossLimit: "50", leverage: "3", riskLevel: "low" });
+    upsertStrategyMutation.mutate({
+      name: newStrategy.name,
+      description: newStrategy.signalSource,
+      pair: newStrategy.pair,
+      riskLevel: newStrategy.riskLevel,
+      stopLoss: newStrategy.stopLoss,
+      takeProfit: newStrategy.takeProfit,
+      maxPosition: newStrategy.maxPosition,
+    }, {
+      onSuccess: () => {
+        setModalType("none");
+        setNewStrategy({ name: "", pair: "BTC/USDT", amount: "100", signalSource: "", stopLoss: "5", takeProfit: "15", maxPosition: "500", dailyLossLimit: "50", leverage: "3", riskLevel: "low" });
+      },
+    });
+  };
+
+  const handleDeleteStrategy = (id: string) => {
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      deleteStrategyMutation.mutate({ id: numId });
+      if (selectedStrategy?.id === id) setSelectedStrategy(null);
+    } else {
+      setStrategies(prev => prev.filter(s => s.id !== id));
+      if (selectedStrategy?.id === id) setSelectedStrategy(null);
+    }
   };
 
   const handleCopyTrade = () => {
@@ -536,6 +614,13 @@ export default function Trading() {
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
                         >
                           {strategy.status === "running" ? <Pause size={12} className="text-muted-foreground" /> : <Play size={12} className="text-neon-green" />}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete strategy "${strategy.name}"?`)) handleDeleteStrategy(strategy.id); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neon-red/20 transition-colors"
+                          title="Delete strategy"
+                        >
+                          <X size={12} className="text-neon-red/60 hover:text-neon-red" />
                         </button>
                       </div>
                     </div>

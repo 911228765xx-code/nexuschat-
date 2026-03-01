@@ -197,6 +197,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Disable automatic modulepreload injection to prevent mobile white screen
+    // (10MB+ JS preloaded on first visit caused blank page on mobile)
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id: string) {

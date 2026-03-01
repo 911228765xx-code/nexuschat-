@@ -12,7 +12,7 @@ import {
   Star, MoreHorizontal, Send, AtSign, X, Quote, ChevronDown,
   CheckCircle2, Copy, ExternalLink, BarChart3, TrendingUp, TrendingDown, Minus, FileText
 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown as Streamdown } from "@/components/LazyStreamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";

@@ -234,4 +234,21 @@ export const copyTradingRouter = router({
         .where(eq(tradingStrategies.id, input.id));
       return { success: true, isActive: !existing[0].isActive };
     }),
+  // ─── Delete strategy ─────────────────────────────────────────────────────
+  deleteStrategy: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db
+        .delete(tradingStrategies)
+        .where(
+          and(
+            eq(tradingStrategies.id, input.id),
+            eq(tradingStrategies.userId, ctx.user.id)
+          )
+        );
+      return { success: true };
+    }),
 });
