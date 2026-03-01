@@ -189,3 +189,13 @@
 - [x] 服务端 console.log 全部替换为 pino 结构化日志（db.ts、index.ts、priceAlertChecker.ts、socket.ts、coinGeckoCache.ts）
 - [x] 新增 server/utils/logger.ts（pino 配置，JSON 格式 + ISO 时间戳）
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v38 页面切换流畅度优化
+
+- [x] 诊断页面切换卡顿原因（Link+button嵌套/AppContext定时器/QueryClient缓存/代码分割）
+- [x] 修复 Link+button 嵌套为 Link+div，消除点击事件拦截
+- [x] 移除 AppContext 中模拟在线状态的 setInterval 定时器（减少全局 re-render）
+- [x] QueryClient 添加全局 staleTime(60s) + gcTime(5min)，减少页面切换时重复请求
+- [x] ChatRoom 轮询间隔从 3s 提升到 10s（Socket.IO 已处理实时消息）
+- [x] 添加 usePrefetchRoutes hook，空闲时预加载 5 个主 Tab 页面 chunk
+- [x] 每个 Route 独立 Suspense 边界，避免全局 loading spinner 闪烁

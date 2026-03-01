@@ -63,7 +63,7 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
 
               return (
                 <Link key={tab.path} href={tab.path}>
-                  <button className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors">
+                  <div className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors cursor-pointer">
                     {isActive && (
                       <motion.div
                         layoutId="tab-indicator"
@@ -106,7 +106,7 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
                     >
                       {t(tab.labelKey)}
                     </span>
-                  </button>
+                  </div>
                 </Link>
               );
             })}
