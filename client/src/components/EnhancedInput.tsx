@@ -12,6 +12,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 
 // ── Token price data (mock) ──
+// Static reference data for inline $TOKEN mentions in chat messages
+// These are display-only references; live prices are shown in the Trading page
 const TOKEN_PRICES: Record<string, { price: string; change: string; trend: "up" | "down" | "flat" }> = {
   BTC: { price: "$67,432.10", change: "+1.8%", trend: "up" },
   ETH: { price: "$3,521.40", change: "+2.3%", trend: "up" },

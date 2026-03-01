@@ -152,3 +152,14 @@
 - [x] Repost 前端接入：PostDetail.tsx + Discover.tsx 的 Repost/Quote 按钮调用后端 API
 - [x] HTML lang 属性优化：I18nContext 初始化和切换时同步 document.documentElement.lang
 - [x] 110 个测试全部通过，TypeScript 0 错误
+
+## v33 P1 上线前优化（第二轮）
+
+- [x] InviteFriends 邀请系统后端化（referrals 表 + 邀请码生成 + 邀请记录查询 + 前端接入）
+- [x] Leaderboard invites/profit Tab 后端化（移除 INVITE_DATA/PROFIT_DATA 静态数组）
+- [x] TaskCenter 任务进度后端化（前端 mock progress 替换为后端真实进度）
+- [x] Notifications 移除 local mock fallback（纯后端通知数据）
+- [x] EnhancedInput 代币价格注释说明（内联代币提及功能，非实时价格展示）
+- [x] Trading priceTicker 静态 fallback 清理（替换为 0 默认值 + CoinGecko 实时加载）
+- [x] 添加 PWA manifest.json
+- [x] 图片 lazy loading（ChatRoom + Wallet NFT）

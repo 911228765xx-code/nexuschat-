@@ -435,3 +435,25 @@ export const userApiKeys = mysqlTable(
 
 export type UserApiKey = typeof userApiKeys.$inferSelect;
 export type InsertUserApiKey = typeof userApiKeys.$inferInsert;
+
+// ─── Referrals (invite system) ───────────────────────────────────────────
+export const referrals = mysqlTable(
+  "referrals",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    referrerId: int("referrerId").notNull(),       // the user who invited
+    inviteeId: int("inviteeId").notNull(),          // the user who was invited
+    status: mysqlEnum("status", ["pending", "active"]).default("pending").notNull(),
+    referrerReward: int("referrerReward").default(0).notNull(), // NP rewarded to referrer
+    inviteeReward: int("inviteeReward").default(0).notNull(),   // NP rewarded to invitee
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    activatedAt: timestamp("activatedAt"),
+  },
+  (t) => [
+    index("idx_referrals_referrer").on(t.referrerId),
+    index("idx_referrals_invitee").on(t.inviteeId),
+  ]
+);
+
+export type Referral = typeof referrals.$inferSelect;
+export type InsertReferral = typeof referrals.$inferInsert;

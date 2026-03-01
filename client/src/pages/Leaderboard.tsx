@@ -25,45 +25,6 @@ interface LeaderboardEntry {
   badge?: string;
 }
 
-const POINTS_DATA: LeaderboardEntry[] = [
-  { rank: 1, name: "whale.eth", avatar: "🐋", value: "128,450 NP", valueNum: 128450, change: "+2,340", badge: "🏆" },
-  { rank: 2, name: "defi_king.eth", avatar: "👑", value: "96,200 NP", valueNum: 96200, change: "+1,890", badge: "🥈" },
-  { rank: 3, name: "alpha_hunter", avatar: "🦅", value: "87,650 NP", valueNum: 87650, change: "+1,560", badge: "🥉" },
-  { rank: 4, name: "nft_wizard.eth", avatar: "🧙", value: "72,300 NP", valueNum: 72300, change: "+980" },
-  { rank: 5, name: "dao_master", avatar: "🏛️", value: "65,800 NP", valueNum: 65800, change: "+870" },
-  { rank: 6, name: "yield_farmer", avatar: "🌾", value: "58,420 NP", valueNum: 58420, change: "+720" },
-  { rank: 7, name: "chain_surfer", avatar: "🏄", value: "51,200 NP", valueNum: 51200, change: "+650" },
-  { rank: 8, name: "crypto_punk", avatar: "👾", value: "45,600 NP", valueNum: 45600, change: "+540" },
-  { rank: 9, name: "sol_maxi.sol", avatar: "☀️", value: "38,900 NP", valueNum: 38900, change: "+430" },
-  { rank: 10, name: "eth_bull.eth", avatar: "🐂", value: "32,100 NP", valueNum: 32100, change: "+380" },
-];
-
-const INVITE_DATA: LeaderboardEntry[] = [
-  { rank: 1, name: "community_lead", avatar: "🌟", value: "342", valueNum: 342, change: "+28", badge: "🏆" },
-  { rank: 2, name: "kol_master.eth", avatar: "📢", value: "256", valueNum: 256, change: "+19", badge: "🥈" },
-  { rank: 3, name: "growth_hacker", avatar: "🚀", value: "198", valueNum: 198, change: "+15", badge: "🥉" },
-  { rank: 4, name: "web3_evangelist", avatar: "🔥", value: "167", valueNum: 167, change: "+12" },
-  { rank: 5, name: "dao_builder.eth", avatar: "🏗️", value: "134", valueNum: 134, change: "+9" },
-  { rank: 6, name: "alpha_caller", avatar: "📡", value: "112", valueNum: 112, change: "+8" },
-  { rank: 7, name: "nft_collector", avatar: "🎨", value: "98", valueNum: 98, change: "+6" },
-  { rank: 8, name: "defi_degen", avatar: "🎰", value: "85", valueNum: 85, change: "+5" },
-  { rank: 9, name: "whale_alert", avatar: "🐳", value: "72", valueNum: 72, change: "+4" },
-  { rank: 10, name: "moon_boy", avatar: "🌙", value: "61", valueNum: 61, change: "+3" },
-];
-
-const PROFIT_DATA: LeaderboardEntry[] = [
-  { rank: 1, name: "trade_god.eth", avatar: "⚡", value: "+$48,230", valueNum: 48230, change: "+12.4%", badge: "🏆" },
-  { rank: 2, name: "quant_whale", avatar: "🤖", value: "+$35,670", valueNum: 35670, change: "+9.8%", badge: "🥈" },
-  { rank: 3, name: "signal_master", avatar: "📊", value: "+$28,900", valueNum: 28900, change: "+8.2%", badge: "🥉" },
-  { rank: 4, name: "degen_trader", avatar: "🎯", value: "+$22,450", valueNum: 22450, change: "+7.1%" },
-  { rank: 5, name: "arb_hunter.eth", avatar: "🏹", value: "+$18,300", valueNum: 18300, change: "+6.3%" },
-  { rank: 6, name: "swing_king", avatar: "👑", value: "+$14,800", valueNum: 14800, change: "+5.5%" },
-  { rank: 7, name: "copy_pro", avatar: "📋", value: "+$11,200", valueNum: 11200, change: "+4.8%" },
-  { rank: 8, name: "bot_runner", avatar: "🤖", value: "+$8,900", valueNum: 8900, change: "+3.9%" },
-  { rank: 9, name: "mev_searcher", avatar: "🔍", value: "+$6,400", valueNum: 6400, change: "+3.2%" },
-  { rank: 10, name: "yield_max", avatar: "💰", value: "+$4,800", valueNum: 4800, change: "+2.7%" },
-];
-
 const TABS = [
   { key: "points", icon: Sparkles, color: "neon-purple" },
   { key: "invites", icon: Users, color: "neon-green" },
@@ -87,45 +48,66 @@ export default function Leaderboard() {
   const { data: myRankData } = trpc.user.myRank.useQuery(undefined, {
     retry: false,
   });
+  const { data: inviteLbData, isLoading: inviteLbLoading } = trpc.user.inviteLeaderboard.useQuery(
+    { limit: 50 },
+    { staleTime: 60_000, enabled: activeTab === "invites" }
+  );
+  const { data: profitLbData, isLoading: profitLbLoading } = trpc.user.profitLeaderboard.useQuery(
+    { limit: 50 },
+    { staleTime: 60_000, enabled: activeTab === "profit" }
+  );
+
+  const isLoading = activeTab === "points" ? lbLoading : activeTab === "invites" ? inviteLbLoading : profitLbLoading;
 
   const data = useMemo(() => {
-    if (activeTab === "points" && lbData && lbData.length > 0) {
-      const list: LeaderboardEntry[] = lbData.map((u) => ({
+    const myEntry: LeaderboardEntry = {
+      rank: myRankData?.rank ?? 9999,
+      name: profile.displayName,
+      avatar: profile.avatar,
+      value: `${(myRankData?.npPoints ?? 0).toLocaleString()} NP`,
+      valueNum: myRankData?.npPoints ?? 0,
+      change: "+0",
+      isMe: true,
+    };
+
+    if (activeTab === "points") {
+      const list: LeaderboardEntry[] = (lbData ?? []).map((u) => ({
         rank: u.rank,
         name: u.displayName,
-        avatar: u.avatar ?? "👤",
+        avatar: u.avatar ?? "\ud83d\udc64",
         value: `${(u.npPoints ?? 0).toLocaleString()} NP`,
         valueNum: u.npPoints ?? 0,
         change: "+0",
-        badge: u.rank === 1 ? "🏆" : u.rank === 2 ? "🥈" : u.rank === 3 ? "🥉" : undefined,
+        badge: u.rank === 1 ? "\ud83c\udfc6" : u.rank === 2 ? "\ud83e\udd48" : u.rank === 3 ? "\ud83e\udd49" : undefined,
       }));
-      const myEntry: LeaderboardEntry = {
-        rank: myRankData?.rank ?? 9999,
-        name: profile.displayName,
-        avatar: profile.avatar,
-        value: `${(myRankData?.npPoints ?? 0).toLocaleString()} NP`,
-        valueNum: myRankData?.npPoints ?? 0,
-        change: "+0",
-        isMe: true,
-      };
       return { list, me: myEntry };
     }
 
-    // Fallback to mock data for invites/profit tabs
-    const base = activeTab === "points" ? POINTS_DATA
-      : activeTab === "invites" ? INVITE_DATA
-      : PROFIT_DATA;
-    const myEntry: LeaderboardEntry = {
-      rank: activeTab === "points" ? 1247 : activeTab === "invites" ? 892 : 456,
-      name: profile.displayName,
-      avatar: profile.avatar,
-      value: activeTab === "points" ? "24,680 NP" : activeTab === "invites" ? "47" : "+$342.80",
-      valueNum: activeTab === "points" ? 24680 : activeTab === "invites" ? 47 : 342,
-      change: activeTab === "points" ? "+180" : activeTab === "invites" ? "+2" : "+1.2%",
-      isMe: true,
-    };
-    return { list: base, me: myEntry };
-  }, [activeTab, profile, lbData, myRankData]);
+    if (activeTab === "invites") {
+      const list: LeaderboardEntry[] = (inviteLbData ?? []).map((u) => ({
+        rank: u.rank,
+        name: u.displayName,
+        avatar: u.avatar ?? "\ud83d\udc64",
+        value: String(u.inviteCount),
+        valueNum: u.inviteCount,
+        change: "+0",
+        badge: u.rank === 1 ? "\ud83c\udfc6" : u.rank === 2 ? "\ud83e\udd48" : u.rank === 3 ? "\ud83e\udd49" : undefined,
+      }));
+      return { list, me: { ...myEntry, value: "0", valueNum: 0 } };
+    }
+
+    // profit tab
+    const list: LeaderboardEntry[] = (profitLbData ?? []).map((u) => ({
+      rank: u.rank,
+      name: u.displayName,
+      avatar: u.avatar ?? "\ud83d\udc64",
+      value: `${u.tradeCount} trades`,
+      valueNum: u.tradeCount,
+      change: "+0",
+      badge: u.rank === 1 ? "\ud83c\udfc6" : u.rank === 2 ? "\ud83e\udd48" : u.rank === 3 ? "\ud83e\udd49" : undefined,
+    }));
+    return { list, me: { ...myEntry, value: "0 trades", valueNum: 0 } };
+  }, [activeTab, profile, lbData, myRankData, inviteLbData, profitLbData]);
 
   const getTabColor = () => {
     return activeTab === "points" ? "neon-purple" : activeTab === "invites" ? "neon-green" : "neon-cyan";
@@ -186,6 +168,18 @@ export default function Leaderboard() {
           ))}
         </div>
 
+        {/* Loading / Empty state */}
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 size={28} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : data.list.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Trophy size={32} className="text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">{t("leaderboard.empty") || "No data yet"}</p>
+          </div>
+        ) : (
+        <>
         {/* Top 3 Podium — correct order: 2nd (left), 1st (center, tallest), 3rd (right) */}
         <div className="px-4 mb-4">
           <div className="flex items-end justify-center gap-3">
@@ -287,6 +281,8 @@ export default function Leaderboard() {
             </motion.div>
           ))}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

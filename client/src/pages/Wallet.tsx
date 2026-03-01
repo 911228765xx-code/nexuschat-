@@ -647,7 +647,7 @@ export default function Wallet() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedNFT(null)}>
           <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="relative aspect-square">
-              <img src={selectedNFT.image} alt={selectedNFT.name} className="w-full h-full object-cover" />
+              <img src={selectedNFT.image} alt={selectedNFT.name} loading="lazy" className="w-full h-full object-cover" />
               {selectedNFT.rarity && (
                 <span className={`absolute top-3 right-3 text-xs font-bold px-2 py-1 rounded-lg backdrop-blur-sm ${
                   selectedNFT.rarity === "Legendary" ? "bg-yellow-500/80 text-black" :

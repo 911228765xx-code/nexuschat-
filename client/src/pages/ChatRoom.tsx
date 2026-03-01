@@ -605,7 +605,7 @@ export default function ChatRoom() {
                       )}
                       {msg.imageUrl && (
                         <div className="mb-2 rounded-lg overflow-hidden">
-                          <img src={msg.imageUrl} alt="shared" className="max-w-[240px] max-h-[200px] object-cover rounded-lg" />
+                          <img src={msg.imageUrl} alt="shared" loading="lazy" className="max-w-[240px] max-h-[200px] object-cover rounded-lg" />
                         </div>
                       )}
                       {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}

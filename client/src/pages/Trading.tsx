@@ -60,13 +60,14 @@ interface PnlDay {
 }
 
 /* ─── Demo Data (no backend yet for traders/strategies) ─── */
-const priceTicker = [
-  { symbol: "BTC", price: 97245, change: 1.8 },
-  { symbol: "ETH", price: 3842.5, change: 2.4 },
-  { symbol: "SOL", price: 187.3, change: -1.2 },
-  { symbol: "ARB", price: 1.85, change: 4.5 },
-  { symbol: "LINK", price: 22.45, change: 3.1 },
-  { symbol: "AVAX", price: 42.8, change: -0.8 },
+// Default ticker structure (prices loaded from CoinGecko API)
+const defaultTicker = [
+  { symbol: "BTC", price: 0, change: 0 },
+  { symbol: "ETH", price: 0, change: 0 },
+  { symbol: "SOL", price: 0, change: 0 },
+  { symbol: "ARB", price: 0, change: 0 },
+  { symbol: "LINK", price: 0, change: 0 },
+  { symbol: "AVAX", price: 0, change: 0 },
 ];
 
 
@@ -102,9 +103,9 @@ export default function Trading() {
     { refetchInterval: 30_000, staleTime: 25_000 }
   );
 
-  // Merge live prices into priceTicker (fallback to mock if API unavailable)
+  // Use live prices, fallback to zeros while loading
   const displayTicker = useMemo(() => {
-    if (!livePrices || livePrices.every(p => p.price === 0)) return priceTicker;
+    if (!livePrices || livePrices.every(p => p.price === 0)) return defaultTicker;
     return livePrices.map(p => ({
       symbol: p.symbol,
       price: p.price,

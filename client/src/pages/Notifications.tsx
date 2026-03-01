@@ -83,8 +83,8 @@ export default function Notifications() {
     });
   }, [serverData]);
 
-  // Merge: server notifications first, then local mock (for demo)
-  const notifications = serverNotifications.length > 0 ? serverNotifications : localNotifications;
+  // Use only server notifications (no mock fallback)
+  const notifications = serverNotifications;
 
   const filtered = useMemo(() =>
     activeFilter === "all"
@@ -333,12 +333,8 @@ export default function Notifications() {
                   {/* Show action result */}
                   {notification.type === "friend_request" && notification.actionTaken && (
                     <div className="mt-2">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        notification.actionTaken === "accepted"
-                          ? "bg-neon-green/10 text-neon-green border border-neon-green/20"
-                          : "bg-secondary/40 text-muted-foreground border border-border/20"
-                      }`}>
-                        {notification.actionTaken === "accepted" ? t("notifications.accepted") : t("notifications.declined")}
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">
+                        {t("notifications.accepted")}
                       </span>
                     </div>
                   )}

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
@@ -273,6 +273,84 @@ export const userRouter = router({
         avatar: u.avatar,
         bio: u.bio,
       }));
+    }),
+
+  // ─── Invite leaderboard (by referral count) ────────────────────────────
+  inviteLeaderboard: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).default(50) }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const limit = input?.limit ?? 50;
+      const rows = await db
+        .select({
+          referrerId: referrals.referrerId,
+          cnt: count(),
+        })
+        .from(referrals)
+        .where(eq(referrals.status, "active"))
+        .groupBy(referrals.referrerId)
+        .orderBy(desc(count()))
+        .limit(limit);
+
+      if (rows.length === 0) return [];
+
+      // Fetch user info for these referrers
+      const userIds = rows.map(r => r.referrerId);
+      const userRows = await db
+        .select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar })
+        .from(users)
+        .where(sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
+
+      const userMap = new Map(userRows.map(u => [u.id, u]));
+      return rows.map((r, idx) => {
+        const u = userMap.get(r.referrerId);
+        return {
+          rank: idx + 1,
+          displayName: u?.name ?? u?.username ?? `User #${r.referrerId}`,
+          avatar: u?.avatar ?? "👤",
+          inviteCount: r.cnt,
+        };
+      });
+    }),
+
+  // ─── Profit leaderboard (by closed position count as proxy) ────────────
+  profitLeaderboard: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).default(50) }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const limit = input?.limit ?? 50;
+      // Count closed positions per user as a proxy for trading activity
+      const rows = await db
+        .select({
+          userId: tradingPositions.userId,
+          tradeCount: count(),
+        })
+        .from(tradingPositions)
+        .where(eq(tradingPositions.status, "closed"))
+        .groupBy(tradingPositions.userId)
+        .orderBy(desc(count()))
+        .limit(limit);
+
+      if (rows.length === 0) return [];
+
+      const userIds = rows.map(r => r.userId);
+      const userRows = await db
+        .select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar })
+        .from(users)
+        .where(sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
+
+      const userMap = new Map(userRows.map(u => [u.id, u]));
+      return rows.map((r, idx) => {
+        const u = userMap.get(r.userId);
+        return {
+          rank: idx + 1,
+          displayName: u?.name ?? u?.username ?? `User #${r.userId}`,
+          avatar: u?.avatar ?? "👤",
+          tradeCount: r.tradeCount,
+        };
+      });
     }),
 
   getUserStats: protectedProcedure.query(async ({ ctx }) => {

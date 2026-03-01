@@ -42,6 +42,7 @@ export default function TaskCenter() {
     retry: false,
     staleTime: 30_000,
   });
+  const { data: myRank } = trpc.user.myRank.useQuery(undefined, { retry: false });
 
   const completeTask = trpc.user.completeTask.useMutation({
     onSuccess: (result, variables) => {
@@ -76,53 +77,40 @@ export default function TaskCenter() {
     return map;
   }, [taskStatus]);
 
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: "d1", title: t("tasks.sendMessage"), desc: t("tasks.sendMessageDesc"),
-      reward: 10, icon: <MessageCircle size={16} className="text-neon-cyan" />,
-      progress: 3, total: 5, completed: false, claimed: false, category: "daily"
-    },
-    {
-      id: "d2", title: t("tasks.likePosts"), desc: t("tasks.likePostsDesc"),
-      reward: 10, icon: <Heart size={16} className="text-neon-red" />,
-      progress: 3, total: 3, completed: true, claimed: false, category: "daily"
-    },
-    {
-      id: "d3", title: t("tasks.shareResearch"), desc: t("tasks.shareResearchDesc"),
-      reward: 20, icon: <Share2 size={16} className="text-neon-purple" />,
-      progress: 0, total: 1, completed: false, claimed: false, category: "daily"
-    },
-    {
-      id: "d4", title: t("tasks.joinGroup"), desc: t("tasks.joinGroupDesc"),
-      reward: 15, icon: <Users size={16} className="text-neon-green" />,
-      progress: 1, total: 1, completed: true, claimed: true, category: "daily"
-    },
-    {
-      id: "g1", title: t("tasks.completeProfile"), desc: t("tasks.completeProfileDesc"),
-      reward: 100, icon: <Star size={16} className="text-amber-400" />,
-      progress: 4, total: 5, completed: false, claimed: false, category: "growth"
-    },
-    {
-      id: "g2", title: t("tasks.bindENS"), desc: t("tasks.bindENSDesc"),
-      reward: 200, icon: <Shield size={16} className="text-neon-cyan" />,
-      progress: 1, total: 1, completed: true, claimed: true, category: "growth"
-    },
-    {
-      id: "g3", title: t("tasks.connectWallet"), desc: t("tasks.connectWalletDesc"),
-      reward: 150, icon: <Wallet size={16} className="text-neon-green" />,
-      progress: 1, total: 1, completed: true, claimed: false, category: "growth"
-    },
-    {
-      id: "g4", title: t("tasks.firstTrade"), desc: t("tasks.firstTradeDesc"),
-      reward: 300, icon: <TrendingUp size={16} className="text-neon-purple" />,
-      progress: 0, total: 1, completed: false, claimed: false, category: "growth"
-    },
-    {
-      id: "g5", title: t("tasks.inviteFriends"), desc: t("tasks.inviteFriendsDesc"),
-      reward: 500, icon: <Gift size={16} className="text-neon-red" />,
-      progress: 5, total: 10, completed: false, claimed: false, category: "growth"
-    },
-  ]);
+  // Task definitions with backend-driven progress
+  const TASK_TYPE_MAP: Record<string, string> = {
+    "d1": "first_message",
+    "d3": "first_research",
+    "g1": "complete_profile",
+    "g3": "connect_wallet",
+    "g5": "invite_friend",
+  };
+
+  const taskDefinitions: Omit<Task, "progress" | "completed" | "claimed">[] = [
+    { id: "d1", title: t("tasks.sendMessage"), desc: t("tasks.sendMessageDesc"), reward: 50, icon: <MessageCircle size={16} className="text-neon-cyan" />, total: 1, category: "daily" },
+    { id: "d2", title: t("tasks.likePosts"), desc: t("tasks.likePostsDesc"), reward: 10, icon: <Heart size={16} className="text-neon-red" />, total: 1, category: "daily" },
+    { id: "d3", title: t("tasks.shareResearch"), desc: t("tasks.shareResearchDesc"), reward: 200, icon: <Share2 size={16} className="text-neon-purple" />, total: 1, category: "daily" },
+    { id: "d4", title: t("tasks.joinGroup"), desc: t("tasks.joinGroupDesc"), reward: 15, icon: <Users size={16} className="text-neon-green" />, total: 1, category: "daily" },
+    { id: "g1", title: t("tasks.completeProfile"), desc: t("tasks.completeProfileDesc"), reward: 100, icon: <Star size={16} className="text-amber-400" />, total: 1, category: "growth" },
+    { id: "g3", title: t("tasks.connectWallet"), desc: t("tasks.connectWalletDesc"), reward: 50, icon: <Wallet size={16} className="text-neon-green" />, total: 1, category: "growth" },
+    { id: "g4", title: t("tasks.firstTrade"), desc: t("tasks.firstTradeDesc"), reward: 100, icon: <TrendingUp size={16} className="text-neon-purple" />, total: 1, category: "growth" },
+    { id: "g5", title: t("tasks.inviteFriends"), desc: t("tasks.inviteFriendsDesc"), reward: 150, icon: <Gift size={16} className="text-neon-red" />, total: 10, category: "growth" },
+  ];
+
+  const tasks: Task[] = useMemo(() => {
+    return taskDefinitions.map((def) => {
+      const backendType = TASK_TYPE_MAP[def.id];
+      const status = backendType ? realTaskMap[backendType] : undefined;
+      const completions = status?.completions ?? 0;
+      const isCompleted = status?.isCompleted ?? false;
+      return {
+        ...def,
+        progress: Math.min(completions, def.total),
+        completed: isCompleted || completions >= def.total,
+        claimed: isCompleted,
+      };
+    });
+  }, [realTaskMap, t]);
 
   const dailyTasks = tasks.filter(t => t.category === "daily");
   const growthTasks = tasks.filter(t => t.category === "growth");
@@ -139,28 +127,15 @@ export default function TaskCenter() {
     toast.success(`${t("tasks.checkinSuccess")} +${reward} NP`);
   };
 
-  // Map task IDs to backend task types
-  const TASK_ID_TO_TYPE: Record<string, string> = {
-    "g1": "complete_profile",
-    "g3": "connect_wallet",
-    "g5": "invite_friend",
-    "d3": "first_research",
-  };
-
   const handleClaim = (taskId: string) => {
-    // Optimistic UI update
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, claimed: true } : t
-    ));
     const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      // Try to complete backend task if mapped
-      const backendTaskType = TASK_ID_TO_TYPE[taskId];
-      if (backendTaskType) {
-        completeTask.mutate({ taskType: backendTaskType });
-      } else {
-        toast.success(`${t("tasks.claimed")} +${task.reward} NP`);
-      }
+    if (!task) return;
+    // Complete backend task if mapped
+    const backendTaskType = TASK_TYPE_MAP[taskId];
+    if (backendTaskType) {
+      completeTask.mutate({ taskType: backendTaskType });
+    } else {
+      toast.success(`${t("tasks.claimed")} +${task.reward} NP`);
     }
   };
 
@@ -179,7 +154,7 @@ export default function TaskCenter() {
           <h1 className="flex-1 text-base font-semibold font-display">{t("tasks.title")}</h1>
           <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
             <Sparkles size={12} className="text-neon-purple" />
-            <span className="text-xs font-bold font-mono text-neon-purple">24,680 NP</span>
+            <span className="text-xs font-bold font-mono text-neon-purple">{(myRank?.npPoints ?? 0).toLocaleString()} NP</span>
           </div>
         </div>
       </header>

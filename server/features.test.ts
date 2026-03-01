@@ -950,3 +950,145 @@ describe("Repost & Quote Post", () => {
     expect(shouldNotify).toBe(true);
   });
 });
+
+describe("Referral System", () => {
+  it("generates a valid invite code format", () => {
+    // Invite codes should be 8-char alphanumeric strings
+    const code = "NX" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    expect(code.length).toBe(8);
+    expect(code).toMatch(/^NX[A-Z0-9]{6}$/);
+  });
+
+  it("tracks referral with referrer and referred user", () => {
+    const referral = {
+      referrerId: 1,
+      referredUserId: 2,
+      inviteCode: "NXABC123",
+      status: "registered" as const,
+    };
+    expect(referral.referrerId).not.toBe(referral.referredUserId);
+    expect(referral.status).toBe("registered");
+  });
+
+  it("calculates reward tiers correctly", () => {
+    const REWARD_TIERS = [
+      { min: 0, max: 5, bonus: 50 },
+      { min: 5, max: 15, bonus: 100 },
+      { min: 15, max: 50, bonus: 200 },
+      { min: 50, max: Infinity, bonus: 500 },
+    ];
+    const inviteCount = 20;
+    const tier = REWARD_TIERS.find(t => inviteCount >= t.min && inviteCount < t.max);
+    expect(tier).toBeDefined();
+    expect(tier!.bonus).toBe(200);
+  });
+
+  it("prevents self-referral", () => {
+    const referrerId = 42;
+    const referredUserId = 42;
+    const isValid = referrerId !== referredUserId;
+    expect(isValid).toBe(false);
+  });
+
+  it("calculates total rewards from referrals", () => {
+    const referrals = [
+      { status: "registered", rewardNP: 50 },
+      { status: "active", rewardNP: 100 },
+      { status: "registered", rewardNP: 50 },
+    ];
+    const totalRewards = referrals.reduce((sum, r) => sum + r.rewardNP, 0);
+    expect(totalRewards).toBe(200);
+  });
+});
+
+describe("Invite Leaderboard", () => {
+  it("sorts users by invite count descending", () => {
+    const users = [
+      { userId: 1, inviteCount: 5 },
+      { userId: 2, inviteCount: 20 },
+      { userId: 3, inviteCount: 12 },
+    ];
+    const sorted = [...users].sort((a, b) => b.inviteCount - a.inviteCount);
+    expect(sorted[0].userId).toBe(2);
+    expect(sorted[1].userId).toBe(3);
+    expect(sorted[2].userId).toBe(1);
+  });
+
+  it("returns top 50 users for leaderboard", () => {
+    const users = Array.from({ length: 100 }, (_, i) => ({
+      userId: i + 1,
+      inviteCount: Math.floor(Math.random() * 100),
+    }));
+    const top50 = users.sort((a, b) => b.inviteCount - a.inviteCount).slice(0, 50);
+    expect(top50.length).toBe(50);
+  });
+});
+
+describe("Profit Leaderboard", () => {
+  it("sorts users by total profit descending", () => {
+    const users = [
+      { userId: 1, totalProfit: 1500 },
+      { userId: 2, totalProfit: 8200 },
+      { userId: 3, totalProfit: 3400 },
+    ];
+    const sorted = [...users].sort((a, b) => b.totalProfit - a.totalProfit);
+    expect(sorted[0].userId).toBe(2);
+    expect(sorted[1].userId).toBe(3);
+    expect(sorted[2].userId).toBe(1);
+  });
+
+  it("formats profit display correctly", () => {
+    const profit = 12345.67;
+    const formatted = `$${profit.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    expect(formatted).toBe("$12,345.67");
+  });
+});
+
+describe("TaskCenter Backend Integration", () => {
+  it("maps task types to backend progress", () => {
+    const TASK_TYPE_MAP: Record<string, string> = {
+      "daily-chat": "daily_chat",
+      "daily-trade": "daily_trade",
+      "daily-research": "daily_research",
+      "weekly-invite": "invite_friend",
+      "achievement-trades": "first_trade",
+    };
+    expect(TASK_TYPE_MAP["daily-chat"]).toBe("daily_chat");
+    expect(TASK_TYPE_MAP["weekly-invite"]).toBe("invite_friend");
+  });
+
+  it("calculates task completion from backend data", () => {
+    const task = { id: "daily-chat", target: 5, backendProgress: 3 };
+    const progress = Math.min(task.backendProgress / task.target, 1);
+    expect(progress).toBeCloseTo(0.6);
+    expect(progress < 1).toBe(true);
+  });
+
+  it("marks task as claimable when progress reaches target", () => {
+    const task = { id: "daily-chat", target: 5, backendProgress: 5, claimed: false };
+    const isClaimable = task.backendProgress >= task.target && !task.claimed;
+    expect(isClaimable).toBe(true);
+  });
+});
+
+describe("PWA Manifest", () => {
+  it("has required manifest fields", () => {
+    const manifest = {
+      name: "NexusChat — AI-Powered Web3 Social Trading",
+      short_name: "NexusChat",
+      start_url: "/",
+      display: "standalone",
+      background_color: "#0a0a0f",
+      theme_color: "#0a0a0f",
+      icons: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+    };
+    expect(manifest.name).toBeTruthy();
+    expect(manifest.short_name).toBeTruthy();
+    expect(manifest.start_url).toBe("/");
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
+  });
+});

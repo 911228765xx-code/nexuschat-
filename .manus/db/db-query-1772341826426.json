@@ -1,0 +1,18 @@
+{
+  "query": "SHOW COLUMNS FROM posts LIKE 'reportId';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SHOW COLUMNS FROM posts LIKE 'reportId';",
+  "rows": [
+    {
+      "Field": "reportId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nreportId\tint\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 1651
+}
