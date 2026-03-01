@@ -239,3 +239,10 @@
 - [x] Wallet History Tab 增强（BSCScan tokentx API 获取 BEP-20 代币转账 + BNB 原生交易合并排序 + CoinGecko 实时价格计算 USD 价值 + 前端显示代币图标/BEP-20 标签/USD 价值/加载状态/空状态/点击跳转 BscScan）
 - [x] tokenChat 路由添加 rateLimitStrict 速率限制
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v44 AI Chat 流式输出
+
+- [x] 后端：创建 SSE 流式端点 POST /api/token-chat/stream，调用 LLM streaming API 逐 token 返回
+- [x] 前端：TokenDetail AI Chat 使用 fetch + ReadableStream 实时接收并逐字渲染
+- [x] 前端：流式输出过程中显示闪烁光标 + 预加载动画，完成后自动隐藏
+- [x] 147 个测试全部通过，0 TS 错误

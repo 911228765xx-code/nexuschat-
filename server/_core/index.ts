@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initSocketIO } from "../socket";
 import { startPriceAlertChecker } from "../priceAlertChecker";
+import { tokenChatStreamRouter } from "../routers/tokenChatStream";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,6 +38,9 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Streaming AI chat endpoint (SSE, outside tRPC)
+  app.use("/api/token-chat", tokenChatStreamRouter);
+
   // tRPC API
   app.use(
     "/api/trpc",

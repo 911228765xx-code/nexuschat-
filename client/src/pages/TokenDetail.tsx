@@ -401,12 +401,17 @@ export default function TokenDetail() {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // LLM-backed AI chat mutation
-  const aiChatMutation = trpc.tokenChat.sendMessage.useMutation();
+  // Ref for aborting in-flight stream requests
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { streamAbortRef.current?.abort(); };
+  }, []);
 
   // tRPC: real-time price data (must be before getPriceData)
   const { data: livePrice } = trpc.trading.getPrices.useQuery(
@@ -474,6 +479,13 @@ export default function TokenDetail() {
     setChatInput("");
     setIsAiTyping(true);
 
+    // Create a placeholder AI message that will be updated incrementally
+    const aiMsgId = `a-${Date.now()}`;
+    const aiMsg: ChatMessage = {
+      id: aiMsgId, role: "ai", content: "", timestamp: new Date(),
+    };
+    setChatMessages(prev => [...prev, aiMsg]);
+
     try {
       // Build conversation history for context (last 10 messages)
       const history = chatMessages.slice(-10).map(m => ({
@@ -481,28 +493,89 @@ export default function TokenDetail() {
         content: m.content,
       }));
 
-      const result = await aiChatMutation.mutateAsync({
-        tokenSymbol: token,
-        message: userMessage,
-        history,
+      // Abort any previous stream
+      streamAbortRef.current?.abort();
+      const abortController = new AbortController();
+      streamAbortRef.current = abortController;
+
+      const response = await fetch("/api/token-chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: abortController.signal,
+        body: JSON.stringify({
+          tokenSymbol: token,
+          message: userMessage,
+          history,
+        }),
       });
 
-      const aiMsg: ChatMessage = {
-        id: `a-${Date.now()}`, role: "ai", content: result.content, timestamp: new Date(),
-      };
-      setChatMessages(prev => [...prev, aiMsg]);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+            if (parsed.content) {
+              accumulated += parsed.content;
+              // Update the AI message content incrementally
+              setChatMessages(prev =>
+                prev.map(m => m.id === aiMsgId ? { ...m, content: accumulated } : m)
+              );
+            }
+          } catch (parseErr: any) {
+            if (parseErr.message && !parseErr.message.includes("JSON")) throw parseErr;
+          }
+        }
+      }
+
+      // If no content was received, show fallback
+      if (!accumulated) {
+        setChatMessages(prev =>
+          prev.map(m => m.id === aiMsgId ? { ...m, content: "⚠️ No response received. Please try again." } : m)
+        );
+      }
     } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: `e-${Date.now()}`, role: "ai",
-        content: "⚠️ AI analysis temporarily unavailable. Please try again in a moment.",
-        timestamp: new Date(),
-      };
-      setChatMessages(prev => [...prev, errorMsg]);
+      if (err.name === "AbortError") return; // User cancelled
+      setChatMessages(prev => {
+        // Update the placeholder AI message with error
+        const updated = prev.map(m =>
+          m.id === aiMsgId && !m.content
+            ? { ...m, content: "⚠️ AI analysis temporarily unavailable. Please try again in a moment." }
+            : m
+        );
+        return updated;
+      });
       toast.error("AI chat error");
     } finally {
       setIsAiTyping(false);
+      streamAbortRef.current = null;
     }
-  }, [chatInput, isAiTyping, token, chatMessages, aiChatMutation]);
+  }, [chatInput, isAiTyping, token, chatMessages]);
 
   // Merge real price into display values
   const displayPrice = livePriceData ? `$${livePriceData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : data?.price ?? "N/A";
@@ -1152,6 +1225,9 @@ export default function TokenDetail() {
                       {msg.role === "ai" ? (
                         <div className="prose prose-invert prose-xs max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
                           <Streamdown>{msg.content}</Streamdown>
+                          {isAiTyping && msg.id === chatMessages[chatMessages.length - 1]?.id && msg.content && (
+                            <span className="inline-block w-1.5 h-3.5 bg-neon-purple/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+                          )}
                         </div>
                       ) : (
                         <span>{msg.content}</span>
@@ -1163,8 +1239,8 @@ export default function TokenDetail() {
                   </motion.div>
                 ))}
 
-                {/* AI typing indicator */}
-                {isAiTyping && (
+                {/* AI typing indicator — only show before first token arrives */}
+                {isAiTyping && chatMessages.length > 0 && chatMessages[chatMessages.length - 1]?.role === "ai" && !chatMessages[chatMessages.length - 1]?.content && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2">
                     <div className="w-7 h-7 rounded-lg bg-neon-purple/15 border border-neon-purple/20 flex items-center justify-center">
                       <Bot size={14} className="text-neon-purple" />
