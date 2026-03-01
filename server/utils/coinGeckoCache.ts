@@ -4,6 +4,8 @@
  * Solves 429 rate limiting on CoinGecko free tier (10-30 req/min)
  */
 
+import logger from './logger';
+
 interface CacheEntry<T> {
   data: T;
   expiresAt: number;
@@ -69,7 +71,7 @@ export async function cachedFetch<T>(
       if (res.status === 429) {
         // Rate limited — wait with exponential backoff
         const waitMs = Math.min(2000 * Math.pow(2, attempt), 30000);
-        console.warn(`[CoinGecko] 429 rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+        logger.warn({ cacheKey, waitMs, attempt: attempt + 1, maxAttempts: maxRetries + 1 }, `CoinGecko: 429 rate limited, retrying in ${waitMs}ms`);
         await new Promise((resolve) => setTimeout(resolve, waitMs));
         continue;
       }
@@ -95,11 +97,11 @@ export async function cachedFetch<T>(
 
   // If all retries failed, return stale cache if available
   if (cached) {
-    console.warn(`[CoinGecko] All retries failed, returning stale cache for: ${cacheKey}`);
+    logger.warn({ cacheKey }, "CoinGecko: All retries failed, returning stale cache");
     return cached.data;
   }
 
-  console.error(`[CoinGecko] All retries failed for: ${cacheKey}`, lastError);
+  logger.error({ cacheKey, err: lastError }, "CoinGecko: All retries failed");
   return null;
 }
 

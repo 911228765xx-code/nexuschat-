@@ -131,18 +131,7 @@ type FilterCategory = "all" | "L1" | "L2" | "DeFi" | "AI" | "Meme";
 
 // ==================== Demo Data (pre-built showcase reports) ====================
 
-const generatePriceHistory = (base: number, volatility: number, trend: number, points: number, labels: string[]) => {
-  let price = base * (1 - trend * 0.3);
-  return labels.map((time) => {
-    price = price + (Math.random() - 0.45) * volatility + trend * (volatility * 0.1);
-    price = Math.max(price * 0.5, price);
-    return { time, price: Math.round(price * 100) / 100 };
-  });
-};
-
-const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const days30 = Array.from({ length: 30 }, (_, i) => `${i + 1}`);
-const days7 = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Price history data is now fetched from CoinGecko API via backend (see trading.getMarketOverview)
 
 
 const hotTokens = ["BTC", "ETH", "SOL", "ARB", "LINK", "AVAX", "RENDER", "PEPE"];

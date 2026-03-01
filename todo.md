@@ -181,3 +181,11 @@
 - [x] TokenDetail 接入 CoinGecko 全部 5 个时间框架（1h/4h/1d/1w/1m）真实历史价格
 - [x] Research 市场概览卡片接入真实数据（CoinGecko Global API + Alternative.me Fear & Greed Index）
 - [x] Market Overview Bar 全部 6 个指标实时化：AI Score、Bullish/Total、Fear & Greed、BTC Dom、Mkt Cap、24h Avg
+
+## v37 最终优化
+
+- [x] Research.tsx 清理死代码 generatePriceHistory（已无调用，filteredReports 始终为空数组）
+- [x] TokenDetail.tsx 移除 generatePriceData + 静态标签常量（priceHistory 全部改为 EMPTY_PRICE，CoinGecko 实时数据为主源）
+- [x] 服务端 console.log 全部替换为 pino 结构化日志（db.ts、index.ts、priceAlertChecker.ts、socket.ts、coinGeckoCache.ts）
+- [x] 新增 server/utils/logger.ts（pino 配置，JSON 格式 + ISO 时间戳）
+- [x] 147 个测试全部通过，0 TS 错误

@@ -83,22 +83,10 @@ interface ChatMessage {
 type ChartTimeframe = "1h" | "4h" | "1d" | "1w" | "1m";
 type DetailTab = "overview" | "technical" | "onchain" | "ai-chat";
 
-// ==================== Mock Data Generator ====================
-
-const generatePriceData = (base: number, vol: number, trend: number, count: number, labels: string[]) => {
-  let p = base * (1 - trend * 0.15);
-  return labels.map((t) => {
-    p = p + (Math.random() - 0.45) * vol + trend * (vol * 0.08);
-    p = Math.max(p * 0.7, p);
-    return { time: t, price: Math.round(p * 100) / 100 };
-  });
-};
-
-const h1Labels = Array.from({ length: 12 }, (_, i) => `${i * 5}m`);
-const h4Labels = Array.from({ length: 16 }, (_, i) => `${(i * 4) % 24}:00`);
-// 1D = 24 hourly candles (every hour from 0:00 to 23:00)
-const d1Labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
-const w1Labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
+// ==================== Chart Data ====================
+// Price history is fetched from CoinGecko API via tRPC (trading.getChart)
+// Static labels kept only for volume/fundFlow display axes
+const EMPTY_PRICE: { time: string; price: number }[] = [];
 const m1Labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Pre-built AI chat responses per token
@@ -137,11 +125,11 @@ const TOKENS_DATA: Record<string, TokenData> = {
     contractVerified: true, auditStatus: "N/A (Native)",
     riskLevel: "low", riskFactors: ["research.riskRegulatory", "research.riskMacro"],
     category: "L1", chain: "Bitcoin",
-    priceHistory1h: generatePriceData(97245, 500, 0.05, 12, h1Labels),
-    priceHistory4h: generatePriceData(97245, 1200, 0.15, 16, h4Labels),
-    priceHistory1d: generatePriceData(97245, 1800, 0.25, 24, d1Labels),
-    priceHistory1w: generatePriceData(97245, 2500, 0.4, 30, w1Labels),
-    priceHistory1m: generatePriceData(97245, 3500, 0.6, 12, m1Labels),
+    priceHistory1h: EMPTY_PRICE,
+    priceHistory4h: EMPTY_PRICE,
+    priceHistory1d: EMPTY_PRICE,
+    priceHistory1w: EMPTY_PRICE,
+    priceHistory1m: EMPTY_PRICE,
     radarData: [
       { metric: "Security", score: 98, fullMark: 100 },
       { metric: "Dev Activity", score: 78, fullMark: 100 },
@@ -216,11 +204,11 @@ const TOKENS_DATA: Record<string, TokenData> = {
     contractVerified: true, auditStatus: "Multiple Audits",
     riskLevel: "low", riskFactors: ["research.riskGasSpike", "research.riskCompetition"],
     category: "L1", chain: "Ethereum",
-    priceHistory1h: generatePriceData(3842, 30, 0.08, 12, h1Labels),
-    priceHistory4h: generatePriceData(3842, 80, 0.12, 16, h4Labels),
-    priceHistory1d: generatePriceData(3842, 120, 0.2, 24, d1Labels),
-    priceHistory1w: generatePriceData(3842, 180, 0.3, 30, w1Labels),
-    priceHistory1m: generatePriceData(3842, 250, 0.5, 12, m1Labels),
+    priceHistory1h: EMPTY_PRICE,
+    priceHistory4h: EMPTY_PRICE,
+    priceHistory1d: EMPTY_PRICE,
+    priceHistory1w: EMPTY_PRICE,
+    priceHistory1m: EMPTY_PRICE,
     radarData: [
       { metric: "Security", score: 95, fullMark: 100 },
       { metric: "Dev Activity", score: 92, fullMark: 100 },
@@ -295,11 +283,11 @@ const TOKENS_DATA: Record<string, TokenData> = {
     contractVerified: true, auditStatus: "Audited",
     riskLevel: "medium", riskFactors: ["research.riskNetworkStability", "research.riskCompetition"],
     category: "L1", chain: "Solana",
-    priceHistory1h: generatePriceData(187.3, 2, -0.05, 12, h1Labels),
-    priceHistory4h: generatePriceData(187.3, 5, -0.08, 16, h4Labels),
-    priceHistory1d: generatePriceData(187.3, 8, 0.1, 24, d1Labels),
-    priceHistory1w: generatePriceData(187.3, 12, 0.2, 30, w1Labels),
-    priceHistory1m: generatePriceData(187.3, 18, 0.4, 12, m1Labels),
+    priceHistory1h: EMPTY_PRICE,
+    priceHistory4h: EMPTY_PRICE,
+    priceHistory1d: EMPTY_PRICE,
+    priceHistory1w: EMPTY_PRICE,
+    priceHistory1m: EMPTY_PRICE,
     radarData: [
       { metric: "Security", score: 78, fullMark: 100 },
       { metric: "Dev Activity", score: 88, fullMark: 100 },

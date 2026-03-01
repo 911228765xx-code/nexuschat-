@@ -12,6 +12,7 @@ import { getDb } from "./db";
 import { priceAlerts, notifications } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { emitToUser } from "./socket";
+import logger from "./utils/logger";
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
@@ -100,18 +101,18 @@ async function checkAlerts() {
       content,
     });
 
-    console.log(
-      `[PriceAlert] Triggered alert #${alert.id} for user ${alert.userId}: ` +
-        `${alert.tokenSymbol} ${alert.condition} $${target} (current: $${currentPrice})`
+    logger.info(
+      { alertId: alert.id, userId: alert.userId, token: alert.tokenSymbol, condition: alert.condition, target, currentPrice },
+      `PriceAlert: Triggered alert #${alert.id} for ${alert.tokenSymbol} ${alert.condition} $${target} (current: $${currentPrice})`
     );
   }
 }
 
 export function startPriceAlertChecker() {
-  console.log("[PriceAlert] Checker started — interval: 2 min");
+  logger.info("PriceAlert: Checker started \u2014 interval: 2 min");
   // Run immediately on startup, then on interval
-  checkAlerts().catch(console.error);
+  checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: check failed"));
   setInterval(() => {
-    checkAlerts().catch(console.error);
+    checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: check failed"));
   }, CHECK_INTERVAL_MS);
 }

@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { getDb } from "./db";
 import { messages } from "../drizzle/schema";
+import logger from "./utils/logger";
 
 interface ChatMessage {
   groupId: number;
@@ -52,7 +53,7 @@ export function initSocketIO(httpServer: HttpServer) {
     const userId = (socket as any).userId as number | undefined;
     const userName = (socket as any).userName || "Anonymous";
 
-    console.log(`[Socket.io] User connected: ${userId} (${socket.id})`);
+    logger.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
 
     // Register user socket for targeted notifications
     if (userId) {
@@ -118,7 +119,7 @@ export function initSocketIO(httpServer: HttpServer) {
         // Broadcast to all in the group (including sender)
         io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
       } catch (err) {
-        console.error("[Socket.io] Error saving message:", err);
+        logger.error({ err }, "Socket.io: Error saving message");
         socket.emit("error", { message: "Failed to send message" });
       }
     });
@@ -133,7 +134,7 @@ export function initSocketIO(httpServer: HttpServer) {
     });
 
     socket.on("disconnect", () => {
-      console.log(`[Socket.io] User disconnected: ${userId} (${socket.id})`);
+      logger.debug({ userId, socketId: socket.id }, "Socket.io: User disconnected");
       // Clean up user socket registry
       const uid = (socket as any).userId as number | undefined;
       if (uid && userSockets.has(uid)) {
