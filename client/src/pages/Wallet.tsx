@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown, Loader2 } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown, Loader2, Settings, ArrowDownUp, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -73,9 +73,47 @@ export default function Wallet() {
   const [sendAmount, setSendAmount] = useState("");
   const [sendAddress, setSendAddress] = useState("");
   const [sendToken, setSendToken] = useState("BNB");
+  const [sendNetwork, setSendNetwork] = useState("BSC");
   const [swapFrom, setSwapFrom] = useState("BNB");
   const [swapTo, setSwapTo] = useState("USDT");
   const [swapAmount, setSwapAmount] = useState("");
+  const [swapSlippage, setSwapSlippage] = useState("0.5");
+  const [showSlippageSettings, setShowSlippageSettings] = useState(false);
+
+  // Fetch real-time prices for swap rate calculation
+  const SWAP_TOKENS = useMemo(() => ["BNB", "ETH", "BTC", "SOL", "USDT", "USDC", "DAI", "MATIC", "ARB", "AVAX", "LINK", "DOT", "CAKE", "DOGE", "PEPE", "RENDER"], []);
+  const { data: swapPrices } = trpc.trading.getPrices.useQuery(
+    { symbols: SWAP_TOKENS },
+    { staleTime: 30_000, refetchInterval: 30_000 }
+  );
+
+  const swapRate = useMemo(() => {
+    if (!swapPrices || swapFrom === swapTo) return null;
+    const fromPrice = swapPrices.find(p => p.symbol === swapFrom)?.price ?? 0;
+    const toPrice = swapPrices.find(p => p.symbol === swapTo)?.price ?? 0;
+    if (fromPrice === 0 || toPrice === 0) return null;
+    return fromPrice / toPrice;
+  }, [swapPrices, swapFrom, swapTo]);
+
+  const swapOutput = useMemo(() => {
+    if (!swapAmount || !swapRate) return "0.00";
+    const amount = parseFloat(swapAmount);
+    if (isNaN(amount) || amount <= 0) return "0.00";
+    return (amount * swapRate).toFixed(6);
+  }, [swapAmount, swapRate]);
+
+  const swapPriceImpact = useMemo(() => {
+    if (!swapAmount || !swapRate) return 0;
+    const amount = parseFloat(swapAmount);
+    const fromPrice = swapPrices?.find(p => p.symbol === swapFrom)?.price ?? 0;
+    if (fromPrice === 0 || amount <= 0) return 0;
+    const usdValue = amount * fromPrice;
+    // Simulate price impact based on trade size
+    if (usdValue > 100000) return 2.5;
+    if (usdValue > 10000) return 0.8;
+    if (usdValue > 1000) return 0.3;
+    return 0.05;
+  }, [swapAmount, swapRate, swapPrices, swapFrom]);
 
   // ─── Real wallet from WalletContext ───
   const { address: connectedAddress } = useWallet();
@@ -533,29 +571,77 @@ export default function Wallet() {
     {/* Send Modal */}
     <AnimatePresence>
       {showSend && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSend(false)}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => { setShowSend(false); setSendAmount(""); setSendAddress(""); }}>
           <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold font-display mb-4">{t("wallet.send") || "Send"}</h3>
             <div className="space-y-3">
+              {/* Network Selector */}
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Token</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.network") || "Network"}</label>
+                <select value={sendNetwork} onChange={(e) => setSendNetwork(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
+                  {[
+                    { id: "BSC", label: "🟡 BNB Smart Chain", gas: "~$0.08" },
+                    { id: "Ethereum", label: "🔷 Ethereum", gas: "~$2.50" },
+                    { id: "Polygon", label: "🟣 Polygon", gas: "~$0.01" },
+                    { id: "Arbitrum", label: "🔵 Arbitrum", gas: "~$0.15" },
+                    { id: "Optimism", label: "🔴 Optimism", gas: "~$0.12" },
+                    { id: "Avalanche", label: "🔺 Avalanche", gas: "~$0.05" },
+                    { id: "Base", label: "🔵 Base", gas: "~$0.03" },
+                  ].map(net => <option key={net.id} value={net.id}>{net.label}</option>)}
+                </select>
+              </div>
+              {/* Token */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.token") || "Token"}</label>
                 <select value={sendToken} onChange={(e) => setSendToken(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
                   {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance}</option>)}
                 </select>
               </div>
+              {/* Recipient */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.recipientAddress") || "Recipient Address"}</label>
                 <input value={sendAddress} onChange={(e) => setSendAddress(e.target.value)} placeholder="0x..." className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
               </div>
+              {/* Amount */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.amount") || "Amount"}</label>
                 <input type="number" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} placeholder="0.00" className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-                <span>Gas Fee: ~$2.50</span>
-                <span>Network: Ethereum</span>
+              {/* Gas & Network Info */}
+              <div className="rounded-xl bg-secondary/30 border border-border/20 p-3 space-y-1.5">
+                {(() => {
+                  const gasMap: Record<string, { gas: string; nativeToken: string; speed: string }> = {
+                    BSC: { gas: "~$0.08", nativeToken: "BNB", speed: "~3s" },
+                    Ethereum: { gas: "~$2.50", nativeToken: "ETH", speed: "~15s" },
+                    Polygon: { gas: "~$0.01", nativeToken: "MATIC", speed: "~2s" },
+                    Arbitrum: { gas: "~$0.15", nativeToken: "ETH", speed: "~1s" },
+                    Optimism: { gas: "~$0.12", nativeToken: "ETH", speed: "~2s" },
+                    Avalanche: { gas: "~$0.05", nativeToken: "AVAX", speed: "~2s" },
+                    Base: { gas: "~$0.03", nativeToken: "ETH", speed: "~2s" },
+                  };
+                  const info = gasMap[sendNetwork] || gasMap.BSC;
+                  return (
+                    <>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{t("wallet.estGasFee") || "Est. Gas Fee"}</span>
+                        <span className="text-foreground font-medium">{info.gas}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{t("wallet.gasPaidIn") || "Gas paid in"}</span>
+                        <span className="text-foreground font-medium">{info.nativeToken}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{t("wallet.estTime") || "Est. Time"}</span>
+                        <span className="text-foreground font-medium">{info.speed}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
-              <button onClick={() => { toast.success(`Sent ${sendAmount} ${sendToken}`); setShowSend(false); setSendAmount(""); setSendAddress(""); }} disabled={!sendAmount || !sendAddress} className="w-full h-11 rounded-xl bg-neon-cyan text-background font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
+              {/* Warning */}
+              <p className="text-[10px] text-yellow-500/80 px-1">⚠️ {t("wallet.sendWarning") || "Make sure the recipient address supports the selected network. Sending to a wrong network may result in permanent loss."}</p>
+              {/* Submit */}
+              <button onClick={() => { toast.success(`Sent ${sendAmount} ${sendToken} via ${sendNetwork}`); setShowSend(false); setSendAmount(""); setSendAddress(""); }} disabled={!sendAmount || !sendAddress} className="w-full h-11 rounded-xl bg-neon-cyan text-background font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
                 {t("wallet.confirmSend") || "Confirm Send"}
               </button>
             </div>
@@ -675,35 +761,121 @@ export default function Wallet() {
     {/* Swap Modal */}
     <AnimatePresence>
       {showSwap && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => { setShowSwap(false); setShowSlippageSettings(false); }}>
           <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold font-display mb-4">Swap</h3>
+            {/* Header with slippage settings */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold font-display">Swap</h3>
+              <button onClick={() => setShowSlippageSettings(!showSlippageSettings)} className="p-1.5 rounded-lg hover:bg-secondary/60 transition-colors">
+                <Settings size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Slippage Settings Panel */}
+            <AnimatePresence>
+              {showSlippageSettings && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-3">
+                  <div className="p-3 rounded-xl bg-secondary/30 border border-border/20">
+                    <label className="text-xs text-muted-foreground mb-2 block">{t("wallet.slippageTolerance") || "Slippage Tolerance"}</label>
+                    <div className="flex gap-2">
+                      {["0.1", "0.5", "1.0"].map(val => (
+                        <button key={val} onClick={() => setSwapSlippage(val)} className={`flex-1 h-8 rounded-lg text-xs font-medium transition-colors ${swapSlippage === val ? "bg-neon-purple text-white" : "bg-secondary/60 text-muted-foreground hover:bg-secondary"}`}>
+                          {val}%
+                        </button>
+                      ))}
+                      <div className="flex-1 relative">
+                        <input type="number" value={!["0.1", "0.5", "1.0"].includes(swapSlippage) ? swapSlippage : ""} onChange={(e) => setSwapSlippage(e.target.value)} placeholder="Custom" className="w-full h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-xs text-right font-mono focus:outline-none focus:border-neon-purple/50" />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                    {parseFloat(swapSlippage) > 3 && <p className="text-[10px] text-yellow-500 mt-1.5">⚠️ High slippage may result in unfavorable trade</p>}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="space-y-3">
+              {/* From Token */}
               <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
-                <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-muted-foreground">From</label>
+                  {(() => {
+                    const fromToken = displayTokens.find(t => t.symbol === swapFrom);
+                    return fromToken ? <span className="text-[10px] text-muted-foreground">Balance: {fromToken.balance.toFixed(4)}</span> : null;
+                  })()}
+                </div>
                 <div className="flex items-center gap-2">
-                  <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                    {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                  <select value={swapFrom} onChange={(e) => { if (e.target.value === swapTo) setSwapTo(swapFrom); setSwapFrom(e.target.value); }} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
+                    {SWAP_TOKENS.map(sym => <option key={sym} value={sym}>{sym}</option>)}
                   </select>
                   <input type="number" value={swapAmount} onChange={(e) => setSwapAmount(e.target.value)} placeholder="0.00" className="flex-1 h-9 rounded-lg bg-transparent text-right text-sm font-mono focus:outline-none" />
                 </div>
+                {swapAmount && swapPrices && (() => {
+                  const p = swapPrices.find(pr => pr.symbol === swapFrom)?.price ?? 0;
+                  const usd = parseFloat(swapAmount) * p;
+                  return usd > 0 ? <p className="text-[10px] text-muted-foreground text-right mt-1">≈ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p> : null;
+                })()}
               </div>
-              <div className="flex justify-center"><div className="w-8 h-8 rounded-full bg-neon-purple/20 flex items-center justify-center"><RefreshCw size={14} className="text-neon-purple" /></div></div>
+
+              {/* Swap direction button */}
+              <div className="flex justify-center">
+                <button onClick={() => { const tmp = swapFrom; setSwapFrom(swapTo); setSwapTo(tmp); }} className="w-8 h-8 rounded-full bg-neon-purple/20 flex items-center justify-center hover:bg-neon-purple/30 transition-colors">
+                  <ArrowDownUp size={14} className="text-neon-purple" />
+                </button>
+              </div>
+
+              {/* To Token */}
               <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
                 <label className="text-xs text-muted-foreground mb-1 block">To</label>
                 <div className="flex items-center gap-2">
-                  <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                    {displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)}
+                  <select value={swapTo} onChange={(e) => { if (e.target.value === swapFrom) setSwapFrom(swapTo); setSwapTo(e.target.value); }} className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
+                    {SWAP_TOKENS.map(sym => <option key={sym} value={sym}>{sym}</option>)}
                   </select>
-                  <span className="flex-1 text-right text-sm font-mono text-muted-foreground">{swapAmount ? (parseFloat(swapAmount) * 1.05).toFixed(4) : "0.00"}</span>
+                  <span className="flex-1 text-right text-sm font-mono text-foreground">{swapOutput}</span>
+                </div>
+                {swapAmount && swapPrices && (() => {
+                  const p = swapPrices.find(pr => pr.symbol === swapTo)?.price ?? 0;
+                  const usd = parseFloat(swapOutput) * p;
+                  return usd > 0 ? <p className="text-[10px] text-muted-foreground text-right mt-1">≈ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p> : null;
+                })()}
+              </div>
+
+              {/* Swap Details */}
+              <div className="rounded-xl bg-secondary/30 border border-border/20 p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t("wallet.rate") || "Rate"}</span>
+                  <span className="text-foreground font-mono">
+                    {swapRate ? `1 ${swapFrom} ≈ ${swapRate.toFixed(6)} ${swapTo}` : `${swapFrom} / ${swapTo}`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">{t("wallet.priceImpact") || "Price Impact"} <Info size={10} /></span>
+                  <span className={`font-mono ${swapPriceImpact > 1 ? "text-yellow-500" : swapPriceImpact > 3 ? "text-red-500" : "text-green-500"}`}>
+                    {swapPriceImpact > 0 ? `~${swapPriceImpact}%` : "-"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t("wallet.slippage") || "Slippage"}</span>
+                  <span className="text-foreground font-mono">{swapSlippage}%</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t("wallet.minReceived") || "Min. Received"}</span>
+                  <span className="text-foreground font-mono">
+                    {swapOutput !== "0.00" ? (parseFloat(swapOutput) * (1 - parseFloat(swapSlippage) / 100)).toFixed(6) : "0.00"} {swapTo}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t("wallet.source") || "Source"}</span>
+                  <span className="text-neon-purple text-[10px] font-medium">CoinGecko Live Price</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-                <span>Rate: 1 {swapFrom} ≈ 1.05 {swapTo}</span>
-                <span>Slippage: 0.5%</span>
-              </div>
-              <button onClick={() => { toast.success(`Swapped ${swapAmount} ${swapFrom} → ${swapTo}`); setShowSwap(false); setSwapAmount(""); }} disabled={!swapAmount} className="w-full h-11 rounded-xl bg-neon-purple text-white font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
-                Swap
+
+              {/* Same token warning */}
+              {swapFrom === swapTo && <p className="text-[10px] text-yellow-500/80 px-1">⚠️ Cannot swap a token to itself</p>}
+
+              {/* Submit */}
+              <button onClick={() => { toast.success(`Swapped ${swapAmount} ${swapFrom} → ${swapOutput} ${swapTo}`); setShowSwap(false); setSwapAmount(""); setShowSlippageSettings(false); }} disabled={!swapAmount || swapFrom === swapTo || !swapRate} className="w-full h-11 rounded-xl bg-neon-purple text-white font-semibold text-sm disabled:opacity-40 hover:opacity-90 transition-opacity">
+                {!swapRate && swapFrom !== swapTo ? (t("wallet.fetchingRate") || "Fetching rate...") : "Swap"}
               </button>
             </div>
           </motion.div>

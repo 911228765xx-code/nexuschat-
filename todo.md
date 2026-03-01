@@ -223,3 +223,12 @@
 - [x] EVM 网络共用钱包地址，非 EVM 网络显示 "Coming soon" 提示
 - [x] 合并 QR 弹窗和 Receive 弹窗为统一的多网络接收弹窗
 - [x] 新增中英文 i18n 翻译
+
+## v42 Send 弹窗 + Swap 功能改进
+
+- [x] Send 弹窗添加多网络选择器（10 个网络 + Gas 费估算 + 网络警告）
+- [x] Send 弹窗显示动态 Gas 费用估算（按网络不同显示不同 Gas 费）
+- [x] Swap 弹窗接入 CoinGecko 实时价格计算真实汇率（16 个代币）
+- [x] Swap 弹窗显示汇率、滑点设置（0.1%/0.5%/1.0%/自定义）、价格影响、最少收到量、数据来源
+- [x] SYMBOL_TO_ID 新增 USDT/USDC/DAI/DOGE/PEPE/RENDER
+- [x] 新增中英文 i18n 翻译

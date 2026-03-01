@@ -21,6 +21,12 @@ const SYMBOL_TO_ID: Record<string, string> = {
   CAKE: "pancakeswap-token",
   MATIC: "matic-network",
   DOT: "polkadot",
+  USDT: "tether",
+  USDC: "usd-coin",
+  DAI: "dai",
+  DOGE: "dogecoin",
+  PEPE: "pepe",
+  RENDER: "render-token",
 };
 
 export const tradingRouter = router({
