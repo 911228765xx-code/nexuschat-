@@ -306,63 +306,53 @@ ${marketContext}
 }
 
 function buildDeepPrompt(symbol: string, marketContext: string): string {
-  return `你是一位顶级加密货币研究机构的首席分析师，以深度、独立、有观点的研究报告著称。你的报告风格类似 Messari、Delphi Digital 的专业研报——数据驱动、逻辑严密、观点鲜明。
-
-请基于以下实时数据（包含代币基本面、全球市场环境、恐惧与贪婪指数、以及 30 天价格趋势分析），对 ${symbol} 进行全面深度研究，生成一份机构级投研报告。所有分析必须基于下方提供的实时数据，引用具体数字而非笼统描述。
+  return `基于实时数据深度研究 ${symbol}。写作规则：每句话必须包含具体数字或明确观点，禁止“值得关注”“需要观察”等废话，用数据说话，直接下结论。
 
 ${marketContext}
 
-**输出要求（Markdown 格式，约 1200-1500 字）：**
+**输出格式（Markdown，严格 600-800 字，每句必须含具体数字）：**
 
 ## 📋 ${symbol} 深度投研报告
 
-### 🎯 投资论点（Investment Thesis）
-用 2-3 句话概括你的**核心投资论点**。明确表态：当前阶段你对该代币是看多、看空还是观望，以及最核心的理由。给出一个 1-10 的**综合评分**（1=强烈看空，5=中性，10=强烈看多）。
+**结论：** 看多/看空/观望。评分: X/10。一句话核心论点。
 
-### 🌍 宏观市场环境
-基于上方提供的全球市场数据（BTC 主导率、总市值、恐惧贪婪指数等），分析当前市场所处的周期阶段，以及对 ${symbol} 的影响。
+### 宏观环境
+2-3 句，引用 BTC 主导率、恐惧贪婪指数等具体数字，判断市场周期对 ${symbol} 的影响。
 
-### 📊 基本面分析
-- **项目定位与竞争格局**：该项目在其赛道中的位置，主要竞争对手对比
-- **代币经济学评估**：基于实际流通量/总供应/最大供应数据，分析供应机制、通胀/通缩模型、代币释放节奏对价格的影响
-- **估值分析**：基于实际市值、FDV、成交量/市值比等数据，判断当前估值是否合理
+### 基本面
+用表格展示核心指标：
 
-### 📈 技术面与价格趋势
-基于上方提供的 30 天价格趋势数据（SMA7/SMA14、区间位置、趋势判断）：
-- **价格趋势**：基于实际涨跌幅和均线关系判断当前处于什么阶段（积累/上升/分配/下跌）
-- **成交量分析**：基于实际成交量/市值比判断量价关系是否健康
-- **关键价位**：基于 30 天最高/最低和均线位置，明确给出支撑位和阻力位（用具体数字）
+| 指标 | 数值 | 判断 |
+|------|------|------|
+| 市值/排名 | 实际数字 | 估值判断 |
+| FDV | 实际数字 | 泡沫/合理/低估 |
+| 成交量/市值比 | X% | 流动性判断 |
+| 流通/最大供应 | X% | 通胀压力判断 |
+| 社区情绪 | X%看多 | 情绪判断 |
 
-### 🔗 链上与情绪分析
-- **社区情绪**：基于 CoinGecko 社区投票数据和恐惧贪婪指数判断市场情绪
-- **筹码分布推断**：基于实际供应量数据推断大户持仓情况
-- **催化剂追踪**：近期可能影响价格的事件或升级
+每行后用 1 句话解读含义。
 
-### 🧭 投研策略
+### 技术面
+基于 30 天趋势数据，用 3-4 句话说清：当前阶段、均线关系、区间位置。
+- 支撑: $X | 阻力: $X
 
-**明确给出以下操作建议：**
+### 操作策略
 
-| 维度 | 判断 | 具体建议 |
+| 维度 | 方向 | 具体价位 |
 |------|------|----------|
-| 短线（1-7天） | 方向 + 置信度 | 入场价位 / 止损 / 目标价 |
-| 中线（1-3月） | 方向 + 置信度 | 建仓策略 / 关注催化剂 |
-| 长线（6月+） | 方向 + 置信度 | 配置建议 / 关键里程碑 |
+| 短线 1-7天 | 看多/空 + 置信度 | 入场 $X / 止损 $X / 目标 $X |
+| 中线 1-3月 | 看多/空 + 置信度 | 建仓策略 + 催化剂 |
+| 长线 6月+ | 看多/空 + 置信度 | 配置 X% 仓位 |
 
-**仓位建议**：根据风险评估给出建议仓位占比（如：总仓位的 X%）
+### 风险
+| 类型 | 描述 | 概率 | 影响 |
+|------|------|------|------|
+（3 行核心风险，每行一句话）
 
-### ⚠️ 风险矩阵
-
-| 风险类型 | 风险描述 | 发生概率 | 影响程度 |
-|----------|----------|----------|----------|
-| 市场风险 | ... | 高/中/低 | 高/中/低 |
-| 项目风险 | ... | 高/中/低 | 高/中/低 |
-| 监管风险 | ... | 高/中/低 | 高/中/低 |
-
-### 💡 总结
-用 2-3 句话总结你的核心观点和最重要的行动建议。
+**一句话总结：** 最重要的行动建议。
 
 ---
-*NexusChat AI 研究助手 | 数据来源: CoinGecko | 本报告基于公开数据的 AI 深度分析，仅供研究参考，不构成投资建议。加密货币市场波动剧烈，请根据自身风险承受能力做出决策。*`;
+*NexusChat AI | CoinGecko 实时数据 | 仅供参考*`;
 }
 
 // ─── Sentiment Extraction ────────────────────────────────────────────────────
@@ -469,8 +459,8 @@ export const researchRouter = router({
         : buildDeepPrompt(symbol, marketContext);
 
       const systemMessage = input.mode === "quick"
-        ? "你是一位经验丰富的加密货币交易员，擅长快速研判市场机会。你的分析风格直接、果断，不回避给出明确方向。回复使用中文。"
-        : "你是一位顶级加密货币研究机构的首席分析师，擅长多维度深度分析。你的报告以数据驱动、逻辑严密、观点鲜明著称。回复使用中文。";
+        ? "你是加密货币交易员。规则：1)每句话必须有具体数字或明确观点 2)禁止套话废话，如“值得关注”“需要观察” 3)直接下结论，不要模棱两可 4)用数据说话。回复使用中文。"
+        : "你是加密货币首席分析师。规则：1)每句话必须含具体数字 2)禁止“值得关注”“需要观察”“不容忽视”等废话 3)直接下结论，用数据说话 4)语言精练，信息密度最大化。回复使用中文。";
 
       const llmResponse = await invokeLLM({
         messages: [
@@ -489,6 +479,10 @@ export const researchRouter = router({
       const sentiment = extractSentiment(reportContent);
       const riskLevel = extractRiskLevel(reportContent);
 
+      // Extract AI score from report content (e.g., "评分: 7/10" or "7/10")
+      const scoreMatch = reportContent.match(/(\d+)\s*\/\s*10/);
+      const aiScore = scoreMatch ? Math.min(10, Math.max(1, parseInt(scoreMatch[1]))) : 5;
+
       const [result] = await db.insert(researchReports).values({
         userId: ctx.user.id,
         tokenSymbol: symbol,
@@ -503,6 +497,30 @@ export const researchRouter = router({
         nxcCost: input.mode === "quick" ? 5 : 10,
       });
 
+      // Build structured visualization data for frontend
+      const vizData = {
+        aiScore,
+        sentiment,
+        riskLevel,
+        keyMetrics: {
+          price: tokenData?.price ?? null,
+          priceChange24h: tokenData?.priceChange24h ?? null,
+          priceChange7d: tokenData?.priceChange7d ?? null,
+          priceChange30d: tokenData?.priceChange30d ?? null,
+          marketCap: tokenData?.marketCap ?? null,
+          marketCapRank: tokenData?.marketCapRank ?? null,
+          volume24h: tokenData?.volume24h ?? null,
+          volumeToMcapRatio: tokenData?.volumeToMcapRatio ?? null,
+          ath: tokenData?.ath ?? null,
+          athChangePercentage: tokenData?.athChangePercentage ?? null,
+          circulatingSupply: tokenData?.circulatingSupply ?? null,
+          maxSupply: tokenData?.maxSupply ?? null,
+          totalSupply: tokenData?.totalSupply ?? null,
+          fdv: tokenData?.fdv ?? null,
+          sentimentUp: tokenData?.sentimentVotesUpPercentage ?? null,
+        },
+      };
+
       return {
         reportId: (result as any).insertId,
         reportContent,
@@ -510,6 +528,7 @@ export const researchRouter = router({
         sentiment,
         riskLevel,
         mode: input.mode,
+        vizData,
       };
     }),
 

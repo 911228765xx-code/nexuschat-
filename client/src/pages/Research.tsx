@@ -258,6 +258,7 @@ export default function Research() {
   const [aiReportRisk, setAiReportRisk] = useState<string>("medium");
   const [aiReportPrice, setAiReportPrice] = useState<string | null>(null);
   const [aiReportMcap, setAiReportMcap] = useState<string | null>(null);
+  const [aiVizData, setAiVizData] = useState<any>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareComment, setShareComment] = useState("");
 
@@ -302,6 +303,7 @@ export default function Research() {
       setAiReportRisk(data.riskLevel ?? "medium");
       setAiReportPrice(data.tokenData?.price ?? null);
       setAiReportMcap(data.tokenData?.marketCap ? String(data.tokenData.marketCap) : null);
+      setAiVizData(data.vizData ?? null);
       setShowAiReport(true);
       setIsSearching(false);
       toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
@@ -654,62 +656,190 @@ export default function Research() {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowAiReport(false)} />
           <div className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
               <div className="flex items-center gap-2 flex-wrap">
                 <Sparkles size={16} className="text-[#a855f7]" />
                 <span className="font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
                 <span className="px-2 py-0.5 rounded-full bg-[#a855f7]/20 text-[#a855f7] text-xs font-mono">{aiReportToken}</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                  aiReportSentiment === "bullish" ? "bg-emerald-500/20 text-emerald-400" :
-                  aiReportSentiment === "bearish" ? "bg-red-500/20 text-red-400" :
-                  "bg-yellow-500/20 text-yellow-400"
-                }`}>
-                  {aiReportSentiment === "bullish" ? "🟢 看多" : aiReportSentiment === "bearish" ? "🔴 看空" : "🟡 中性"}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                  aiReportRisk === "low" ? "bg-emerald-500/15 text-emerald-400" :
-                  aiReportRisk === "high" ? "bg-red-500/15 text-red-400" :
-                  "bg-yellow-500/15 text-yellow-400"
-                }`}>
-                  {aiReportRisk === "low" ? "低风险" : aiReportRisk === "high" ? "高风险" : "中风险"}
-                </span>
               </div>
               <button onClick={() => setShowAiReport(false)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 shrink-0">
                 <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            {/* Token Data Summary Bar */}
-            {(aiReportPrice || aiReportMcap) && (
-              <div className="px-5 py-2.5 border-b border-white/5 flex items-center gap-4 flex-wrap bg-white/[0.02]">
-                {aiReportPrice && (
-                  <span className="text-xs text-gray-300 flex items-center gap-1">
-                    <TrendingUp size={11} className="text-[#00d4ff]" />
-                    ${aiReportPrice}
-                  </span>
-                )}
-                {aiReportMcap && (
-                  <span className="text-xs text-gray-400">
-                    MCap: ${Number(aiReportMcap) > 1e9 ? (Number(aiReportMcap) / 1e9).toFixed(1) + "B" : Number(aiReportMcap) > 1e6 ? (Number(aiReportMcap) / 1e6).toFixed(1) + "M" : aiReportMcap}
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto">
 
-            {/* Report Content - Markdown */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 prose prose-invert prose-sm max-w-none
-              prose-headings:text-white prose-headings:font-['Space_Grotesk']
-              prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2
-              prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1.5
-              prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed
-              prose-strong:text-white
-              prose-table:text-xs
-              prose-th:text-[#a855f7] prose-th:font-medium prose-th:border-white/10
-              prose-td:border-white/5 prose-td:text-gray-300
-              prose-li:text-gray-300 prose-li:text-sm
-              prose-code:text-[#00d4ff] prose-code:bg-white/5 prose-code:px-1 prose-code:rounded
-            ">
-              <Streamdown>{aiReportContent}</Streamdown>
+              {/* ===== Visualization Dashboard ===== */}
+              {aiVizData && (
+                <div className="px-5 pt-4 pb-2">
+                  {/* Row 1: Score Gauge + Sentiment + Risk */}
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {/* AI Score Gauge */}
+                    <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-white/10 p-3 flex flex-col items-center justify-center">
+                      <div className="relative w-16 h-16">
+                        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#1e293b" strokeWidth="3" />
+                          <circle
+                            cx="18" cy="18" r="15.5" fill="none"
+                            stroke={aiVizData.aiScore >= 7 ? "#00ff88" : aiVizData.aiScore >= 4 ? "#eab308" : "#ff3366"}
+                            strokeWidth="3" strokeLinecap="round"
+                            strokeDasharray={`${aiVizData.aiScore * 9.74} 97.4`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-lg font-bold font-mono text-white">{aiVizData.aiScore}</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-gray-400 mt-1">综合评分</span>
+                    </div>
+
+                    {/* Sentiment Indicator */}
+                    <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-white/10 p-3 flex flex-col items-center justify-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                        aiVizData.sentiment === "bullish" ? "bg-emerald-500/20" :
+                        aiVizData.sentiment === "bearish" ? "bg-red-500/20" : "bg-yellow-500/20"
+                      }`}>
+                        {aiVizData.sentiment === "bullish" ? "📈" : aiVizData.sentiment === "bearish" ? "📉" : "➖"}
+                      </div>
+                      <span className={`text-xs font-bold mt-1.5 ${
+                        aiVizData.sentiment === "bullish" ? "text-emerald-400" :
+                        aiVizData.sentiment === "bearish" ? "text-red-400" : "text-yellow-400"
+                      }`}>
+                        {aiVizData.sentiment === "bullish" ? "看多" : aiVizData.sentiment === "bearish" ? "看空" : "中性"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">情绪判断</span>
+                    </div>
+
+                    {/* Risk Level */}
+                    <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-white/10 p-3 flex flex-col items-center justify-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        aiVizData.riskLevel === "low" ? "bg-emerald-500/20" :
+                        aiVizData.riskLevel === "high" ? "bg-red-500/20" : "bg-yellow-500/20"
+                      }`}>
+                        <Shield size={18} className={`${
+                          aiVizData.riskLevel === "low" ? "text-emerald-400" :
+                          aiVizData.riskLevel === "high" ? "text-red-400" : "text-yellow-400"
+                        }`} />
+                      </div>
+                      <span className={`text-xs font-bold mt-1.5 ${
+                        aiVizData.riskLevel === "low" ? "text-emerald-400" :
+                        aiVizData.riskLevel === "high" ? "text-red-400" : "text-yellow-400"
+                      }`}>
+                        {aiVizData.riskLevel === "low" ? "低风险" : aiVizData.riskLevel === "high" ? "高风险" : "中风险"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">风险等级</span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Key Metrics Cards */}
+                  {aiVizData.keyMetrics && (
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                      {/* Price */}
+                      {aiVizData.keyMetrics.price != null && (
+                        <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">价格</p>
+                          <p className="text-sm font-mono font-bold text-white mt-0.5">
+                            ${aiVizData.keyMetrics.price < 0.01 ? aiVizData.keyMetrics.price.toFixed(6) : aiVizData.keyMetrics.price < 1 ? aiVizData.keyMetrics.price.toFixed(4) : aiVizData.keyMetrics.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                          </p>
+                          {aiVizData.keyMetrics.priceChange24h != null && (
+                            <p className={`text-[10px] font-mono mt-0.5 ${aiVizData.keyMetrics.priceChange24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                              {aiVizData.keyMetrics.priceChange24h >= 0 ? "+" : ""}{aiVizData.keyMetrics.priceChange24h.toFixed(2)}%
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {/* Market Cap */}
+                      {aiVizData.keyMetrics.marketCap != null && (
+                        <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">市值</p>
+                          <p className="text-sm font-mono font-bold text-white mt-0.5">
+                            ${aiVizData.keyMetrics.marketCap > 1e9 ? (aiVizData.keyMetrics.marketCap / 1e9).toFixed(1) + "B" : (aiVizData.keyMetrics.marketCap / 1e6).toFixed(1) + "M"}
+                          </p>
+                          {aiVizData.keyMetrics.marketCapRank && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">#{aiVizData.keyMetrics.marketCapRank}</p>
+                          )}
+                        </div>
+                      )}
+                      {/* 24h Volume */}
+                      {aiVizData.keyMetrics.volume24h != null && (
+                        <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">24h 量</p>
+                          <p className="text-sm font-mono font-bold text-white mt-0.5">
+                            ${aiVizData.keyMetrics.volume24h > 1e9 ? (aiVizData.keyMetrics.volume24h / 1e9).toFixed(1) + "B" : (aiVizData.keyMetrics.volume24h / 1e6).toFixed(1) + "M"}
+                          </p>
+                          {aiVizData.keyMetrics.volumeToMcapRatio != null && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">量比: {(aiVizData.keyMetrics.volumeToMcapRatio * 100).toFixed(1)}%</p>
+                          )}
+                        </div>
+                      )}
+                      {/* Sentiment */}
+                      {aiVizData.keyMetrics.sentimentUp != null && (
+                        <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">社区情绪</p>
+                          <p className="text-sm font-mono font-bold text-white mt-0.5">{aiVizData.keyMetrics.sentimentUp.toFixed(0)}%</p>
+                          <div className="h-1 rounded-full bg-gray-700 mt-1 overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-400" style={{ width: `${aiVizData.keyMetrics.sentimentUp}%` }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Row 3: Price Change Bars */}
+                  {aiVizData.keyMetrics && (aiVizData.keyMetrics.priceChange24h != null || aiVizData.keyMetrics.priceChange7d != null || aiVizData.keyMetrics.priceChange30d != null) && (
+                    <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-white/10 p-3 mb-3">
+                      <p className="text-[10px] text-gray-400 mb-2 font-medium">涨跌幅对比</p>
+                      <div className="flex items-end gap-3 h-12">
+                        {[
+                          { label: "24h", val: aiVizData.keyMetrics.priceChange24h },
+                          { label: "7d", val: aiVizData.keyMetrics.priceChange7d },
+                          { label: "30d", val: aiVizData.keyMetrics.priceChange30d },
+                        ].filter(d => d.val != null).map(d => {
+                          const maxAbs = Math.max(
+                            Math.abs(aiVizData.keyMetrics.priceChange24h ?? 0),
+                            Math.abs(aiVizData.keyMetrics.priceChange7d ?? 0),
+                            Math.abs(aiVizData.keyMetrics.priceChange30d ?? 0),
+                            1
+                          );
+                          const pct = Math.min(Math.abs(d.val!) / maxAbs * 100, 100);
+                          const isPos = d.val! >= 0;
+                          return (
+                            <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+                              <div className="w-full flex justify-center">
+                                <div
+                                  className={`w-full max-w-[40px] rounded-t-sm ${isPos ? "bg-emerald-500" : "bg-red-500"}`}
+                                  style={{ height: `${Math.max(pct * 0.4, 4)}px` }}
+                                />
+                              </div>
+                              <span className={`text-[10px] font-mono font-bold ${isPos ? "text-emerald-400" : "text-red-400"}`}>
+                                {isPos ? "+" : ""}{d.val!.toFixed(1)}%
+                              </span>
+                              <span className="text-[9px] text-gray-500">{d.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ===== Report Content - Markdown ===== */}
+              <div className="px-5 py-4 prose prose-invert prose-sm max-w-none
+                prose-headings:text-white prose-headings:font-['Space_Grotesk']
+                prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2
+                prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1.5
+                prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed
+                prose-strong:text-white
+                prose-table:text-xs
+                prose-th:text-[#a855f7] prose-th:font-medium prose-th:border-white/10
+                prose-td:border-white/5 prose-td:text-gray-300
+                prose-li:text-gray-300 prose-li:text-sm
+                prose-code:text-[#00d4ff] prose-code:bg-white/5 prose-code:px-1 prose-code:rounded
+              ">
+                <Streamdown>{aiReportContent}</Streamdown>
+              </div>
             </div>
 
             {/* Footer with actions */}
