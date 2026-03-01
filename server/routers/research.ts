@@ -66,10 +66,153 @@ async function fetchTokenData(symbol: string) {
   };
 }
 
-// ─── Market Context Builder ──────────────────────────────────────────────────
+// ─── Global Market Data ────────────────────────────────────────────────────────
 
-function buildMarketContext(tokenData: NonNullable<Awaited<ReturnType<typeof fetchTokenData>>>) {
-  const athDrop = tokenData.athChangePercentage
+interface GlobalMarketData {
+  totalMarketCap: number | null;
+  totalVolume24h: number | null;
+  btcDominance: number | null;
+  ethDominance: number | null;
+  marketCapChange24h: number | null;
+  activeCryptocurrencies: number | null;
+}
+
+async function fetchGlobalMarketData(): Promise<GlobalMarketData | null> {
+  try {
+    const data = await cachedFetch<any>(
+      "global:market",
+      "https://api.coingecko.com/api/v3/global",
+      TTL.prices,
+      (res) => res.json(),
+    );
+    if (!data?.data) return null;
+    const d = data.data;
+    return {
+      totalMarketCap: d.total_market_cap?.usd ?? null,
+      totalVolume24h: d.total_volume?.usd ?? null,
+      btcDominance: d.market_cap_percentage?.btc ?? null,
+      ethDominance: d.market_cap_percentage?.eth ?? null,
+      marketCapChange24h: d.market_cap_change_percentage_24h_usd ?? null,
+      activeCryptocurrencies: d.active_cryptocurrencies ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFearGreedIndex(): Promise<{ value: number; classification: string } | null> {
+  try {
+    const data = await cachedFetch<any>(
+      "feargreed:index",
+      "https://api.alternative.me/fng/?limit=1",
+      TTL.prices,
+      (res) => res.json(),
+    );
+    if (!data?.data?.[0]) return null;
+    return {
+      value: parseInt(data.data[0].value, 10),
+      classification: data.data[0].value_classification,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBtcPrice(): Promise<{ price: number; change24h: number } | null> {
+  try {
+    const data = await cachedFetch<any>(
+      "btc:price:report",
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true",
+      TTL.prices,
+      (res) => res.json(),
+    );
+    if (!data?.bitcoin) return null;
+    return {
+      price: data.bitcoin.usd,
+      change24h: data.bitcoin.usd_24h_change,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildGlobalContext(global: GlobalMarketData | null, fng: { value: number; classification: string } | null, btc: { price: number; change24h: number } | null): string {
+  if (!global && !fng && !btc) return "";
+  const lines: string[] = ["\n=== 全球市场环境 ==="];
+  if (btc) {
+    lines.push(`BTC 价格: $${btc.price.toLocaleString()} (${fmtPct(btc.change24h)})`);
+  }
+  if (global) {
+    if (global.totalMarketCap) lines.push(`加密市场总市值: $${fmtUsd(global.totalMarketCap)} (24h ${fmtPct(global.marketCapChange24h)})`);
+    if (global.totalVolume24h) lines.push(`24h 总成交量: $${fmtUsd(global.totalVolume24h)}`);
+    if (global.btcDominance) lines.push(`BTC 主导率: ${global.btcDominance.toFixed(1)}%`);
+    if (global.ethDominance) lines.push(`ETH 主导率: ${global.ethDominance.toFixed(1)}%`);
+    if (global.activeCryptocurrencies) lines.push(`活跃加密货币数量: ${global.activeCryptocurrencies.toLocaleString()}`);
+  }
+  if (fng) {
+    lines.push(`恐惧与贪婪指数: ${fng.value}/100 (${fng.classification})`);
+  }
+  return lines.join("\n");
+}
+
+// ─── Historical Price Trend ───────────────────────────────────────────────────
+
+async function fetchPriceTrend(coinId: string): Promise<string> {
+  try {
+    // 30-day daily prices
+    const data = await cachedFetch<any>(
+      `trend:30d:${coinId}`,
+      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=30&interval=daily`,
+      TTL.chart,
+      (res) => res.json(),
+    );
+    if (!data?.prices || data.prices.length < 5) return "";
+
+    const prices: [number, number][] = data.prices;
+    const latest = prices[prices.length - 1][1];
+    const weekAgo = prices.length >= 8 ? prices[prices.length - 8][1] : prices[0][1];
+    const twoWeeksAgo = prices.length >= 15 ? prices[prices.length - 15][1] : prices[0][1];
+    const monthStart = prices[0][1];
+
+    // Calculate simple moving averages
+    const last7 = prices.slice(-7).map(p => p[1]);
+    const last14 = prices.slice(-14).map(p => p[1]);
+    const sma7 = last7.reduce((a, b) => a + b, 0) / last7.length;
+    const sma14 = last14.length > 0 ? last14.reduce((a, b) => a + b, 0) / last14.length : sma7;
+
+    // Find 30d high/low
+    const allPrices = prices.map(p => p[1]);
+    const high30d = Math.max(...allPrices);
+    const low30d = Math.min(...allPrices);
+    const range = high30d - low30d;
+    const positionInRange = range > 0 ? ((latest - low30d) / range * 100).toFixed(0) : "50";
+
+    // Trend determination
+    let trend = "震荡";
+    if (latest > sma7 && sma7 > sma14) trend = "上升趋势";
+    else if (latest < sma7 && sma7 < sma14) trend = "下降趋势";
+    else if (latest > sma7 && sma7 < sma14) trend = "反弹初期";
+    else if (latest < sma7 && sma7 > sma14) trend = "回调初期";
+
+    return `\n=== 30天价格趋势分析 ===
+当前价格: $${latest.toFixed(latest < 1 ? 6 : 2)}
+7天前价格: $${weekAgo.toFixed(weekAgo < 1 ? 6 : 2)} (变化 ${fmtPct((latest - weekAgo) / weekAgo * 100)})
+14天前价格: $${twoWeeksAgo.toFixed(twoWeeksAgo < 1 ? 6 : 2)} (变化 ${fmtPct((latest - twoWeeksAgo) / twoWeeksAgo * 100)})
+30天前价格: $${monthStart.toFixed(monthStart < 1 ? 6 : 2)} (变化 ${fmtPct((latest - monthStart) / monthStart * 100)})
+30天最高: $${high30d.toFixed(high30d < 1 ? 6 : 2)}
+30天最低: $${low30d.toFixed(low30d < 1 ? 6 : 2)}
+当前位置: 在 30天区间的 ${positionInRange}% 位置
+7天均线 (SMA7): $${sma7.toFixed(sma7 < 1 ? 6 : 2)}
+14天均线 (SMA14): $${sma14.toFixed(sma14 < 1 ? 6 : 2)}
+趋势判断: ${trend} (价格 ${latest > sma7 ? "在" : "低于"} SMA7 ${sma7 > sma14 ? "且 SMA7 > SMA14" : "且 SMA7 < SMA14"})`;
+  } catch {
+    return "";
+  }
+}
+
+// ─── Market Context Builder ──────────────────────────────────────────────────────
+
+function buildMarketContext(tokenData: NonNullable<Awaited<ReturnType<typeof fetchTokenData>>>) { const athDrop = tokenData.athChangePercentage
     ? `距离ATH下跌 ${Math.abs(tokenData.athChangePercentage).toFixed(1)}%`
     : "N/A";
 
@@ -165,30 +308,34 @@ ${marketContext}
 function buildDeepPrompt(symbol: string, marketContext: string): string {
   return `你是一位顶级加密货币研究机构的首席分析师，以深度、独立、有观点的研究报告著称。你的报告风格类似 Messari、Delphi Digital 的专业研报——数据驱动、逻辑严密、观点鲜明。
 
-请基于以下实时数据，对 ${symbol} 进行全面深度研究，生成一份机构级投研报告。
+请基于以下实时数据（包含代币基本面、全球市场环境、恐惧与贪婪指数、以及 30 天价格趋势分析），对 ${symbol} 进行全面深度研究，生成一份机构级投研报告。所有分析必须基于下方提供的实时数据，引用具体数字而非笼统描述。
 
 ${marketContext}
 
-**输出要求（Markdown 格式，约 1000-1200 字）：**
+**输出要求（Markdown 格式，约 1200-1500 字）：**
 
 ## 📋 ${symbol} 深度投研报告
 
 ### 🎯 投资论点（Investment Thesis）
 用 2-3 句话概括你的**核心投资论点**。明确表态：当前阶段你对该代币是看多、看空还是观望，以及最核心的理由。给出一个 1-10 的**综合评分**（1=强烈看空，5=中性，10=强烈看多）。
 
+### 🌍 宏观市场环境
+基于上方提供的全球市场数据（BTC 主导率、总市值、恐惧贪婪指数等），分析当前市场所处的周期阶段，以及对 ${symbol} 的影响。
+
 ### 📊 基本面分析
 - **项目定位与竞争格局**：该项目在其赛道中的位置，主要竞争对手对比
-- **代币经济学评估**：供应机制、通胀/通缩模型、代币释放节奏对价格的影响
-- **估值分析**：当前市值/FDV 是否合理，与同赛道项目的估值对比
+- **代币经济学评估**：基于实际流通量/总供应/最大供应数据，分析供应机制、通胀/通缩模型、代币释放节奏对价格的影响
+- **估值分析**：基于实际市值、FDV、成交量/市值比等数据，判断当前估值是否合理
 
-### 📈 技术面与市场结构
-- **价格趋势**：基于 24h/7d/30d 涨跌幅判断当前处于什么阶段（积累/上升/分配/下跌）
-- **成交量分析**：量价关系是否健康，是否有异常放量/缩量
-- **关键价位**：明确给出支撑位和阻力位（用具体数字）
+### 📈 技术面与价格趋势
+基于上方提供的 30 天价格趋势数据（SMA7/SMA14、区间位置、趋势判断）：
+- **价格趋势**：基于实际涨跌幅和均线关系判断当前处于什么阶段（积累/上升/分配/下跌）
+- **成交量分析**：基于实际成交量/市值比判断量价关系是否健康
+- **关键价位**：基于 30 天最高/最低和均线位置，明确给出支撑位和阻力位（用具体数字）
 
 ### 🔗 链上与情绪分析
-- **社区情绪**：基于投票数据和市场表现判断市场情绪
-- **筹码分布推断**：基于供应量数据推断大户持仓情况
+- **社区情绪**：基于 CoinGecko 社区投票数据和恐惧贪婪指数判断市场情绪
+- **筹码分布推断**：基于实际供应量数据推断大户持仓情况
 - **催化剂追踪**：近期可能影响价格的事件或升级
 
 ### 🧭 投研策略
@@ -279,12 +426,42 @@ export const researchRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Fetch real market data
+      // Fetch real market data (token-specific)
       const tokenData = await fetchTokenData(input.tokenSymbol);
 
-      const marketContext = tokenData
+      let marketContext = tokenData
         ? buildMarketContext(tokenData)
         : `=== 市场数据 ===\n代币符号: ${input.tokenSymbol.toUpperCase()}\n链: ${input.chain}\n（无法获取实时数据，请基于你的专业知识进行分析，但需明确标注数据缺失）`;
+
+      // For Deep mode, fetch additional data dimensions in parallel
+      if (input.mode === "deep") {
+        const coinId = tokenData ? (await cachedFetch<any>(
+          `token:search:${input.tokenSymbol.toLowerCase()}`,
+          `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(input.tokenSymbol)}`,
+          TTL.search,
+          (res) => res.json(),
+        ))?.coins?.[0]?.id : null;
+
+        const [globalData, fngData, btcData, priceTrend] = await Promise.all([
+          fetchGlobalMarketData(),
+          fetchFearGreedIndex(),
+          fetchBtcPrice(),
+          coinId ? fetchPriceTrend(coinId) : Promise.resolve(""),
+        ]);
+
+        // Append global market context
+        const globalContext = buildGlobalContext(globalData, fngData, btcData);
+        if (globalContext) marketContext += "\n" + globalContext;
+
+        // Append price trend analysis
+        if (priceTrend) marketContext += "\n" + priceTrend;
+      } else {
+        // Quick mode: fetch Fear & Greed only (lightweight)
+        const fngData = await fetchFearGreedIndex();
+        if (fngData) {
+          marketContext += `\n\n恐惧与贪婪指数: ${fngData.value}/100 (${fngData.classification})`;
+        }
+      }
 
       const symbol = input.tokenSymbol.toUpperCase();
       const prompt = input.mode === "quick"
