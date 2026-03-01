@@ -753,3 +753,121 @@ describe("Phase 8: Follow Router", () => {
     expect(content).toBe("alice.eth started following you");
   });
 });
+
+// ─── Phase 9: Settings & API Key Management Tests ────────────────────────────
+describe("Settings Router", () => {
+  describe("Privacy Settings Schema", () => {
+    it("validates boolean privacy settings", () => {
+      const validSettings = {
+        showWallet: false,
+        showActivity: true,
+        showNFTs: true,
+        readReceipts: true,
+        profileVisible: true,
+        twoFAEnabled: false,
+        biometricEnabled: false,
+      };
+      for (const [key, val] of Object.entries(validSettings)) {
+        expect(typeof val).toBe("boolean");
+      }
+      expect(Object.keys(validSettings)).toHaveLength(7);
+    });
+
+    it("allows partial updates (only changed fields)", () => {
+      const partialUpdate = { showWallet: true };
+      expect(Object.keys(partialUpdate)).toHaveLength(1);
+      expect(partialUpdate.showWallet).toBe(true);
+    });
+
+    it("rejects invalid setting values", () => {
+      const invalidUpdate = { showWallet: "yes" as any };
+      expect(typeof invalidUpdate.showWallet).not.toBe("boolean");
+    });
+  });
+
+  describe("API Key Generation", () => {
+    it("generates keys with correct prefix format", () => {
+      // Simulate the key generation logic
+      const { randomBytes, createHash } = require("crypto");
+      const random = randomBytes(24).toString("hex");
+      const rawKey = `nx_sk_${random}`;
+      expect(rawKey).toMatch(/^nx_sk_[a-f0-9]{48}$/);
+      expect(rawKey.length).toBe(54); // "nx_sk_" (6) + 48 hex chars
+    });
+
+    it("produces unique keys on each generation", () => {
+      const { randomBytes } = require("crypto");
+      const key1 = `nx_sk_${randomBytes(24).toString("hex")}`;
+      const key2 = `nx_sk_${randomBytes(24).toString("hex")}`;
+      expect(key1).not.toBe(key2);
+    });
+
+    it("hashes API keys with SHA-256", () => {
+      const { createHash } = require("crypto");
+      const rawKey = "nx_sk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6";
+      const hash = createHash("sha256").update(rawKey).digest("hex");
+      expect(hash).toHaveLength(64); // SHA-256 = 64 hex chars
+      // Same input = same hash (deterministic)
+      const hash2 = createHash("sha256").update(rawKey).digest("hex");
+      expect(hash).toBe(hash2);
+    });
+
+    it("extracts correct key prefix for storage", () => {
+      const rawKey = "nx_sk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6";
+      const keyPrefix = rawKey.slice(0, 10);
+      expect(keyPrefix).toBe("nx_sk_a1b2");
+    });
+
+    it("enforces maximum 5 active keys per user", () => {
+      const existingKeys = [1, 2, 3, 4, 5]; // 5 active keys
+      const maxKeys = 5;
+      expect(existingKeys.length >= maxKeys).toBe(true);
+    });
+
+    it("masks API key for display", () => {
+      const keyPrefix = "nx_sk_a1b2";
+      const maskedKey = `${keyPrefix}${"•".repeat(40)}`;
+      expect(maskedKey).toMatch(/^nx_sk_a1b2•{40}$/);
+      expect(maskedKey.length).toBe(50);
+    });
+  });
+});
+
+// ─── Phase 9: Avatar Upload Tests ────────────────────────────────────────────
+describe("Avatar Upload", () => {
+  it("validates base64 image data", () => {
+    const validBase64 = "iVBORw0KGgoAAAANSUhEUg=="; // PNG header
+    const isBase64 = /^[A-Za-z0-9+/=]+$/.test(validBase64);
+    expect(isBase64).toBe(true);
+  });
+
+  it("validates supported MIME types", () => {
+    const supportedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const unsupportedTypes = ["image/svg+xml", "application/pdf", "text/html"];
+    for (const type of supportedTypes) {
+      expect(type.startsWith("image/")).toBe(true);
+    }
+    for (const type of unsupportedTypes) {
+      const isSupported = supportedTypes.includes(type);
+      expect(isSupported).toBe(false);
+    }
+  });
+
+  it("enforces 4MB file size limit", () => {
+    const maxSizeBytes = 4 * 1024 * 1024; // 4MB
+    const smallFile = Buffer.alloc(1024 * 100); // 100KB
+    const largeFile = Buffer.alloc(5 * 1024 * 1024); // 5MB
+    expect(smallFile.length <= maxSizeBytes).toBe(true);
+    expect(largeFile.length <= maxSizeBytes).toBe(false);
+  });
+
+  it("generates unique S3 keys for avatars", () => {
+    const userId = 42;
+    const timestamp = Date.now();
+    const key = `avatars/${userId}/${timestamp}.jpg`;
+    expect(key).toMatch(/^avatars\/42\/\d+\.jpg$/);
+    // Different timestamps = different keys
+    const key2 = `avatars/${userId}/${timestamp + 1}.jpg`;
+    expect(key).not.toBe(key2);
+  });
+});

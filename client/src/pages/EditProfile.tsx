@@ -74,8 +74,8 @@ export default function EditProfile() {
     }
   }, [profileData]);
 
-  // ─── tRPC: upload avatar to S3 ────────────────────────────────────────────────
-  const uploadAvatarMutation = trpc.posts.uploadMedia.useMutation({
+    // ─── tRPC: upload avatar to S3 ────────────────────────────────────────────
+  const uploadAvatarMutation = trpc.user.uploadAvatar.useMutation({
     onError: (err) => {
       if (!err.message.includes("10001")) toast.error("头像上传失败: " + err.message);
     },
@@ -128,7 +128,6 @@ export default function EditProfile() {
         const ext = mimeType.split("/")[1] ?? "jpg";
         const result = await uploadAvatarMutation.mutateAsync({
           fileData: base64Data,
-          fileName: `avatar.${ext}`,
           mimeType,
         });
         // Replace local preview with CDN URL

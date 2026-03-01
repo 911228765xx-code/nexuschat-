@@ -102,3 +102,12 @@
 ## v27 修复
 
 - [x] 修复 Reown analytics 域名白名单错误（Origin not found on Allowlist）——拦截 XHR 屏蔽 analytics 请求
+
+## v28 功能优化
+
+- [x] 用户头像上传优化：专用 avatar 上传端点（user.uploadAvatar），自动裁剪路径
+- [x] Settings 隐私设置持久化：新建 user_settings 表 + updateSettings/getSettings 接口
+- [x] Settings API Key 管理：后端生成/存储/重新生成 API Key（user_api_keys 表）
+- [x] 代码分割优化：React.lazy 懒加载所有页面组件，减少首屏 bundle 大小
+- [x] i18n 补全：Research Quick/Deep 模式、报告弹窗、全局市场等新增文案（en + zh-CN）
+- [x] 110 个测试全部通过，TypeScript 0 错误

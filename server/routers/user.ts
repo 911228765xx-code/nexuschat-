@@ -3,6 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, userTasks, posts } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
+import { storagePut } from "../storage";
 
 // ─── Task definitions ─────────────────────────────────────────────────────────
 export const TASK_DEFINITIONS: Record<
@@ -97,6 +98,34 @@ export const userRouter = router({
       }
 
       return { success: true };
+    }),
+
+  // ─── Upload avatar to S3 ─────────────────────────────────────────────────
+  uploadAvatar: protectedProcedure
+    .input(
+      z.object({
+        fileData: z.string().max(6_000_000), // ~4.5MB base64
+        mimeType: z.string().max(100),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { fileData, mimeType } = input;
+      const buffer = Buffer.from(fileData, "base64");
+      if (buffer.length > 4 * 1024 * 1024) {
+        throw new Error("头像图片不能超过 4MB");
+      }
+      const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+      const randomSuffix = Math.random().toString(36).slice(2, 8);
+      const key = `avatars/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
+      const { url } = await storagePut(key, buffer, mimeType);
+
+      // Auto-update user avatar field
+      const db = await getDb();
+      if (db) {
+        await db.update(users).set({ avatar: url }).where(eq(users.id, ctx.user.id));
+      }
+
+      return { url };
     }),
 
   // ─── Get leaderboard ──────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import { followRouter } from "./routers/follow";
 import { contactsRouter } from "./routers/contacts";
 import { watchlistRouter } from "./routers/watchlist";
 import { copyTradingRouter } from "./routers/copyTrading";
+import { settingsRouter } from "./routers/settings";
 
 export const appRouter = router({
   system: systemRouter,
@@ -35,6 +36,7 @@ export const appRouter = router({
   contacts: contactsRouter,
   watchlist: watchlistRouter,
   copyTrading: copyTradingRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

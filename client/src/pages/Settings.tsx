@@ -2,14 +2,14 @@
  * Settings — 完整设置页面
  * 账户安全/语言切换/隐私管理/关于信息/退出登录
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Shield, Globe, Lock, Eye, EyeOff, Key, Smartphone,
   ChevronRight, Moon, Sun, Bell, Info, ExternalLink, LogOut,
   Copy, Check, AlertTriangle, Fingerprint, QrCode, Monitor,
-  Clock, Trash2, HelpCircle, MessageSquare, FileText, Heart
+  Clock, Trash2, HelpCircle, MessageSquare, FileText, Heart, Plus, X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
@@ -43,18 +43,69 @@ export default function Settings() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
-  // Security states
+  // ─── Backend-backed settings ─────────────────────────────────────────────
+  const settingsQuery = trpc.settings.getSettings.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const updateSettingsMut = trpc.settings.updateSettings.useMutation({
+    onSuccess: () => {
+      settingsQuery.refetch();
+      toast.success(t("settings.settingsSaved"));
+    },
+    onError: () => toast.error(t("settings.settingsError")),
+  });
+
+  // Local state synced from backend
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
-  const demoApiKey = "nx_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"; // Demo placeholder
-
-  // Privacy states
   const [showWallet, setShowWallet] = useState(false);
   const [showActivity, setShowActivity] = useState(true);
   const [showNFTs, setShowNFTs] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
   const [profileVisible, setProfileVisible] = useState(true);
+
+  // Sync from backend when data loads
+  useEffect(() => {
+    if (settingsQuery.data) {
+      const s = settingsQuery.data;
+      setTwoFAEnabled(s.twoFAEnabled);
+      setBiometricEnabled(s.biometricEnabled);
+      setShowWallet(s.showWallet);
+      setShowActivity(s.showActivity);
+      setShowNFTs(s.showNFTs);
+      setReadReceipts(s.readReceipts);
+      setProfileVisible(s.profileVisible);
+    }
+  }, [settingsQuery.data]);
+
+  // Helper to toggle and persist a setting
+  const toggleSetting = (key: string, current: boolean, setter: (v: boolean) => void) => {
+    const newVal = !current;
+    setter(newVal);
+    updateSettingsMut.mutate({ [key]: newVal });
+  };
+
+  // ─── API Key management ─────────────────────────────────────────────────
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<string | null>(null);
+  const apiKeysQuery = trpc.settings.listApiKeys.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const generateKeyMut = trpc.settings.generateApiKey.useMutation({
+    onSuccess: (data) => {
+      setNewlyGeneratedKey(data.apiKey);
+      apiKeysQuery.refetch();
+      toast.success("API Key generated! Copy it now — it won't be shown again.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const revokeKeyMut = trpc.settings.revokeApiKey.useMutation({
+    onSuccess: () => {
+      apiKeysQuery.refetch();
+      toast.success("API Key revoked");
+    },
+  });
+  const currentApiKey = newlyGeneratedKey ?? (apiKeysQuery.data?.[0]?.maskedKey || "nx_sk_••••••••••••••••••••••••••••");
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
@@ -115,10 +166,7 @@ export default function Settings() {
                   <p className="text-[10px] text-muted-foreground">{t("settings.twoFADesc")}</p>
                 </div>
               </div>
-              {renderToggle(twoFAEnabled, () => {
-                setTwoFAEnabled(!twoFAEnabled);
-                toast.success(twoFAEnabled ? t("settings.twoFADisabled") : t("settings.twoFAEnabled"));
-              })}
+              {renderToggle(twoFAEnabled, () => toggleSetting("twoFAEnabled", twoFAEnabled, setTwoFAEnabled))}
             </div>
           </div>
         </div>
@@ -136,10 +184,7 @@ export default function Settings() {
                   <p className="text-[10px] text-muted-foreground">{t("settings.biometricDesc")}</p>
                 </div>
               </div>
-              {renderToggle(biometricEnabled, () => {
-                setBiometricEnabled(!biometricEnabled);
-                toast.success(biometricEnabled ? t("settings.biometricOff") : t("settings.biometricOn"));
-              })}
+              {renderToggle(biometricEnabled, () => toggleSetting("biometricEnabled", biometricEnabled, setBiometricEnabled))}
             </div>
           </div>
         </div>
@@ -158,7 +203,7 @@ export default function Settings() {
             </div>
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary/30 border border-border/20">
               <code className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                {apiKeyVisible ? demoApiKey : "nx_sk_••••••••••••••••••••••••••••"}
+                {apiKeyVisible ? currentApiKey : "nx_sk_••••••••••••••••••••••••••••"}
               </code>
               <button
                 onClick={() => setApiKeyVisible(!apiKeyVisible)}
@@ -167,14 +212,14 @@ export default function Settings() {
                 {apiKeyVisible ? <EyeOff size={14} className="text-muted-foreground" /> : <Eye size={14} className="text-muted-foreground" />}
               </button>
               <button
-                onClick={() => { navigator.clipboard.writeText(demoApiKey); toast.success(t("settings.apiKeyCopied")); }}
+                onClick={() => { navigator.clipboard.writeText(currentApiKey); toast.success(t("settings.apiKeyCopied")); }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
               >
                 <Copy size={14} className="text-muted-foreground" />
               </button>
             </div>
             <button
-              onClick={() => toast.success(t("settings.apiKeyRegenerated"))}
+              onClick={() => generateKeyMut.mutate()}
               className="mt-2 text-[10px] text-neon-red hover:underline"
             >
               {t("settings.regenerateKey")}
@@ -233,11 +278,11 @@ export default function Settings() {
       </header>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {[
-          { label: t("settings.showWallet"), desc: t("settings.showWalletDesc"), on: showWallet, toggle: () => { setShowWallet(!showWallet); }, icon: <Eye size={16} className="text-neon-cyan" /> },
-          { label: t("settings.showActivity"), desc: t("settings.showActivityDesc"), on: showActivity, toggle: () => { setShowActivity(!showActivity); }, icon: <Clock size={16} className="text-neon-green" /> },
-          { label: t("settings.showNFTs"), desc: t("settings.showNFTsDesc"), on: showNFTs, toggle: () => { setShowNFTs(!showNFTs); }, icon: <Heart size={16} className="text-neon-purple" /> },
-          { label: t("settings.readReceipts"), desc: t("settings.readReceiptsDesc"), on: readReceipts, toggle: () => { setReadReceipts(!readReceipts); }, icon: <Check size={16} className="text-neon-cyan" /> },
-          { label: t("settings.profileVisible"), desc: t("settings.profileVisibleDesc"), on: profileVisible, toggle: () => { setProfileVisible(!profileVisible); }, icon: <Eye size={16} className="text-amber-400" /> },
+          { label: t("settings.showWallet"), desc: t("settings.showWalletDesc"), on: showWallet, toggle: () => toggleSetting("showWallet", showWallet, setShowWallet), icon: <Eye size={16} className="text-neon-cyan" /> },
+          { label: t("settings.showActivity"), desc: t("settings.showActivityDesc"), on: showActivity, toggle: () => toggleSetting("showActivity", showActivity, setShowActivity), icon: <Clock size={16} className="text-neon-green" /> },
+          { label: t("settings.showNFTs"), desc: t("settings.showNFTsDesc"), on: showNFTs, toggle: () => toggleSetting("showNFTs", showNFTs, setShowNFTs), icon: <Heart size={16} className="text-neon-purple" /> },
+          { label: t("settings.readReceipts"), desc: t("settings.readReceiptsDesc"), on: readReceipts, toggle: () => toggleSetting("readReceipts", readReceipts, setReadReceipts), icon: <Check size={16} className="text-neon-cyan" /> },
+          { label: t("settings.profileVisible"), desc: t("settings.profileVisibleDesc"), on: profileVisible, toggle: () => toggleSetting("profileVisible", profileVisible, setProfileVisible), icon: <Eye size={16} className="text-amber-400" /> },
         ].map((item, i) => (
           <div key={i} className="flex items-center justify-between p-3.5 rounded-2xl bg-card/50 border border-border/20">
             <div className="flex items-center gap-3">

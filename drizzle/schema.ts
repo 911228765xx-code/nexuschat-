@@ -393,3 +393,44 @@ export const tradingStrategies = mysqlTable(
   ]
 );
 export type TradingStrategy = typeof tradingStrategies.$inferSelect;
+
+// ─── User Settings (privacy & preferences persistence) ──────────────────
+export const userSettings = mysqlTable(
+  "user_settings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique(),
+    showWallet: boolean("showWallet").default(false).notNull(),
+    showActivity: boolean("showActivity").default(true).notNull(),
+    showNFTs: boolean("showNFTs").default(true).notNull(),
+    readReceipts: boolean("readReceipts").default(true).notNull(),
+    profileVisible: boolean("profileVisible").default(true).notNull(),
+    twoFAEnabled: boolean("twoFAEnabled").default(false).notNull(),
+    biometricEnabled: boolean("biometricEnabled").default(false).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  }
+);
+
+export type UserSettings = typeof userSettings.$inferSelect;
+export type InsertUserSettings = typeof userSettings.$inferInsert;
+
+// ─── User API Keys ────────────────────────────────────────────────────────
+export const userApiKeys = mysqlTable(
+  "user_api_keys",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    keyPrefix: varchar("keyPrefix", { length: 10 }).notNull(), // "nx_sk_" + first 4 chars
+    keyHash: varchar("keyHash", { length: 128 }).notNull(), // SHA-256 hash
+    label: varchar("label", { length: 100 }).default("Default"),
+    isActive: boolean("isActive").default(true).notNull(),
+    lastUsedAt: timestamp("lastUsedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_api_keys_user").on(t.userId),
+  ]
+);
+
+export type UserApiKey = typeof userApiKeys.$inferSelect;
+export type InsertUserApiKey = typeof userApiKeys.$inferInsert;

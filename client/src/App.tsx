@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -6,31 +6,45 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
-import Home from "./pages/Home";
-import Chat from "./pages/Chat";
-import ChatRoom from "./pages/ChatRoom";
-import Research from "./pages/Research";
-import Trading from "./pages/Trading";
-import Profile from "./pages/Profile";
-import Discover from "./pages/Discover";
-import Contacts from "./pages/Contacts";
-import Notifications from "./pages/Notifications";
 import AppLayout from "./components/AppLayout";
 import Onboarding from "./components/Onboarding";
-import CreateGroup from "./pages/CreateGroup";
-import EditProfile from "./pages/EditProfile";
-import GroupChatRoom from "./pages/GroupChatRoom";
-import Wallet from "./pages/Wallet";
-import InviteFriends from "./pages/InviteFriends";
-import TaskCenter from "./pages/TaskCenter";
-import Leaderboard from "./pages/Leaderboard";
-import Settings from "./pages/Settings";
-import TokenDetail from "./pages/TokenDetail";
-import PostDetail from "./pages/PostDetail";
-import Watchlist from "./pages/Watchlist";
-import DMChat from "./pages/DMChat";
 import { AppProvider } from "./contexts/AppContext";
 import { usePriceAlertSocket } from "./hooks/usePriceAlertSocket";
+
+// ─── Lazy-loaded page components (code splitting) ────────────────────────────
+const Home = lazy(() => import("./pages/Home"));
+const Chat = lazy(() => import("./pages/Chat"));
+const ChatRoom = lazy(() => import("./pages/ChatRoom"));
+const Research = lazy(() => import("./pages/Research"));
+const Trading = lazy(() => import("./pages/Trading"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Discover = lazy(() => import("./pages/Discover"));
+const Contacts = lazy(() => import("./pages/Contacts"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const CreateGroup = lazy(() => import("./pages/CreateGroup"));
+const EditProfile = lazy(() => import("./pages/EditProfile"));
+const GroupChatRoom = lazy(() => import("./pages/GroupChatRoom"));
+const Wallet = lazy(() => import("./pages/Wallet"));
+const InviteFriends = lazy(() => import("./pages/InviteFriends"));
+const TaskCenter = lazy(() => import("./pages/TaskCenter"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const Settings = lazy(() => import("./pages/Settings"));
+const TokenDetail = lazy(() => import("./pages/TokenDetail"));
+const PostDetail = lazy(() => import("./pages/PostDetail"));
+const Watchlist = lazy(() => import("./pages/Watchlist"));
+const DMChat = lazy(() => import("./pages/DMChat"));
+
+// ─── Minimal loading fallback ────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-[#00d4ff]/30 border-t-[#00d4ff] rounded-full animate-spin" />
+        <span className="text-xs text-muted-foreground">Loading...</span>
+      </div>
+    </div>
+  );
+}
 
 function AppContent() {
   // Connect Socket.IO for real-time price alert push notifications
@@ -46,122 +60,124 @@ function AppContent() {
       {showOnboarding && (
         <Onboarding onComplete={() => setShowOnboarding(false)} />
       )}
-      <Switch>
-        <Route path="/">
-          <Home />
-        </Route>
-        <Route path="/app/group/:id">
-          <AppLayout hideNav>
-            <GroupChatRoom />
-          </AppLayout>
-        </Route>
-        <Route path="/app/dm/:userId">
-          <AppLayout hideNav>
-            <DMChat />
-          </AppLayout>
-        </Route>
-        <Route path="/app/chat/:id">
-          <AppLayout>
-            <ChatRoom />
-          </AppLayout>
-        </Route>
-        <Route path="/app/chat">
-          <AppLayout>
-            <Chat />
-          </AppLayout>
-        </Route>
-        <Route path="/app/create-group">
-          <AppLayout hideNav>
-            <CreateGroup />
-          </AppLayout>
-        </Route>
-        <Route path="/app/edit-profile">
-          <AppLayout hideNav>
-            <EditProfile />
-          </AppLayout>
-        </Route>
-        <Route path="/app/wallet">
-          <AppLayout hideNav>
-            <Wallet />
-          </AppLayout>
-        </Route>
-        <Route path="/app/contacts">
-          <AppLayout hideNav>
-            <Contacts />
-          </AppLayout>
-        </Route>
-        <Route path="/app/notifications">
-          <AppLayout hideNav>
-            <Notifications />
-          </AppLayout>
-        </Route>
-        <Route path="/app/invite">
-          <AppLayout hideNav>
-            <InviteFriends />
-          </AppLayout>
-        </Route>
-        <Route path="/app/tasks">
-          <AppLayout hideNav>
-            <TaskCenter />
-          </AppLayout>
-        </Route>
-        <Route path="/app/leaderboard">
-          <AppLayout hideNav>
-            <Leaderboard />
-          </AppLayout>
-        </Route>
-        <Route path="/app/settings">
-          <AppLayout hideNav>
-            <Settings />
-          </AppLayout>
-        </Route>
-        <Route path="/app/discover">
-          <AppLayout>
-            <Discover />
-          </AppLayout>
-        </Route>
-        <Route path="/app/post/:id">
-          <AppLayout hideNav>
-            <PostDetail />
-          </AppLayout>
-        </Route>
-        <Route path="/app/research/:token">
-          <AppLayout hideNav>
-            <TokenDetail />
-          </AppLayout>
-        </Route>
-        <Route path="/app/research">
-          <AppLayout>
-            <Research />
-          </AppLayout>
-        </Route>
-        <Route path="/app/watchlist">
-          <AppLayout hideNav>
-            <Watchlist />
-          </AppLayout>
-        </Route>
-        <Route path="/app/trading">
-          <AppLayout>
-            <Trading />
-          </AppLayout>
-        </Route>
-        <Route path="/app/profile">
-          <AppLayout>
-            <Profile />
-          </AppLayout>
-        </Route>
-        <Route path="/app">
-          <AppLayout>
-            <Chat />
-          </AppLayout>
-        </Route>
-        <Route path="/404">
-          <NotFound />
-        </Route>
-        <Route>
-          <NotFound />
-        </Route>
-      </Switch>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/">
+            <Home />
+          </Route>
+          <Route path="/app/group/:id">
+            <AppLayout hideNav>
+              <GroupChatRoom />
+            </AppLayout>
+          </Route>
+          <Route path="/app/dm/:userId">
+            <AppLayout hideNav>
+              <DMChat />
+            </AppLayout>
+          </Route>
+          <Route path="/app/chat/:id">
+            <AppLayout>
+              <ChatRoom />
+            </AppLayout>
+          </Route>
+          <Route path="/app/chat">
+            <AppLayout>
+              <Chat />
+            </AppLayout>
+          </Route>
+          <Route path="/app/create-group">
+            <AppLayout hideNav>
+              <CreateGroup />
+            </AppLayout>
+          </Route>
+          <Route path="/app/edit-profile">
+            <AppLayout hideNav>
+              <EditProfile />
+            </AppLayout>
+          </Route>
+          <Route path="/app/wallet">
+            <AppLayout hideNav>
+              <Wallet />
+            </AppLayout>
+          </Route>
+          <Route path="/app/contacts">
+            <AppLayout hideNav>
+              <Contacts />
+            </AppLayout>
+          </Route>
+          <Route path="/app/notifications">
+            <AppLayout hideNav>
+              <Notifications />
+            </AppLayout>
+          </Route>
+          <Route path="/app/invite">
+            <AppLayout hideNav>
+              <InviteFriends />
+            </AppLayout>
+          </Route>
+          <Route path="/app/tasks">
+            <AppLayout hideNav>
+              <TaskCenter />
+            </AppLayout>
+          </Route>
+          <Route path="/app/leaderboard">
+            <AppLayout hideNav>
+              <Leaderboard />
+            </AppLayout>
+          </Route>
+          <Route path="/app/settings">
+            <AppLayout hideNav>
+              <Settings />
+            </AppLayout>
+          </Route>
+          <Route path="/app/discover">
+            <AppLayout>
+              <Discover />
+            </AppLayout>
+          </Route>
+          <Route path="/app/post/:id">
+            <AppLayout hideNav>
+              <PostDetail />
+            </AppLayout>
+          </Route>
+          <Route path="/app/research/:token">
+            <AppLayout hideNav>
+              <TokenDetail />
+            </AppLayout>
+          </Route>
+          <Route path="/app/research">
+            <AppLayout>
+              <Research />
+            </AppLayout>
+          </Route>
+          <Route path="/app/watchlist">
+            <AppLayout hideNav>
+              <Watchlist />
+            </AppLayout>
+          </Route>
+          <Route path="/app/trading">
+            <AppLayout>
+              <Trading />
+            </AppLayout>
+          </Route>
+          <Route path="/app/profile">
+            <AppLayout>
+              <Profile />
+            </AppLayout>
+          </Route>
+          <Route path="/app">
+            <AppLayout>
+              <Chat />
+            </AppLayout>
+          </Route>
+          <Route path="/404">
+            <NotFound />
+          </Route>
+          <Route>
+            <NotFound />
+          </Route>
+        </Switch>
+      </Suspense>
     </>
   );
 }

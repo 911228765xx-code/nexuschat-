@@ -57,6 +57,13 @@
       "when": 1772299926608,
       "tag": "0007_handy_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1772328695693,
+      "tag": "0008_unusual_magma",
+      "breakpoints": true
     }
   ]
 }
