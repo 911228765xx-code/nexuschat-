@@ -1280,20 +1280,11 @@ export default function Discover() {
                 <button
                   onClick={() => {
                     const numId = parseInt(user.id, 10);
-                    if (!isNaN(numId)) {
-                      if (followedUsers.has(user.id)) {
-                        unfollowMutation.mutate({ targetUserId: numId });
-                      } else {
-                        followMutation.mutate({ targetUserId: numId });
-                      }
+                    if (isNaN(numId)) return;
+                    if (followedUsers.has(user.id)) {
+                      unfollowMutation.mutate({ targetUserId: numId });
                     } else {
-                      // Fallback for mock users with non-numeric IDs
-                      setFollowedUsers(prev => {
-                        const next = new Set(prev);
-                        if (next.has(user.id)) next.delete(user.id); else next.add(user.id);
-                        return next;
-                      });
-                      toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
+                      followMutation.mutate({ targetUserId: numId });
                     }
                   }}
                   className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${

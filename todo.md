@@ -209,3 +209,9 @@
   - PostDetail.tsx 同样添加删除功能
   - 新增中英文 i18n 翻译
 - [x] 修复 Discover Users Tab "Cannot follow yourself" 错误（realUsers 列表过滤掉 currentUser.id）
+
+## v40 上线前修复
+
+- [x] priceAlertChecker.ts checkAlerts 添加 try-catch 包裹 DB 查询 + 单条 alert 处理（ECONNRESET/ETIMEDOUT 优雅降级，下个周期重试）
+- [x] OG image + Twitter image 改为 CDN 绝对 URL（社交分享正常显示）
+- [x] Discover Users Tab 移除 mock fallback 分支（简化为纯数字 ID 处理）
