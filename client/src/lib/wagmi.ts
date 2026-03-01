@@ -42,12 +42,29 @@ import { bsc, bscTestnet } from "wagmi/chains";
   };
 })();
 
+/**
+ * WalletConnect Cloud Configuration
+ * 
+ * For production: Set VITE_WALLETCONNECT_PROJECT_ID in environment secrets.
+ * Get a free projectId at https://cloud.walletconnect.com
+ * Then add your production domain to the allowlist in the WalletConnect dashboard.
+ * 
+ * Without a valid projectId, wallet connections via WalletConnect QR code
+ * will not work, but injected wallets (MetaMask browser extension) still function.
+ */
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "00000000000000000000000000000000";
+
+if (projectId === "00000000000000000000000000000000" && typeof window !== "undefined") {
+  console.warn(
+    "[NexusChat] WalletConnect projectId not configured. " +
+    "QR code wallet connections are disabled. " +
+    "Set VITE_WALLETCONNECT_PROJECT_ID for full wallet support."
+  );
+}
+
 export const wagmiConfig = getDefaultConfig({
   appName: "NexusChat",
-  // WalletConnect Cloud projectId — replace with real one from https://cloud.walletconnect.com
-  projectId:
-    import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ||
-    "00000000000000000000000000000000",
+  projectId,
   chains: [bsc, bscTestnet],
   ssr: false,
 });

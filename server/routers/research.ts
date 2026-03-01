@@ -6,6 +6,7 @@ import { eq, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
+import { sanitizeInput } from "../utils/sanitize";
 
 // ─── CoinGecko Data Fetching ─────────────────────────────────────────────────
 
@@ -438,7 +439,7 @@ export const researchRouter = router({
       const summaryLine = lines.find((l: string) => l.length > 30) ?? `${report.tokenSymbol} \u6295\u7814\u62a5\u544a`;
       const summary = summaryLine.replace(/\*\*/g, "").slice(0, 150);
 
-      const userComment = input.comment?.trim() ? `${input.comment.trim()}\n\n` : "";
+      const userComment = input.comment?.trim() ? `${sanitizeInput(input.comment.trim(), 500)}\n\n` : "";
       const fmtMcap = (v: number | null) => {
         if (!v) return "N/A";
         if (v > 1e9) return (v / 1e9).toFixed(1) + "B";

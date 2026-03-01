@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { users, userTasks, posts } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 
 // ─── Task definitions ─────────────────────────────────────────────────────────
 export const TASK_DEFINITIONS: Record<
@@ -82,9 +83,9 @@ export const userRouter = router({
       if (!db) throw new Error("Database not available");
 
       const updateData: Partial<typeof users.$inferInsert> = {};
-      if (input.name !== undefined) updateData.name = input.name;
-      if (input.username !== undefined) updateData.username = input.username;
-      if (input.bio !== undefined) updateData.bio = input.bio;
+      if (input.name !== undefined) updateData.name = sanitizeInput(input.name, 50);
+      if (input.username !== undefined) updateData.username = sanitizeUsername(input.username);
+      if (input.bio !== undefined) updateData.bio = sanitizeInput(input.bio, 200);
       if (input.avatar !== undefined) updateData.avatar = input.avatar;
 
       await db.update(users).set(updateData).where(eq(users.id, ctx.user.id));

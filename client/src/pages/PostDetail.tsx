@@ -10,8 +10,9 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Heart, MessageSquare, Repeat2, Share2, Bookmark,
   Star, MoreHorizontal, Send, AtSign, X, Quote, ChevronDown,
-  CheckCircle2, Copy, ExternalLink
+  CheckCircle2, Copy, ExternalLink, BarChart3, TrendingUp, TrendingDown, Minus, FileText
 } from "lucide-react";
+import { Streamdown } from "streamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -412,6 +413,15 @@ export default function PostDetail() {
     { enabled: isNumericId }
   );
 
+  // Extract reportId from server post
+  const reportId = serverPost?.reportId ?? null;
+
+  // tRPC: load full report if post has reportId
+  const { data: reportData, isLoading: reportLoading } = trpc.research.getReportPublic.useQuery(
+    { reportId: reportId! },
+    { enabled: !!reportId }
+  );
+
   // tRPC: load real comments
   const { data: serverComments } = trpc.posts.getComments.useQuery(
     { postId: numericPostId, limit: 50 },
@@ -625,6 +635,77 @@ export default function PostDetail() {
 
           {/* Full content */}
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-line mb-3">{post.content}</p>
+
+          {/* ─── Embedded Research Report ─── */}
+          {reportId && (
+            <div className="my-4 rounded-2xl border border-neon-cyan/20 bg-gradient-to-br from-neon-cyan/5 via-card to-[#a855f7]/5 overflow-hidden">
+              {/* Report Header */}
+              <div className="px-4 py-3 border-b border-border/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-neon-cyan/15 flex items-center justify-center">
+                    <BarChart3 size={16} className="text-neon-cyan" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold font-display">
+                        {reportData?.tokenSymbol?.toUpperCase() || 'AI'} Research Report
+                      </span>
+                      {reportData?.sentiment && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          reportData.sentiment === 'bullish' ? 'bg-green-500/15 text-green-400' :
+                          reportData.sentiment === 'bearish' ? 'bg-red-500/15 text-red-400' :
+                          'bg-yellow-500/15 text-yellow-400'
+                        }`}>
+                          {reportData.sentiment === 'bullish' ? '看多' : reportData.sentiment === 'bearish' ? '看空' : '中性'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      AI Research Report
+                      {reportData?.priceAtReport ? ` · Price: $${reportData.priceAtReport}` : ''}
+                    </p>
+                  </div>
+                </div>
+                {reportData?.sentiment && (
+                  <div className="flex items-center gap-1">
+                    {reportData.sentiment === 'bullish' ? <TrendingUp size={16} className="text-green-400" /> :
+                     reportData.sentiment === 'bearish' ? <TrendingDown size={16} className="text-red-400" /> :
+                     <Minus size={16} className="text-yellow-400" />}
+                  </div>
+                )}
+              </div>
+
+              {/* Report Body */}
+              <div className="px-4 py-3">
+                {reportLoading ? (
+                  <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+                    <FileText size={16} className="animate-pulse" />
+                    <span className="text-xs">Loading report...</span>
+                  </div>
+                ) : reportData?.reportContent ? (
+                  <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-1.5 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mb-1 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ol]:text-xs [&_li]:mb-0.5 [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-xs [&_strong]:text-neon-cyan">
+                    <Streamdown>{reportData.reportContent}</Streamdown>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-4">Report content unavailable</p>
+                )}
+              </div>
+
+              {/* Report Footer */}
+              {reportData?.riskLevel && (
+                <div className="px-4 py-2 border-t border-border/10 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Risk Level</span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    reportData.riskLevel === 'high' ? 'bg-red-500/15 text-red-400' :
+                    reportData.riskLevel === 'medium' ? 'bg-yellow-500/15 text-yellow-400' :
+                    'bg-green-500/15 text-green-400'
+                  }`}>
+                    {reportData.riskLevel === 'high' ? '高风险' : reportData.riskLevel === 'medium' ? '中等风险' : '低风险'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tags */}
           {post.tags && post.tags.length > 0 && (

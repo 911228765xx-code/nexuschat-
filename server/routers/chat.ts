@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne } from "drizzle-orm";
 import { emitToUser } from "../socket";
+import { sanitizeInput } from "../utils/sanitize";
 
 export const chatRouter = router({
   // List public groups
@@ -128,7 +129,7 @@ export const chatRouter = router({
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
         senderId: ctx.user.id,
-        content: input.content,
+        content: sanitizeInput(input.content, 5000),
         messageType: input.messageType as "text" | "image" | "file" | "system",
         mediaUrl: input.mediaUrl ?? undefined,
       });
@@ -150,7 +151,7 @@ export const chatRouter = router({
         senderId: ctx.user.id,
         receiverId: input.receiverId,
         groupId: null,
-        content: input.content,
+        content: sanitizeInput(input.content, 5000),
         messageType: input.messageType as "text" | "image" | "file" | "system",
         mediaUrl: input.mediaUrl ?? undefined,
       });

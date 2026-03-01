@@ -130,3 +130,13 @@
 - [x] 前端：分享确认弹窗（可编辑评论 + 预览卡片 + 发布按钮）
 - [x] 前端：Discover 动态流中渲染 ReportCard 组件（渐变卡片 + 标签 + hover 查看完整报告）
 - [x] 110 个测试全部通过，TypeScript 0 错误
+
+## v31 P0 上线前必须处理
+
+- [x] SEO: 添加 meta description、og:*、twitter:* 标签到 index.html
+- [x] 添加 favicon.ico（AI 生成赛博朋克风格图标 + ICO 多尺寸转换）
+- [x] 添加 robots.txt
+- [x] PostDetail 页面检测 reportId 并渲染完整投研报告（Streamdown + 数据摘要栏）
+- [x] WalletConnect projectId 配置优化（fetch 拦截 analytics + 优雅降级文档）
+- [x] XSS 防护：安装 DOMPurify，对 posts/comments/chat/profile/shareToFeed 全部输入消毒
+- [x] 110 个测试全部通过，TypeScript 0 错误

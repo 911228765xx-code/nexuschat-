@@ -5,6 +5,7 @@ import { posts, postLikes, postComments, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { createNotification } from "./notificationsRouter";
+import { sanitizeInput } from "../utils/sanitize";
 
 export const postsRouter = router({
   // ─── List posts (public feed) ──────────────────────────────────────────────
@@ -86,9 +87,9 @@ export const postsRouter = router({
 
       const [result] = await db.insert(posts).values({
         authorId: ctx.user.id,
-        content: input.content,
+        content: sanitizeInput(input.content, 2000),
         mediaUrls: input.mediaUrls ? JSON.stringify(input.mediaUrls) : undefined,
-        tags: input.tags ? JSON.stringify(input.tags) : undefined,
+        tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
       return { postId: (result as any).insertId as number };
@@ -241,7 +242,7 @@ export const postsRouter = router({
       const [result] = await db.insert(postComments).values({
         postId: input.postId,
         authorId: ctx.user.id,
-        content: input.content,
+        content: sanitizeInput(input.content, 1000),
       });
 
       // Increment comment count
