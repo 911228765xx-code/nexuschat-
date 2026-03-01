@@ -163,3 +163,9 @@
 - [x] Trading priceTicker 静态 fallback 清理（替换为 0 默认值 + CoinGecko 实时加载）
 - [x] 添加 PWA manifest.json
 - [x] 图片 lazy loading（ChatRoom + Wallet NFT）
+
+## v34 P2 优化
+
+- [x] API 速率限制中间件（tRPC 接口 rate limiting，特别是 LLM 投研接口）
+- [x] EnhancedInput 代币价格实时化（$TOKEN 内联卡片接入 CoinGecko 实时数据）
+- [x] PnL Calendar 后端化（接入 trading_positions 表计算真实盈亏 + closePrice/realizedPnl 字段 + 月份导航）

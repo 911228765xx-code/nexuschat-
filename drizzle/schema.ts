@@ -315,6 +315,8 @@ export const tradingPositions = mysqlTable(
     liquidationPrice: varchar("liquidationPrice", { length: 30 }),
     strategyName: varchar("strategyName", { length: 100 }),
     status: mysqlEnum("status", ["open", "closed"]).default("open").notNull(),
+    closePrice: varchar("closePrice", { length: 30 }),
+    realizedPnl: varchar("realizedPnl", { length: 30 }),
     closedAt: timestamp("closedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

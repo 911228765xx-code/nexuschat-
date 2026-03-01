@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { rateLimitStrict, rateLimitWrite } from "../rateLimit";
 import { getDb } from "../db";
 import { researchReports, priceAlerts, posts, users } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
@@ -265,6 +267,7 @@ function extractRiskLevel(content: string): "low" | "medium" | "high" {
 export const researchRouter = router({
   // Generate AI research report (supports quick / deep modes)
   generate: protectedProcedure
+    .use(rateLimitStrict)
     .input(z.object({
       tokenSymbol: z.string().min(1).max(20),
       contractAddress: z.string().optional(),
@@ -272,6 +275,7 @@ export const researchRouter = router({
       mode: z.enum(["quick", "deep"]).default("deep"),
     }))
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 

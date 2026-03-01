@@ -228,14 +228,95 @@ export const tradingRouter = router({
     }),
 
   closePosition: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({
+      id: z.number(),
+      closePrice: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
+
+      // Fetch position to calculate PnL
+      const [pos] = await db
+        .select()
+        .from(tradingPositions)
+        .where(and(eq(tradingPositions.id, input.id), eq(tradingPositions.userId, ctx.user.id)))
+        .limit(1);
+
+      if (!pos) return { success: false };
+
+      let realizedPnl: string | undefined;
+      const cp = input.closePrice ? parseFloat(input.closePrice) : undefined;
+      if (cp !== undefined) {
+        const entry = parseFloat(pos.entryPrice);
+        const amt = parseFloat(pos.amount);
+        const lev = pos.leverage;
+        const pnl = pos.side === "long"
+          ? (cp - entry) * amt * lev
+          : (entry - cp) * amt * lev;
+        realizedPnl = pnl.toFixed(2);
+      }
+
       await db
         .update(tradingPositions)
-        .set({ status: "closed", closedAt: new Date() })
+        .set({
+          status: "closed",
+          closePrice: input.closePrice ?? undefined,
+          realizedPnl,
+          closedAt: new Date(),
+        })
         .where(and(eq(tradingPositions.id, input.id), eq(tradingPositions.userId, ctx.user.id)));
-      return { success: true };
+      return { success: true, realizedPnl };
+    }),
+
+  // ─── PnL Calendar: aggregate daily PnL from closed positions ──────────
+  getPnlCalendar: protectedProcedure
+    .input(z.object({
+      year: z.number().min(2020).max(2030),
+      month: z.number().min(0).max(11), // 0-indexed like JS Date
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      // Get first and last day of the month
+      const startDate = new Date(input.year, input.month, 1);
+      const endDate = new Date(input.year, input.month + 1, 0, 23, 59, 59);
+      const daysInMonth = endDate.getDate();
+
+      // Fetch all closed positions for this user in this month
+      const closedPositions = await db
+        .select()
+        .from(tradingPositions)
+        .where(
+          and(
+            eq(tradingPositions.userId, ctx.user.id),
+            eq(tradingPositions.status, "closed"),
+          )
+        )
+        .orderBy(desc(tradingPositions.closedAt));
+
+      // Filter to the requested month and aggregate by day
+      const dailyMap: Record<number, { pnl: number; trades: number }> = {};
+      for (let d = 1; d <= daysInMonth; d++) {
+        dailyMap[d] = { pnl: 0, trades: 0 };
+      }
+
+      for (const pos of closedPositions) {
+        if (!pos.closedAt || !pos.realizedPnl) continue;
+        const closedDate = new Date(pos.closedAt);
+        if (closedDate < startDate || closedDate > endDate) continue;
+        const day = closedDate.getDate();
+        dailyMap[day].pnl += parseFloat(pos.realizedPnl);
+        dailyMap[day].trades += 1;
+      }
+
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return Array.from({ length: daysInMonth }, (_, i) => ({
+        date: `${monthNames[input.month]} ${i + 1}`,
+        day: i + 1,
+        pnl: parseFloat(dailyMap[i + 1].pnl.toFixed(2)),
+        trades: dailyMap[i + 1].trades,
+      }));
     }),
 });

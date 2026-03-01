@@ -72,24 +72,7 @@ const defaultTicker = [
 
 
 
-// PnL Calendar data for February 2026
-const generatePnlCalendar = (): PnlDay[] => {
-  const days: PnlDay[] = [];
-  const pnlData = [
-    12.5, -3.2, 8.1, 0, 15.8, -2.1, 22.3, 0, -5.5, 18.2,
-    6.8, 0, -8.3, 25.1, 0, 11.5, -1.8, 0, 32.4, -6.2,
-    14.7, 0, 8.9, -3.5, 19.2, 0, 0, 0
-  ];
-  const tradeData = [
-    3, 1, 2, 0, 4, 1, 5, 0, 2, 3,
-    2, 0, 1, 6, 0, 3, 1, 0, 4, 2,
-    3, 0, 2, 1, 4, 0, 0, 0
-  ];
-  for (let i = 0; i < 28; i++) {
-    days.push({ date: `Feb ${i + 1}`, day: i + 1, pnl: pnlData[i], trades: tradeData[i] });
-  }
-  return days;
-};
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 type MainTab = "strategies" | "market" | "positions" | "calendar" | "logs" | "alerts";
 type DetailTab = "chart" | "trades" | "risk" | "stats";
@@ -181,7 +164,8 @@ export default function Trading() {
   const [copyTrader, setCopyTrader] = useState<Trader | null>(null);
   const [closePosition, setClosePosition] = useState<Position | null>(null);
   const [compareList, setCompareList] = useState<string[]>([]);
-  const [calendarMonth, setCalendarMonth] = useState(1); // 0=Jan, 1=Feb
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth()); // 0-indexed
   const [tickerOffset, setTickerOffset] = useState(0);
   const { t } = useI18n();
 
@@ -273,7 +257,10 @@ export default function Trading() {
     return () => clearInterval(timer);
   }, []);
 
-  const pnlCalendar = useMemo(() => generatePnlCalendar(), []);
+  const { data: pnlCalendar = [] } = trpc.trading.getPnlCalendar.useQuery(
+    { year: calendarYear, month: calendarMonth },
+    { staleTime: 60_000 }
+  );
 
   const totalProfit = strategies.reduce((s, st) => s + st.totalProfit, 0);
   const totalTrades = strategies.reduce((s, st) => s + st.trades, 0);
@@ -995,25 +982,36 @@ export default function Trading() {
               <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
                 {/* Month Navigation */}
                 <div className="flex items-center justify-between">
-                  <button onClick={() => setCalendarMonth(Math.max(0, calendarMonth - 1))} className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary/40">
+                  <button onClick={() => {
+                    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+                    else setCalendarMonth(m => m - 1);
+                  }} className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary/40">
                     <ChevronLeft size={16} className="text-muted-foreground" />
                   </button>
                   <span className="text-sm font-semibold font-display">
-                    {calendarMonth === 0 ? "January" : "February"} 2026
+                    {MONTH_NAMES[calendarMonth]} {calendarYear}
                   </span>
-                  <button onClick={() => setCalendarMonth(Math.min(1, calendarMonth + 1))} className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary/40">
+                  <button onClick={() => {
+                    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+                    else setCalendarMonth(m => m + 1);
+                  }} className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary/40">
                     <ChevronRight size={16} className="text-muted-foreground" />
                   </button>
                 </div>
 
                 {/* Monthly Summary */}
                 <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { label: "Total PnL", value: `+$${pnlCalendar.reduce((s, d) => s + d.pnl, 0).toFixed(1)}`, color: "text-neon-green" },
-                    { label: "Win Days", value: `${pnlCalendar.filter(d => d.pnl > 0).length}`, color: "text-neon-green" },
-                    { label: "Loss Days", value: `${pnlCalendar.filter(d => d.pnl < 0).length}`, color: "text-neon-red" },
-                    { label: "Best Day", value: `+$${Math.max(...pnlCalendar.map(d => d.pnl)).toFixed(1)}`, color: "text-neon-cyan" },
-                  ].map((item) => (
+                  {(() => {
+                    const totalPnl = pnlCalendar.reduce((s, d) => s + d.pnl, 0);
+                    const pnlValues = pnlCalendar.map(d => d.pnl);
+                    const bestDay = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
+                    return [
+                      { label: "Total PnL", value: `${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(1)}`, color: totalPnl >= 0 ? "text-neon-green" : "text-neon-red" },
+                      { label: "Win Days", value: `${pnlCalendar.filter(d => d.pnl > 0).length}`, color: "text-neon-green" },
+                      { label: "Loss Days", value: `${pnlCalendar.filter(d => d.pnl < 0).length}`, color: "text-neon-red" },
+                      { label: "Best Day", value: `${bestDay >= 0 ? "+" : ""}$${bestDay.toFixed(1)}`, color: "text-neon-cyan" },
+                    ];
+                  })().map((item) => (
                     <div key={item.label} className="p-2 rounded-xl bg-secondary/20 border border-border/20 text-center">
                       <p className="text-[9px] text-muted-foreground">{item.label}</p>
                       <p className={`text-xs font-mono font-bold ${item.color}`}>{item.value}</p>

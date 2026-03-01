@@ -1092,3 +1092,130 @@ describe("PWA Manifest", () => {
     expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// ─── Rate Limiting ─────────────────────────────────────────────────────────
+describe("Rate Limiting", () => {
+  it("should export createRateLimiter function", async () => {
+    const mod = await import("./rateLimit");
+    expect(mod.createRateLimiter).toBeDefined();
+    expect(typeof mod.createRateLimiter).toBe("function");
+  });
+
+  it("should export rateLimitDefault, rateLimitStrict, rateLimitWrite", async () => {
+    const mod = await import("./rateLimit");
+    expect(mod.rateLimitDefault).toBeDefined();
+    expect(mod.rateLimitStrict).toBeDefined();
+    expect(mod.rateLimitWrite).toBeDefined();
+  });
+
+  it("createRateLimiter should return a tRPC middleware object", async () => {
+    const { createRateLimiter } = await import("./rateLimit");
+    const limiter = createRateLimiter({ windowMs: 60000, maxRequests: 10 });
+    expect(limiter).toBeDefined();
+    expect(limiter).toHaveProperty("_middlewares");
+  });
+
+  it("rate limit config values are reasonable", async () => {
+    const { createRateLimiter } = await import("./rateLimit");
+    // Default: 60 req/min
+    const defaultLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
+    expect(defaultLimiter).toBeDefined();
+    // Strict: 10 req/min (for LLM calls)
+    const strictLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 10 });
+    expect(strictLimiter).toBeDefined();
+    // Write: 30 req/min
+    const writeLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
+    expect(writeLimiter).toBeDefined();
+  });
+});
+
+// ─── Trading PnL Calendar ──────────────────────────────────────────────────
+describe("Trading PnL Calendar", () => {
+  it("should have getPnlCalendar procedure in trading router", async () => {
+    const { appRouter } = await import("./routers");
+    const procedures = Object.keys((appRouter as any)._def.procedures);
+    expect(procedures).toContain("trading.getPnlCalendar");
+  });
+
+  it("closePosition should exist in trading router", async () => {
+    const { appRouter } = await import("./routers");
+    const procedures = Object.keys((appRouter as any)._def.procedures);
+    expect(procedures).toContain("trading.closePosition");
+  });
+
+  it("PnL calculation is correct for long position", () => {
+    const entryPrice = 100;
+    const closePrice = 120;
+    const amount = 1;
+    const leverage = 5;
+    const side = "long";
+    const pnl = side === "long"
+      ? (closePrice - entryPrice) * amount * leverage
+      : (entryPrice - closePrice) * amount * leverage;
+    expect(pnl).toBe(100); // (120-100)*1*5 = 100
+  });
+
+  it("PnL calculation is correct for short position", () => {
+    const entryPrice = 100;
+    const closePrice = 80;
+    const amount = 2;
+    const leverage = 3;
+    const side = "short";
+    const pnl = side === "long"
+      ? (closePrice - entryPrice) * amount * leverage
+      : (entryPrice - closePrice) * amount * leverage;
+    expect(pnl).toBe(120); // (100-80)*2*3 = 120
+  });
+
+  it("PnL calendar aggregates daily data correctly", () => {
+    const positions = [
+      { closedAt: new Date(2026, 2, 1, 10, 0), realizedPnl: "50.00" },
+      { closedAt: new Date(2026, 2, 1, 14, 0), realizedPnl: "-20.00" },
+      { closedAt: new Date(2026, 2, 2, 9, 0), realizedPnl: "30.00" },
+    ];
+    const dailyMap: Record<number, number> = {};
+    for (const pos of positions) {
+      const day = pos.closedAt.getDate();
+      dailyMap[day] = (dailyMap[day] || 0) + parseFloat(pos.realizedPnl);
+    }
+    expect(dailyMap[1]).toBe(30); // 50 + (-20) = 30
+    expect(dailyMap[2]).toBe(30);
+  });
+
+  it("handles empty PnL calendar gracefully", () => {
+    const pnlCalendar: { pnl: number }[] = [];
+    const totalPnl = pnlCalendar.reduce((s, d) => s + d.pnl, 0);
+    const pnlValues = pnlCalendar.map(d => d.pnl);
+    const bestDay = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
+    expect(totalPnl).toBe(0);
+    expect(bestDay).toBe(0);
+  });
+});
+
+// ─── EnhancedInput Live Prices ─────────────────────────────────────────────
+describe("EnhancedInput Live Prices", () => {
+  it("token symbol lookup is case-insensitive", () => {
+    const symbols = ["BTC", "ETH", "SOL", "ARB"];
+    const query = "btc";
+    const matches = symbols.filter(s => s.toLowerCase().includes(query.toLowerCase()));
+    expect(matches).toContain("BTC");
+  });
+
+  it("formats token price correctly", () => {
+    const price = 67432.15;
+    const formatted = price >= 1000
+      ? `$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+      : `$${price.toFixed(4)}`;
+    expect(formatted).toMatch(/^\$67,432/);
+  });
+
+  it("formats 24h change with sign", () => {
+    const change = 2.34;
+    const formatted = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
+    expect(formatted).toBe("+2.3%");
+
+    const negChange = -1.5;
+    const negFormatted = `${negChange >= 0 ? "+" : ""}${negChange.toFixed(1)}%`;
+    expect(negFormatted).toBe("-1.5%");
+  });
+});

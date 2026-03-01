@@ -10,28 +10,35 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
+import { trpc } from "@/lib/trpc";
 
-// ── Token price data (mock) ──
-// Static reference data for inline $TOKEN mentions in chat messages
-// These are display-only references; live prices are shown in the Trading page
-const TOKEN_PRICES: Record<string, { price: string; change: string; trend: "up" | "down" | "flat" }> = {
-  BTC: { price: "$67,432.10", change: "+1.8%", trend: "up" },
-  ETH: { price: "$3,521.40", change: "+2.3%", trend: "up" },
-  SOL: { price: "$142.80", change: "-0.5%", trend: "down" },
-  DOGE: { price: "$0.1234", change: "+5.2%", trend: "up" },
-  USDT: { price: "$1.00", change: "0.0%", trend: "flat" },
-  USDC: { price: "$1.00", change: "0.0%", trend: "flat" },
-  BNB: { price: "$612.30", change: "+0.8%", trend: "up" },
-  XRP: { price: "$0.5432", change: "-1.2%", trend: "down" },
-  ADA: { price: "$0.4521", change: "+3.1%", trend: "up" },
-  AVAX: { price: "$35.67", change: "+1.5%", trend: "up" },
-  DOT: { price: "$7.89", change: "-0.3%", trend: "down" },
-  LINK: { price: "$14.56", change: "+4.2%", trend: "up" },
-  UNI: { price: "$9.87", change: "+2.1%", trend: "up" },
-  MATIC: { price: "$0.7654", change: "-0.8%", trend: "down" },
-  ARB: { price: "$1.23", change: "+6.5%", trend: "up" },
-  OP: { price: "$2.34", change: "+3.8%", trend: "up" },
-};
+// ── Supported token symbols for inline $TOKEN mentions ──
+const SUPPORTED_SYMBOLS = [
+  "BTC", "ETH", "SOL", "DOGE", "USDT", "USDC", "BNB", "XRP",
+  "ADA", "AVAX", "DOT", "LINK", "UNI", "MATIC", "ARB", "OP",
+];
+
+type TokenPriceEntry = { price: string; change: string; trend: "up" | "down" | "flat" };
+
+function formatPrice(p: number): string {
+  if (p >= 1000) return `$${p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (p >= 1) return `$${p.toFixed(2)}`;
+  return `$${p.toPrecision(4)}`;
+}
+
+function buildTokenPrices(data: { symbol: string; price: number; change: number }[] | undefined): Record<string, TokenPriceEntry> {
+  const map: Record<string, TokenPriceEntry> = {};
+  if (!data) return map;
+  for (const coin of data) {
+    const trend: "up" | "down" | "flat" = coin.change > 0.05 ? "up" : coin.change < -0.05 ? "down" : "flat";
+    map[coin.symbol] = {
+      price: formatPrice(coin.price),
+      change: `${coin.change >= 0 ? "+" : ""}${coin.change.toFixed(1)}%`,
+      trend,
+    };
+  }
+  return map;
+}
 
 // ── Sticker packs ──
 const STICKER_PACKS = [
@@ -66,6 +73,14 @@ interface EnhancedInputProps {
 
 export default function EnhancedInput({ value, onChange, onSend, placeholder, className }: EnhancedInputProps) {
   const { t } = useI18n();
+
+  // Fetch live token prices from CoinGecko via backend (60s stale time)
+  const { data: priceData } = trpc.trading.getPrices.useQuery(
+    { symbols: SUPPORTED_SYMBOLS },
+    { staleTime: 60_000, refetchInterval: 120_000 }
+  );
+  const TOKEN_PRICES = useMemo(() => buildTokenPrices(priceData), [priceData]);
+
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
   const [tokenSearch, setTokenSearch] = useState("");
@@ -101,11 +116,13 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
 
   // Filtered tokens
   const filteredTokens = useMemo(() => {
-    if (!tokenSearch) return Object.entries(TOKEN_PRICES).slice(0, 6);
-    return Object.entries(TOKEN_PRICES).filter(([symbol]) =>
+    // Show all supported symbols even if prices haven't loaded yet
+    const allEntries = SUPPORTED_SYMBOLS.map(s => [s, TOKEN_PRICES[s] || { price: "...", change: "0.0%", trend: "flat" as const }] as [string, TokenPriceEntry]);
+    if (!tokenSearch) return allEntries.slice(0, 6);
+    return allEntries.filter(([symbol]) =>
       symbol.startsWith(tokenSearch)
     ).slice(0, 6);
-  }, [tokenSearch]);
+  }, [tokenSearch, TOKEN_PRICES]);
 
   // Insert token price card
   const insertTokenPrice = useCallback((symbol: string) => {

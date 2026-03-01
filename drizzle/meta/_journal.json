@@ -71,6 +71,13 @@
       "when": 1772341854900,
       "tag": "0009_unique_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1772350673169,
+      "tag": "0010_early_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }
