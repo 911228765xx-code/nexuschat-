@@ -259,3 +259,11 @@
 - [x] 后端返回 vizData 结构化数据（aiScore/sentiment/riskLevel/keyMetrics 15个指标）
 - [x] 前端报告页增加可视化：SVG圆环评分仪表盘 + 情绪/风险指示器 + 4格指标卡片(价格/市值/成交量/社区情绪) + 涨跌幅对比柱状图
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v46 Research 流式输出 + 30天价格迷你图
+
+- [x] 后端：创建 POST /api/research/stream SSE 端点，复用 tokenChatStream 架构，并行获取全球市场/恐贪指数/BTC/30天价格历史
+- [x] 前端：Research 页面切换为 fetch + ReadableStream 流式接收，逐字渲染 + 闪烁光标 + 预加载动画
+- [x] 后端：vizData 新增 priceHistory30d 字段（含 SMA7/SMA14 计算）
+- [x] 前端：可视化仪表盘嵌入 Recharts ComposedChart 迷你图（价格面积图 + SMA7/SMA14 虚线 + 图例 + Tooltip）
+- [x] 147 个测试全部通过，0 TS 错误，端点 401 认证正常

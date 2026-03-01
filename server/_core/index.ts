@@ -10,6 +10,7 @@ import { serveStatic, setupVite } from "./vite";
 import { initSocketIO } from "../socket";
 import { startPriceAlertChecker } from "../priceAlertChecker";
 import { tokenChatStreamRouter } from "../routers/tokenChatStream";
+import { researchStreamRouter } from "../routers/researchStream";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,6 +41,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Streaming AI chat endpoint (SSE, outside tRPC)
   app.use("/api/token-chat", tokenChatStreamRouter);
+  // Streaming AI research report endpoint (SSE, outside tRPC)
+  app.use("/api/research", researchStreamRouter);
 
   // tRPC API
   app.use(

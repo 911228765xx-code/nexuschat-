@@ -3,7 +3,7 @@
  * 全面增强版：更多代币 + 时间周期切换 + 搜索交互 + 风险指标 + 市场情绪 + 链上数据
  * Design: Cyberpunk dark theme with neon accents, Space Grotesk headings
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -34,6 +34,9 @@ import {
   BarChart,
   Bar,
   CartesianGrid,
+  Line,
+  ComposedChart,
+  ReferenceLine,
 } from "recharts";
 
 // ==================== Types ====================
@@ -294,36 +297,118 @@ export default function Research() {
     },
     onError: (err) => toast.error("分享失败: " + err.message),
   });
-  // tRPC AI report generation
-  const generateReport = trpc.research.generate.useMutation({
-    onSuccess: (data) => {
-      setAiReportContent(data.reportContent);
-      setAiReportId(data.reportId ?? null);
-      setAiReportSentiment(data.sentiment ?? "neutral");
-      setAiReportRisk(data.riskLevel ?? "medium");
-      setAiReportPrice(data.tokenData?.price ?? null);
-      setAiReportMcap(data.tokenData?.marketCap ? String(data.tokenData.marketCap) : null);
-      setAiVizData(data.vizData ?? null);
-      setShowAiReport(true);
-      setIsSearching(false);
-      toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
-      refetchHistory();
-    },
-    onError: (err) => {
-      setIsSearching(false);
-      if (err.message.includes("10001") || err.message.includes("login")) {
-        toast.info("请登录后使用 AI 研究报告功能");
-      } else {
-        toast.error("AI 报告生成失败: " + err.message);
-      }
-    },
-  });
+  // ─── Streaming AI report generation ───
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const handleSearch = useCallback(() => {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
+    const symbol = searchQuery.trim().toUpperCase();
     setIsSearching(true);
-    setAiReportToken(searchQuery.trim().toUpperCase());
-    generateReport.mutate({ tokenSymbol: searchQuery.trim(), chain: "BSC" });
+    setIsStreaming(true);
+    setAiReportToken(symbol);
+    setAiReportContent("");
+    setAiReportId(null);
+    setAiReportSentiment("neutral");
+    setAiReportRisk("medium");
+    setAiReportPrice(null);
+    setAiReportMcap(null);
+    setAiVizData(null);
+    setShowAiReport(true);
+
+    // Abort any previous stream
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const resp = await fetch("/api/research/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({ tokenSymbol: searchQuery.trim(), chain: "BSC", mode: "deep" }),
+      });
+
+      if (resp.status === 401) {
+        toast.info("请登录后使用 AI 研究报告功能");
+        setIsSearching(false);
+        setIsStreaming(false);
+        setShowAiReport(false);
+        return;
+      }
+      if (!resp.ok) {
+        toast.error("AI 报告生成失败");
+        setIsSearching(false);
+        setIsStreaming(false);
+        setShowAiReport(false);
+        return;
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error("No stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.content) {
+              accumulated += parsed.content;
+              setAiReportContent(accumulated);
+            }
+            if (parsed.vizData) {
+              setAiVizData(parsed.vizData);
+            }
+            if (parsed.meta) {
+              setAiReportId(parsed.meta.reportId ?? null);
+              setAiReportSentiment(parsed.meta.sentiment ?? "neutral");
+              setAiReportRisk(parsed.meta.riskLevel ?? "medium");
+              if (parsed.meta.tokenData) {
+                setAiReportPrice(parsed.meta.tokenData.price ?? null);
+                setAiReportMcap(parsed.meta.tokenData.marketCap ? String(parsed.meta.tokenData.marketCap) : null);
+              }
+            }
+            if (parsed.error) {
+              toast.error(parsed.error);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      setIsSearching(false);
+      setIsStreaming(false);
+      if (accumulated.length > 0) {
+        toast.success(`AI 研究报告已生成: ${symbol}`);
+      }
+      refetchHistory();
+
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      setIsSearching(false);
+      setIsStreaming(false);
+      toast.error("AI 报告生成失败");
+    }
   }, [searchQuery]);
 
   const toggleWatchlist = useCallback((id: string) => {
@@ -825,6 +910,93 @@ export default function Research() {
                 </div>
               )}
 
+              {/* ===== 30-Day Price Mini Chart ===== */}
+              {aiVizData?.priceHistory30d && aiVizData.priceHistory30d.length > 5 && (() => {
+                const ph = aiVizData.priceHistory30d;
+                const prices = ph.map((p: any) => p.price);
+                const minP = Math.min(...prices);
+                const maxP = Math.max(...prices);
+                const latest = prices[prices.length - 1];
+                const first = prices[0];
+                const isUp = latest >= first;
+                const mainColor = isUp ? "#00ff88" : "#ff3366";
+                return (
+                  <div className="px-5 pt-3 pb-1">
+                    <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-white/10 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-gray-400 font-medium">30天价格走势</p>
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1 text-[9px] text-[#00d4ff]"><span className="w-2 h-[2px] bg-[#00d4ff] inline-block rounded" />SMA7</span>
+                          <span className="flex items-center gap-1 text-[9px] text-[#a855f7]"><span className="w-2 h-[2px] bg-[#a855f7] inline-block rounded" />SMA14</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 120 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={ph} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={mainColor} stopOpacity={0.3} />
+                                <stop offset="100%" stopColor={mainColor} stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis
+                              dataKey="date"
+                              tick={{ fontSize: 8, fill: "#6b7280" }}
+                              tickFormatter={(v: string) => v.slice(5)}
+                              axisLine={false}
+                              tickLine={false}
+                              interval={Math.floor(ph.length / 5)}
+                            />
+                            <YAxis
+                              domain={[minP * 0.995, maxP * 1.005]}
+                              tick={{ fontSize: 8, fill: "#6b7280" }}
+                              tickFormatter={(v: number) => v < 1 ? v.toFixed(4) : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(1)}
+                              axisLine={false}
+                              tickLine={false}
+                              width={45}
+                            />
+                            <RechartsTooltip
+                              contentStyle={{ background: "#131b35", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                              labelStyle={{ color: "#9ca3af", fontSize: 10 }}
+                              formatter={(val: number) => [`$${val < 1 ? val.toFixed(6) : val.toFixed(2)}`, ""]}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="price"
+                              stroke={mainColor}
+                              strokeWidth={1.5}
+                              fill="url(#priceGrad)"
+                              dot={false}
+                              name="价格"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="sma7"
+                              stroke="#00d4ff"
+                              strokeWidth={1}
+                              dot={false}
+                              strokeDasharray="4 2"
+                              connectNulls
+                              name="SMA7"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="sma14"
+                              stroke="#a855f7"
+                              strokeWidth={1}
+                              dot={false}
+                              strokeDasharray="4 2"
+                              connectNulls
+                              name="SMA14"
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ===== Report Content - Markdown ===== */}
               <div className="px-5 py-4 prose prose-invert prose-sm max-w-none
                 prose-headings:text-white prose-headings:font-['Space_Grotesk']
@@ -839,6 +1011,19 @@ export default function Research() {
                 prose-code:text-[#00d4ff] prose-code:bg-white/5 prose-code:px-1 prose-code:rounded
               ">
                 <Streamdown>{aiReportContent}</Streamdown>
+                {isStreaming && aiReportContent.length > 0 && (
+                  <span className="inline-block w-1.5 h-4 bg-[#a855f7] rounded-sm animate-pulse ml-0.5 align-text-bottom" />
+                )}
+                {isStreaming && aiReportContent.length === 0 && (
+                  <div className="flex items-center gap-2 py-4">
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00d4ff] animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#a855f7] animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                    <span className="text-xs text-gray-400">正在获取实时数据并生成报告...</span>
+                  </div>
+                )}
               </div>
             </div>
 
