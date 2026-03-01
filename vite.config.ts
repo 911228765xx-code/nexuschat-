@@ -202,6 +202,10 @@ export default defineConfig({
     modulePreload: false,
     rollupOptions: {
       output: {
+        // Prevent Rollup from hoisting transitive imports of dynamic chunks
+        // to the entry chunk's synchronous dependencies.
+        // This keeps vendor-web3, vendor-misc etc. as truly async chunks.
+        hoistTransitiveImports: false,
         manualChunks(id: string) {
           // Wallet / Web3 libs (~400KB)
           if (id.includes("wagmi") || id.includes("@rainbow-me") || id.includes("viem") || id.includes("@reown") || id.includes("@walletconnect")) {
@@ -227,29 +231,31 @@ export default defineConfig({
           if (id.includes("@trpc") || id.includes("@tanstack")) {
             return "vendor-trpc";
           }
-          // Shiki syntax highlighting (languages + themes ~8MB)
-          if (id.includes("@shikijs") || id.includes("shiki")) {
-            return "vendor-shiki";
-          }
-          // Mermaid diagrams (~3MB)
-          if (id.includes("mermaid") || id.includes("elkjs") || id.includes("dagre") || id.includes("cytoscape")) {
-            return "vendor-mermaid";
-          }
-          // KaTeX math rendering (~1MB)
-          if (id.includes("katex")) {
-            return "vendor-katex";
-          }
-          // Markdown / streamdown core
-          if (id.includes("streamdown") || id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") || id.includes("unified") || id.includes("mdast") || id.includes("hast") || id.includes("micromark") || id.includes("marked")) {
-            return "vendor-markdown";
-          }
-          // Socket.IO
-          if (id.includes("socket.io")) {
+          // NOTE: shiki, mermaid, katex, streamdown have been removed from the app
+          // LightMarkdown component is used instead (pure JS, ~0KB extra)
+          // Socket.IO client (lazy-loaded for chat pages)
+          if (id.includes("socket.io") || id.includes("engine.io") || id.includes("xmlhttprequest-ssl")) {
             return "vendor-socketio";
+          }
+          // viem (Ethereum utilities, used by wagmi/web3 pages only)
+          if (id.includes("viem") || id.includes("@noble") || id.includes("@scure") || id.includes("@adraffy")) {
+            return "vendor-web3";
+          }
+          // QR code (used only in wallet/invite pages)
+          if (id.includes("qrcode") || id.includes("qr-code")) {
+            return "vendor-qrcode";
+          }
+          // D3 (used only in charts/trading pages)
+          if (id.includes("/d3-") || id.includes("d3-array") || id.includes("d3-scale") || id.includes("d3-shape") || id.includes("d3-path") || id.includes("d3-color") || id.includes("d3-format") || id.includes("d3-interpolate") || id.includes("d3-time")) {
+            return "vendor-charts";
           }
           // Radix UI primitives
           if (id.includes("@radix-ui")) {
             return "vendor-radix";
+          }
+          // Superjson (used in tRPC, keep small)
+          if (id.includes("superjson")) {
+            return "vendor-trpc";
           }
           // Remaining node_modules
           if (id.includes("node_modules")) {

@@ -7,11 +7,8 @@ import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
-import { WagmiProvider } from "wagmi";
-import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
-import { wagmiConfig } from "@/lib/wagmi";
-import { WalletProvider } from "@/contexts/WalletContext";
-import "@rainbow-me/rainbowkit/styles.css";
+// Web3 providers (wagmi + rainbowkit) are lazily loaded to keep initial bundle small
+import { LazyWeb3Provider } from "@/components/LazyWeb3Provider";
 
 const queryClient = new QueryClient();
 
@@ -58,15 +55,11 @@ const trpcClient = trpc.createClient({
 });
 
 createRoot(document.getElementById("root")!).render(
-  <WagmiProvider config={wagmiConfig}>
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={darkTheme()} locale="zh-CN">
-          <WalletProvider>
-            <App />
-          </WalletProvider>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
-  </WagmiProvider>
+  <trpc.Provider client={trpcClient} queryClient={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <LazyWeb3Provider>
+        <App />
+      </LazyWeb3Provider>
+    </QueryClientProvider>
+  </trpc.Provider>
 );

@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -7,9 +7,10 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
 import AppLayout from "./components/AppLayout";
-import Onboarding from "./components/Onboarding";
 import { AppProvider } from "./contexts/AppContext";
-import { usePriceAlertSocket } from "./hooks/usePriceAlertSocket";
+// NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
+// Onboarding uses framer-motion (79KB), socket.io (42KB) — both deferred
+const Onboarding = lazy(() => import("./components/Onboarding"));
 
 // ─── Lazy-loaded page components (code splitting) ────────────────────────────
 const Home = lazy(() => import("./pages/Home"));
@@ -46,10 +47,34 @@ function PageLoader() {
   );
 }
 
-function AppContent() {
-  // Connect Socket.IO for real-time price alert push notifications
-  usePriceAlertSocket();
+/**
+ * PriceAlertSocketLoader — dynamically imports usePriceAlertSocket after initial render
+ * This keeps socket.io out of the initial bundle
+ */
+function PriceAlertSocketLoader() {
+  useEffect(() => {
+    // Dynamically import the hook module after mount to avoid socket.io in initial bundle
+    import("./hooks/usePriceAlertSocket").then(({ usePriceAlertSocket: _hook }) => {
+      // The hook is imported but we can't call it here (hooks rules)
+      // Instead we use a separate component below
+    });
+  }, []);
+  return null;
+}
 
+/**
+ * PriceAlertSocket — rendered after initial paint, loads socket.io lazily
+ */
+const PriceAlertSocket = lazy(() =>
+  import("./hooks/usePriceAlertSocket").then((mod) => ({
+    default: function PriceAlertSocketComponent() {
+      mod.usePriceAlertSocket();
+      return null;
+    },
+  }))
+);
+
+function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
@@ -57,8 +82,15 @@ function AppContent() {
   // make sure to consider if you need authentication for certain routes
   return (
     <>
+      {/* Lazy-load socket.io connection after initial render */}
+      <Suspense fallback={null}>
+        <PriceAlertSocket />
+      </Suspense>
+
       {showOnboarding && (
-        <Onboarding onComplete={() => setShowOnboarding(false)} />
+        <Suspense fallback={null}>
+          <Onboarding onComplete={() => setShowOnboarding(false)} />
+        </Suspense>
       )}
       <Suspense fallback={<PageLoader />}>
         <Switch>

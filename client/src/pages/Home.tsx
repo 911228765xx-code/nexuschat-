@@ -4,14 +4,15 @@
  * 多语言支持 + 钱包连接弹窗
  */
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import WalletConnectModal from "@/components/WalletConnectModal";
+// Lazy-load WalletConnectModal — avoids pulling wagmi into the Home chunk
+const WalletConnectModal = lazy(() => import("@/components/WalletConnectModal"));
 
 const HERO_BG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-1_1772143409000_na1fn_aGVyby1iZw.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTFfMTc3MjE0MzQwOTAwMF9uYTFmbl9hR1Z5YnkxaVp3LnBuZz94LW9zcy1wcm9jZXNzPWltYWdlL3Jlc2l6ZSx3XzE5MjAsaF8xOTIwL2Zvcm1hdCx3ZWJwL3F1YWxpdHkscV84MCIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=YNWq2UYomZlpXHDO99M1B1U0andZ-fjmtJEK-90bzIzIVNVs~FJnfuaKVsJrayXYNQbwaTPopKxcYI9gAiqKUbeKlcEwtR45jROrIxL3ju5fToQqs9rc1GHn59ZYTSIi8uOWphC7DGE3qkzMVfyGZZcDUSOSq1flIaXMmktLwEvfg8mKIIJ5J2N5jBCkZWNIepZ7nivfF7dHNCboGiOItE8b1TLZqvJktJenCanwa7dkAc8k5VXPjq7CTODFXAJWzVvSmYRS6besGetLo6dMzU99InBBQnr2V2wTOSh0sjPx4Dkj6x0u9R87xAwiQ2eCYvwHxG0prqnGP8u-Eh8vZg__";
 const CHAT_IMG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-2_1772143383000_na1fn_Y2hhdC1pbGx1c3RyYXRpb24.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTJfMTc3MjE0MzM4MzAwMF9uYTFmbl9ZMmhoZEMxcGJHeDFjM1J5WVhScGIyNC5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=FHRKYkhNty2zDXjg1cHlEAkHz7eGD-GN1Z4lLE5xfRkeso63kr10-y5xNKxQezI6ZONOWIs950ieEJIgcXoKGO8tFG2oaVWHgbuRZyhzRZhPDbNA465WARidd4HDUXRopVswmafbkMrdr7mgeHr8RG301qV3pAeZ6wa0skZ~xIQ2zS3AX8wE0S4Xy3yulJov00rYw5nvvwPClXYqnT8t9du36uoZ6QfKx0VROAAddIglgtLwtxTkqqPccgwi65i~UDQK9iFTeFnSPmeH-jrcJzyA4SoNrxPwWJ1AzPwWnpH-JCD7T1TpmmtMsP-dt-Ct1dYPrlaZnuvh5pnV3Ewphg__";
@@ -319,8 +320,12 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Wallet Connect Modal */}
-      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      {/* Wallet Connect Modal — lazy loaded, only renders when walletOpen */}
+      {walletOpen && (
+        <Suspense fallback={null}>
+          <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

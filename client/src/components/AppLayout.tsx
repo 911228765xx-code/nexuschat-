@@ -2,10 +2,10 @@
  * AppLayout — Cyberpunk Noir mobile-first layout
  * Bottom tab navigation with glassmorphism effect + dynamic unread badges from AppContext
  * 5 tabs: Chat / Discover / Research / Trading / Profile
+ * NOTE: framer-motion removed — uses CSS animations to keep initial bundle small
  */
 import { useLocation, Link } from "wouter";
 import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
-import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
@@ -64,14 +64,13 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
               return (
                 <Link key={tab.path} href={tab.path}>
                   <button className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors">
+                    {/* CSS-based tab indicator (replaces framer-motion layoutId) */}
                     {isActive && (
-                      <motion.div
-                        layoutId="tab-indicator"
-                        className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-neon-cyan"
+                      <div
+                        className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-neon-cyan transition-all duration-300"
                         style={{
                           boxShadow: "0 0 8px oklch(0.82 0.15 195 / 0.6)",
                         }}
-                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
                       />
                     )}
                     <div className="relative">
@@ -83,12 +82,10 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
                             : "text-muted-foreground"
                         }
                       />
-                      {/* Unread badge */}
+                      {/* Unread badge — CSS scale animation */}
                       {tab.badge > 0 && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center"
+                        <div
+                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
                           style={{
                             boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
                           }}
@@ -96,7 +93,7 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
                           <span className="text-[9px] font-bold text-white leading-none">
                             {tab.badge > 99 ? "99+" : tab.badge}
                           </span>
-                        </motion.div>
+                        </div>
                       )}
                     </div>
                     <span
