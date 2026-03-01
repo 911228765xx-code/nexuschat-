@@ -4,6 +4,7 @@
  * 三个Tab切换 + 总资产概览
  */
 import { useState, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -66,6 +67,7 @@ export default function Wallet() {
   const [showQR, setShowQR] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
+  const [receiveSelectedNetwork, setReceiveSelectedNetwork] = useState<string | null>(null);
   const [showSwap, setShowSwap] = useState(false);
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
   const [sendAmount, setSendAmount] = useState("");
@@ -526,23 +528,7 @@ export default function Wallet() {
           )}
         </AnimatePresence>
       </div>
-    {/* QR Code Modal */}
-    <AnimatePresence>
-      {showQR && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowQR(false)}>
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-center font-bold font-display mb-4">{t("wallet.receiveQR") || "Receive"}</h3>
-            <div className="bg-white rounded-xl p-4 mx-auto w-48 h-48 flex items-center justify-center mb-4">
-              <div className="w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iMTYwIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjE2MCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTAiIHk9IjEwIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAiIHk9IjExMCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjIwIiB5PSIyMCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBmaWxsPSJ3aGl0ZSIvPjxyZWN0IHg9IjEyMCIgeT0iMjAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIyMCIgeT0iMTIwIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIGZpbGw9IndoaXRlIi8+PHJlY3QgeD0iNjAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjMwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzAiIHk9IjYwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjgwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjcwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTEwIiB5PSI2MCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMCIgeT0iNzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODAiIHk9IjEyMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExMCIgeT0iMTEwIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxMjAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4=')] bg-contain bg-center bg-no-repeat" />
-            </div>
-            <p className="text-center text-xs text-muted-foreground font-mono break-all px-4 mb-4">{walletAddress}</p>
-            <button onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success("Address copied!"); }} className="w-full h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2">
-              <Copy size={14} /> {t("wallet.copyAddress") || "Copy Address"}
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    {/* QR Code Modal — redirects to Receive modal */}
 
     {/* Send Modal */}
     <AnimatePresence>
@@ -578,25 +564,109 @@ export default function Wallet() {
       )}
     </AnimatePresence>
 
-    {/* Receive Modal */}
+    {/* Receive Modal — Multi-network with QR code */}
     <AnimatePresence>
-      {showReceive && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowReceive(false)}>
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-center font-bold font-display mb-2">{t("wallet.receive") || "Receive"}</h3>
-            <p className="text-center text-xs text-muted-foreground mb-4">{t("wallet.receiveDesc") || "Share your address to receive tokens"}</p>
-            <div className="space-y-3">
-              {["Ethereum", "Solana", "Bitcoin"].map(chain => (
-                <button key={chain} onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success(`${chain} address copied!`); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20 hover:border-neon-cyan/30 transition-colors">
-                  <div className="w-8 h-8 rounded-lg bg-neon-cyan/10 flex items-center justify-center text-xs font-bold text-neon-cyan">{chain[0]}</div>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium">{chain}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate">{walletAddress.slice(0, 12)}...{walletAddress.slice(-6)}</p>
+      {(showReceive || showQR) && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setShowReceive(false); setShowQR(false); setReceiveSelectedNetwork(null); }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+
+            {/* ── Network detail view with QR ── */}
+            {receiveSelectedNetwork ? (() => {
+              const NETWORKS: Record<string, { label: string; icon: string; color: string; addressType: string; sampleAddr: string; tokens: string }> = {
+                "BSC": { label: "BNB Smart Chain", icon: "🟡", color: "text-yellow-400", addressType: "EVM", sampleAddr: walletAddress, tokens: "BNB, USDT, USDC, CAKE, BUSD, and all BEP-20 tokens" },
+                "Ethereum": { label: "Ethereum", icon: "🔷", color: "text-blue-400", addressType: "EVM", sampleAddr: walletAddress, tokens: "ETH, USDT, USDC, UNI, LINK, and all ERC-20 tokens" },
+                "Polygon": { label: "Polygon", icon: "🟣", color: "text-purple-400", addressType: "EVM", sampleAddr: walletAddress, tokens: "MATIC, USDT, USDC, AAVE, and all ERC-20 tokens" },
+                "Arbitrum": { label: "Arbitrum", icon: "🔵", color: "text-blue-300", addressType: "EVM", sampleAddr: walletAddress, tokens: "ETH, USDT, USDC, ARB, GMX, and all ERC-20 tokens" },
+                "Optimism": { label: "Optimism", icon: "🔴", color: "text-red-400", addressType: "EVM", sampleAddr: walletAddress, tokens: "ETH, USDT, USDC, OP, and all ERC-20 tokens" },
+                "Avalanche": { label: "Avalanche C-Chain", icon: "🔺", color: "text-red-500", addressType: "EVM", sampleAddr: walletAddress, tokens: "AVAX, USDT, USDC, JOE, and all ERC-20 tokens" },
+                "Base": { label: "Base", icon: "🔵", color: "text-blue-500", addressType: "EVM", sampleAddr: walletAddress, tokens: "ETH, USDC, and all ERC-20 tokens" },
+                "Solana": { label: "Solana", icon: "🟢", color: "text-green-400", addressType: "Solana", sampleAddr: "Coming soon — connect a Solana wallet", tokens: "SOL, USDT, USDC, RAY, and all SPL tokens" },
+                "Bitcoin": { label: "Bitcoin", icon: "🟠", color: "text-orange-400", addressType: "Bitcoin", sampleAddr: "Coming soon — connect a Bitcoin wallet", tokens: "BTC" },
+                "Tron": { label: "Tron", icon: "⬛", color: "text-red-400", addressType: "Tron", sampleAddr: "Coming soon — connect a Tron wallet", tokens: "TRX, USDT, USDC, and all TRC-20 tokens" },
+              };
+              const net = NETWORKS[receiveSelectedNetwork];
+              if (!net) return null;
+              const isEVM = net.addressType === "EVM";
+              const displayAddr = isEVM ? walletAddress : net.sampleAddr;
+              const canCopy = isEVM;
+              return (
+                <>
+                  <button onClick={() => setReceiveSelectedNetwork(null)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3">
+                    <ArrowLeft size={14} /> {t("wallet.backToNetworks") || "Back to networks"}
+                  </button>
+                  <div className="text-center mb-4">
+                    <span className="text-3xl">{net.icon}</span>
+                    <h3 className="font-bold font-display mt-2">{net.label}</h3>
+                    <p className="text-[10px] text-muted-foreground mt-1">{t("wallet.receiveAllTokens") || "You can receive all tokens on this network"}</p>
                   </div>
-                  <Copy size={14} className="text-muted-foreground" />
-                </button>
-              ))}
-            </div>
+                  {canCopy ? (
+                    <>
+                      <div className="bg-white rounded-xl p-3 mx-auto w-44 h-44 flex items-center justify-center mb-3">
+                        <QRCodeSVG value={displayAddr} size={160} level="M" />
+                      </div>
+                      <p className="text-center text-[10px] text-muted-foreground font-mono break-all px-2 mb-2">{displayAddr}</p>
+                      <button onClick={() => { navigator.clipboard.writeText(displayAddr); toast.success(`${net.label} address copied!`); }} className="w-full h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2 mb-3">
+                        <Copy size={14} /> {t("wallet.copyAddress") || "Copy Address"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-6 px-4 rounded-xl bg-secondary/30 border border-border/20 mb-3">
+                      <p className="text-sm text-muted-foreground">{displayAddr}</p>
+                    </div>
+                  )}
+                  <div className="rounded-xl bg-secondary/30 border border-border/20 p-3">
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1">{t("wallet.supportedTokens") || "Supported tokens on this network:"}</p>
+                    <p className="text-[11px] text-foreground/80">{net.tokens}</p>
+                  </div>
+                  {canCopy && (
+                    <p className="text-center text-[10px] text-yellow-500/80 mt-3">⚠️ {t("wallet.networkWarning") || "Only send tokens on this network. Sending from a different network may result in permanent loss."}</p>
+                  )}
+                </>
+              );
+            })() : (
+              /* ── Network list view ── */
+              <>
+                <h3 className="text-center font-bold font-display mb-1">{t("wallet.receive") || "Receive"}</h3>
+                <p className="text-center text-xs text-muted-foreground mb-4">{t("wallet.selectNetwork") || "Select a network to receive tokens"}</p>
+
+                {/* EVM Networks */}
+                <p className="text-[10px] text-muted-foreground font-medium mb-2 px-1">EVM Networks</p>
+                <div className="space-y-2 mb-4">
+                  {["BSC", "Ethereum", "Polygon", "Arbitrum", "Optimism", "Avalanche", "Base"].map(net => {
+                    const icons: Record<string, string> = { BSC: "🟡", Ethereum: "🔷", Polygon: "🟣", Arbitrum: "🔵", Optimism: "🔴", Avalanche: "🔺", Base: "🔵" };
+                    const labels: Record<string, string> = { BSC: "BNB Smart Chain", Ethereum: "Ethereum", Polygon: "Polygon", Arbitrum: "Arbitrum", Optimism: "Optimism", Avalanche: "Avalanche C-Chain", Base: "Base" };
+                    return (
+                      <button key={net} onClick={() => setReceiveSelectedNetwork(net)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20 hover:border-neon-cyan/30 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-secondary/60 flex items-center justify-center text-base">{icons[net]}</div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium">{labels[net]}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-muted-foreground -rotate-90" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Non-EVM Networks */}
+                <p className="text-[10px] text-muted-foreground font-medium mb-2 px-1">Other Networks</p>
+                <div className="space-y-2">
+                  {["Solana", "Bitcoin", "Tron"].map(net => {
+                    const icons: Record<string, string> = { Solana: "🟢", Bitcoin: "🟠", Tron: "⬛" };
+                    return (
+                      <button key={net} onClick={() => setReceiveSelectedNetwork(net)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20 hover:border-neon-cyan/30 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-secondary/60 flex items-center justify-center text-base">{icons[net]}</div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium">{net}</p>
+                          <p className="text-[10px] text-muted-foreground">{t("wallet.connectToReceive") || "Connect wallet to receive"}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-muted-foreground -rotate-90" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}

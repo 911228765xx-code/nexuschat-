@@ -215,3 +215,11 @@
 - [x] priceAlertChecker.ts checkAlerts 添加 try-catch 包裹 DB 查询 + 单条 alert 处理（ECONNRESET/ETIMEDOUT 优雅降级，下个周期重试）
 - [x] OG image + Twitter image 改为 CDN 绝对 URL（社交分享正常显示）
 - [x] Discover Users Tab 移除 mock fallback 分支（简化为纯数字 ID 处理）
+
+## v41 钱包 Receive 弹窗改进
+
+- [x] 扩展支持 10 个网络（BSC/Ethereum/Polygon/Arbitrum/Optimism/Avalanche/Base + Solana/Bitcoin/Tron）
+- [x] 选择网络后显示对应钱包地址 + 真实 QR 码（qrcode.react）+ 支持代币列表 + 网络警告
+- [x] EVM 网络共用钱包地址，非 EVM 网络显示 "Coming soon" 提示
+- [x] 合并 QR 弹窗和 Receive 弹窗为统一的多网络接收弹窗
+- [x] 新增中英文 i18n 翻译
