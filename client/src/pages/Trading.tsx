@@ -533,9 +533,9 @@ export default function Trading() {
         <div className="mx-4 mt-3 grid grid-cols-4 gap-2">
           {[
             { label: t("trading.totalProfit"), value: `+$${totalProfit.toFixed(0)}`, color: "text-neon-green", bg: "from-neon-green/8 to-transparent border-neon-green/15" },
-            { label: "Win Rate", value: `${avgWinRate}%`, color: "text-neon-cyan", bg: "from-neon-cyan/8 to-transparent border-neon-cyan/15" },
-            { label: "Open PnL", value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red", bg: "from-neon-purple/8 to-transparent border-neon-purple/15" },
-            { label: "Active", value: `${strategies.filter(s => s.status === "running").length}/${strategies.length}`, color: "text-foreground", bg: "from-secondary/40 to-transparent border-border/20" },
+            { label: t("trading.winRate2"), value: `${avgWinRate}%`, color: "text-neon-cyan", bg: "from-neon-cyan/8 to-transparent border-neon-cyan/15" },
+            { label: t("trading.openPnlLabel"), value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red", bg: "from-neon-purple/8 to-transparent border-neon-purple/15" },
+            { label: t("trading.strategyActive"), value: `${strategies.filter(s => s.status === "running").length}/${strategies.length}`, color: "text-foreground", bg: "from-secondary/40 to-transparent border-border/20" },
           ].map((card) => (
             <div key={card.label} className={`p-2 rounded-xl bg-gradient-to-br ${card.bg} border`}>
               <p className="text-[9px] text-muted-foreground mb-0.5 truncate">{card.label}</p>
@@ -589,7 +589,7 @@ export default function Trading() {
                           {strategy.status === "running" ? t("trading.running") : t("trading.paused")}
                         </span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${riskColor(strategy.riskLevel)}`}>
-                          {strategy.riskLevel === "low" ? "Low" : strategy.riskLevel === "medium" ? "Med" : "High"}
+                          {strategy.riskLevel === "low" ? t("trading.low") : strategy.riskLevel === "medium" ? t("trading.med") : t("trading.high")}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -631,10 +631,10 @@ export default function Trading() {
 
                     <div className="grid grid-cols-4 gap-2">
                       {[
-                        { label: "Profit", value: `+$${strategy.totalProfit.toFixed(0)}`, color: "text-neon-green" },
-                        { label: "Win%", value: `${strategy.winRate}%`, color: "text-foreground" },
-                        { label: "Trades", value: `${strategy.trades}`, color: "text-foreground" },
-                        { label: "Sharpe", value: strategy.sharpeRatio.toFixed(2), color: strategy.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
+                        { label: t("trading.profit"), value: `+$${strategy.totalProfit.toFixed(0)}`, color: "text-neon-green" },
+                        { label: t("trading.winPct"), value: `${strategy.winRate}%`, color: "text-foreground" },
+                        { label: t("trading.trades"), value: `${strategy.trades}`, color: "text-foreground" },
+                        { label: t("trading.sharpe"), value: strategy.sharpeRatio.toFixed(2), color: strategy.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
                       ].map((m) => (
                         <div key={m.label} className="p-1 rounded-lg bg-secondary/30 text-center">
                           <p className="text-[8px] text-muted-foreground">{m.label}</p>
@@ -651,7 +651,7 @@ export default function Trading() {
                   className="w-full p-4 rounded-2xl border-2 border-dashed border-border/40 hover:border-neon-green/30 transition-colors flex items-center justify-center gap-2 text-muted-foreground hover:text-neon-green"
                 >
                   <Plus size={18} />
-                  <span className="text-sm font-medium">Create New Strategy</span>
+                  <span className="text-sm font-medium">{t("trading.createStrategy")}</span>
                 </button>
               </motion.div>
             )}
@@ -1341,7 +1341,7 @@ export default function Trading() {
                       className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                         detailTab === tab ? "bg-secondary text-foreground" : "text-muted-foreground"
                       }`}>
-                      {tab === "chart" ? "Chart" : tab === "stats" ? "Stats" : tab === "risk" ? "Risk" : "Trades"}
+                      {tab === "chart" ? t("trading.chart") : tab === "stats" ? t("trading.stats") : tab === "risk" ? t("trading.riskTab") : t("trading.trades")}
                     </button>
                   ))}
                 </div>
@@ -1352,7 +1352,7 @@ export default function Trading() {
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-medium">Cumulative PnL vs Benchmark</h4>
+                        <h4 className="text-xs font-medium">{t("trading.cumPnl")}</h4>
                         <span className="text-xs font-mono text-neon-green">+${selectedStrategy.totalProfit.toFixed(1)}</span>
                       </div>
                       <div className="h-[160px]">
@@ -1393,15 +1393,15 @@ export default function Trading() {
                 {detailTab === "stats" && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-neon-cyan" /> Performance Metrics</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-neon-cyan" /> {t("trading.perfMetrics")}</h4>
                       <div className="space-y-2">
                         {[
-                          { label: "Sharpe Ratio", value: selectedStrategy.sharpeRatio.toFixed(2), color: selectedStrategy.sharpeRatio >= 2 ? "text-neon-green" : "text-yellow-400" },
-                          { label: "Profit Factor", value: selectedStrategy.profitFactor.toFixed(2), color: selectedStrategy.profitFactor >= 1.5 ? "text-neon-green" : "text-yellow-400" },
-                          { label: "Max Consecutive Loss", value: `${selectedStrategy.maxConsecutiveLoss}`, color: "text-foreground" },
-                          { label: "Avg Profit / Trade", value: `+$${selectedStrategy.avgProfit.toFixed(1)}`, color: "text-neon-green" },
-                          { label: "Avg Loss / Trade", value: `-$${Math.abs(selectedStrategy.avgLoss).toFixed(1)}`, color: "text-neon-red" },
-                          { label: "Profit/Loss Ratio", value: (selectedStrategy.avgProfit / Math.abs(selectedStrategy.avgLoss)).toFixed(2), color: "text-foreground" },
+                          { label: t("trading.sharpeRatio"), value: selectedStrategy.sharpeRatio.toFixed(2), color: selectedStrategy.sharpeRatio >= 2 ? "text-neon-green" : "text-yellow-400" },
+                          { label: t("trading.profitFactor"), value: selectedStrategy.profitFactor.toFixed(2), color: selectedStrategy.profitFactor >= 1.5 ? "text-neon-green" : "text-yellow-400" },
+                          { label: t("trading.maxConsecLoss"), value: `${selectedStrategy.maxConsecutiveLoss}`, color: "text-foreground" },
+                          { label: t("trading.avgProfitTrade"), value: `+$${selectedStrategy.avgProfit.toFixed(1)}`, color: "text-neon-green" },
+                          { label: t("trading.avgLossTrade"), value: `-$${Math.abs(selectedStrategy.avgLoss).toFixed(1)}`, color: "text-neon-red" },
+                          { label: t("trading.plRatio"), value: (selectedStrategy.avgProfit / Math.abs(selectedStrategy.avgLoss)).toFixed(2), color: "text-foreground" },
                         ].map((item) => (
                           <div key={item.label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
                             <span className="text-[11px] text-muted-foreground">{item.label}</span>
@@ -1415,12 +1415,12 @@ export default function Trading() {
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={[
-                            { metric: "Win Rate", value: selectedStrategy.winRate },
-                            { metric: "Sharpe", value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
-                            { metric: "Profit Factor", value: Math.min(selectedStrategy.profitFactor * 40, 100) },
-                            { metric: "Consistency", value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
-                            { metric: "Frequency", value: Math.min(selectedStrategy.trades * 2, 100) },
-                            { metric: "Risk Mgmt", value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
+                            { metric: t("trading.winRate"), value: selectedStrategy.winRate },
+                            { metric: t("trading.sharpe"), value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
+                            { metric: t("trading.profitFactor"), value: Math.min(selectedStrategy.profitFactor * 40, 100) },
+                            { metric: t("trading.consistency"), value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
+                            { metric: t("trading.frequency"), value: Math.min(selectedStrategy.trades * 2, 100) },
+                            { metric: t("trading.riskMgmt"), value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
                           ]}>
                             <PolarGrid stroke="var(--border)" />
                             <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
@@ -1435,10 +1435,10 @@ export default function Trading() {
                 {detailTab === "risk" && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Shield size={14} className="text-neon-purple" /> Risk Profile</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Shield size={14} className="text-neon-purple" /> {t("trading.riskProfile")}</h4>
                       <div className="flex items-center gap-3 mb-3">
                         <span className={`text-sm px-3 py-1 rounded-full border font-medium ${riskColor(selectedStrategy.riskLevel)}`}>
-                          {selectedStrategy.riskLevel === "low" ? "Low Risk" : selectedStrategy.riskLevel === "medium" ? "Medium Risk" : "High Risk"}
+                          {selectedStrategy.riskLevel === "low" ? t("trading.lowRisk") : selectedStrategy.riskLevel === "medium" ? t("trading.medRisk") : t("trading.highRisk")}
                         </span>
                         <span className="text-[11px] text-muted-foreground">Max DD: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
                       </div>
@@ -1449,13 +1449,13 @@ export default function Trading() {
                       </div>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Settings size={14} /> Risk Controls</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Settings size={14} /> {t("trading.riskControls")}</h4>
                       <div className="space-y-2.5">
                         {[
-                          { label: "Stop Loss", value: `${selectedStrategy.stopLoss}%`, icon: TrendingDown, color: "text-neon-red" },
-                          { label: "Take Profit", value: `${selectedStrategy.takeProfit}%`, icon: TrendingUp, color: "text-neon-green" },
-                          { label: "Max Position", value: `$${selectedStrategy.maxPosition}`, icon: CircleDollarSign, color: "text-foreground" },
-                          { label: "Daily Loss Limit", value: `$${selectedStrategy.dailyLossLimit}`, icon: Shield, color: "text-yellow-400" },
+                          { label: t("trading.stopLoss"), value: `${selectedStrategy.stopLoss}%`, icon: TrendingDown, color: "text-neon-red" },
+                          { label: t("trading.takeProfit"), value: `${selectedStrategy.takeProfit}%`, icon: TrendingUp, color: "text-neon-green" },
+                          { label: t("trading.maxPosition"), value: `$${selectedStrategy.maxPosition}`, icon: CircleDollarSign, color: "text-foreground" },
+                          { label: t("trading.dailyLossLimit"), value: `$${selectedStrategy.dailyLossLimit}`, icon: Shield, color: "text-yellow-400" },
                         ].map((item) => {
                           const Icon = item.icon;
                           return (
@@ -1511,13 +1511,13 @@ export default function Trading() {
               <div className="px-4 py-3 border-t border-border/30 flex gap-3 shrink-0">
                 <button onClick={() => { setModalType("createStrategy"); toast.info("Edit mode: modify your strategy parameters"); }}
                   className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
-                  <Settings size={14} /> Edit
+                  <Settings size={14} /> {t("trading.editStrategy")}
                 </button>
                 <button onClick={() => toggleStrategyStatus(selectedStrategy.id)}
                   className={`flex-1 h-10 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                     selectedStrategy.status === "running" ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-neon-green/10 text-neon-green border border-neon-green/20"
                   }`}>
-                  {selectedStrategy.status === "running" ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+                  {selectedStrategy.status === "running" ? <><Pause size={14} /> {t("trading.pauseStrategy")}</> : <><Play size={14} /> {t("trading.resumeStrategy")}</>}
                 </button>
               </div>
             </motion.div>

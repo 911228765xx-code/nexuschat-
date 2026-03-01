@@ -274,3 +274,10 @@
 - [x] handleCreateStrategy 调用 trpc.copyTrading.upsertStrategy mutation 写入数据库，按鈕显示加载状态
 - [x] toggleStrategyStatus 乐观更新本地状态 + 调用 trpc.copyTrading.toggleStrategy 持久化
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v48 我的策略 i18n 修复
+
+- [x] 定位并替换策略列表卡片和详情弹窗中所有硬编码英文文本（10+ 处）
+- [x] 补充缺失的翻译键（英文/简体中文）：图表/统计/风险/止损/止盈/小平均线/编辑/暂停/恢复等 40+ 键
+- [x] 全部替换为 t() 调用，切换语言后内容全部同步更新
+- [x] 147 个测试全部通过，0 TS 错误
