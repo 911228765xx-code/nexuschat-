@@ -17,6 +17,7 @@ import {
   ArrowUp, ArrowDown, Signal
 } from "lucide-react";
 import { toast } from "sonner";
+import { Streamdown } from "streamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -937,6 +938,13 @@ export default function Research() {
   const [aiReportContent, setAiReportContent] = useState<string | null>(null);
   const [showAiReport, setShowAiReport] = useState(false);
   const [aiReportToken, setAiReportToken] = useState<string>("");
+  const [aiReportId, setAiReportId] = useState<number | null>(null);
+  const [aiReportSentiment, setAiReportSentiment] = useState<string>("neutral");
+  const [aiReportRisk, setAiReportRisk] = useState<string>("medium");
+  const [aiReportPrice, setAiReportPrice] = useState<string | null>(null);
+  const [aiReportMcap, setAiReportMcap] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareComment, setShareComment] = useState("");
 
   // ─── Auth state ───
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -961,10 +969,24 @@ export default function Research() {
       toast.error("设置预警失败: " + err.message);
     },
   });
+  // tRPC: share report to feed
+  const shareToFeed = trpc.research.shareToFeed.useMutation({
+    onSuccess: () => {
+      toast.success("报告已分享到社区\u52a8\u6001");
+      setShowShareDialog(false);
+      setShareComment("");
+    },
+    onError: (err) => toast.error("分享失败: " + err.message),
+  });
   // tRPC AI report generation
   const generateReport = trpc.research.generate.useMutation({
     onSuccess: (data) => {
       setAiReportContent(data.reportContent);
+      setAiReportId(data.reportId ?? null);
+      setAiReportSentiment(data.sentiment ?? "neutral");
+      setAiReportRisk(data.riskLevel ?? "medium");
+      setAiReportPrice(data.tokenData?.price ?? null);
+      setAiReportMcap(data.tokenData?.marketCap ? String(data.tokenData.marketCap) : null);
       setShowAiReport(true);
       setIsSearching(false);
       toast.success(`AI 研究报告已生成: ${data.tokenData?.name ?? aiReportToken}`);
@@ -1319,22 +1341,158 @@ export default function Research() {
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowAiReport(false)} />
           <div className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl overflow-hidden flex flex-col">
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Sparkles size={16} className="text-[#a855f7]" />
-                <span className="font-bold text-white font-['Space_Grotesk']">AI 深度研究报告</span>
+                <span className="font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
                 <span className="px-2 py-0.5 rounded-full bg-[#a855f7]/20 text-[#a855f7] text-xs font-mono">{aiReportToken}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                  aiReportSentiment === "bullish" ? "bg-emerald-500/20 text-emerald-400" :
+                  aiReportSentiment === "bearish" ? "bg-red-500/20 text-red-400" :
+                  "bg-yellow-500/20 text-yellow-400"
+                }`}>
+                  {aiReportSentiment === "bullish" ? "🟢 看多" : aiReportSentiment === "bearish" ? "🔴 看空" : "🟡 中性"}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                  aiReportRisk === "low" ? "bg-emerald-500/15 text-emerald-400" :
+                  aiReportRisk === "high" ? "bg-red-500/15 text-red-400" :
+                  "bg-yellow-500/15 text-yellow-400"
+                }`}>
+                  {aiReportRisk === "low" ? "低风险" : aiReportRisk === "high" ? "高风险" : "中风险"}
+                </span>
               </div>
-              <button onClick={() => setShowAiReport(false)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10">
+              <button onClick={() => setShowAiReport(false)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 shrink-0">
                 <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4 prose prose-invert prose-sm max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-gray-200 font-sans leading-relaxed">{aiReportContent}</pre>
+
+            {/* Token Data Summary Bar */}
+            {(aiReportPrice || aiReportMcap) && (
+              <div className="px-5 py-2.5 border-b border-white/5 flex items-center gap-4 flex-wrap bg-white/[0.02]">
+                {aiReportPrice && (
+                  <span className="text-xs text-gray-300 flex items-center gap-1">
+                    <TrendingUp size={11} className="text-[#00d4ff]" />
+                    ${aiReportPrice}
+                  </span>
+                )}
+                {aiReportMcap && (
+                  <span className="text-xs text-gray-400">
+                    MCap: ${Number(aiReportMcap) > 1e9 ? (Number(aiReportMcap) / 1e9).toFixed(1) + "B" : Number(aiReportMcap) > 1e6 ? (Number(aiReportMcap) / 1e6).toFixed(1) + "M" : aiReportMcap}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Report Content - Markdown */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 prose prose-invert prose-sm max-w-none
+              prose-headings:text-white prose-headings:font-['Space_Grotesk']
+              prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2
+              prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1.5
+              prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed
+              prose-strong:text-white
+              prose-table:text-xs
+              prose-th:text-[#a855f7] prose-th:font-medium prose-th:border-white/10
+              prose-td:border-white/5 prose-td:text-gray-300
+              prose-li:text-gray-300 prose-li:text-sm
+              prose-code:text-[#00d4ff] prose-code:bg-white/5 prose-code:px-1 prose-code:rounded
+            ">
+              <Streamdown>{aiReportContent}</Streamdown>
             </div>
+
+            {/* Footer with actions */}
             <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between">
-              <p className="text-xs text-gray-500">本报告仅供参考，不构成投资建议</p>
-              <button onClick={() => { navigator.clipboard.writeText(aiReportContent); toast.success("已复制报告"); }} className="text-xs text-[#00d4ff] hover:underline">复制内容</button>
+              <p className="text-[10px] text-gray-500">本报告仅供参考，不构成投资建议</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(aiReportContent); toast.success("已复制报告"); }}
+                  className="text-xs text-[#00d4ff] hover:underline"
+                >复制内容</button>
+                {aiReportId && (
+                  <button
+                    onClick={() => { setShowShareDialog(true); setShareComment(""); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00d4ff]/20 to-[#a855f7]/20 border border-[#a855f7]/30 text-xs text-white hover:from-[#00d4ff]/30 hover:to-[#a855f7]/30 transition-all"
+                  >
+                    <Share2 size={12} />
+                    分享到社区
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share to Feed Dialog */}
+      {showShareDialog && aiReportId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowShareDialog(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-white/10">
+              <h3 className="text-base font-bold text-white font-['Space_Grotesk'] flex items-center gap-2">
+                <Share2 size={16} className="text-[#a855f7]" />
+                分享报告到社区动态
+              </h3>
+            </div>
+
+            {/* Preview Card */}
+            <div className="px-5 py-3">
+              <div className="rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-[#a855f7]/20 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+                    <BarChart3 size={12} className="text-white" />
+                  </div>
+                  <span className="text-sm font-bold text-white font-['Space_Grotesk']">{aiReportToken}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
+                    aiReportSentiment === "bullish" ? "bg-emerald-500/20 text-emerald-400" :
+                    aiReportSentiment === "bearish" ? "bg-red-500/20 text-red-400" :
+                    "bg-yellow-500/20 text-yellow-400"
+                  }`}>
+                    {aiReportSentiment === "bullish" ? "🟢 看多" : aiReportSentiment === "bearish" ? "🔴 看空" : "🟡 中性"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 line-clamp-2">
+                  {(aiReportContent ?? "").split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("|")).find(l => l.length > 20)?.replace(/\*\*/g, "").slice(0, 100) ?? "AI 投研报告"}
+                </p>
+              </div>
+            </div>
+
+            {/* Comment Input */}
+            <div className="px-5 pb-3">
+              <textarea
+                value={shareComment}
+                onChange={(e) => setShareComment(e.target.value)}
+                placeholder="添加你的观点（可选）..."
+                maxLength={500}
+                rows={3}
+                className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#a855f7]/40 resize-none"
+              />
+              <p className="text-right text-[10px] text-gray-500 mt-1">{shareComment.length}/500</p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-5 py-3 border-t border-white/10 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowShareDialog(false)}
+                className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+              >取消</button>
+              <button
+                onClick={() => {
+                  if (!aiReportId) return;
+                  shareToFeed.mutate({
+                    reportId: aiReportId,
+                    comment: shareComment || undefined,
+                  });
+                }}
+                disabled={shareToFeed.isPending}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-sm text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {shareToFeed.isPending ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 发布中...</>
+                ) : (
+                  <><Share2 size={14} /> 发布到社区</>
+                )}
+              </button>
             </div>
           </div>
         </div>

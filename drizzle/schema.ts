@@ -104,6 +104,7 @@ export const posts = mysqlTable(
     commentCount: int("commentCount").default(0).notNull(),
     shareCount: int("shareCount").default(0).notNull(),
     aiScore: int("aiScore").default(0),
+    reportId: int("reportId"),
     isPinned: boolean("isPinned").default(false).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

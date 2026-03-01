@@ -5,7 +5,7 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2 } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -59,6 +59,7 @@ interface MomentPost {
   tags?: string[];
   commentList: Comment[];
   showComments: boolean;
+  reportId?: number | null;
 }
 
 /* ─── Mock Data ─── */
@@ -303,6 +304,7 @@ export default function Discover() {
     isBookmarked: false,
     commentList: [],
     showComments: false,
+    reportId: (p as any).reportId ?? null,
   }), []);
 
   // Merge server posts into moments (append on page change, replace on page 0)
@@ -795,6 +797,34 @@ export default function Discover() {
                         className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => setLocation(`/app/post/${post.id}`)}
                       >{post.content}</p>
+
+                      {/* Report Card */}
+                      {post.reportId && (
+                        <div
+                          onClick={() => setLocation(`/app/post/${post.id}`)}
+                          className="mt-3 rounded-xl bg-gradient-to-br from-[#0a0f1e] to-[#131b35] border border-[#a855f7]/20 p-3.5 cursor-pointer hover:border-[#a855f7]/40 transition-all group"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+                              <BarChart3 size={12} className="text-white" />
+                            </div>
+                            <span className="text-xs font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
+                            <Sparkles size={10} className="text-[#a855f7]" />
+                            <span className="ml-auto text-[10px] text-[#00d4ff] flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              查看完整报告 <ExternalLink size={9} />
+                            </span>
+                          </div>
+                          {post.tags && post.tags.includes("投研报告") && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {post.tags.filter(t => t !== "投研报告").map(tag => (
+                                <span key={tag} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-[#a855f7]/15 text-[#a855f7]">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Media images grid */}
                       {post.images && post.images.length > 0 && (

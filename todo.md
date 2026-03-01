@@ -118,3 +118,15 @@
 - [x] 重写 Deep 模式 prompt：加入投研框架（基本面/技术面/链上数据/情绪面）+ 投资论点 + 进出场策略
 - [x] 报告输出结构化：明确的看多/看空/中性立场 + 置信度评分 + 关键催化剂
 - [x] 测试验证报告质量（BTC Deep 模式实测通过）
+
+## v30 投研报告一键分享到社区
+
+- [x] 后端：posts 表新增 reportId 关联字段（schema 迁移完成）
+- [x] 后端：新增 research.shareToFeed 接口（创建带报告引用的帖子，自动生成摘要文案）
+- [x] 后端：新增 research.getReportPublic 接口（公开查看报告详情，含作者信息）
+- [x] 后端：posts.list / getById / search 返回 reportId 字段
+- [x] 前端：AI 报告弹窗升级（Streamdown Markdown 渲染 + sentiment/risk 标签 + 价格摘要栏）
+- [x] 前端：报告弹窗底部"分享到社区"按钮
+- [x] 前端：分享确认弹窗（可编辑评论 + 预览卡片 + 发布按钮）
+- [x] 前端：Discover 动态流中渲染 ReportCard 组件（渐变卡片 + 标签 + hover 查看完整报告）
+- [x] 110 个测试全部通过，TypeScript 0 错误

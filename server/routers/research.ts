@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { researchReports, priceAlerts } from "../../drizzle/schema";
+import { researchReports, priceAlerts, posts, users } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
@@ -406,5 +406,87 @@ export const researchRouter = router({
     .input(z.object({ symbol: z.string() }))
     .query(async ({ input }) => {
       return fetchTokenData(input.symbol);
+    }),
+
+  // ─── Share report to community feed ─────────────────────────────────────
+  shareToFeed: protectedProcedure
+    .input(z.object({
+      reportId: z.number(),
+      comment: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [report] = await db
+        .select()
+        .from(researchReports)
+        .where(eq(researchReports.id, input.reportId))
+        .limit(1);
+
+      if (!report) throw new Error("Report not found");
+      if (report.userId !== ctx.user.id) throw new Error("Not authorized");
+
+      const sentimentEmoji = report.sentiment === "bullish" ? "\ud83d\udfe2" : report.sentiment === "bearish" ? "\ud83d\udd34" : "\ud83d\udfe1";
+      const sentimentLabel = report.sentiment === "bullish" ? "\u770b\u591a" : report.sentiment === "bearish" ? "\u770b\u7a7a" : "\u4e2d\u6027";
+      const riskLabel = report.riskLevel === "low" ? "\u4f4e\u98ce\u9669" : report.riskLevel === "high" ? "\u9ad8\u98ce\u9669" : "\u4e2d\u98ce\u9669";
+
+      const scoreMatch = report.reportContent.match(/(\d+)\s*\/\s*10/);
+      const aiScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
+
+      const lines = report.reportContent.split("\n").filter((l: string) => l.trim() && !l.startsWith("#") && !l.startsWith("|") && !l.startsWith("---") && !l.startsWith("*Nexus"));
+      const summaryLine = lines.find((l: string) => l.length > 30) ?? `${report.tokenSymbol} \u6295\u7814\u62a5\u544a`;
+      const summary = summaryLine.replace(/\*\*/g, "").slice(0, 150);
+
+      const userComment = input.comment?.trim() ? `${input.comment.trim()}\n\n` : "";
+      const fmtMcap = (v: number | null) => {
+        if (!v) return "N/A";
+        if (v > 1e9) return (v / 1e9).toFixed(1) + "B";
+        if (v > 1e6) return (v / 1e6).toFixed(1) + "M";
+        return v.toString();
+      };
+      const postContent = `${userComment}\ud83d\udcca AI \u6295\u7814\u62a5\u544a | ${report.tokenSymbol} ${sentimentEmoji} ${sentimentLabel}\n\n${summary}${summary.length >= 150 ? "..." : ""}\n\n\ud83d\udcb0 \u62a5\u544a\u4ef7\u683c: $${report.priceAtReport ?? "N/A"} | \ud83d\udcc8 \u5e02\u503c: $${fmtMcap(Number(report.marketCapAtReport) || null)} | \u26a0\ufe0f ${riskLabel}${aiScore ? ` | \ud83c\udfaf \u8bc4\u5206: ${aiScore}/10` : ""}`;
+
+      const tags = JSON.stringify(["\u6295\u7814\u62a5\u544a", report.tokenSymbol, sentimentLabel]);
+
+      const [result] = await db.insert(posts).values({
+        authorId: ctx.user.id,
+        content: postContent,
+        tags,
+        reportId: input.reportId,
+        aiScore: aiScore,
+      });
+
+      return {
+        postId: (result as any).insertId as number,
+        success: true,
+      };
+    }),
+
+  // ─── Get report by ID (public, for viewing shared reports) ─────────────
+  getReportPublic: publicProcedure
+    .input(z.object({ reportId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [report] = await db
+        .select({
+          id: researchReports.id,
+          tokenSymbol: researchReports.tokenSymbol,
+          tokenName: researchReports.tokenName,
+          reportContent: researchReports.reportContent,
+          priceAtReport: researchReports.priceAtReport,
+          marketCapAtReport: researchReports.marketCapAtReport,
+          sentiment: researchReports.sentiment,
+          riskLevel: researchReports.riskLevel,
+          createdAt: researchReports.createdAt,
+          authorName: users.name,
+          authorAvatar: users.avatar,
+        })
+        .from(researchReports)
+        .leftJoin(users, eq(researchReports.userId, users.id))
+        .where(eq(researchReports.id, input.reportId))
+        .limit(1);
+      return report ?? null;
     }),
 });
