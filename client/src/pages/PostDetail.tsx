@@ -12,7 +12,7 @@ import {
   Star, MoreHorizontal, Send, AtSign, X, Quote, ChevronDown,
   CheckCircle2, Copy, ExternalLink, BarChart3, TrendingUp, TrendingDown, Minus, FileText, Trash2
 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown } from "@/components/LazyStreamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -504,7 +504,7 @@ export default function PostDetail() {
                   </div>
                 ) : reportData?.reportContent ? (
                   <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-1.5 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mb-1 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ol]:text-xs [&_li]:mb-0.5 [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-xs [&_strong]:text-neon-cyan">
-                    <Streamdown>{reportData.reportContent}</Streamdown>
+                    <LazyStreamdown>{reportData.reportContent}</LazyStreamdown>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-4">Report content unavailable</p>

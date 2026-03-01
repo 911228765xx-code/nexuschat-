@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { trpc } from "@/lib/trpc";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown } from "@/components/LazyStreamdown";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   Tooltip as RechartsTooltip, RadarChart, PolarGrid,
@@ -1224,7 +1224,7 @@ export default function TokenDetail() {
                     }`}>
                       {msg.role === "ai" ? (
                         <div className="prose prose-invert prose-xs max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                          <Streamdown>{msg.content}</Streamdown>
+                          <LazyStreamdown>{msg.content}</LazyStreamdown>
                           {isAiTyping && msg.id === chatMessages[chatMessages.length - 1]?.id && msg.content && (
                             <span className="inline-block w-1.5 h-3.5 bg-neon-purple/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
                           )}

@@ -17,7 +17,7 @@ import {
   ArrowUp, ArrowDown, Signal
 } from "lucide-react";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown } from "@/components/LazyStreamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -1010,7 +1010,7 @@ export default function Research() {
                 prose-li:text-gray-300 prose-li:text-sm
                 prose-code:text-[#00d4ff] prose-code:bg-white/5 prose-code:px-1 prose-code:rounded
               ">
-                <Streamdown>{aiReportContent}</Streamdown>
+                <LazyStreamdown>{aiReportContent}</LazyStreamdown>
                 {isStreaming && aiReportContent.length > 0 && (
                   <span className="inline-block w-1.5 h-4 bg-[#a855f7] rounded-sm animate-pulse ml-0.5 align-text-bottom" />
                 )}

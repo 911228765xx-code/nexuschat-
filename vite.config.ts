@@ -197,6 +197,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Disable automatic modulepreload injection so browsers load chunks on-demand
+    // instead of preloading all vendor chunks at startup (prevents mobile white screen)
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks(id: string) {
@@ -224,20 +227,24 @@ export default defineConfig({
           if (id.includes("@trpc") || id.includes("@tanstack")) {
             return "vendor-trpc";
           }
-          // Shiki syntax highlighting (languages + themes ~8MB)
+          // Shiki syntax highlighting (languages + themes ~8MB) — lazy only
           if (id.includes("@shikijs") || id.includes("shiki")) {
             return "vendor-shiki";
           }
-          // Mermaid diagrams (~3MB)
+          // Mermaid diagrams (~3MB) — lazy only
           if (id.includes("mermaid") || id.includes("elkjs") || id.includes("dagre") || id.includes("cytoscape")) {
             return "vendor-mermaid";
           }
-          // KaTeX math rendering (~1MB)
+          // KaTeX math rendering (~1MB) — lazy only
           if (id.includes("katex")) {
             return "vendor-katex";
           }
-          // Markdown / streamdown core
-          if (id.includes("streamdown") || id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") || id.includes("unified") || id.includes("mdast") || id.includes("hast") || id.includes("micromark") || id.includes("marked")) {
+          // Streamdown — must be in its own chunk so shiki/mermaid deps stay lazy
+          if (id.includes("streamdown")) {
+            return "vendor-streamdown";
+          }
+          // Markdown / remark / rehype utilities
+          if (id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") || id.includes("unified") || id.includes("mdast") || id.includes("hast") || id.includes("micromark") || id.includes("marked")) {
             return "vendor-markdown";
           }
           // Socket.IO
@@ -247,6 +254,30 @@ export default defineConfig({
           // Radix UI primitives
           if (id.includes("@radix-ui")) {
             return "vendor-radix";
+          }
+          // Form handling
+          if (id.includes("react-hook-form") || id.includes("@hookform") || id.includes("zod")) {
+            return "vendor-forms";
+          }
+          // Date utilities
+          if (id.includes("date-fns") || id.includes("react-day-picker")) {
+            return "vendor-date";
+          }
+          // QR code (only used in Wallet Receive modal)
+          if (id.includes("qrcode")) {
+            return "vendor-qrcode";
+          }
+          // Canvas / image export (only used in specific features)
+          if (id.includes("html2canvas")) {
+            return "vendor-canvas";
+          }
+          // Carousel / slider
+          if (id.includes("embla-carousel") || id.includes("vaul") || id.includes("input-otp") || id.includes("cmdk")) {
+            return "vendor-ui-extra";
+          }
+          // Superjson + serialization
+          if (id.includes("superjson") || id.includes("nanoid") || id.includes("class-variance") || id.includes("clsx") || id.includes("tailwind-merge")) {
+            return "vendor-utils";
           }
           // Remaining node_modules
           if (id.includes("node_modules")) {

@@ -289,3 +289,11 @@
 - [x] 前端：详情弹窗增加删除按鈕，内联确认按鈕组，关闭弹窗自动重置
 - [x] 前端：Market Tab 交易员详情弹窗 20+ 硬编码英文文本替换为 t() ，补充 20+ 翻译键
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v50 手机端白屏修复
+
+- [x] 诊断白屏原因：index.html 自动注入所有 vendor chunk 的 modulepreload，手机首屏需下载 10MB+ JS
+- [x] 修复 1：禁用 Vite 自动 modulepreload 注入（modulePreload: { polyfill: false }），浏览器改为按需加载 chunk
+- [x] 修复 2：将 streamdown 拆分为独立 chunk（vendor-streamdown 30KB），并创建 LazyStreamdown 包装器延迟加载 shiki/mermaid
+- [x] 修复 3：vite.config.ts manualChunks 进一步拆分 vendor-misc（forms/date/qrcode/canvas/ui-extra/utils）
+- [x] 147 个测试全部通过，0 TS 错误
