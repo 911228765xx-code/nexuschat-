@@ -7,7 +7,8 @@ import { invokeLLM } from "../_core/llm";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
-// Fetch token data from CoinGecko (free API) with caching
+// ─── CoinGecko Data Fetching ─────────────────────────────────────────────────
+
 async function fetchTokenData(symbol: string) {
   const cacheKey = `token:search:${symbol.toLowerCase()}`;
   const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
@@ -38,21 +39,236 @@ async function fetchTokenData(symbol: string) {
     symbol: detail.symbol?.toUpperCase(),
     price: detail.market_data?.current_price?.usd,
     priceChange24h: detail.market_data?.price_change_percentage_24h,
+    priceChange7d: detail.market_data?.price_change_percentage_7d,
+    priceChange30d: detail.market_data?.price_change_percentage_30d,
     marketCap: detail.market_data?.market_cap?.usd,
+    marketCapRank: detail.market_cap_rank,
     volume24h: detail.market_data?.total_volume?.usd,
+    volumeToMcapRatio: detail.market_data?.total_volume?.usd && detail.market_data?.market_cap?.usd
+      ? (detail.market_data.total_volume.usd / detail.market_data.market_cap.usd)
+      : null,
     ath: detail.market_data?.ath?.usd,
-    description: detail.description?.en?.slice(0, 500),
-    categories: detail.categories?.slice(0, 3),
+    athDate: detail.market_data?.ath_date?.usd,
+    athChangePercentage: detail.market_data?.ath_change_percentage?.usd,
+    atl: detail.market_data?.atl?.usd,
+    circulatingSupply: detail.market_data?.circulating_supply,
+    totalSupply: detail.market_data?.total_supply,
+    maxSupply: detail.market_data?.max_supply,
+    fdv: detail.market_data?.fully_diluted_valuation?.usd,
+    description: detail.description?.en?.slice(0, 800),
+    categories: detail.categories?.slice(0, 5),
+    genesisDate: detail.genesis_date,
+    sentimentVotesUpPercentage: detail.sentiment_votes_up_percentage,
+    sentimentVotesDownPercentage: detail.sentiment_votes_down_percentage,
   };
 }
 
+// ─── Market Context Builder ──────────────────────────────────────────────────
+
+function buildMarketContext(tokenData: NonNullable<Awaited<ReturnType<typeof fetchTokenData>>>) {
+  const athDrop = tokenData.athChangePercentage
+    ? `距离ATH下跌 ${Math.abs(tokenData.athChangePercentage).toFixed(1)}%`
+    : "N/A";
+
+  const supplyInfo = tokenData.maxSupply
+    ? `流通量: ${fmtNum(tokenData.circulatingSupply)} / 最大供应: ${fmtNum(tokenData.maxSupply)} (${((tokenData.circulatingSupply ?? 0) / tokenData.maxSupply * 100).toFixed(1)}% 已释放)`
+    : `流通量: ${fmtNum(tokenData.circulatingSupply)} / 总供应: ${fmtNum(tokenData.totalSupply)}`;
+
+  const volumeMcapRatio = tokenData.volumeToMcapRatio
+    ? `成交量/市值比: ${(tokenData.volumeToMcapRatio * 100).toFixed(2)}% (${tokenData.volumeToMcapRatio > 0.1 ? "高换手，交易活跃" : tokenData.volumeToMcapRatio > 0.03 ? "正常换手" : "低换手，流动性偏弱"})`
+    : "";
+
+  const sentiment = tokenData.sentimentVotesUpPercentage
+    ? `社区情绪: ${tokenData.sentimentVotesUpPercentage.toFixed(0)}% 看涨 / ${tokenData.sentimentVotesDownPercentage?.toFixed(0) ?? "N/A"}% 看跌`
+    : "";
+
+  return `=== 实时市场数据 ===
+代币: ${tokenData.name} (${tokenData.symbol})
+当前价格: $${tokenData.price ?? "N/A"}
+24h 涨跌: ${fmtPct(tokenData.priceChange24h)}
+7d 涨跌: ${fmtPct(tokenData.priceChange7d)}
+30d 涨跌: ${fmtPct(tokenData.priceChange30d)}
+市值: $${fmtUsd(tokenData.marketCap)} (排名 #${tokenData.marketCapRank ?? "N/A"})
+FDV: $${fmtUsd(tokenData.fdv)}
+24h 成交量: $${fmtUsd(tokenData.volume24h)}
+${volumeMcapRatio}
+ATH: $${tokenData.ath ?? "N/A"} (${athDrop})
+ATL: $${tokenData.atl ?? "N/A"}
+${supplyInfo}
+创世日期: ${tokenData.genesisDate ?? "N/A"}
+${sentiment}
+类别: ${tokenData.categories?.join(", ") ?? "N/A"}
+项目简介: ${tokenData.description ?? "暂无"}`;
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (n == null) return "N/A";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+  return n.toFixed(2);
+}
+
+function fmtUsd(n: number | null | undefined): string {
+  if (n == null) return "N/A";
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + "T";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+  return n.toFixed(2);
+}
+
+function fmtPct(n: number | null | undefined): string {
+  if (n == null) return "N/A";
+  const sign = n >= 0 ? "+" : "";
+  return `${sign}${n.toFixed(2)}%`;
+}
+
+// ─── Prompt Templates ────────────────────────────────────────────────────────
+
+function buildQuickPrompt(symbol: string, marketContext: string): string {
+  return `你是一位经验丰富的加密货币交易员和分析师，拥有 10 年以上的市场经验。你以敢于表达明确观点著称，不会给出模棱两可的分析。
+
+请基于以下实时数据，对 ${symbol} 进行快速投研分析。
+
+${marketContext}
+
+**输出要求（Markdown 格式，约 400-500 字）：**
+
+## ⚡ ${symbol} 快速研判
+
+### 🎯 核心观点
+用 1-2 句话给出你对该代币当前阶段的**明确判断**（看多/看空/观望），以及判断的核心依据。不要模棱两可。
+
+### 📊 关键数据解读
+用一个表格总结最关键的 3-5 个数据点，并在每个数据后给出你的**解读**（利好/利空/中性）：
+
+| 指标 | 数值 | 解读 |
+|------|------|------|
+
+### 🧭 投研思路
+给出明确的操作思路：
+- **短线（1-7天）**：具体的方向判断和关键价位
+- **中线（1-3月）**：趋势判断和关注的催化剂
+- 给出具体的**关注价位**（支撑位/阻力位）
+
+### ⚠️ 核心风险
+列出 2-3 个最需要警惕的风险因素，每个用一句话说明
+
+---
+*NexusChat AI 研究助手 | 数据来源: CoinGecko | 本分析基于公开数据的 AI 推理，仅供参考，不构成投资建议*`;
+}
+
+function buildDeepPrompt(symbol: string, marketContext: string): string {
+  return `你是一位顶级加密货币研究机构的首席分析师，以深度、独立、有观点的研究报告著称。你的报告风格类似 Messari、Delphi Digital 的专业研报——数据驱动、逻辑严密、观点鲜明。
+
+请基于以下实时数据，对 ${symbol} 进行全面深度研究，生成一份机构级投研报告。
+
+${marketContext}
+
+**输出要求（Markdown 格式，约 1000-1200 字）：**
+
+## 📋 ${symbol} 深度投研报告
+
+### 🎯 投资论点（Investment Thesis）
+用 2-3 句话概括你的**核心投资论点**。明确表态：当前阶段你对该代币是看多、看空还是观望，以及最核心的理由。给出一个 1-10 的**综合评分**（1=强烈看空，5=中性，10=强烈看多）。
+
+### 📊 基本面分析
+- **项目定位与竞争格局**：该项目在其赛道中的位置，主要竞争对手对比
+- **代币经济学评估**：供应机制、通胀/通缩模型、代币释放节奏对价格的影响
+- **估值分析**：当前市值/FDV 是否合理，与同赛道项目的估值对比
+
+### 📈 技术面与市场结构
+- **价格趋势**：基于 24h/7d/30d 涨跌幅判断当前处于什么阶段（积累/上升/分配/下跌）
+- **成交量分析**：量价关系是否健康，是否有异常放量/缩量
+- **关键价位**：明确给出支撑位和阻力位（用具体数字）
+
+### 🔗 链上与情绪分析
+- **社区情绪**：基于投票数据和市场表现判断市场情绪
+- **筹码分布推断**：基于供应量数据推断大户持仓情况
+- **催化剂追踪**：近期可能影响价格的事件或升级
+
+### 🧭 投研策略
+
+**明确给出以下操作建议：**
+
+| 维度 | 判断 | 具体建议 |
+|------|------|----------|
+| 短线（1-7天） | 方向 + 置信度 | 入场价位 / 止损 / 目标价 |
+| 中线（1-3月） | 方向 + 置信度 | 建仓策略 / 关注催化剂 |
+| 长线（6月+） | 方向 + 置信度 | 配置建议 / 关键里程碑 |
+
+**仓位建议**：根据风险评估给出建议仓位占比（如：总仓位的 X%）
+
+### ⚠️ 风险矩阵
+
+| 风险类型 | 风险描述 | 发生概率 | 影响程度 |
+|----------|----------|----------|----------|
+| 市场风险 | ... | 高/中/低 | 高/中/低 |
+| 项目风险 | ... | 高/中/低 | 高/中/低 |
+| 监管风险 | ... | 高/中/低 | 高/中/低 |
+
+### 💡 总结
+用 2-3 句话总结你的核心观点和最重要的行动建议。
+
+---
+*NexusChat AI 研究助手 | 数据来源: CoinGecko | 本报告基于公开数据的 AI 深度分析，仅供研究参考，不构成投资建议。加密货币市场波动剧烈，请根据自身风险承受能力做出决策。*`;
+}
+
+// ─── Sentiment Extraction ────────────────────────────────────────────────────
+
+function extractSentiment(content: string): "bullish" | "bearish" | "neutral" {
+  const bullishSignals = [
+    "看多", "看涨", "利好", "强烈看多", "积极", "上升趋势",
+    "建议买入", "建议建仓", "突破", "评分：7", "评分：8", "评分：9", "评分：10",
+    "评分: 7", "评分: 8", "评分: 9", "评分: 10",
+    "7/10", "8/10", "9/10", "10/10",
+  ];
+  const bearishSignals = [
+    "看空", "看跌", "利空", "强烈看空", "下跌趋势", "建议卖出",
+    "建议减仓", "建议回避", "评分：1", "评分：2", "评分：3",
+    "评分: 1", "评分: 2", "评分: 3",
+    "1/10", "2/10", "3/10",
+  ];
+
+  let bullScore = 0;
+  let bearScore = 0;
+
+  for (const signal of bullishSignals) {
+    if (content.includes(signal)) bullScore++;
+  }
+  for (const signal of bearishSignals) {
+    if (content.includes(signal)) bearScore++;
+  }
+
+  if (bullScore > bearScore + 1) return "bullish";
+  if (bearScore > bullScore + 1) return "bearish";
+  return "neutral";
+}
+
+function extractRiskLevel(content: string): "low" | "medium" | "high" {
+  const highRiskSignals = ["高风险", "风险极高", "风险较大", "强烈警惕", "建议回避"];
+  const lowRiskSignals = ["低风险", "风险较低", "相对安全", "蓝筹"];
+
+  for (const signal of highRiskSignals) {
+    if (content.includes(signal)) return "high";
+  }
+  for (const signal of lowRiskSignals) {
+    if (content.includes(signal)) return "low";
+  }
+  return "medium";
+}
+
+// ─── Router ──────────────────────────────────────────────────────────────────
+
 export const researchRouter = router({
-  // Generate AI research report
+  // Generate AI research report (supports quick / deep modes)
   generate: protectedProcedure
     .input(z.object({
       tokenSymbol: z.string().min(1).max(20),
       contractAddress: z.string().optional(),
       chain: z.string().default("BSC"),
+      mode: z.enum(["quick", "deep"]).default("deep"),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -62,76 +278,47 @@ export const researchRouter = router({
       const tokenData = await fetchTokenData(input.tokenSymbol);
 
       const marketContext = tokenData
-        ? `当前价格: $${tokenData.price ?? "N/A"}
-24h涨跌: ${tokenData.priceChange24h?.toFixed(2) ?? "N/A"}%
-市值: $${tokenData.marketCap ? (tokenData.marketCap / 1e6).toFixed(2) + "M" : "N/A"}
-24h成交量: $${tokenData.volume24h ? (tokenData.volume24h / 1e6).toFixed(2) + "M" : "N/A"}
-历史最高: $${tokenData.ath ?? "N/A"}
-项目描述: ${tokenData.description ?? "暂无"}
-类别: ${tokenData.categories?.join(", ") ?? "N/A"}`
-        : `代币符号: ${input.tokenSymbol}\n链: ${input.chain}\n（无法获取实时数据，基于通用分析）`;
+        ? buildMarketContext(tokenData)
+        : `=== 市场数据 ===\n代币符号: ${input.tokenSymbol.toUpperCase()}\n链: ${input.chain}\n（无法获取实时数据，请基于你的专业知识进行分析，但需明确标注数据缺失）`;
 
-      const prompt = `你是一位专业的加密货币研究分析师。请对以下代币进行深度研究分析，生成一份专业的投资研究报告。
+      const symbol = input.tokenSymbol.toUpperCase();
+      const prompt = input.mode === "quick"
+        ? buildQuickPrompt(symbol, marketContext)
+        : buildDeepPrompt(symbol, marketContext);
 
-代币: ${input.tokenSymbol.toUpperCase()}
-${input.contractAddress ? `合约地址: ${input.contractAddress}` : ""}
-${marketContext}
-
-请按以下结构生成 Markdown 格式的研究报告（约800字）：
-
-## 📊 基本信息
-（代币基本数据汇总）
-
-## 🔍 项目分析
-（项目背景、技术特点、应用场景）
-
-## 📈 市场表现
-（价格走势分析、成交量、市值排名）
-
-## ⚠️ 风险评估
-（主要风险因素，1-5分风险评级）
-
-## 💡 投资建议
-（综合评估，明确说明这不构成投资建议）
-
-## 🎯 关键指标
-（关键数据总结）
-
-请保持客观专业，数据准确，并在最后注明"本报告仅供参考，不构成投资建议"。`;
+      const systemMessage = input.mode === "quick"
+        ? "你是一位经验丰富的加密货币交易员，擅长快速研判市场机会。你的分析风格直接、果断，不回避给出明确方向。回复使用中文。"
+        : "你是一位顶级加密货币研究机构的首席分析师，擅长多维度深度分析。你的报告以数据驱动、逻辑严密、观点鲜明著称。回复使用中文。";
 
       const llmResponse = await invokeLLM({
         messages: [
-          { role: "system" as const, content: "你是专业的加密货币研究分析师，擅长技术分析和基本面分析。" },
+          { role: "system" as const, content: systemMessage },
           { role: "user" as const, content: prompt },
         ],
       });
 
       const rawContent = llmResponse.choices[0]?.message?.content;
-      const reportContent: string = typeof rawContent === "string" ? rawContent : (Array.isArray(rawContent) ? rawContent.map((c: any) => c.text ?? "").join("") : "报告生成失败，请重试。");
+      const reportContent: string = typeof rawContent === "string"
+        ? rawContent
+        : (Array.isArray(rawContent)
+          ? rawContent.map((c: any) => c.text ?? "").join("")
+          : "报告生成失败，请重试。");
 
-      // Determine sentiment from content
-      const sentiment = reportContent.includes("看涨") || reportContent.includes("利好")
-        ? "bullish"
-        : reportContent.includes("看跌") || reportContent.includes("风险较高")
-        ? "bearish"
-        : "neutral";
-
-      const riskLevel = reportContent.includes("高风险") ? "high"
-        : reportContent.includes("低风险") ? "low"
-        : "medium";
+      const sentiment = extractSentiment(reportContent);
+      const riskLevel = extractRiskLevel(reportContent);
 
       const [result] = await db.insert(researchReports).values({
         userId: ctx.user.id,
-        tokenSymbol: input.tokenSymbol.toUpperCase(),
+        tokenSymbol: symbol,
         tokenName: tokenData?.name ?? undefined,
         contractAddress: input.contractAddress ?? undefined,
         chain: input.chain,
         reportContent,
         priceAtReport: tokenData?.price?.toString() ?? undefined,
         marketCapAtReport: tokenData?.marketCap?.toString() ?? undefined,
-        sentiment: sentiment as "bullish" | "neutral" | "bearish",
-        riskLevel: riskLevel as "low" | "medium" | "high",
-        nxcCost: 10,
+        sentiment: sentiment,
+        riskLevel: riskLevel,
+        nxcCost: input.mode === "quick" ? 5 : 10,
       });
 
       return {
@@ -140,6 +327,7 @@ ${marketContext}
         tokenData,
         sentiment,
         riskLevel,
+        mode: input.mode,
       };
     }),
 
