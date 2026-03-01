@@ -15,7 +15,6 @@ import { watchlistRouter } from "./routers/watchlist";
 import { copyTradingRouter } from "./routers/copyTrading";
 import { settingsRouter } from "./routers/settings";
 import { referralRouter } from "./routers/referral";
-import { tokenChatRouter } from "./routers/tokenChat";
 
 export const appRouter = router({
   system: systemRouter,
@@ -40,7 +39,6 @@ export const appRouter = router({
   copyTrading: copyTradingRouter,
   settings: settingsRouter,
   referral: referralRouter,
-  tokenChat: tokenChatRouter,
 });
 
 export type AppRouter = typeof appRouter;

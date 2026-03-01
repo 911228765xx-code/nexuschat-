@@ -13,16 +13,7 @@ import { wagmiConfig } from "@/lib/wagmi";
 import { WalletProvider } from "@/contexts/WalletContext";
 import "@rainbow-me/rainbowkit/styles.css";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,      // 30s — data stays fresh, no refetch on re-mount
-      gcTime: 5 * 60_000,     // 5min — keep cache for fast back-navigation
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

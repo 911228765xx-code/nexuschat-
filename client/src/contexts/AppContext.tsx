@@ -229,7 +229,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveToStorage("notifications", notifications); }, [notifications]);
   useEffect(() => { saveToStorage("notificationSettings", notificationSettings); }, [notificationSettings]);
 
-  // Online status is now driven by real Socket.IO events — no simulated timer needed
+  // Simulate online status changes every 15-30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setContacts(prev => {
+        const idx = Math.floor(Math.random() * prev.length);
+        return prev.map((c, i) => i === idx ? { ...c, isOnline: !c.isOnline } : c);
+      });
+      // Also update conversation online status
+      setConversations(prev => {
+        const nonGroup = prev.filter(c => !c.isGroup);
+        if (nonGroup.length === 0) return prev;
+        const target = nonGroup[Math.floor(Math.random() * nonGroup.length)];
+        return prev.map(c => c.id === target.id ? { ...c, isOnline: !c.isOnline } : c);
+      });
+    }, 15000 + Math.random() * 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Profile actions
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {

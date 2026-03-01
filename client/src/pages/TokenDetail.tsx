@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { trpc } from "@/lib/trpc";
-import { LazyStreamdown } from "@/components/LazyStreamdown";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   Tooltip as RechartsTooltip, RadarChart, PolarGrid,
@@ -91,7 +90,27 @@ const EMPTY_PRICE: { time: string; price: number }[] = [];
 const m1Labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Pre-built AI chat responses per token
-// AI Chat responses are now powered by LLM via tokenChat.sendMessage
+const aiChatResponses: Record<string, string[]> = {
+  BTC: [
+    "Based on current technical analysis, BTC is showing strong bullish momentum. The golden cross on the 4H chart combined with RSI at 62.4 suggests room for further upside before entering overbought territory. Key support at $94,500 and resistance at $100,000.",
+    "On-chain data shows significant whale accumulation over the past 7 days, with net exchange outflows of 12,450 BTC. This typically precedes upward price movements as supply decreases on exchanges.",
+    "The Fear & Greed Index at 72 indicates moderate greed. Historically, BTC tends to continue rallying until this index reaches 85+. Current market structure supports a target of $103,000-$105,000 within the next 2 weeks.",
+    "Risk assessment: Primary risks include potential regulatory announcements and macro economic shifts. The halving cycle dynamics remain favorable. Recommended position sizing: 2-3% of portfolio with 3x-5x leverage.",
+  ],
+  ETH: [
+    "Ethereum's EIP-4844 implementation has significantly reduced L2 gas costs, driving increased ecosystem activity. The burn rate of 2.1 ETH/min combined with staking rate of 27.3% creates strong deflationary pressure.",
+    "Technical analysis shows ETH forming a bullish ascending triangle on the daily chart. MACD crossover on 4H confirms momentum shift. Target: $4,200 with support at $3,650.",
+    "DeFi TVL on Ethereum has grown 15% this month, indicating renewed confidence in the ecosystem. The ETH/BTC ratio is showing signs of bottoming, suggesting potential outperformance ahead.",
+  ],
+  SOL: [
+    "Solana's network metrics show impressive growth with 1,200+ TPS average and sub-second finality. However, the recent price decline of 1.2% reflects profit-taking after the strong rally.",
+    "The DeFi ecosystem on Solana continues to expand with TVL at $8.9B. Key risk: network stability concerns persist despite improvements. Watch for the $180 support level.",
+  ],
+  DEFAULT: [
+    "I'm analyzing the current market data for this token. Based on the technical indicators and on-chain metrics, here's my assessment of the current situation and potential trading opportunities.",
+    "The market sentiment analysis shows mixed signals. I recommend monitoring the key support and resistance levels closely before making any trading decisions.",
+  ],
+};
 
 const TOKENS_DATA: Record<string, TokenData> = {
   BTC: {
@@ -400,18 +419,11 @@ export default function TokenDetail() {
   const [chatInput, setChatInput] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Ref for aborting in-flight stream requests
-  const streamAbortRef = useRef<AbortController | null>(null);
+  const chatResponseIndex = useRef(0);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => { streamAbortRef.current?.abort(); };
-  }, []);
 
   // tRPC: real-time price data (must be before getPriceData)
   const { data: livePrice } = trpc.trading.getPrices.useQuery(
@@ -469,113 +481,26 @@ export default function TokenDetail() {
     toast.success(`${t("research.alertSet")} ${token} @ $${alertPrice}`);
   }, [alertPrice, token, t]);
 
-  const handleSendChat = useCallback(async () => {
+  const handleSendChat = useCallback(() => {
     if (!chatInput.trim() || isAiTyping) return;
-    const userMessage = chatInput.trim();
     const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`, role: "user", content: userMessage, timestamp: new Date(),
+      id: `u-${Date.now()}`, role: "user", content: chatInput.trim(), timestamp: new Date(),
     };
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput("");
     setIsAiTyping(true);
 
-    // Create a placeholder AI message that will be updated incrementally
-    const aiMsgId = `a-${Date.now()}`;
-    const aiMsg: ChatMessage = {
-      id: aiMsgId, role: "ai", content: "", timestamp: new Date(),
-    };
-    setChatMessages(prev => [...prev, aiMsg]);
-
-    try {
-      // Build conversation history for context (last 10 messages)
-      const history = chatMessages.slice(-10).map(m => ({
-        role: m.role === "user" ? "user" as const : "assistant" as const,
-        content: m.content,
-      }));
-
-      // Abort any previous stream
-      streamAbortRef.current?.abort();
-      const abortController = new AbortController();
-      streamAbortRef.current = abortController;
-
-      const response = await fetch("/api/token-chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        signal: abortController.signal,
-        body: JSON.stringify({
-          tokenSymbol: token,
-          message: userMessage,
-          history,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-          const dataStr = trimmed.slice(6);
-          if (dataStr === "[DONE]") continue;
-
-          try {
-            const parsed = JSON.parse(dataStr);
-            if (parsed.error) {
-              throw new Error(parsed.error);
-            }
-            if (parsed.content) {
-              accumulated += parsed.content;
-              // Update the AI message content incrementally
-              setChatMessages(prev =>
-                prev.map(m => m.id === aiMsgId ? { ...m, content: accumulated } : m)
-              );
-            }
-          } catch (parseErr: any) {
-            if (parseErr.message && !parseErr.message.includes("JSON")) throw parseErr;
-          }
-        }
-      }
-
-      // If no content was received, show fallback
-      if (!accumulated) {
-        setChatMessages(prev =>
-          prev.map(m => m.id === aiMsgId ? { ...m, content: "⚠️ No response received. Please try again." } : m)
-        );
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") return; // User cancelled
-      setChatMessages(prev => {
-        // Update the placeholder AI message with error
-        const updated = prev.map(m =>
-          m.id === aiMsgId && !m.content
-            ? { ...m, content: "⚠️ AI analysis temporarily unavailable. Please try again in a moment." }
-            : m
-        );
-        return updated;
-      });
-      toast.error("AI chat error");
-    } finally {
+    setTimeout(() => {
+      const responses = aiChatResponses[token] || aiChatResponses.DEFAULT;
+      const idx = chatResponseIndex.current % responses.length;
+      chatResponseIndex.current++;
+      const aiMsg: ChatMessage = {
+        id: `a-${Date.now()}`, role: "ai", content: responses[idx], timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, aiMsg]);
       setIsAiTyping(false);
-      streamAbortRef.current = null;
-    }
-  }, [chatInput, isAiTyping, token, chatMessages]);
+    }, 1500 + Math.random() * 1500);
+  }, [chatInput, isAiTyping, token]);
 
   // Merge real price into display values
   const displayPrice = livePriceData ? `$${livePriceData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : data?.price ?? "N/A";
@@ -1222,16 +1147,7 @@ export default function TokenDetail() {
                         ? "bg-secondary/30 border border-border/20 rounded-tl-sm"
                         : "bg-neon-cyan/10 border border-neon-cyan/15 rounded-tr-sm"
                     }`}>
-                      {msg.role === "ai" ? (
-                        <div className="prose prose-invert prose-xs max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                          <LazyStreamdown>{msg.content}</LazyStreamdown>
-                          {isAiTyping && msg.id === chatMessages[chatMessages.length - 1]?.id && msg.content && (
-                            <span className="inline-block w-1.5 h-3.5 bg-neon-purple/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
-                          )}
-                        </div>
-                      ) : (
-                        <span>{msg.content}</span>
-                      )}
+                      {msg.content}
                       <p className="text-[8px] text-muted-foreground mt-1.5 font-mono">
                         {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
@@ -1239,8 +1155,8 @@ export default function TokenDetail() {
                   </motion.div>
                 ))}
 
-                {/* AI typing indicator — only show before first token arrives */}
-                {isAiTyping && chatMessages.length > 0 && chatMessages[chatMessages.length - 1]?.role === "ai" && !chatMessages[chatMessages.length - 1]?.content && (
+                {/* AI typing indicator */}
+                {isAiTyping && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2">
                     <div className="w-7 h-7 rounded-lg bg-neon-purple/15 border border-neon-purple/20 flex items-center justify-center">
                       <Bot size={14} className="text-neon-purple" />

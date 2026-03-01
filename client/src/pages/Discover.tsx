@@ -5,7 +5,7 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles, Trash2, Copy, Flag } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -47,7 +47,6 @@ interface Comment {
 
 interface MomentPost {
   id: string;
-  authorId?: number;
   author: { name: string; avatar: string; isVerified: boolean; handle: string };
   content: string;
   images?: string[];
@@ -109,21 +108,7 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
-  const { isAuthenticated, user: currentUser } = useAuth();
-  const [moreMenuPostId, setMoreMenuPostId] = useState<string | null>(null);
-
-  // ─── tRPC: Delete post mutation ───
-  const deletePostMutation = trpc.posts.delete.useMutation({
-    onSuccess: (_, vars) => {
-      setMoments(prev => prev.filter(m => m.id !== String(vars.postId)));
-      toast.success(t("discover.postDeleted") || "Post deleted");
-      setMoreMenuPostId(null);
-    },
-    onError: (err) => {
-      if (!err.message.includes("10001")) toast.error(err.message || "Failed to delete post");
-    },
-  });
-
+  const { isAuthenticated } = useAuth();
   // ─── tRPC: Real groups from backend ───
   const { data: groupsData, refetch: refetchGroups } = trpc.chat.listGroups.useQuery(
     { limit: 30 },
@@ -244,17 +229,15 @@ export default function Discover() {
   );
   const realUsers: TrendingUser[] = useMemo(() => {
     if (!leaderboardData || leaderboardData.length === 0) return [];
-    return leaderboardData
-      .filter((u) => !currentUser || u.id !== currentUser.id) // Exclude self from users list
-      .map((u) => ({
-        id: String(u.id),
-        name: u.displayName,
-        avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
-        bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
-        followers: u.npPoints ?? 0,
-        isVerified: (u.npPoints ?? 0) >= 1000,
-      }));
-  }, [leaderboardData, currentUser]);
+    return leaderboardData.map((u) => ({
+      id: String(u.id),
+      name: u.displayName,
+      avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
+      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
+      followers: u.npPoints ?? 0,
+      isVerified: (u.npPoints ?? 0) >= 1000,
+    }));
+  }, [leaderboardData]);
 
   // ─── tRPC: Follow/Unfollow ───
   const followMutation = trpc.follow.follow.useMutation({
@@ -319,7 +302,6 @@ export default function Discover() {
   // Map server posts to MomentPost format
   const mapServerPost = useCallback((p: NonNullable<typeof serverPostsData>["posts"][number]): MomentPost => ({
     id: String(p.id),
-    authorId: p.authorId,
     author: {
       name: p.authorName ?? "Anonymous",
       avatar: p.authorAvatar ?? "👤",
@@ -814,70 +796,14 @@ export default function Discover() {
                           )}
                           <span className="text-[10px] text-muted-foreground font-mono truncate">{post.author.handle}</span>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0 relative">
+                        <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-muted-foreground/50">{post.timestamp}</span>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setMoreMenuPostId(moreMenuPostId === post.id ? null : post.id); }}
+                            onClick={() => toast(t("discover.moreOptions") || "More options")}
                             className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
                           >
                             <MoreHorizontal size={15} />
                           </button>
-                          {/* Post action dropdown */}
-                          <AnimatePresence>
-                            {moreMenuPostId === post.id && (
-                              <>
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  className="fixed inset-0 z-40"
-                                  onClick={() => setMoreMenuPostId(null)}
-                                />
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                                  className="absolute right-0 top-8 z-50 w-44 rounded-xl bg-card border border-border/40 shadow-2xl overflow-hidden py-1"
-                                >
-                                  {/* Copy link */}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/app/post/${post.id}`); toast.success(t("discover.linkCopied") || "Link copied"); setMoreMenuPostId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/60 transition-colors text-left text-sm"
-                                  >
-                                    <Copy size={14} className="text-muted-foreground" />
-                                    <span>{t("discover.copyLink") || "Copy link"}</span>
-                                  </button>
-                                  {/* Delete (only for own posts) */}
-                                  {currentUser && post.authorId === currentUser.id && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(t("discover.confirmDelete") || "Are you sure you want to delete this post?")) {
-                                          deletePostMutation.mutate({ postId: parseInt(post.id, 10) });
-                                        } else {
-                                          setMoreMenuPostId(null);
-                                        }
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 transition-colors text-left text-sm text-red-400"
-                                    >
-                                      <Trash2 size={14} />
-                                      <span>{t("discover.deletePost") || "Delete post"}</span>
-                                    </button>
-                                  )}
-                                  {/* Report (for other people's posts) */}
-                                  {(!currentUser || post.authorId !== currentUser.id) && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); toast(t("discover.reported") || "Post reported"); setMoreMenuPostId(null); }}
-                                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/60 transition-colors text-left text-sm text-muted-foreground"
-                                    >
-                                      <Flag size={14} />
-                                      <span>{t("discover.reportPost") || "Report"}</span>
-                                    </button>
-                                  )}
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
                         </div>
                       </div>
 
@@ -1123,7 +1049,9 @@ export default function Discover() {
                         )}
                       </AnimatePresence>
                     </div>
-
+                    <button className="shrink-0 p-1 text-muted-foreground hover:text-foreground">
+                      <MoreHorizontal size={16} />
+                    </button>
                   </div>
                 </motion.article>
               ))}
@@ -1280,11 +1208,20 @@ export default function Discover() {
                 <button
                   onClick={() => {
                     const numId = parseInt(user.id, 10);
-                    if (isNaN(numId)) return;
-                    if (followedUsers.has(user.id)) {
-                      unfollowMutation.mutate({ targetUserId: numId });
+                    if (!isNaN(numId)) {
+                      if (followedUsers.has(user.id)) {
+                        unfollowMutation.mutate({ targetUserId: numId });
+                      } else {
+                        followMutation.mutate({ targetUserId: numId });
+                      }
                     } else {
-                      followMutation.mutate({ targetUserId: numId });
+                      // Fallback for mock users with non-numeric IDs
+                      setFollowedUsers(prev => {
+                        const next = new Set(prev);
+                        if (next.has(user.id)) next.delete(user.id); else next.add(user.id);
+                        return next;
+                      });
+                      toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
                     }
                   }}
                   className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${

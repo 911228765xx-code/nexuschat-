@@ -210,30 +210,6 @@ export const copyTradingRouter = router({
       .orderBy(desc(tradingStrategies.createdAt));
   }),
 
-  // ─── Delete a strategy ──────────────────────────────────────────────────────
-  deleteStrategy: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .use(rateLimitWrite)
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) return { success: false };
-      const existing = await db
-        .select()
-        .from(tradingStrategies)
-        .where(
-          and(
-            eq(tradingStrategies.id, input.id),
-            eq(tradingStrategies.userId, ctx.user.id)
-          )
-        )
-        .limit(1);
-      if (existing.length === 0) return { success: false };
-      await db
-        .delete(tradingStrategies)
-        .where(eq(tradingStrategies.id, input.id));
-      return { success: true };
-    }),
-
   // ─── Toggle strategy active status ─────────────────────────────────────────
   toggleStrategy: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))

@@ -135,8 +135,8 @@ export default function ChatRoom() {
     { groupId, limit: 50 },
     {
       enabled: isValidRoom,
-      refetchInterval: 10_000,
-      staleTime: 8_000,
+      refetchInterval: 3000,
+      staleTime: 2000,
     }
   );
 

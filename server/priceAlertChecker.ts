@@ -42,18 +42,11 @@ async function checkAlerts() {
   const db = await getDb();
   if (!db) return;
 
-  // Fetch all active, non-triggered alerts — wrapped in try-catch
-  // to gracefully handle transient DB connection errors (ECONNRESET, ETIMEDOUT)
-  let activeAlerts;
-  try {
-    activeAlerts = await db
-      .select()
-      .from(priceAlerts)
-      .where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.isTriggered, false)));
-  } catch (err) {
-    logger.warn({ err }, "PriceAlert: DB query failed (transient), will retry next cycle");
-    return;
-  }
+  // Fetch all active, non-triggered alerts
+  const activeAlerts = await db
+    .select()
+    .from(priceAlerts)
+    .where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.isTriggered, false)));
 
   if (activeAlerts.length === 0) return;
 
@@ -76,53 +69,49 @@ async function checkAlerts() {
 
     if (!triggered) continue;
 
-    try {
-      // 1. Mark alert as triggered
-      await db
-        .update(priceAlerts)
-        .set({ isTriggered: true, isActive: false })
-        .where(eq(priceAlerts.id, alert.id));
+    // 1. Mark alert as triggered
+    await db
+      .update(priceAlerts)
+      .set({ isTriggered: true, isActive: false })
+      .where(eq(priceAlerts.id, alert.id));
 
-      // 2. Insert a system notification for the user
-      const directionLabel = alert.condition === "above" ? "above ↑" : "below ↓";
-      const content =
-        `🔔 Price Alert: ${alert.tokenSymbol} is now $${currentPrice.toLocaleString()} — ` +
-        `your target of $${target.toLocaleString()} (${directionLabel}) has been reached!`;
+    // 2. Insert a system notification for the user
+    const directionLabel = alert.condition === "above" ? "above ↑" : "below ↓";
+    const content =
+      `🔔 Price Alert: ${alert.tokenSymbol} is now $${currentPrice.toLocaleString()} — ` +
+      `your target of $${target.toLocaleString()} (${directionLabel}) has been reached!`;
 
-      await db.insert(notifications).values({
-        userId: alert.userId,
-        type: "system",
-        fromUserId: null,
-        fromUserName: "NexusChat",
-        fromUserAvatar: "🔔",
-        content,
-        isRead: false,
-      });
+    await db.insert(notifications).values({
+      userId: alert.userId,
+      type: "system",
+      fromUserId: null,
+      fromUserName: "NexusChat",
+      fromUserAvatar: "🔔",
+      content,
+      isRead: false,
+    });
 
-      // 3. Push real-time Socket.IO notification to the user (if online)
-      emitToUser(alert.userId, "price_alert", {
-        alertId: alert.id,
-        tokenSymbol: alert.tokenSymbol,
-        condition: alert.condition,
-        targetPrice: target,
-        currentPrice,
-        content,
-      });
+    // 3. Push real-time Socket.IO notification to the user (if online)
+    emitToUser(alert.userId, "price_alert", {
+      alertId: alert.id,
+      tokenSymbol: alert.tokenSymbol,
+      condition: alert.condition,
+      targetPrice: target,
+      currentPrice,
+      content,
+    });
 
-      logger.info(
-        { alertId: alert.id, userId: alert.userId, token: alert.tokenSymbol, condition: alert.condition, target, currentPrice },
-        `PriceAlert: Triggered alert #${alert.id} for ${alert.tokenSymbol} ${alert.condition} $${target} (current: $${currentPrice})`
-      );
-    } catch (err) {
-      logger.warn({ err, alertId: alert.id }, "PriceAlert: Failed to process alert, will retry next cycle");
-    }
+    logger.info(
+      { alertId: alert.id, userId: alert.userId, token: alert.tokenSymbol, condition: alert.condition, target, currentPrice },
+      `PriceAlert: Triggered alert #${alert.id} for ${alert.tokenSymbol} ${alert.condition} $${target} (current: $${currentPrice})`
+    );
   }
 }
 
 export function startPriceAlertChecker() {
-  logger.info("PriceAlert: Checker started — interval: 2 min");
+  logger.info("PriceAlert: Checker started \u2014 interval: 2 min");
   // Run immediately on startup, then on interval
-  checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: initial check failed"));
+  checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: check failed"));
   setInterval(() => {
     checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: check failed"));
   }, CHECK_INTERVAL_MS);
