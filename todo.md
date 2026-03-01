@@ -297,3 +297,10 @@
 - [x] 修复 2：将 streamdown 拆分为独立 chunk（vendor-streamdown 30KB），并创建 LazyStreamdown 包装器延迟加载 shiki/mermaid
 - [x] 修复 3：vite.config.ts manualChunks 进一步拆分 vendor-misc（forms/date/qrcode/canvas/ui-extra/utils）
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v50b 彻底修复白屏根本原因
+
+- [x] 发现 AIChatBox.tsx 静态 import streamdown，导致 shiki/mermaid 被拉入主 bundle
+- [x] 将 AIChatBox.tsx 的 Streamdown 替换为 LazyStreamdown（动态 import）
+- [x] 所有 streamdown 静态引用已清零，首屏不再加载 shiki/mermaid（共节省约 11MB）
+- [x] 147 个测试全部通过，0 TS 错误
