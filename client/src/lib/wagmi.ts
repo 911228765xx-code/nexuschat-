@@ -5,29 +5,40 @@ import { bsc, bscTestnet } from "wagmi/chains";
  * Suppress Reown/WalletConnect analytics requests that trigger
  * "Origin not found on Allowlist" errors in dev/preview environments.
  *
- * The error comes from @reown/appkit-core's EventsController which
- * defaults analytics: true and calls pulse.walletconnect.org.
- * Since we don't control the WalletConnect Cloud allowlist for
- * dynamic sandbox domains, we intercept and block the analytics XHR.
+ * The SDK uses native `fetch` (via FetchUtil → fetchData) to POST to
+ * pulse.walletconnect.org. Since our dynamic sandbox domains are not
+ * on the WalletConnect Cloud allowlist, we intercept fetch and return
+ * a fake 200 response for analytics endpoints.
  */
 (() => {
-  const origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (
-    this: XMLHttpRequest,
-    method: string,
-    url: string | URL,
-    ...rest: unknown[]
-  ) {
-    const urlStr = typeof url === "string" ? url : url.toString();
+  if (typeof window === "undefined") return;
+
+  const origFetch = window.fetch;
+  window.fetch = function (...args: Parameters<typeof fetch>) {
+    const input = args[0];
+    const urlStr =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input instanceof Request
+            ? input.url
+            : "";
+
     if (
       urlStr.includes("pulse.walletconnect") ||
       urlStr.includes("api.web3modal") ||
       urlStr.includes("getAnalyticsConfig")
     ) {
-      // Redirect to a no-op data URI so the request never fires
-      return (origOpen as Function).call(this, method, "data:text/plain,", ...rest);
+      // Return a fake successful response so the SDK doesn't throw
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
     }
-    return (origOpen as Function).call(this, method, url, ...rest);
+    return origFetch.apply(this, args);
   };
 })();
 
