@@ -329,6 +329,121 @@ export const postsRouter = router({
     }),
 
   // ─── Search posts ───────────────────────────────────────────────────────
+  // ─── Repost (increment shareCount on original post) ─────────────────────
+  repost: protectedProcedure
+    .input(z.object({ postId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Increment share count on the original post
+      await db
+        .update(posts)
+        .set({ shareCount: sql`${posts.shareCount} + 1` })
+        .where(eq(posts.id, input.postId));
+
+      // Create a new post that references the original
+      const [original] = await db
+        .select({ content: posts.content, authorId: posts.authorId })
+        .from(posts)
+        .where(eq(posts.id, input.postId))
+        .limit(1);
+
+      if (!original) throw new Error("Post not found");
+
+      // Get original author name
+      const [originalAuthor] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, original.authorId))
+        .limit(1);
+
+      const repostContent = `\uD83D\uDD01 Reposted from @${originalAuthor?.name ?? "user"}:\n\n${original.content.slice(0, 500)}`;
+
+      const [result] = await db.insert(posts).values({
+        authorId: ctx.user.id,
+        content: repostContent,
+        tags: JSON.stringify(["#repost"]),
+      });
+
+      // Notify original author
+      if (original.authorId !== ctx.user.id) {
+        try {
+          await createNotification({
+            db,
+            targetUserId: original.authorId,
+            fromUserId: ctx.user.id,
+            fromUserName: ctx.user.name ?? "Someone",
+            fromUserAvatar: ctx.user.avatar ?? "",
+            type: "system",
+            content: `reposted your post`,
+            postId: input.postId,
+          });
+        } catch (_) { /* notification failure is non-critical */ }
+      }
+
+      return { success: true, newPostId: (result as any).insertId as number };
+    }),
+
+  // ─── Quote Post (create new post with quote reference) ─────────────────────
+  quotePost: protectedProcedure
+    .input(z.object({
+      postId: z.number(),
+      comment: z.string().min(1).max(280),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Increment share count on the original post
+      await db
+        .update(posts)
+        .set({ shareCount: sql`${posts.shareCount} + 1` })
+        .where(eq(posts.id, input.postId));
+
+      // Get original post
+      const [original] = await db
+        .select({ content: posts.content, authorId: posts.authorId })
+        .from(posts)
+        .where(eq(posts.id, input.postId))
+        .limit(1);
+
+      if (!original) throw new Error("Post not found");
+
+      const [originalAuthor] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, original.authorId))
+        .limit(1);
+
+      const quoteContent = `${sanitizeInput(input.comment, 280)}\n\n\uD83D\uDCAC Quoting @${originalAuthor?.name ?? "user"}:\n> ${original.content.slice(0, 300)}`;
+
+      const [result] = await db.insert(posts).values({
+        authorId: ctx.user.id,
+        content: quoteContent,
+        tags: JSON.stringify(["#quote"]),
+      });
+
+      // Notify original author
+      if (original.authorId !== ctx.user.id) {
+        try {
+          await createNotification({
+            db,
+            targetUserId: original.authorId,
+            fromUserId: ctx.user.id,
+            fromUserName: ctx.user.name ?? "Someone",
+            fromUserAvatar: ctx.user.avatar ?? "",
+            type: "system",
+            content: `quoted your post`,
+            postId: input.postId,
+          });
+        } catch (_) { /* notification failure is non-critical */ }
+      }
+
+      return { success: true, newPostId: (result as any).insertId as number };
+    }),
+
+  // ─── Search posts ───────────────────────────────────────────────────────
   search: publicProcedure
     .input(
       z.object({

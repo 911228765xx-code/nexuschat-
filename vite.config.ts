@@ -197,6 +197,64 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          // Wallet / Web3 libs (~400KB)
+          if (id.includes("wagmi") || id.includes("@rainbow-me") || id.includes("viem") || id.includes("@reown") || id.includes("@walletconnect")) {
+            return "vendor-web3";
+          }
+          // Charts / data-viz (~300KB)
+          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
+            return "vendor-charts";
+          }
+          // Animation (~200KB)
+          if (id.includes("framer-motion")) {
+            return "vendor-motion";
+          }
+          // Icons (~150KB)
+          if (id.includes("lucide-react")) {
+            return "vendor-icons";
+          }
+          // React core (~150KB)
+          if (id.includes("react-dom") || id.includes("react/") || id.includes("scheduler")) {
+            return "vendor-react";
+          }
+          // tRPC + tanstack-query (~100KB)
+          if (id.includes("@trpc") || id.includes("@tanstack")) {
+            return "vendor-trpc";
+          }
+          // Shiki syntax highlighting (languages + themes ~8MB)
+          if (id.includes("@shikijs") || id.includes("shiki")) {
+            return "vendor-shiki";
+          }
+          // Mermaid diagrams (~3MB)
+          if (id.includes("mermaid") || id.includes("elkjs") || id.includes("dagre") || id.includes("cytoscape")) {
+            return "vendor-mermaid";
+          }
+          // KaTeX math rendering (~1MB)
+          if (id.includes("katex")) {
+            return "vendor-katex";
+          }
+          // Markdown / streamdown core
+          if (id.includes("streamdown") || id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") || id.includes("unified") || id.includes("mdast") || id.includes("hast") || id.includes("micromark") || id.includes("marked")) {
+            return "vendor-markdown";
+          }
+          // Socket.IO
+          if (id.includes("socket.io")) {
+            return "vendor-socketio";
+          }
+          // Radix UI primitives
+          if (id.includes("@radix-ui")) {
+            return "vendor-radix";
+          }
+          // Remaining node_modules
+          if (id.includes("node_modules")) {
+            return "vendor-misc";
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,

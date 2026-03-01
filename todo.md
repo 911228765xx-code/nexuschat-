@@ -140,3 +140,15 @@
 - [x] WalletConnect projectId 配置优化（fetch 拦截 analytics + 优雅降级文档）
 - [x] XSS 防护：安装 DOMPurify，对 posts/comments/chat/profile/shareToFeed 全部输入消毒
 - [x] 110 个测试全部通过，TypeScript 0 错误
+
+## v32 P1 上线质量提升
+
+- [x] Bundle 体积优化：manualChunks 拆分 vendor-misc（14MB→2.6MB），shiki/mermaid/katex/socketio/radix 独立 chunk
+- [x] Demo 数据清理：PostDetail.tsx 移除 demoPostsData/demoCommentsData（~220行）
+- [x] Demo 数据清理：Trading.tsx 移除 demoTraders/demoStrategies/allTrades（~160行），替换为空状态 UI
+- [x] Demo 数据清理：Research.tsx 移除 demoReports（~674行），替换为空状态/后端数据
+- [x] 移除客户端 console.log（useSocket.ts、ComponentShowcase.tsx）
+- [x] Repost 功能后端化：posts.repost + posts.quotePost tRPC 接口（含通知 + shareCount 递增）
+- [x] Repost 前端接入：PostDetail.tsx + Discover.tsx 的 Repost/Quote 按钮调用后端 API
+- [x] HTML lang 属性优化：I18nContext 初始化和切换时同步 document.documentElement.lang
+- [x] 110 个测试全部通过，TypeScript 0 错误

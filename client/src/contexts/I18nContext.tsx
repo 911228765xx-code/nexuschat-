@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 
 export type Locale = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "ar";
 
@@ -4735,6 +4735,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLocaleState(newLocale);
     localStorage.setItem("nexuschat-locale", newLocale);
     document.documentElement.dir = LOCALES.find(l => l.code === newLocale)?.dir || "ltr";
+    document.documentElement.lang = newLocale;
   }, []);
 
   const t = useCallback((key: string): string => {
@@ -4742,6 +4743,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const localeInfo = LOCALES.find(l => l.code === locale) || LOCALES[0];
+
+  // Set html lang and dir on initial mount
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = localeInfo.dir;
+  }, [locale, localeInfo.dir]);
 
   return (
     <I18nContext.Provider value={{ locale, setLocale, t, dir: localeInfo.dir, localeInfo }}>

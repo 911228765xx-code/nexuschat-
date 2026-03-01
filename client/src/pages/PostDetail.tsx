@@ -56,229 +56,6 @@ const emptyPost: PostData = {
   isLiked: false,
   isBookmarked: false,
 };
-
-/* ─── Demo Data (fallback for non-numeric IDs) ─── */
-const demoPostsData: Record<string, PostData> = {
-  "1": {
-    id: "1",
-    author: { name: "vitalik.eth", avatar: "V", isVerified: true, handle: "0x71C7...3a9b", bio: "Ethereum co-founder. Building the future of decentralized internet.", followers: 5200000 },
-    content: "Excited about the latest Ethereum upgrade! The transition to full danksharding is progressing well. Layer 2 fees are about to drop significantly. 🚀\n\nThis is a huge milestone for the ecosystem. The blob transactions introduced in EIP-4844 have already reduced L2 fees by 10x. Full danksharding will take this even further.\n\nKey benefits:\n• L2 fees drop to near-zero\n• Throughput increases 100x\n• Decentralization maintained\n\nThe future of Ethereum is bright. We're building something that will last for generations.",
-    timestamp: "2h ago",
-    likes: 12400,
-    comments: 892,
-    reposts: 3200,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Ethereum", "#Danksharding", "#L2", "#EIP4844"],
-  },
-  "2": {
-    id: "2",
-    author: { name: "defi_whale.eth", avatar: "🐋", isVerified: true, handle: "0xA3F2...8c1d", bio: "On-chain analyst. Following whale wallets since 2017.", followers: 340000 },
-    content: "Just spotted a massive $ETH accumulation by a new whale wallet. 15,000 ETH purchased in the last 24 hours. On-chain data doesn't lie. 👀\n\nSmart money is loading up.\n\nWallet: 0x7f3a...9b2c\nTotal ETH: 15,247\nAvg buy price: $3,420\nSource: Multiple CEX withdrawals\n\nThis pattern matches the accumulation behavior we saw before the 2021 bull run. Worth watching closely.",
-    timestamp: "4h ago",
-    likes: 5670,
-    comments: 423,
-    reposts: 1890,
-    isLiked: true,
-    isBookmarked: false,
-    tags: ["#OnChain", "#WhaleAlert", "#ETH"],
-  },
-  "3": {
-    id: "3",
-    author: { name: "nft_artist.eth", avatar: "🎨", isVerified: false, handle: "0xB9E4...2f7a", bio: "Generative artist. All work stored fully on-chain.", followers: 45000 },
-    content: "Just minted my new generative art collection on-chain. Each piece is fully stored on Ethereum — no IPFS dependency. True digital permanence. ✨\n\nLink in bio for early access.\n\nCollection: 'Quantum Fragments'\n• 256 unique pieces\n• Fully on-chain SVG\n• No external dependencies\n• Mint price: 0.05 ETH\n\nEach piece is generated from a unique seed derived from the minter's wallet address. No two pieces are alike.",
-    timestamp: "6h ago",
-    likes: 2340,
-    comments: 187,
-    reposts: 560,
-    isLiked: false,
-    isBookmarked: true,
-    tags: ["#NFT", "#GenerativeArt", "#OnChainArt"],
-  },
-  "4": {
-    id: "4",
-    author: { name: "trader_pro.eth", avatar: "📊", isVerified: true, handle: "0xD5C1...9e3b", bio: "Professional trader. 5 years in crypto. Sharing alpha.", followers: 890000 },
-    content: "My copy trading strategy hit 340% ROI this quarter. Key insight: focus on BTC/ETH pairs during high volatility windows, use tight stop losses.\n\nFull breakdown thread below 🧵\n\n1/ The core strategy: Enter during high volatility windows (ATR > 2x 20-period average). This filters out noise and captures real momentum moves.\n\n2/ Position sizing: Never risk more than 2% of portfolio per trade. This sounds conservative but it's what keeps you in the game long-term.\n\n3/ Stop losses: Set at 1.5x ATR below entry. This gives the trade room to breathe while limiting downside.\n\n4/ Take profits: Scale out at 1:2 and 1:3 risk/reward. Never let a winner turn into a loser.",
-    timestamp: "8h ago",
-    likes: 8920,
-    comments: 1240,
-    reposts: 4100,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Trading", "#CopyTrading", "#Alpha", "#BTC", "#ETH"],
-  },
-  "5": {
-    id: "5",
-    author: { name: "solana_dev.sol", avatar: "◎", isVerified: true, handle: "0xF8A2...1b4c", bio: "Solana core contributor. Building fast.", followers: 120000 },
-    content: "Solana just processed 65,000 TPS in the latest stress test without a single hiccup. The network reliability improvements are real.\n\nBuilding on Solana has never been better. 🔥\n\nKey improvements in the latest release:\n• Turbine block propagation 3x faster\n• QUIC networking reduces packet loss by 80%\n• Firedancer client adds redundancy\n• Stake-weighted QoS prevents spam\n\nThe days of network outages are behind us. Solana is ready for mainstream adoption.",
-    timestamp: "12h ago",
-    likes: 4560,
-    comments: 367,
-    reposts: 1230,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["#Solana", "#L1", "#TPS"],
-  },
-};
-
-const demoCommentsData: Record<string, Comment[]> = {
-  "1": [
-    {
-      id: "c1",
-      author: { name: "alice.eth", avatar: "A", isVerified: false },
-      content: "This is huge! Can't wait for the full rollout 🔥 The L2 ecosystem is going to explode once fees drop to near-zero.",
-      timestamp: "1h ago",
-      likes: 42,
-      isLiked: false,
-    },
-    {
-      id: "c2",
-      author: { name: "bob_trader", avatar: "B", isVerified: true },
-      content: "L2 fees dropping will bring so many new users to DeFi. We're talking about onboarding the next billion users.",
-      timestamp: "1h ago",
-      likes: 18,
-      isLiked: true,
-      quotedPost: { author: "vitalik.eth", content: "Layer 2 fees are about to drop significantly. 🚀" },
-    },
-    {
-      id: "c3",
-      author: { name: "defi_dev.eth", avatar: "D", isVerified: false },
-      content: "Already testing on Holesky. The blob transactions are working great! Deployed a new rollup yesterday and the cost savings are insane.",
-      timestamp: "45m ago",
-      likes: 8,
-      isLiked: false,
-    },
-    {
-      id: "c4",
-      author: { name: "crypto_researcher", avatar: "C", isVerified: true },
-      content: "The technical implementation is elegant. Using KZG commitments for data availability is a brilliant solution to the scalability trilemma.",
-      timestamp: "30m ago",
-      likes: 31,
-      isLiked: false,
-    },
-    {
-      id: "c5",
-      author: { name: "layer2_maxi", avatar: "⚡", isVerified: false },
-      content: "Been building on Optimism for 2 years. The difference in UX with cheaper fees is night and day. Users actually stay when gas isn't $50.",
-      timestamp: "20m ago",
-      likes: 15,
-      isLiked: false,
-    },
-    {
-      id: "c6",
-      author: { name: "zk_researcher", avatar: "🔐", isVerified: true },
-      content: "The path to full danksharding via PeerDAS is clever. Distributing data availability sampling across the P2P network without requiring every node to download all blobs.",
-      timestamp: "15m ago",
-      likes: 27,
-      isLiked: false,
-    },
-  ],
-  "2": [
-    {
-      id: "c7",
-      author: { name: "crypto_analyst", avatar: "C", isVerified: false },
-      content: "Which wallet? Can you share the address? I want to track it on Etherscan.",
-      timestamp: "3h ago",
-      likes: 15,
-      isLiked: false,
-    },
-    {
-      id: "c8",
-      author: { name: "on_chain_sleuth", avatar: "O", isVerified: true },
-      content: "I tracked it too. Multiple wallets, all funded from the same source. This looks like institutional accumulation, not retail.",
-      timestamp: "2h ago",
-      likes: 31,
-      isLiked: false,
-    },
-    {
-      id: "c9",
-      author: { name: "defi_whale.eth", avatar: "🐋", isVerified: true },
-      content: "Wallet address: 0x7f3a...9b2c. You can track it on Nansen or Arkham. The pattern is clear — this is a new institutional player entering the market.",
-      timestamp: "1h ago",
-      likes: 89,
-      isLiked: false,
-    },
-  ],
-  "3": [
-    {
-      id: "c10",
-      author: { name: "art_collector", avatar: "🎭", isVerified: false },
-      content: "Beautiful work! Just minted #42. The generative patterns are mesmerizing. The way the colors shift based on the seed is incredible.",
-      timestamp: "5h ago",
-      likes: 7,
-      isLiked: false,
-    },
-    {
-      id: "c11",
-      author: { name: "nft_degen.eth", avatar: "🎨", isVerified: false },
-      content: "Fully on-chain is the only way. IPFS is a centralization risk. Love that you're doing it right.",
-      timestamp: "4h ago",
-      likes: 12,
-      isLiked: false,
-    },
-  ],
-  "4": [
-    {
-      id: "c12",
-      author: { name: "newbie_trader", avatar: "N", isVerified: false },
-      content: "What exchange do you use for copy trading? Is this available on Binance or do you use a DEX?",
-      timestamp: "7h ago",
-      likes: 5,
-      isLiked: false,
-    },
-    {
-      id: "c13",
-      author: { name: "risk_manager", avatar: "R", isVerified: true },
-      content: "340% ROI is impressive but what's the max drawdown? Risk-adjusted returns matter more than raw returns.",
-      timestamp: "6h ago",
-      likes: 22,
-      isLiked: false,
-    },
-    {
-      id: "c14",
-      author: { name: "trader_pro.eth", avatar: "📊", isVerified: true },
-      content: "@risk_manager Max drawdown was 12%. I use strict position sizing — never more than 2% risk per trade. The key is surviving long enough to compound.",
-      timestamp: "5h ago",
-      likes: 35,
-      isLiked: true,
-    },
-    {
-      id: "c15",
-      author: { name: "quant_dev.eth", avatar: "🤖", isVerified: false },
-      content: "Have you backtested this strategy? What's the Sharpe ratio? Would love to see the full stats.",
-      timestamp: "4h ago",
-      likes: 18,
-      isLiked: false,
-    },
-  ],
-  "5": [
-    {
-      id: "c16",
-      author: { name: "sol_builder", avatar: "◎", isVerified: false },
-      content: "The Firedancer client is a game changer for reliability! Having a second independent implementation removes the single point of failure.",
-      timestamp: "10h ago",
-      likes: 11,
-      isLiked: false,
-    },
-    {
-      id: "c17",
-      author: { name: "eth_maxi", avatar: "⟠", isVerified: false },
-      content: "Impressive numbers but let's see how it holds up under real mainnet conditions with full DeFi activity.",
-      timestamp: "9h ago",
-      likes: 8,
-      isLiked: false,
-    },
-    {
-      id: "c18",
-      author: { name: "solana_dev.sol", avatar: "◎", isVerified: true },
-      content: "@eth_maxi Fair point. The stress test was under controlled conditions. Real mainnet is always the true test. We're confident but staying humble.",
-      timestamp: "8h ago",
-      likes: 24,
-      isLiked: false,
-    },
-  ],
-};
-
 /* ─── Repost/Quote Modal ─── */
 function RepostModal({
   post,
@@ -400,9 +177,9 @@ export default function PostDetail() {
   const isNumericId = !isNaN(numericPostId);
   const { user } = useAuth();
 
-  // Use empty defaults for numeric IDs (real data), demo data for non-numeric IDs
-  const postData = isNumericId ? emptyPost : (demoPostsData[postId] || emptyPost);
-  const initialComments = isNumericId ? [] : (demoCommentsData[postId] || []);
+  // Always use empty defaults, real data loaded from backend
+  const postData = emptyPost;
+  const initialComments: Comment[] = [];
 
   const [post, setPost] = useState<PostData>(postData);
   const [comments, setComments] = useState<Comment[]>(initialComments);
@@ -532,14 +309,34 @@ export default function PostDetail() {
     toast("Comment posted! 💬");
   };
 
+  const repostMutation = trpc.posts.repost.useMutation({
+    onSuccess: () => {
+      setPost(p => ({ ...p, reposts: p.reposts + 1 }));
+      toast.success("Reposted to your timeline");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to repost");
+    },
+  });
+
+  const quotePostMutation = trpc.posts.quotePost.useMutation({
+    onSuccess: () => {
+      setPost(p => ({ ...p, reposts: p.reposts + 1 }));
+      toast.success("Quote posted!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to quote post");
+    },
+  });
+
   const handleRepost = () => {
-    setPost(p => ({ ...p, reposts: p.reposts + 1 }));
-    toast.success("Reposted to your timeline");
+    if (!isNumericId) return;
+    repostMutation.mutate({ postId: numericPostId });
   };
 
   const handleQuote = (text: string) => {
-    setPost(p => ({ ...p, reposts: p.reposts + 1 }));
-    toast.success(`Quote posted: "${text.slice(0, 30)}..."`);
+    if (!isNumericId) return;
+    quotePostMutation.mutate({ postId: numericPostId, comment: text });
   };
 
   return (

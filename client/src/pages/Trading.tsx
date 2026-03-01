@@ -69,169 +69,7 @@ const priceTicker = [
   { symbol: "AVAX", price: 42.8, change: -0.8 },
 ];
 
-const demoTraders: Trader[] = [
-  {
-    id: "tr1", name: "CryptoKing", avatar: "👑", badge: "gold",
-    followers: 2845, totalReturn: 342.5, winRate: 78, trades30d: 156,
-    maxDrawdown: -8.2, sharpeRatio: 2.85, riskLevel: "medium", isFollowing: false,
-    profitHistory: [
-      { date: "W1", profit: 12 }, { date: "W2", profit: 28 }, { date: "W3", profit: 45 },
-      { date: "W4", profit: 38 }, { date: "W5", profit: 62 }, { date: "W6", profit: 85 },
-      { date: "W7", profit: 78 }, { date: "W8", profit: 105 },
-    ],
-    topPairs: ["BTC/USDT", "ETH/USDT", "SOL/USDT"],
-    avgHoldTime: "2.4h", description: "Momentum & breakout specialist. 3+ years crypto trading.",
-    weeklyReturns: [3.2, 5.8, 4.1, -1.2, 6.5, 8.2, 2.8, 7.1], consistency: 85, avgTradeSize: "$250",
-  },
-  {
-    id: "tr2", name: "WhaleHunter", avatar: "🐋", badge: "gold",
-    followers: 1923, totalReturn: 285.8, winRate: 72, trades30d: 89,
-    maxDrawdown: -12.5, sharpeRatio: 2.12, riskLevel: "medium", isFollowing: true,
-    profitHistory: [
-      { date: "W1", profit: 8 }, { date: "W2", profit: 22 }, { date: "W3", profit: 35 },
-      { date: "W4", profit: 52 }, { date: "W5", profit: 48 }, { date: "W6", profit: 72 },
-      { date: "W7", profit: 90 }, { date: "W8", profit: 95 },
-    ],
-    topPairs: ["BTC/USDT", "LINK/USDT"],
-    avgHoldTime: "6.8h", description: "Whale flow analysis & on-chain signals. Focus on BTC/ETH.",
-    weeklyReturns: [2.1, 4.5, 3.8, 5.2, -0.8, 7.5, 9.2, 1.5], consistency: 78, avgTradeSize: "$500",
-  },
-  {
-    id: "tr3", name: "DeFiAlpha", avatar: "🦊", badge: "silver",
-    followers: 1456, totalReturn: 198.3, winRate: 65, trades30d: 234,
-    maxDrawdown: -15.8, sharpeRatio: 1.78, riskLevel: "high", isFollowing: false,
-    profitHistory: [
-      { date: "W1", profit: 15 }, { date: "W2", profit: 10 }, { date: "W3", profit: 32 },
-      { date: "W4", profit: 28 }, { date: "W5", profit: 55 }, { date: "W6", profit: 42 },
-      { date: "W7", profit: 68 }, { date: "W8", profit: 75 },
-    ],
-    topPairs: ["ARB/USDT", "OP/USDT", "MATIC/USDT"],
-    avgHoldTime: "1.2h", description: "High-frequency DeFi token scalper. Aggressive style.",
-    weeklyReturns: [8.5, -3.2, 12.1, -5.5, 15.8, 6.2, -2.1, 10.5], consistency: 55, avgTradeSize: "$100",
-  },
-  {
-    id: "tr4", name: "SteadyEddie", avatar: "🛡️", badge: "silver",
-    followers: 3210, totalReturn: 156.2, winRate: 82, trades30d: 42,
-    maxDrawdown: -3.5, sharpeRatio: 3.45, riskLevel: "low", isFollowing: false,
-    profitHistory: [
-      { date: "W1", profit: 5 }, { date: "W2", profit: 12 }, { date: "W3", profit: 18 },
-      { date: "W4", profit: 25 }, { date: "W5", profit: 32 }, { date: "W6", profit: 38 },
-      { date: "W7", profit: 45 }, { date: "W8", profit: 52 },
-    ],
-    topPairs: ["BTC/USDT", "ETH/USDT"],
-    avgHoldTime: "12.5h", description: "Conservative swing trader. Capital preservation first.",
-    weeklyReturns: [1.5, 2.1, 1.8, 2.5, 1.2, 2.8, 3.1, 2.2], consistency: 95, avgTradeSize: "$1,000",
-  },
-  {
-    id: "tr5", name: "MemeSniper", avatar: "🎯", badge: "bronze",
-    followers: 876, totalReturn: 520.8, winRate: 45, trades30d: 312,
-    maxDrawdown: -35.2, sharpeRatio: 0.92, riskLevel: "high", isFollowing: false,
-    profitHistory: [
-      { date: "W1", profit: 45 }, { date: "W2", profit: -20 }, { date: "W3", profit: 80 },
-      { date: "W4", profit: -15 }, { date: "W5", profit: 120 }, { date: "W6", profit: 65 },
-      { date: "W7", profit: -30 }, { date: "W8", profit: 150 },
-    ],
-    topPairs: ["PEPE/USDT", "DOGE/USDT", "SHIB/USDT"],
-    avgHoldTime: "0.3h", description: "Meme coin specialist. High risk, high reward.",
-    weeklyReturns: [25.5, -18.2, 32.1, -12.5, 45.8, 15.2, -22.1, 38.5], consistency: 30, avgTradeSize: "$50",
-  },
-  {
-    id: "tr6", name: "AIQuantBot", avatar: "🤖", badge: "bronze",
-    followers: 1102, totalReturn: 178.4, winRate: 69, trades30d: 580,
-    maxDrawdown: -9.8, sharpeRatio: 2.05, riskLevel: "medium", isFollowing: false,
-    profitHistory: [
-      { date: "W1", profit: 8 }, { date: "W2", profit: 18 }, { date: "W3", profit: 25 },
-      { date: "W4", profit: 35 }, { date: "W5", profit: 42 }, { date: "W6", profit: 55 },
-      { date: "W7", profit: 62 }, { date: "W8", profit: 70 },
-    ],
-    topPairs: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT"],
-    avgHoldTime: "0.8h", description: "ML-powered quantitative strategy. Fully automated.",
-    weeklyReturns: [3.5, 4.2, 2.8, 5.1, 3.9, 6.2, 4.5, 5.8], consistency: 82, avgTradeSize: "$200",
-  },
-];
 
-const demoStrategies: Strategy[] = [
-  {
-    id: "1", name: "BTC MA Breakout", signalSource: "CryptoKing",
-    pair: "BTC/USDT", amount: "$100/trade", status: "running",
-    totalProfit: 234.5, profitPercent: 12.3, trades: 28, winRate: 68,
-    maxDrawdown: -4.2, createdAt: "2025-12-15", avgHoldTime: "4.2h",
-    sharpeRatio: 2.15, profitFactor: 1.85, maxConsecutiveLoss: 3,
-    avgProfit: 18.5, avgLoss: -12.3, riskLevel: "low",
-    stopLoss: 5, takeProfit: 15, maxPosition: 500, dailyLossLimit: 50,
-    notifications: { onTrade: true, onStopLoss: true, onTakeProfit: true, dailySummary: true },
-    profitHistory: [
-      { date: "Jan", profit: 20, benchmark: 15 }, { date: "Feb", profit: 45, benchmark: 30 },
-      { date: "Mar", profit: 38, benchmark: 25 }, { date: "Apr", profit: 72, benchmark: 48 },
-      { date: "May", profit: 95, benchmark: 60 }, { date: "Jun", profit: 110, benchmark: 72 },
-      { date: "Jul", profit: 88, benchmark: 65 }, { date: "Aug", profit: 135, benchmark: 90 },
-      { date: "Sep", profit: 168, benchmark: 110 }, { date: "Oct", profit: 195, benchmark: 130 },
-      { date: "Nov", profit: 210, benchmark: 145 }, { date: "Dec", profit: 234.5, benchmark: 160 },
-    ],
-    recentTrades: [
-      { id: "t1", pair: "BTC/USDT", side: "buy", amount: "$100", price: "$97,432", profit: 12.5, time: "14:30", date: "Today" },
-      { id: "t2", pair: "BTC/USDT", side: "sell", amount: "$100", price: "$97,890", profit: -5.2, time: "11:42", date: "Today" },
-      { id: "t3", pair: "BTC/USDT", side: "buy", amount: "$100", price: "$96,980", profit: 22.1, time: "09:15", date: "Yesterday" },
-      { id: "t4", pair: "BTC/USDT", side: "sell", amount: "$100", price: "$97,120", profit: 8.3, time: "16:45", date: "Yesterday" },
-      { id: "t5", pair: "BTC/USDT", side: "buy", amount: "$100", price: "$95,800", profit: 35.0, time: "10:20", date: "Feb 24" },
-      { id: "t6", pair: "BTC/USDT", side: "sell", amount: "$100", price: "$96,200", profit: -8.7, time: "08:30", date: "Feb 24" },
-    ],
-  },
-  {
-    id: "2", name: "ETH RSI Oversold", signalSource: "WhaleHunter",
-    pair: "ETH/USDT", amount: "$50/trade", status: "running",
-    totalProfit: 89.2, profitPercent: 8.9, trades: 15, winRate: 73,
-    maxDrawdown: -2.8, createdAt: "2026-01-10", avgHoldTime: "6.1h",
-    sharpeRatio: 2.68, profitFactor: 2.12, maxConsecutiveLoss: 2,
-    avgProfit: 12.8, avgLoss: -6.5, riskLevel: "low",
-    stopLoss: 3, takeProfit: 10, maxPosition: 300, dailyLossLimit: 30,
-    notifications: { onTrade: true, onStopLoss: true, onTakeProfit: false, dailySummary: true },
-    profitHistory: [
-      { date: "Jan", profit: 10, benchmark: 8 }, { date: "Feb", profit: 28, benchmark: 18 },
-      { date: "Mar", profit: 35, benchmark: 22 }, { date: "Apr", profit: 42, benchmark: 30 },
-      { date: "May", profit: 55, benchmark: 38 }, { date: "Jun", profit: 62, benchmark: 45 },
-      { date: "Jul", profit: 58, benchmark: 42 }, { date: "Aug", profit: 70, benchmark: 52 },
-      { date: "Sep", profit: 75, benchmark: 58 }, { date: "Oct", profit: 80, benchmark: 62 },
-      { date: "Nov", profit: 85, benchmark: 68 }, { date: "Dec", profit: 89.2, benchmark: 72 },
-    ],
-    recentTrades: [
-      { id: "t1", pair: "ETH/USDT", side: "sell", amount: "$50", price: "$3,842", profit: 8.3, time: "13:15", date: "Today" },
-      { id: "t2", pair: "ETH/USDT", side: "buy", amount: "$50", price: "$3,780", profit: 15.1, time: "09:20", date: "Today" },
-      { id: "t3", pair: "ETH/USDT", side: "sell", amount: "$50", price: "$3,810", profit: -3.2, time: "15:40", date: "Yesterday" },
-    ],
-  },
-  {
-    id: "3", name: "SOL Bollinger", signalSource: "DeFiAlpha",
-    pair: "SOL/USDT", amount: "$30/trade", status: "paused",
-    totalProfit: 19.1, profitPercent: 3.2, trades: 4, winRate: 50,
-    maxDrawdown: -6.5, createdAt: "2026-02-01", avgHoldTime: "2.8h",
-    sharpeRatio: 0.85, profitFactor: 1.15, maxConsecutiveLoss: 2,
-    avgProfit: 8.2, avgLoss: -7.8, riskLevel: "medium",
-    stopLoss: 8, takeProfit: 20, maxPosition: 200, dailyLossLimit: 40,
-    notifications: { onTrade: false, onStopLoss: true, onTakeProfit: true, dailySummary: false },
-    profitHistory: [
-      { date: "W1", profit: 5, benchmark: 3 }, { date: "W2", profit: 12, benchmark: 8 },
-      { date: "W3", profit: 8, benchmark: 6 }, { date: "W4", profit: 19.1, benchmark: 12 },
-    ],
-    recentTrades: [
-      { id: "t1", pair: "SOL/USDT", side: "buy", amount: "$30", price: "$187.50", profit: 4.2, time: "10:30", date: "Feb 20" },
-      { id: "t2", pair: "SOL/USDT", side: "sell", amount: "$30", price: "$185.80", profit: -2.1, time: "14:15", date: "Feb 19" },
-    ],
-  },
-];
-
-// mockPositions removed — now using real positions from backend
-
-const allTrades = [
-  { id: "1", pair: "BTC/USDT", side: "buy" as const, amount: "$100", price: "$97,432", profit: 12.5, time: "14:30", date: "Today", strategy: "BTC MA Breakout" },
-  { id: "2", pair: "ETH/USDT", side: "sell" as const, amount: "$50", price: "$3,842", profit: 8.3, time: "13:15", date: "Today", strategy: "ETH RSI Oversold" },
-  { id: "3", pair: "BTC/USDT", side: "sell" as const, amount: "$100", price: "$97,890", profit: -5.2, time: "11:42", date: "Today", strategy: "BTC MA Breakout" },
-  { id: "4", pair: "ETH/USDT", side: "buy" as const, amount: "$50", price: "$3,780", profit: 15.1, time: "09:20", date: "Today", strategy: "ETH RSI Oversold" },
-  { id: "5", pair: "BTC/USDT", side: "buy" as const, amount: "$100", price: "$96,980", profit: 22.1, time: "09:15", date: "Yesterday", strategy: "BTC MA Breakout" },
-  { id: "6", pair: "SOL/USDT", side: "buy" as const, amount: "$30", price: "$187.50", profit: 4.2, time: "10:30", date: "Feb 24", strategy: "SOL Bollinger" },
-  { id: "7", pair: "BTC/USDT", side: "sell" as const, amount: "$100", price: "$96,200", profit: -8.7, time: "08:30", date: "Feb 24", strategy: "BTC MA Breakout" },
-  { id: "8", pair: "ETH/USDT", side: "sell" as const, amount: "$50", price: "$3,810", profit: -3.2, time: "15:40", date: "Feb 23", strategy: "ETH RSI Oversold" },
-];
 
 // PnL Calendar data for February 2026
 const generatePnlCalendar = (): PnlDay[] => {
@@ -275,7 +113,7 @@ export default function Trading() {
   }, [livePrices]);
 
   const [activeTab, setActiveTab] = useState<MainTab>("strategies");
-  const [strategies, setStrategies] = useState(demoStrategies);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
   const [detailTab, setDetailTab] = useState<DetailTab>("chart");
@@ -306,7 +144,7 @@ export default function Trading() {
   const trpcUtils = trpc.useUtils();
 
   const realTraders: Trader[] = useMemo(() => {
-    if (!backendTraders || backendTraders.length === 0) return demoTraders;
+    if (!backendTraders || backendTraders.length === 0) return [];
     return backendTraders.map(t => ({
       id: String(t.id),
       name: t.displayName,
@@ -330,7 +168,7 @@ export default function Trading() {
     }));
   }, [backendTraders, followedSet]);
 
-  const [traders, setTraders] = useState(demoTraders);
+  const [traders, setTraders] = useState<Trader[]>([]);
   // Sync real traders when loaded
   useEffect(() => {
     if (realTraders.length > 0) setTraders(realTraders);
@@ -1278,34 +1116,14 @@ export default function Trading() {
                   </div>
                 </div>
 
-                {allTrades.map((trade, index) => (
-                  <motion.div
-                    key={trade.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/20"
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      trade.side === "buy" ? "bg-neon-green/10" : "bg-destructive/10"
-                    }`}>
-                      {trade.side === "buy" ? <ArrowUpRight size={16} className="text-neon-green" /> : <ArrowDownRight size={16} className="text-destructive" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono font-medium">{trade.pair}</span>
-                        <span className={`text-[10px] uppercase font-mono ${trade.side === "buy" ? "text-neon-green" : "text-destructive"}`}>{trade.side.toUpperCase()}</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground truncate">{trade.strategy} · {trade.amount} @ {trade.price}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-xs font-mono font-semibold ${trade.profit >= 0 ? "text-neon-green" : "text-destructive"}`}>
-                        {trade.profit >= 0 ? "+" : ""}${trade.profit.toFixed(1)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{trade.date} {trade.time}</p>
-                    </div>
-                  </motion.div>
-                ))}
+                {/* Trade history - empty state */}
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-secondary/30 flex items-center justify-center mb-3">
+                    <BarChart3 size={20} className="text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">No trade history yet</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Your trades will appear here</p>
+                </div>
               </motion.div>
             )}
 

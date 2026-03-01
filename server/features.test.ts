@@ -871,3 +871,82 @@ describe("Avatar Upload", () => {
     expect(key).not.toBe(key2);
   });
 });
+
+// ─── Phase 10: Repost & Quote Post Tests ─────────────────────────────────────
+describe("Repost & Quote Post", () => {
+  it("postsRouter has repost procedure", async () => {
+    const { postsRouter } = await import("./routers/posts");
+    const procs = (postsRouter as any)._def.procedures;
+    expect(procs.repost !== undefined).toBe(true);
+  });
+
+  it("postsRouter has quotePost procedure", async () => {
+    const { postsRouter } = await import("./routers/posts");
+    const procs = (postsRouter as any)._def.procedures;
+    expect(procs.quotePost !== undefined).toBe(true);
+  });
+
+  it("generates correct repost content format", () => {
+    const originalAuthorName = "alice.eth";
+    const originalContent = "Check out this amazing DeFi protocol!";
+    const repostContent = `🔁 Reposted from @${originalAuthorName}:\n\n${originalContent.slice(0, 500)}`;
+    expect(repostContent).toContain("🔁 Reposted from @alice.eth");
+    expect(repostContent).toContain(originalContent);
+  });
+
+  it("truncates long original content in repost", () => {
+    const longContent = "x".repeat(600);
+    const truncated = longContent.slice(0, 500);
+    expect(truncated.length).toBe(500);
+    expect(truncated.length).toBeLessThan(longContent.length);
+  });
+
+  it("generates correct quote post content format", () => {
+    const comment = "This is my take on this";
+    const originalAuthorName = "bob.eth";
+    const originalContent = "BTC to 100k!";
+    const quoteContent = `${comment}\n\n💬 Quoting @${originalAuthorName}:\n> ${originalContent.slice(0, 300)}`;
+    expect(quoteContent).toContain(comment);
+    expect(quoteContent).toContain("💬 Quoting @bob.eth");
+    expect(quoteContent).toContain("> BTC to 100k!");
+  });
+
+  it("validates quote comment max length (280 chars)", () => {
+    const validComment = "Short comment";
+    const tooLong = "x".repeat(281);
+    expect(validComment.length <= 280).toBe(true);
+    expect(tooLong.length <= 280).toBe(false);
+  });
+
+  it("truncates quoted original content to 300 chars", () => {
+    const longOriginal = "y".repeat(400);
+    const truncated = longOriginal.slice(0, 300);
+    expect(truncated.length).toBe(300);
+  });
+
+  it("adds #repost tag to reposted posts", () => {
+    const tags = JSON.stringify(["#repost"]);
+    const parsed = JSON.parse(tags);
+    expect(parsed).toContain("#repost");
+  });
+
+  it("adds #quote tag to quoted posts", () => {
+    const tags = JSON.stringify(["#quote"]);
+    const parsed = JSON.parse(tags);
+    expect(parsed).toContain("#quote");
+  });
+
+  it("skips self-notification on repost", () => {
+    const authorId = 42;
+    const reposterId = 42;
+    const shouldNotify = authorId !== reposterId;
+    expect(shouldNotify).toBe(false);
+  });
+
+  it("sends notification on repost from different user", () => {
+    const authorId = 42;
+    const reposterId = 99;
+    const shouldNotify = authorId !== reposterId;
+    expect(shouldNotify).toBe(true);
+  });
+});

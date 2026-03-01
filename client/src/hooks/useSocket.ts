@@ -36,12 +36,12 @@ export function useSocket({ userId, userName }: UseSocketOptions) {
 
     socket.on("connect", () => {
       setConnected(true);
-      console.log("[Socket.IO] Connected:", socket.id);
+      // connected
     });
 
     socket.on("disconnect", () => {
       setConnected(false);
-      console.log("[Socket.IO] Disconnected");
+      // disconnected
     });
 
     socketRef.current = socket;

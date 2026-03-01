@@ -262,6 +262,21 @@ export default function Discover() {
   const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
+  // ─── tRPC: Repost mutation ───
+  const repostMutation = trpc.posts.repost.useMutation({
+    onSuccess: () => {
+      if (repostMenuPostId) {
+        setMoments(prev => prev.map(m => m.id === repostMenuPostId ? { ...m, reposts: m.reposts + 1 } : m));
+      }
+      toast.success(t("discover.reposted") || "Reposted to your timeline");
+      setRepostMenuPostId(null);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to repost");
+      setRepostMenuPostId(null);
+    },
+  });
+
   // ─── tRPC: Upload media mutation ───
   const [uploadingImages, setUploadingImages] = useState(false);
   const uploadMedia = trpc.posts.uploadMedia.useMutation({
@@ -1247,9 +1262,12 @@ export default function Discover() {
                 <h3 className="text-sm font-semibold font-display text-center mb-3">Share Post</h3>
                 <button
                   onClick={() => {
-                    setMoments(prev => prev.map(m => m.id === repostMenuPostId ? { ...m, reposts: m.reposts + 1 } : m));
-                    toast.success(t("discover.reposted") || "Reposted to your timeline");
-                    setRepostMenuPostId(null);
+                    const numId = parseInt(repostMenuPostId!, 10);
+                    if (!isNaN(numId)) {
+                      repostMutation.mutate({ postId: numId });
+                    } else {
+                      setRepostMenuPostId(null);
+                    }
                   }}
                   className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-secondary/40 hover:bg-secondary/60 transition-colors"
                 >
