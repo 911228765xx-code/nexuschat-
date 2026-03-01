@@ -169,3 +169,9 @@
 - [x] API 速率限制中间件（tRPC 接口 rate limiting，特别是 LLM 投研接口）
 - [x] EnhancedInput 代币价格实时化（$TOKEN 内联卡片接入 CoinGecko 实时数据）
 - [x] PnL Calendar 后端化（接入 trading_positions 表计算真实盈亏 + closePrice/realizedPnl 字段 + 月份导航）
+
+## v35 上线前快速修复
+
+- [x] A3: Settings LOGIN_DEVICES mock 数据替换为当前会话显示
+- [x] A4: 批量为 mutation 应用 rateLimitWrite（44 个 mutation 全部覆盖）
+- [x] A5: z.string() 输入添加 .max() 长度限制（所有 router 文件已补全）

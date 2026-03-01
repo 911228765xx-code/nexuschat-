@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -26,6 +27,7 @@ export const followRouter = router({
   // Follow a user
   follow: protectedProcedure
     .input(z.object({ targetUserId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.id === input.targetUserId) {
         throw new Error("Cannot follow yourself");
@@ -67,6 +69,7 @@ export const followRouter = router({
   // Unfollow a user
   unfollow: protectedProcedure
     .input(z.object({ targetUserId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

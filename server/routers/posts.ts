@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -81,6 +82,7 @@ export const postsRouter = router({
         tags: z.array(z.string().max(30)).max(5).optional(),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -98,6 +100,7 @@ export const postsRouter = router({
   // ─── Toggle like ───────────────────────────────────────────────────────────
   toggleLike: protectedProcedure
     .input(z.object({ postId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -235,6 +238,7 @@ export const postsRouter = router({
         content: z.string().min(1).max(1000),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -288,6 +292,7 @@ export const postsRouter = router({
         mimeType: z.string().max(100),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const { fileData, fileName, mimeType } = input;
       // Decode base64
@@ -306,6 +311,7 @@ export const postsRouter = router({
   // ─── Delete post ──────────────────────────────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ postId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -332,6 +338,7 @@ export const postsRouter = router({
   // ─── Repost (increment shareCount on original post) ─────────────────────
   repost: protectedProcedure
     .input(z.object({ postId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -391,6 +398,7 @@ export const postsRouter = router({
       postId: z.number(),
       comment: z.string().min(1).max(280),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

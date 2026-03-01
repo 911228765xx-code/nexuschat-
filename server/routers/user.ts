@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -78,6 +79,7 @@ export const userRouter = router({
         avatar: z.string().max(500).optional(),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -109,6 +111,7 @@ export const userRouter = router({
         mimeType: z.string().max(100),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const { fileData, mimeType } = input;
       const buffer = Buffer.from(fileData, "base64");
@@ -231,7 +234,8 @@ export const userRouter = router({
 
   // ─── Complete a task ───────────────────────────────────────────────────────
   completeTask: protectedProcedure
-    .input(z.object({ taskType: z.string() }))
+    .input(z.object({ taskType: z.string().max(50) }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -52,6 +53,7 @@ export const settingsRouter = router({
         biometricEnabled: z.boolean().optional(),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -114,6 +116,7 @@ export const settingsRouter = router({
         label: z.string().max(100).default("Default"),
       }).optional()
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -151,6 +154,7 @@ export const settingsRouter = router({
   // ─── Revoke (deactivate) an API key ───────────────────────────────────────
   revokeApiKey: protectedProcedure
     .input(z.object({ keyId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

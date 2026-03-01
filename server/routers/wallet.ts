@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -32,6 +33,7 @@ export const walletRouter = router({
         chain: z.string().default("BSC"),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -39,6 +40,7 @@ export const copyTradingRouter = router({
   // ─── Follow / unfollow a trader ────────────────────────────────────────────
   toggleFollow: protectedProcedure
     .input(z.object({ traderId: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false, isFollowing: false };
@@ -87,6 +89,7 @@ export const copyTradingRouter = router({
       riskLevel: z.enum(["low", "medium", "high"]).default("medium"),
       topPairs: z.array(z.string().max(20)).max(5).optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -155,6 +158,7 @@ export const copyTradingRouter = router({
       takeProfit: z.string().max(30).optional(),
       maxPosition: z.string().max(30).optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -209,6 +213,7 @@ export const copyTradingRouter = router({
   // ─── Toggle strategy active status ─────────────────────────────────────────
   toggleStrategy: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };

@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -111,6 +112,7 @@ export const referralRouter = router({
   // ─── Record a referral (called when invitee signs up with code) ───────────
   recordReferral: protectedProcedure
     .input(z.object({ inviteCode: z.string().max(30) }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false, message: "Database unavailable" };

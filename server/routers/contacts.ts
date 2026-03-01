@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -8,6 +9,7 @@ export const contactsRouter = router({
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure
     .input(z.object({ receiverId: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -41,6 +43,7 @@ export const contactsRouter = router({
   // ─── Accept friend request ──────────────────────────────────────────────────
   acceptRequest: protectedProcedure
     .input(z.object({ requestId: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -61,6 +64,7 @@ export const contactsRouter = router({
   // ─── Reject friend request ──────────────────────────────────────────────────
   rejectRequest: protectedProcedure
     .input(z.object({ requestId: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -228,6 +232,7 @@ export const contactsRouter = router({
   // ─── Toggle favorite ─────────────────────────────────────────────────
   toggleFavorite: protectedProcedure
     .input(z.object({ contactId: z.number().int().positive() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -262,6 +267,7 @@ export const contactsRouter = router({
   // ─── Update note ─────────────────────────────────────────────────────
   updateNote: protectedProcedure
     .input(z.object({ contactId: z.number().int().positive(), note: z.string().max(500) }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -295,6 +301,7 @@ export const contactsRouter = router({
   // ─── Update tags ─────────────────────────────────────────────────────
   updateTags: protectedProcedure
     .input(z.object({ contactId: z.number().int().positive(), tags: z.array(z.string().max(30)).max(10) }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };

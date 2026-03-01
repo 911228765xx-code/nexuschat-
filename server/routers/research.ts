@@ -366,10 +366,11 @@ export const researchRouter = router({
 
   // Price alerts
   createAlert: protectedProcedure
+    .use(rateLimitWrite)
     .input(z.object({
-      tokenSymbol: z.string(),
-      tokenId: z.string(),
-      targetPrice: z.string(),
+      tokenSymbol: z.string().max(20),
+      tokenId: z.string().max(100),
+      targetPrice: z.string().max(30),
       condition: z.enum(["above", "below"]),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -408,7 +409,7 @@ export const researchRouter = router({
 
   // Fetch live price from CoinGecko (public)
   getPrice: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().max(20) }))
     .query(async ({ input }) => {
       return fetchTokenData(input.symbol);
     }),

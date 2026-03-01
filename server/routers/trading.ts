@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
@@ -68,7 +69,7 @@ export const tradingRouter = router({
   getChart: publicProcedure
     .input(
       z.object({
-        symbol: z.string(),
+        symbol: z.string().max(20),
         days: z.number().min(1).max(365).default(7),
       })
     )
@@ -130,6 +131,7 @@ export const tradingRouter = router({
         condition: z.enum(["above", "below"]),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { id: 0, success: false };
@@ -157,6 +159,7 @@ export const tradingRouter = router({
 
   deleteAlert: protectedProcedure
     .input(z.object({ id: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -168,6 +171,7 @@ export const tradingRouter = router({
 
   toggleAlert: protectedProcedure
     .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -200,14 +204,15 @@ export const tradingRouter = router({
     .input(z.object({
       pair: z.string().max(30),
       side: z.enum(["long", "short"]),
-      entryPrice: z.string(),
-      amount: z.string(),
+      entryPrice: z.string().max(30),
+      amount: z.string().max(30),
       leverage: z.number().int().min(1).max(100).default(1),
       stopLossPrice: z.string().optional(),
       takeProfitPrice: z.string().optional(),
       liquidationPrice: z.string().optional(),
       strategyName: z.string().max(100).optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false, id: null };
@@ -232,6 +237,7 @@ export const tradingRouter = router({
       id: z.number(),
       closePrice: z.string().optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };

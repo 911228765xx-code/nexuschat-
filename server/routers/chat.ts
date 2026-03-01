@@ -5,6 +5,7 @@ import { chatGroups, groupMembers, messages, users } from "../../drizzle/schema"
 import { eq, and, desc, lt, sql, or, ne } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
+import { rateLimitWrite } from "../rateLimit";
 
 export const chatRouter = router({
   // List public groups
@@ -31,6 +32,7 @@ export const chatRouter = router({
       tokenGateAmount: z.string().optional(),
       tokenGateContract: z.string().optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -57,6 +59,7 @@ export const chatRouter = router({
   // Join a group
   joinGroup: protectedProcedure
     .input(z.object({ groupId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -123,6 +126,7 @@ export const chatRouter = router({
       messageType: z.enum(["text", "image", "file"]).default("text"),
       mediaUrl: z.string().optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -144,6 +148,7 @@ export const chatRouter = router({
       messageType: z.enum(["text", "image", "file"]).default("text"),
       mediaUrl: z.string().optional(),
     }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

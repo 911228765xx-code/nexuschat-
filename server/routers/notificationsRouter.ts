@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -64,6 +65,7 @@ export const notificationsRouter = router({
         notificationId: z.number().optional(), // if omitted, mark all as read
       }).optional()
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -101,6 +103,7 @@ export const notificationsRouter = router({
         postId: z.number().optional(),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       // Don't notify yourself
       if (input.targetUserId === ctx.user.id) return { success: true };
@@ -125,6 +128,7 @@ export const notificationsRouter = router({
   // ─── Delete a notification ───────────────────────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ notificationId: z.number() }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

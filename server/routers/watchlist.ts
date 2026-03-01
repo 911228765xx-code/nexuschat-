@@ -1,3 +1,4 @@
+import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -26,6 +27,7 @@ export const watchlistRouter = router({
         tokenName: z.string().min(1).max(100),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -56,6 +58,7 @@ export const watchlistRouter = router({
   // ─── Remove token from watchlist ─────────────────────────────────────────────
   removeToken: protectedProcedure
     .input(z.object({ tokenId: z.string().min(1).max(100) }))
+    .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");

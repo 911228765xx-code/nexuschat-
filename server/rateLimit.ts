@@ -95,9 +95,10 @@ export const rateLimitStrict = t.middleware(async ({ ctx, next }) => {
 /**
  * Write rate limit: 30 requests per 60 seconds per user.
  * For mutations (create post, send message, etc.).
+ * Note: uses next() without ctx override to preserve upstream type narrowing (e.g. protectedProcedure's non-null user).
  */
-export const rateLimitWrite = t.middleware(async ({ ctx, next }) => {
-  const identifier = ctx.user?.id?.toString() || getClientIp(ctx.req);
+export const rateLimitWrite = t.middleware(async (opts) => {
+  const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `write:${identifier}`;
   if (!checkRate(key, 60_000, 30)) {
     throw new TRPCError({
@@ -105,7 +106,7 @@ export const rateLimitWrite = t.middleware(async ({ ctx, next }) => {
       message: "Too many write operations. Please slow down.",
     });
   }
-  return next({ ctx });
+  return opts.next();
 });
 
 /**

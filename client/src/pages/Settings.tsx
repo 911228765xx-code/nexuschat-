@@ -28,11 +28,7 @@ const LANGUAGES = [
   { code: "ar", name: "العربية", flag: "🇸🇦" },
 ];
 
-const LOGIN_DEVICES = [
-  { id: "1", name: "Chrome · macOS", ip: "192.168.1.***", time: "Now", current: true },
-  { id: "2", name: "Safari · iPhone", ip: "10.0.0.***", time: "2h ago", current: false },
-  { id: "3", name: "Firefox · Windows", ip: "172.16.0.***", time: "3d ago", current: false },
-];
+// Login devices — only show current session (backend session management not yet implemented)
 
 export default function Settings() {
   const [, setLocation] = useLocation();
@@ -235,30 +231,18 @@ export default function Settings() {
               <h4 className="text-xs font-medium text-muted-foreground">{t("settings.loginDevices")}</h4>
             </div>
           </div>
-          {LOGIN_DEVICES.map((device) => (
-            <div key={device.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/10 last:border-0">
+          <div className="flex items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">
-                <Smartphone size={16} className={device.current ? "text-neon-green" : "text-muted-foreground"} />
+                <Smartphone size={16} className="text-neon-green" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs font-medium">{device.name}</p>
-                  {device.current && (
-                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">{t("settings.current")}</span>
-                  )}
+                  <p className="text-xs font-medium">{t("settings.currentDevice") || "Current Device"}</p>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">{t("settings.current")}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">{device.ip} · {device.time}</p>
+                <p className="text-[10px] text-muted-foreground">{t("settings.activeSession") || "Active session"}</p>
               </div>
-              {!device.current && (
-                <button
-                  onClick={() => toast.success(t("settings.deviceRemoved"))}
-                  className="text-[10px] text-neon-red hover:underline"
-                >
-                  {t("settings.remove")}
-                </button>
-              )}
             </div>
-          ))}
         </div>
       </div>
     </motion.div>
