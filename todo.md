@@ -232,3 +232,10 @@
 - [x] Swap 弹窗显示汇率、滑点设置（0.1%/0.5%/1.0%/自定义）、价格影响、最少收到量、数据来源
 - [x] SYMBOL_TO_ID 新增 USDT/USDC/DAI/DOGE/PEPE/RENDER
 - [x] 新增中英文 i18n 翻译
+
+## v43 AI Chat + Wallet History
+
+- [x] TokenDetail AI Chat 接入 LLM（替换静态 aiChatResponses，创建 tokenChat tRPC 路由调用 invokeLLM，传入 CoinGecko 实时数据作为系统提示词上下文，支持对话历史，Streamdown 渲染 Markdown 回复）
+- [x] Wallet History Tab 增强（BSCScan tokentx API 获取 BEP-20 代币转账 + BNB 原生交易合并排序 + CoinGecko 实时价格计算 USD 价值 + 前端显示代币图标/BEP-20 标签/USD 价值/加载状态/空状态/点击跳转 BscScan）
+- [x] tokenChat 路由添加 rateLimitStrict 速率限制
+- [x] 147 个测试全部通过，0 TS 错误

@@ -44,12 +44,14 @@ interface Transaction {
   tokenIcon: string;
   amount: string;
   value: string;
+  usdValue: string | null;
   from: string;
   to: string;
   time: string;
   status: "confirmed" | "pending" | "failed";
   hash: string;
   chain: string;
+  isTokenTransfer: boolean;
 }
 
 // Mock data removed — now using real BSC chain data from backend
@@ -173,20 +175,26 @@ export default function Wallet() {
 
   const displayTxs = useMemo((): Transaction[] => {
     if (!txData || txData.length === 0) return [];
-    return txData.map((tx) => ({
-      id: tx.hash,
-      type: (tx.isIncoming ? "receive" : "send") as Transaction["type"],
-      token: "BNB",
-      tokenIcon: "⬡",
-      amount: `${tx.isIncoming ? "+" : "-"}${tx.valueFormatted} BNB`,
-      value: "",
-      from: tx.from,
-      to: tx.to,
-      time: new Date(tx.timestamp).toLocaleString(),
-      status: (tx.isError ? "failed" : "confirmed") as Transaction["status"],
-      hash: tx.hash,
-      chain: "BSC",
-    }));
+    return txData.map((tx) => {
+      const symbol = tx.tokenSymbol || "BNB";
+      const icon = symbol === "BNB" ? "⬡" : symbol.charAt(0).toUpperCase();
+      return {
+        id: `${tx.hash}-${symbol}`,
+        type: (tx.isIncoming ? "receive" : "send") as Transaction["type"],
+        token: symbol,
+        tokenIcon: icon,
+        amount: `${tx.isIncoming ? "+" : "-"}${parseFloat(tx.valueFormatted).toFixed(4)} ${symbol}`,
+        value: tx.usdValue ? `$${parseFloat(tx.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "",
+        usdValue: tx.usdValue,
+        from: tx.from,
+        to: tx.to,
+        time: new Date(tx.timestamp).toLocaleString(),
+        status: (tx.isError ? "failed" : "confirmed") as Transaction["status"],
+        hash: tx.hash,
+        chain: "BSC",
+        isTokenTransfer: tx.isTokenTransfer,
+      };
+    });
   }, [txData]);
 
   // Use real data when available, fallback to mock
@@ -520,35 +528,63 @@ export default function Wallet() {
               transition={{ duration: 0.2 }}
               className="space-y-1 pt-2"
             >
-              {filteredTxs.map((tx, i) => (
+              {txLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={20} className="animate-spin text-neon-cyan" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading transactions...</span>
+                </div>
+              ) : filteredTxs.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-muted-foreground">No transactions found</p>
+                </div>
+              ) : filteredTxs.map((tx, i) => (
                 <motion.div
                   key={tx.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                   className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer"
-                  onClick={() => { navigator.clipboard.writeText(tx.hash); toast.success(`Tx hash copied: ${tx.hash.slice(0, 10)}...`); }}
+                  onClick={() => { window.open(`https://bscscan.com/tx/${tx.hash}`, "_blank"); }}
                 >
-                  <div className="w-9 h-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0">
-                    {txTypeIcon(tx.type)}
+                  {/* Token icon circle */}
+                  <div className="w-9 h-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 relative">
+                    {tx.isTokenTransfer ? (
+                      <span className="text-xs font-bold text-neon-purple">{tx.tokenIcon}</span>
+                    ) : (
+                      txTypeIcon(tx.type)
+                    )}
+                    {/* Small direction indicator */}
+                    <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center ${
+                      tx.type === "receive" ? "bg-green-500/20" : "bg-red-500/20"
+                    }`}>
+                      {tx.type === "receive" ? <ArrowDownLeft size={8} className="text-neon-green" /> : <ArrowUpRight size={8} className="text-red-400" />}
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium">{txTypeLabel(tx.type)}</span>
-                        <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-secondary/50">{tx.chain}</span>
+                        {tx.isTokenTransfer && (
+                          <span className="text-[9px] text-neon-purple px-1 py-0.5 rounded bg-neon-purple/10 border border-neon-purple/20">BEP-20</span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-secondary/50">{tx.token}</span>
                       </div>
-                      <span className={`text-sm font-mono font-medium ${
-                        tx.type === "receive" ? "text-neon-green" :
-                        tx.type === "send" ? "text-red-400" :
-                        "text-foreground"
-                      }`}>
-                        {tx.amount.split(" ")[0]} {tx.token.split(" ")[0]}
-                      </span>
+                      <div className="text-right">
+                        <span className={`text-sm font-mono font-medium block ${
+                          tx.type === "receive" ? "text-neon-green" :
+                          tx.type === "send" ? "text-red-400" :
+                          "text-foreground"
+                        }`}>
+                          {tx.amount.split(" ")[0]} {tx.token}
+                        </span>
+                        {tx.usdValue && (
+                          <span className="text-[10px] text-muted-foreground font-mono">{tx.value}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[11px] text-muted-foreground truncate max-w-[60%]">
-                        {tx.type === "swap" ? tx.token : tx.type === "receive" ? `From: ${tx.from}` : `To: ${tx.to}`}
+                      <span className="text-[11px] text-muted-foreground truncate max-w-[55%] font-mono">
+                        {tx.type === "receive" ? `${tx.from.slice(0, 6)}...${tx.from.slice(-4)}` : `${tx.to.slice(0, 6)}...${tx.to.slice(-4)}`}
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-muted-foreground">{tx.time}</span>

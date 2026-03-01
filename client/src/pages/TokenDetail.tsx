@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { trpc } from "@/lib/trpc";
+import { Streamdown } from "streamdown";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   Tooltip as RechartsTooltip, RadarChart, PolarGrid,
@@ -90,27 +91,7 @@ const EMPTY_PRICE: { time: string; price: number }[] = [];
 const m1Labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Pre-built AI chat responses per token
-const aiChatResponses: Record<string, string[]> = {
-  BTC: [
-    "Based on current technical analysis, BTC is showing strong bullish momentum. The golden cross on the 4H chart combined with RSI at 62.4 suggests room for further upside before entering overbought territory. Key support at $94,500 and resistance at $100,000.",
-    "On-chain data shows significant whale accumulation over the past 7 days, with net exchange outflows of 12,450 BTC. This typically precedes upward price movements as supply decreases on exchanges.",
-    "The Fear & Greed Index at 72 indicates moderate greed. Historically, BTC tends to continue rallying until this index reaches 85+. Current market structure supports a target of $103,000-$105,000 within the next 2 weeks.",
-    "Risk assessment: Primary risks include potential regulatory announcements and macro economic shifts. The halving cycle dynamics remain favorable. Recommended position sizing: 2-3% of portfolio with 3x-5x leverage.",
-  ],
-  ETH: [
-    "Ethereum's EIP-4844 implementation has significantly reduced L2 gas costs, driving increased ecosystem activity. The burn rate of 2.1 ETH/min combined with staking rate of 27.3% creates strong deflationary pressure.",
-    "Technical analysis shows ETH forming a bullish ascending triangle on the daily chart. MACD crossover on 4H confirms momentum shift. Target: $4,200 with support at $3,650.",
-    "DeFi TVL on Ethereum has grown 15% this month, indicating renewed confidence in the ecosystem. The ETH/BTC ratio is showing signs of bottoming, suggesting potential outperformance ahead.",
-  ],
-  SOL: [
-    "Solana's network metrics show impressive growth with 1,200+ TPS average and sub-second finality. However, the recent price decline of 1.2% reflects profit-taking after the strong rally.",
-    "The DeFi ecosystem on Solana continues to expand with TVL at $8.9B. Key risk: network stability concerns persist despite improvements. Watch for the $180 support level.",
-  ],
-  DEFAULT: [
-    "I'm analyzing the current market data for this token. Based on the technical indicators and on-chain metrics, here's my assessment of the current situation and potential trading opportunities.",
-    "The market sentiment analysis shows mixed signals. I recommend monitoring the key support and resistance levels closely before making any trading decisions.",
-  ],
-};
+// AI Chat responses are now powered by LLM via tokenChat.sendMessage
 
 const TOKENS_DATA: Record<string, TokenData> = {
   BTC: {
@@ -419,7 +400,9 @@ export default function TokenDetail() {
   const [chatInput, setChatInput] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatResponseIndex = useRef(0);
+
+  // LLM-backed AI chat mutation
+  const aiChatMutation = trpc.tokenChat.sendMessage.useMutation();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -481,26 +464,45 @@ export default function TokenDetail() {
     toast.success(`${t("research.alertSet")} ${token} @ $${alertPrice}`);
   }, [alertPrice, token, t]);
 
-  const handleSendChat = useCallback(() => {
+  const handleSendChat = useCallback(async () => {
     if (!chatInput.trim() || isAiTyping) return;
+    const userMessage = chatInput.trim();
     const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`, role: "user", content: chatInput.trim(), timestamp: new Date(),
+      id: `u-${Date.now()}`, role: "user", content: userMessage, timestamp: new Date(),
     };
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput("");
     setIsAiTyping(true);
 
-    setTimeout(() => {
-      const responses = aiChatResponses[token] || aiChatResponses.DEFAULT;
-      const idx = chatResponseIndex.current % responses.length;
-      chatResponseIndex.current++;
+    try {
+      // Build conversation history for context (last 10 messages)
+      const history = chatMessages.slice(-10).map(m => ({
+        role: m.role === "user" ? "user" as const : "assistant" as const,
+        content: m.content,
+      }));
+
+      const result = await aiChatMutation.mutateAsync({
+        tokenSymbol: token,
+        message: userMessage,
+        history,
+      });
+
       const aiMsg: ChatMessage = {
-        id: `a-${Date.now()}`, role: "ai", content: responses[idx], timestamp: new Date(),
+        id: `a-${Date.now()}`, role: "ai", content: result.content, timestamp: new Date(),
       };
       setChatMessages(prev => [...prev, aiMsg]);
+    } catch (err: any) {
+      const errorMsg: ChatMessage = {
+        id: `e-${Date.now()}`, role: "ai",
+        content: "⚠️ AI analysis temporarily unavailable. Please try again in a moment.",
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, errorMsg]);
+      toast.error("AI chat error");
+    } finally {
       setIsAiTyping(false);
-    }, 1500 + Math.random() * 1500);
-  }, [chatInput, isAiTyping, token]);
+    }
+  }, [chatInput, isAiTyping, token, chatMessages, aiChatMutation]);
 
   // Merge real price into display values
   const displayPrice = livePriceData ? `$${livePriceData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : data?.price ?? "N/A";
@@ -1147,7 +1149,13 @@ export default function TokenDetail() {
                         ? "bg-secondary/30 border border-border/20 rounded-tl-sm"
                         : "bg-neon-cyan/10 border border-neon-cyan/15 rounded-tr-sm"
                     }`}>
-                      {msg.content}
+                      {msg.role === "ai" ? (
+                        <div className="prose prose-invert prose-xs max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
+                          <Streamdown>{msg.content}</Streamdown>
+                        </div>
+                      ) : (
+                        <span>{msg.content}</span>
+                      )}
                       <p className="text-[8px] text-muted-foreground mt-1.5 font-mono">
                         {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>

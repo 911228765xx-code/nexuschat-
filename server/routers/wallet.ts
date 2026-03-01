@@ -143,7 +143,7 @@ export const walletRouter = router({
         }));
     }),
 
-  // ─── Get transaction history ───────────────────────────────────────────────
+  // ─── Get transaction history (BNB + BEP-20 token transfers) ─────────────
   getTransactions: publicProcedure
     .input(
       z.object({
@@ -153,7 +153,8 @@ export const walletRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const data = await fetchBscScan<{
+      // Fetch BNB native transactions
+      const bnbTxPromise = fetchBscScan<{
         status: string;
         message: string;
         result: Array<{
@@ -177,21 +178,163 @@ export const walletRouter = router({
         sort: "desc",
       });
 
-      if (!data || data.status !== "1" || !Array.isArray(data.result)) {
-        return [];
+      // Fetch BEP-20 token transfers
+      const tokenTxPromise = fetchBscScan<{
+        status: string;
+        message: string;
+        result: Array<{
+          hash: string;
+          from: string;
+          to: string;
+          value: string;
+          timeStamp: string;
+          tokenName: string;
+          tokenSymbol: string;
+          tokenDecimal: string;
+          contractAddress: string;
+          gas: string;
+          gasPrice: string;
+        }>;
+      }>({
+        module: "account",
+        action: "tokentx",
+        address: input.address,
+        startblock: "0",
+        endblock: "99999999",
+        page: input.page.toString(),
+        offset: input.offset.toString(),
+        sort: "desc",
+      });
+
+      const [bnbData, tokenTxData] = await Promise.all([bnbTxPromise, tokenTxPromise]);
+
+      // Fetch BNB price for USD value calculation
+      const bnbPriceData = await cachedFetch<any>(
+        "bnb-usd-price-tx",
+        "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd",
+        TTL.prices,
+        (res) => res.json(),
+      );
+      const bnbPrice = bnbPriceData?.binancecoin?.usd ?? 0;
+
+      // Collect unique token symbols from token transfers for price lookup
+      const tokenSymbols = new Set<string>();
+      if (tokenTxData?.status === "1" && Array.isArray(tokenTxData.result)) {
+        tokenTxData.result.forEach((tx) => tokenSymbols.add(tx.tokenSymbol.toUpperCase()));
       }
 
-      return data.result.map((tx) => ({
-        hash: tx.hash,
-        from: tx.from,
-        to: tx.to,
-        value: tx.value,
-        valueFormatted: (parseFloat(tx.value) / 1e18).toFixed(6),
-        timestamp: parseInt(tx.timeStamp, 10) * 1000,
-        isError: tx.isError === "1",
-        isIncoming: tx.to.toLowerCase() === input.address.toLowerCase(),
-        gasUsed: tx.gas,
-        gasPrice: tx.gasPrice,
-      }));
+      // Fetch token prices from CoinGecko
+      const SYMBOL_TO_COINGECKO: Record<string, string> = {
+        USDT: "tether", USDC: "usd-coin", BUSD: "binance-usd", DAI: "dai",
+        CAKE: "pancakeswap-token", WBNB: "wbnb", ETH: "ethereum", BTCB: "bitcoin-bep2",
+        LINK: "chainlink", UNI: "uniswap", AAVE: "aave", DOT: "polkadot",
+        MATIC: "matic-network", DOGE: "dogecoin", PEPE: "pepe", SHIB: "shiba-inu",
+      };
+      const tokenPrices: Record<string, number> = {};
+      const coingeckoIds = Array.from(tokenSymbols)
+        .map((s) => SYMBOL_TO_COINGECKO[s])
+        .filter(Boolean);
+      if (coingeckoIds.length > 0) {
+        const priceData = await cachedFetch<any>(
+          `token-prices-tx:${coingeckoIds.sort().join(",")}`,
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds.join(",")}&vs_currencies=usd`,
+          TTL.prices,
+          (res) => res.json(),
+        );
+        if (priceData) {
+          for (const [sym, cgId] of Object.entries(SYMBOL_TO_COINGECKO)) {
+            if (priceData[cgId]?.usd) {
+              tokenPrices[sym] = priceData[cgId].usd;
+            }
+          }
+        }
+      }
+
+      // Unified transaction type
+      interface UnifiedTx {
+        hash: string;
+        from: string;
+        to: string;
+        value: string;
+        valueFormatted: string;
+        timestamp: number;
+        isError: boolean;
+        isIncoming: boolean;
+        gasUsed: string;
+        gasPrice: string;
+        tokenSymbol: string;
+        tokenName: string;
+        tokenDecimals: number;
+        isTokenTransfer: boolean;
+        usdValue: string | null;
+      }
+
+      const allTxs: UnifiedTx[] = [];
+
+      // Process BNB native transactions
+      if (bnbData?.status === "1" && Array.isArray(bnbData.result)) {
+        for (const tx of bnbData.result) {
+          const bnbAmount = parseFloat(tx.value) / 1e18;
+          const usd = bnbPrice > 0 && bnbAmount > 0 ? (bnbAmount * bnbPrice).toFixed(2) : null;
+          allTxs.push({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            valueFormatted: bnbAmount.toFixed(6),
+            timestamp: parseInt(tx.timeStamp, 10) * 1000,
+            isError: tx.isError === "1",
+            isIncoming: tx.to.toLowerCase() === input.address.toLowerCase(),
+            gasUsed: tx.gas,
+            gasPrice: tx.gasPrice,
+            tokenSymbol: "BNB",
+            tokenName: "BNB",
+            tokenDecimals: 18,
+            isTokenTransfer: false,
+            usdValue: usd,
+          });
+        }
+      }
+
+      // Process BEP-20 token transfers
+      if (tokenTxData?.status === "1" && Array.isArray(tokenTxData.result)) {
+        for (const tx of tokenTxData.result) {
+          const decimals = parseInt(tx.tokenDecimal, 10) || 18;
+          const tokenAmount = parseFloat(tx.value) / Math.pow(10, decimals);
+          const sym = tx.tokenSymbol.toUpperCase();
+          const price = tokenPrices[sym] ?? 0;
+          const usd = price > 0 && tokenAmount > 0 ? (tokenAmount * price).toFixed(2) : null;
+          allTxs.push({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            valueFormatted: tokenAmount.toFixed(6),
+            timestamp: parseInt(tx.timeStamp, 10) * 1000,
+            isError: false,
+            isIncoming: tx.to.toLowerCase() === input.address.toLowerCase(),
+            gasUsed: tx.gas,
+            gasPrice: tx.gasPrice,
+            tokenSymbol: tx.tokenSymbol,
+            tokenName: tx.tokenName,
+            tokenDecimals: decimals,
+            isTokenTransfer: true,
+            usdValue: usd,
+          });
+        }
+      }
+
+      // Sort by timestamp descending, deduplicate by hash+tokenSymbol
+      const seen = new Set<string>();
+      const deduplicated = allTxs.filter((tx) => {
+        const key = `${tx.hash}-${tx.tokenSymbol}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      deduplicated.sort((a, b) => b.timestamp - a.timestamp);
+
+      // Return top N results
+      return deduplicated.slice(0, input.offset);
     }),
 });
