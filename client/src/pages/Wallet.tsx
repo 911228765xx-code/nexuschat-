@@ -738,7 +738,13 @@ export default function Wallet() {
     { enabled: isAuthenticated && activeTab === "history", staleTime: 30_000 }
   );
 
-  // ─── Merge real data: wagmi native + ETH mainnet + BSC tokens ───
+  // ─── Ethereum mainnet ERC-20 tokens via Alchemy + CoinGecko prices ───
+  const { data: ethTokenData, isLoading: ethTokensLoading } = trpc.wallet.getEthTokenBalances.useQuery(
+    { address: walletAddress },
+    { enabled: isValidBscAddress, staleTime: 60_000, refetchOnMount: "always", refetchOnWindowFocus: false }
+  );
+
+  // ─── Merge real data: wagmi native + ETH mainnet + BSC tokens + ETH ERC-20 ───
   const displayTokens = useMemo(() => {
     if (!walletConnected || !connectedAddress) return [];
     const result: Token[] = [];
@@ -796,8 +802,45 @@ export default function Wallet() {
         }
       });
     }
-    return result;
-  }, [nativeBalance, ethMainnetBalance, tokenData, bnbData, walletConnected, connectedAddress, connectedChainId]);
+
+    // ETH mainnet ERC-20 tokens (Alchemy/Etherscan + CoinGecko USD prices)
+    if (ethTokenData) {
+      // Enrich ETH native balance with real USD price
+      const ethNativeIdx = result.findIndex(
+        (t) => t.id === "eth-mainnet" || t.id === `native-${mainnet.id}`
+      );
+      if (ethNativeIdx !== -1) {
+        result[ethNativeIdx] = {
+          ...result[ethNativeIdx],
+          value: result[ethNativeIdx].balance * ethTokenData.ethUsdPrice,
+          price: ethTokenData.ethUsdPrice,
+          change24h: ethTokenData.ethChange24h,
+        };
+      }
+      // Add ERC-20 tokens (skip duplicates by symbol)
+      const existingSymbols = new Set(result.map((t) => t.symbol.toUpperCase()));
+      ethTokenData.tokens.forEach((tk) => {
+        if (existingSymbols.has(tk.symbol.toUpperCase())) return;
+        const bal = parseFloat(tk.balanceFormatted);
+        if (bal <= 0 && tk.usdValue <= 0) return;
+        existingSymbols.add(tk.symbol.toUpperCase());
+        result.push({
+          id: tk.contractAddress,
+          symbol: tk.symbol,
+          name: tk.name,
+          icon: tk.logo ?? tk.symbol.charAt(0),
+          balance: bal,
+          value: tk.usdValue,
+          price: tk.usdPrice,
+          change24h: tk.change24h,
+          chain: "Ethereum",
+        });
+      });
+    }
+
+    // Sort by USD value descending so highest-value assets appear first
+    return result.sort((a, b) => b.value - a.value);
+  }, [nativeBalance, ethMainnetBalance, tokenData, bnbData, ethTokenData, walletConnected, connectedAddress, connectedChainId]);
 
   const displayTxs = useMemo((): Transaction[] => {
     if (!txData || txData.length === 0) return [];
@@ -829,7 +872,7 @@ export default function Wallet() {
   const filteredTokens = selectedChain === "All" ? displayTokens : displayTokens.filter(t => t.chain === selectedChain);
   const filteredNFTs = selectedChain === "All" ? nfts : nfts.filter(n => n.chain === selectedChain);
   const filteredTxs = selectedChain === "All" ? displayTxs : displayTxs.filter(tx => tx.chain === selectedChain);
-  const isLoadingData = bnbLoading || tokensLoading;
+  const isLoadingData = bnbLoading || tokensLoading || ethTokensLoading || nativeLoading;
 
   const txTypeIcon = (type: Transaction["type"]) => {
     switch (type) {
