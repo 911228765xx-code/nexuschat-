@@ -699,15 +699,15 @@ export default function Wallet() {
   const isValidBscAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
   const { data: bnbData, isLoading: bnbLoading } = trpc.wallet.getBalance.useQuery(
     { address: walletAddress },
-    { enabled: isValidBscAddress, staleTime: 30_000 }
+    { enabled: isValidBscAddress, staleTime: 30_000, refetchOnMount: "always", refetchOnWindowFocus: false }
   );
   const { data: tokenData, isLoading: tokensLoading } = trpc.wallet.getTokenBalances.useQuery(
     { address: walletAddress },
-    { enabled: isValidBscAddress, staleTime: 60_000 }
+    { enabled: isValidBscAddress, staleTime: 60_000, refetchOnMount: "always", refetchOnWindowFocus: false }
   );
   const { data: txData, isLoading: txLoading } = trpc.wallet.getTransactions.useQuery(
     { address: walletAddress, page: 1, offset: 20 },
-    { enabled: isValidBscAddress && activeTab === "history", staleTime: 30_000 }
+    { enabled: isValidBscAddress && activeTab === "history", staleTime: 30_000, refetchOnMount: "always", refetchOnWindowFocus: false }
   );
 
   // ─── Swap history query ───

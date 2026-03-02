@@ -8,7 +8,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
 import AppLayout from "./components/AppLayout";
-import { AppProvider } from "./contexts/AppContext";
+import { AppProvider, useApp } from "./contexts/AppContext";
+import { useWallet } from "./contexts/WalletContext";
 
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
 // Onboarding uses framer-motion (79KB), socket.io (42KB) — both deferred
@@ -87,6 +88,23 @@ const PriceAlertSocket = lazy(() =>
   }))
 );
 
+/**
+ * WalletSyncEffect — syncs the connected Web3 wallet address into AppContext profile
+ * Must be rendered inside both AppProvider and WalletProvider
+ */
+function WalletSyncEffect() {
+  const { address, isConnected } = useWallet();
+  const { updateProfile } = useApp();
+
+  useEffect(() => {
+    if (isConnected && address) {
+      updateProfile({ walletAddress: address });
+    }
+  }, [address, isConnected, updateProfile]);
+
+  return null;
+}
+
 function AppContent() {
   const [location] = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -96,6 +114,9 @@ function AppContent() {
 
   return (
     <>
+      {/* Sync connected wallet address into AppContext profile */}
+      <WalletSyncEffect />
+
       {/* Lazy-load socket.io connection after initial render */}
       <Suspense fallback={null}>
         <PriceAlertSocket />
