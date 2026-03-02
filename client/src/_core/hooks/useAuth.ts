@@ -1,6 +1,9 @@
 /**
- * useAuth — 认证钩子（无登录模式）
- * 网站已移除登录流程，isAuthenticated 始终返回 true，所有页面公开访问。
+ * useAuth — 认证钩子
+ * isAuthenticated 基于服务端 session 真实状态：
+ *   - meQuery.data 有值 → 已登录
+ *   - meQuery.data 为 null/undefined → 未登录
+ * loading 期间 isAuthenticated = false，避免触发 protectedProcedure 报 10001。
  */
 import { trpc } from "@/lib/trpc";
 import { useCallback, useMemo } from "react";
@@ -28,7 +31,7 @@ export function useAuth(_options?: UseAuthOptions) {
     try {
       await logoutMutation.mutateAsync();
     } catch {
-      // ignore errors on logout in no-login mode
+      // ignore errors on logout
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
@@ -36,15 +39,16 @@ export function useAuth(_options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
+    const user = meQuery.data ?? null;
     return {
-      user: meQuery.data ?? null,
-      loading: false,         // Never block UI waiting for auth
-      error: null,            // Never show auth errors
-      isAuthenticated: true,  // Always authenticated (no-login mode)
+      user,
+      // loading = true while the initial session check is in flight
+      loading: meQuery.isLoading,
+      error: null,
+      // Only true once the server confirms a valid session
+      isAuthenticated: !!user,
     };
-  }, [meQuery.data]);
-
-  // No redirect logic — all pages are publicly accessible
+  }, [meQuery.data, meQuery.isLoading]);
 
   return {
     ...state,
