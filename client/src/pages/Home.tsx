@@ -105,6 +105,14 @@ export default function Home() {
               </Button>
             )}
             <Button
+              onClick={() => setLocation('/download')}
+              className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3"
+              variant="outline"
+            >
+              <Download size={14} className="mr-1.5" />
+              {t('pwa.downloadApp')}
+            </Button>
+            <Button
               onClick={() => setLocation("/app/chat")}
               className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-9 px-4"
               variant="outline"
@@ -211,32 +219,12 @@ export default function Home() {
               {t("home.learnMore")}
             </Button>
             <Button
-              onClick={() => {
-                if (platform === 'ios') {
-                  // iOS: show Safari install guide
-                  setShowIOSGuide(true);
-                } else if (platform === 'android') {
-                  // Android: download APK from CDN
-                  const link = document.createElement('a');
-                  link.href = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.0-android_d637d435.zip';
-                  link.download = 'NexusChat-v1.0.0-android.zip';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                } else if (canInstall) {
-                  // Desktop Chrome: PWA install prompt
-                  triggerInstall();
-                } else {
-                  // Fallback: show install guide
-                  setShowIOSGuide(true);
-                }
-              }}
-              disabled={isInstalling}
+              onClick={() => setLocation('/download')}
               variant="outline"
-              className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent disabled:opacity-60"
+              className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent"
             >
               <Download size={16} className="mr-2" />
-              {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
+              {t('pwa.downloadApp')}
             </Button>
           </motion.div>
 

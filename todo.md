@@ -226,3 +226,10 @@
 - [ ] 在 AppLayout 底部添加 PWA 安装横幅（仅未安装时显示）
 - [ ] 添加 Service Worker（sw.js）实现离线缓存和快速启动
 - [ ] 国际化：添加 PWA 安装相关文案到 I18nContext
+
+## v43 下载页面优化
+- [x] 生成 Android/iOS 下载二维码图片并上传 CDN
+- [x] 创建 /download 专属下载页面（双平台入口、二维码、安装说明、App 截图）
+- [x] 首页导航栏添加"下载"链接
+- [x] 首页 Hero 区域"下载 App"按钮跳转到 /download 页面
+- [x] 注册 /download 路由到 App.tsx

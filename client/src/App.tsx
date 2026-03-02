@@ -36,6 +36,7 @@ const TokenDetail = lazy(() => import("./pages/TokenDetail"));
 const PostDetail = lazy(() => import("./pages/PostDetail"));
 const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
+const DownloadPage = lazy(() => import("./pages/Download"));
 
 // ─── Skeleton loader — dark bg, no flash ─────────────────────────────────────
 function PageLoader() {
@@ -138,6 +139,9 @@ function AppContent() {
             <Switch location={location}>
               <Route path="/">
                 <Home />
+              </Route>
+              <Route path="/download">
+                <DownloadPage />
               </Route>
               <Route path="/app/group/:id">
                 <AppLayout hideNav>
