@@ -478,11 +478,11 @@ export default function Trading() {
 
   const tabItems: { key: MainTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "strategies", label: t("trading.myStrategies"), icon: <Zap size={13} /> },
-    { key: "market", label: t("trading.market") || "Market", icon: <Users size={13} /> },
-    { key: "positions", label: t("trading.positions") || "Positions", icon: <Activity size={13} /> },
-    { key: "calendar", label: "PnL Cal", icon: <Calendar size={13} /> },
+    { key: "market", label: t("trading.market"), icon: <Users size={13} /> },
+    { key: "positions", label: t("trading.positions"), icon: <Activity size={13} /> },
+    { key: "calendar", label: t("trading.pnlCal"), icon: <Calendar size={13} /> },
     { key: "logs", label: t("trading.tradeHistory"), icon: <Clock size={13} /> },
-    { key: "alerts", label: "Alerts", icon: <Bell size={13} />, badge: realAlerts.length },
+    { key: "alerts", label: t("trading.alerts"), icon: <Bell size={13} />, badge: realAlerts.length },
   ];
 
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
@@ -517,7 +517,7 @@ export default function Trading() {
                 onClick={() => setModalType("compare")}
                 className="h-8 px-2.5 flex items-center gap-1 rounded-lg bg-neon-purple/10 text-neon-purple text-[11px] font-medium border border-neon-purple/20"
               >
-                <Scale size={13} /> Compare ({compareList.length})
+                <Scale size={13} /> {t("trading.compareBtn")} ({compareList.length})
               </button>
             )}
             <button
@@ -541,9 +541,9 @@ export default function Trading() {
         <div className="mx-4 mt-3 grid grid-cols-4 gap-2">
           {[
             { label: t("trading.totalProfit"), value: `+$${totalProfit.toFixed(0)}`, color: "text-neon-green", bg: "from-neon-green/8 to-transparent border-neon-green/15" },
-            { label: "Win Rate", value: `${avgWinRate}%`, color: "text-neon-cyan", bg: "from-neon-cyan/8 to-transparent border-neon-cyan/15" },
-            { label: "Open PnL", value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red", bg: "from-neon-purple/8 to-transparent border-neon-purple/15" },
-            { label: "Active", value: `${strategies.filter(s => s.status === "running").length}/${strategies.length}`, color: "text-foreground", bg: "from-secondary/40 to-transparent border-border/20" },
+            { label: t("trading.avgWinRate"), value: `${avgWinRate}%`, color: "text-neon-cyan", bg: "from-neon-cyan/8 to-transparent border-neon-cyan/15" },
+            { label: t("trading.openPnl"), value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red", bg: "from-neon-purple/8 to-transparent border-neon-purple/15" },
+            { label: t("trading.active"), value: `${strategies.filter(s => s.status === "running").length}/${strategies.length}`, color: "text-foreground", bg: "from-secondary/40 to-transparent border-border/20" },
           ].map((card) => (
             <div key={card.label} className={`p-2 rounded-xl bg-gradient-to-br ${card.bg} border`}>
               <p className="text-[9px] text-muted-foreground mb-0.5 truncate">{card.label}</p>
@@ -597,7 +597,7 @@ export default function Trading() {
                           {strategy.status === "running" ? t("trading.running") : t("trading.paused")}
                         </span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${riskColor(strategy.riskLevel)}`}>
-                          {strategy.riskLevel === "low" ? "Low" : strategy.riskLevel === "medium" ? "Med" : "High"}
+                          {strategy.riskLevel === "low" ? t("trading.lowRiskLabel") : strategy.riskLevel === "medium" ? t("trading.mediumRiskLabel") : t("trading.highRiskLabel")}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -646,10 +646,10 @@ export default function Trading() {
 
                     <div className="grid grid-cols-4 gap-2">
                       {[
-                        { label: "Profit", value: `+$${strategy.totalProfit.toFixed(0)}`, color: "text-neon-green" },
-                        { label: "Win%", value: `${strategy.winRate}%`, color: "text-foreground" },
-                        { label: "Trades", value: `${strategy.trades}`, color: "text-foreground" },
-                        { label: "Sharpe", value: strategy.sharpeRatio.toFixed(2), color: strategy.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
+                        { label: t("trading.profit"), value: `+$${strategy.totalProfit.toFixed(0)}`, color: "text-neon-green" },
+                        { label: t("trading.winRate"), value: `${strategy.winRate}%`, color: "text-foreground" },
+                        { label: t("trading.trades"), value: `${strategy.trades}`, color: "text-foreground" },
+                        { label: t("trading.sortSharpe"), value: strategy.sharpeRatio.toFixed(2), color: strategy.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
                       ].map((m) => (
                         <div key={m.label} className="p-1 rounded-lg bg-secondary/30 text-center">
                           <p className="text-[8px] text-muted-foreground">{m.label}</p>
@@ -666,7 +666,7 @@ export default function Trading() {
                   className="w-full p-4 rounded-2xl border-2 border-dashed border-border/40 hover:border-neon-green/30 transition-colors flex items-center justify-center gap-2 text-muted-foreground hover:text-neon-green"
                 >
                   <Plus size={18} />
-                  <span className="text-sm font-medium">Create New Strategy</span>
+                  <span className="text-sm font-medium">{t("trading.createNewStrategy")}</span>
                 </button>
               </motion.div>
             )}
@@ -685,7 +685,7 @@ export default function Trading() {
                           marketSort === sort ? "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20" : "bg-secondary/30 text-muted-foreground"
                         }`}
                       >
-                        {sort === "return" ? "ROI" : sort === "winRate" ? "Win%" : sort === "followers" ? "Followers" : "Sharpe"}
+                        {sort === "return" ? t("trading.sortROI") : sort === "winRate" ? t("trading.sortWinRate") : sort === "followers" ? t("trading.sortFollowers") : t("trading.sortSharpe")}
                       </button>
                     ))}
                   </div>
@@ -704,7 +704,7 @@ export default function Trading() {
                           riskFilter === risk ? "bg-neon-purple/10 text-neon-purple border border-neon-purple/20" : "bg-secondary/30 text-muted-foreground"
                         }`}
                       >
-                        {risk === "all" ? "All Risk" : `${risk.charAt(0).toUpperCase() + risk.slice(1)} Risk`}
+                        {risk === "all" ? t("trading.allRisk") : risk === "low" ? t("trading.lowRisk") : risk === "medium" ? t("trading.mediumRisk") : t("trading.highRisk")}
                       </button>
                     ))}
                   </motion.div>
@@ -713,7 +713,7 @@ export default function Trading() {
                 {/* Compare hint */}
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground px-1">
                   <Scale size={12} />
-                  <span>Tap checkbox to compare traders (max 3)</span>
+                  <span>{t("trading.compareHint")}</span>
                 </div>
 
                 {/* Top 3 Podium */}
@@ -777,13 +777,13 @@ export default function Trading() {
                             trader.isFollowing ? "bg-secondary text-muted-foreground" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20"
                           }`}
                         >
-                          {trader.isFollowing ? "Following" : "Follow"}
+                          {trader.isFollowing ? t("trading.following") : t("trading.follow")}
                         </button>
                         <button
                           onClick={() => { setCopyTrader(trader); setModalType("copyConfig"); }}
                           className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-neon-green/10 text-neon-green border border-neon-green/20"
                         >
-                          Copy
+                          {t("trading.copy")}
                         </button>
                       </div>
                     </div>
@@ -805,10 +805,10 @@ export default function Trading() {
 
                     <div className="grid grid-cols-4 gap-2">
                       {[
-                        { label: "ROI", value: `+${trader.totalReturn}%`, color: "text-neon-green" },
-                        { label: "Win%", value: `${trader.winRate}%`, color: "text-foreground" },
-                        { label: "Followers", value: trader.followers > 1000 ? `${(trader.followers / 1000).toFixed(1)}K` : `${trader.followers}`, color: "text-foreground" },
-                        { label: "Sharpe", value: trader.sharpeRatio.toFixed(2), color: trader.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
+                        { label: t("trading.sortROI"), value: `+${trader.totalReturn}%`, color: "text-neon-green" },
+                        { label: t("trading.sortWinRate"), value: `${trader.winRate}%`, color: "text-foreground" },
+                        { label: t("trading.sortFollowers"), value: trader.followers > 1000 ? `${(trader.followers / 1000).toFixed(1)}K` : `${trader.followers}`, color: "text-foreground" },
+                        { label: t("trading.sortSharpe"), value: trader.sharpeRatio.toFixed(2), color: trader.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
                       ].map((m) => (
                         <div key={m.label} className="p-1 rounded-lg bg-secondary/30 text-center">
                           <p className="text-[8px] text-muted-foreground">{m.label}</p>
@@ -827,14 +827,14 @@ export default function Trading() {
                 {/* Position Summary */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium flex items-center gap-1.5"><Activity size={14} className="text-neon-cyan" /> Live Positions</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green font-mono">{displayPositions.length} Open</span>
+                    <span className="text-xs font-medium flex items-center gap-1.5"><Activity size={14} className="text-neon-cyan" /> {t("trading.livePositions")}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green font-mono">{displayPositions.length} {t("trading.openLabel")}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { label: "Unrealized PnL", value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red" },
-                      { label: "Long", value: `${displayPositions.filter(p => p.side === "long").length}`, color: "text-neon-green" },
-                      { label: "Short", value: `${displayPositions.filter(p => p.side === "short").length}`, color: "text-neon-red" },
+                      { label: t("trading.unrealizedPnl"), value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red" },
+                      { label: t("trading.long"), value: `${displayPositions.filter(p => p.side === "long").length}`, color: "text-neon-green" },
+                      { label: t("trading.short"), value: `${displayPositions.filter(p => p.side === "short").length}`, color: "text-neon-red" },
                     ].map((item) => (
                       <div key={item.label} className="text-center">
                         <p className="text-[10px] text-muted-foreground">{item.label}</p>
@@ -846,7 +846,7 @@ export default function Trading() {
 
                 {/* Position Cards */}
                 {displayPositions.length === 0 && (
-                  <div className="py-12 text-center text-muted-foreground text-sm">No open positions</div>
+                  <div className="py-12 text-center text-muted-foreground text-sm">{t("trading.noOpenPositions")}</div>
                 )}
                 {displayPositions.map((pos, index) => (
                   <motion.div
@@ -877,19 +877,19 @@ export default function Trading() {
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Entry</span>
+                        <span className="text-muted-foreground">{t("trading.entry")}</span>
                         <span className="font-mono">${pos.entryPrice.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Current</span>
+                        <span className="text-muted-foreground">{t("trading.current")}</span>
                         <span className="font-mono">${pos.currentPrice.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Size</span>
+                        <span className="text-muted-foreground">{t("trading.size")}</span>
                         <span className="font-mono">{pos.amount}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Open</span>
+                        <span className="text-muted-foreground">{t("trading.openTime")}</span>
                         <span className="font-mono">{pos.openTime}</span>
                       </div>
                     </div>
@@ -897,15 +897,15 @@ export default function Trading() {
                     {/* SL/TP/Liq Info */}
                     <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-border/20">
                       <div className="text-center">
-                        <p className="text-[9px] text-muted-foreground">Stop Loss</p>
+                        <p className="text-[9px] text-muted-foreground">{t("trading.stopLossLabel")}</p>
                         <p className="text-[10px] font-mono text-neon-red">{pos.stopLossPrice ? `$${pos.stopLossPrice.toLocaleString()}` : "—"}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[9px] text-muted-foreground">Take Profit</p>
+                        <p className="text-[9px] text-muted-foreground">{t("trading.takeProfitLabel")}</p>
                         <p className="text-[10px] font-mono text-neon-green">{pos.takeProfitPrice ? `$${pos.takeProfitPrice.toLocaleString()}` : "—"}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[9px] text-muted-foreground">Liquidation</p>
+                        <p className="text-[9px] text-muted-foreground">{t("trading.liquidation")}</p>
                         <p className="text-[10px] font-mono text-yellow-400">{pos.liquidationPrice ? `$${pos.liquidationPrice.toLocaleString()}` : "—"}</p>
                       </div>
                     </div>
@@ -916,7 +916,7 @@ export default function Trading() {
                         onClick={() => { setClosePosition(pos); setModalType("closePosition"); }}
                         className="px-3 py-1 rounded-lg text-[10px] font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
                       >
-                        Close
+                        {t("trading.closeBtn")}
                       </button>
                     </div>
                   </motion.div>
@@ -925,7 +925,7 @@ export default function Trading() {
                 {/* ─── Open Position Form ─── */}
                 <div className="p-3 rounded-2xl bg-card/50 border border-neon-cyan/20">
                   <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5">
-                    <Plus size={14} className="text-neon-cyan" /> Open New Position
+                    <Plus size={14} className="text-neon-cyan" /> {t("trading.openNewPosition")}
                   </h4>
                   {/* Side Toggle */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
@@ -937,7 +937,7 @@ export default function Trading() {
                           : "bg-secondary/30 text-muted-foreground border border-border/20"
                       }`}
                     >
-                      ▲ Long
+                      ▲ {t("trading.long")}
                     </button>
                     <button
                       onClick={() => setOpenForm(f => ({ ...f, side: "short" }))}
@@ -947,13 +947,13 @@ export default function Trading() {
                           : "bg-secondary/30 text-muted-foreground border border-border/20"
                       }`}
                     >
-                      ▼ Short
+                      ▼ {t("trading.short")}
                     </button>
                   </div>
                   {/* Pair & Amount */}
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1 block">Pair</label>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.pair")}</label>
                       <select
                         value={openForm.pair}
                         onChange={(e) => setOpenForm(f => ({ ...f, pair: e.target.value }))}
@@ -965,7 +965,7 @@ export default function Trading() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1 block">Amount (USDT)</label>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.amountUSDT")}</label>
                       <input
                         type="number"
                         value={openForm.amount}
@@ -977,7 +977,7 @@ export default function Trading() {
                   </div>
                   {/* Leverage */}
                   <div className="mb-2">
-                    <label className="text-[10px] text-muted-foreground mb-1 block">Leverage: {openForm.leverage}x</label>
+                    <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.leverage")}: {openForm.leverage}x</label>
                     <input
                       type="range"
                       min={1}
@@ -993,7 +993,7 @@ export default function Trading() {
                   {/* SL / TP */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1 block">Stop Loss</label>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.stopLossLabel")}</label>
                       <input
                         type="number"
                         value={openForm.stopLoss}
@@ -1003,7 +1003,7 @@ export default function Trading() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1 block">Take Profit</label>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.takeProfitLabel")}</label>
                       <input
                         type="number"
                         value={openForm.takeProfit}
@@ -1015,7 +1015,7 @@ export default function Trading() {
                   </div>
                   {/* Current Price Info */}
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-3 px-1">
-                    <span>Entry Price</span>
+                    <span>{t("trading.entry")}</span>
                     <span className="font-mono font-semibold text-foreground">
                       ${(displayTicker.find(t => t.symbol === openForm.pair.split("/")[0])?.price ?? 0).toLocaleString()}
                     </span>
@@ -1031,24 +1031,24 @@ export default function Trading() {
                     } disabled:opacity-50`}
                   >
                     {openPositionMutation.isPending
-                      ? "Opening..."
+                      ? t("trading.opening")
                       : openForm.side === "long"
-                        ? `Buy Long ${openForm.pair}`
-                        : `Sell Short ${openForm.pair}`}
+                        ? `${t("trading.buyLong")} ${openForm.pair}`
+                        : `${t("trading.sellShort")} ${openForm.pair}`}
                   </button>
                 </div>
 
                 {/* Margin Info */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5"><Wallet size={14} className="text-neon-purple" /> Account Summary</h4>
+                  <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5"><Wallet size={14} className="text-neon-purple" /> {t("trading.accountSummary")}</h4>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
                     {[
-                      { label: "Balance", value: "$2,450.00" },
-                      { label: "Used Margin", value: "$185.20" },
-                      { label: "Available", value: "$2,264.80" },
-                      { label: "Margin Level", value: "1,322%" },
-                      { label: "Today's PnL", value: "+$30.70" },
-                      { label: "Total PnL", value: "+$342.80" },
+                      { label: t("trading.balance"), value: "$2,450.00" },
+                      { label: t("trading.usedMargin"), value: "$185.20" },
+                      { label: t("trading.available"), value: "$2,264.80" },
+                      { label: t("trading.marginLevel"), value: "1,322%" },
+                      { label: t("trading.todayPnl"), value: "+$30.70" },
+                      { label: t("trading.totalPnlLabel"), value: "+$342.80" },
                     ].map((item) => (
                       <div key={item.label} className="flex justify-between">
                         <span className="text-muted-foreground">{item.label}</span>
@@ -1089,10 +1089,10 @@ export default function Trading() {
                     const pnlValues = pnlCalendar.map(d => d.pnl);
                     const bestDay = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
                     return [
-                      { label: "Total PnL", value: `${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(1)}`, color: totalPnl >= 0 ? "text-neon-green" : "text-neon-red" },
-                      { label: "Win Days", value: `${pnlCalendar.filter(d => d.pnl > 0).length}`, color: "text-neon-green" },
-                      { label: "Loss Days", value: `${pnlCalendar.filter(d => d.pnl < 0).length}`, color: "text-neon-red" },
-                      { label: "Best Day", value: `${bestDay >= 0 ? "+" : ""}$${bestDay.toFixed(1)}`, color: "text-neon-cyan" },
+                      { label: t("trading.totalPnlLabel"), value: `${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(1)}`, color: totalPnl >= 0 ? "text-neon-green" : "text-neon-red" },
+                      { label: t("trading.winDays"), value: `${pnlCalendar.filter(d => d.pnl > 0).length}`, color: "text-neon-green" },
+                      { label: t("trading.lossDays"), value: `${pnlCalendar.filter(d => d.pnl < 0).length}`, color: "text-neon-red" },
+                      { label: t("trading.bestDay"), value: `${bestDay >= 0 ? "+" : ""}$${bestDay.toFixed(1)}`, color: "text-neon-cyan" },
                     ];
                   })().map((item) => (
                     <div key={item.label} className="p-2 rounded-xl bg-secondary/20 border border-border/20 text-center">
@@ -1106,7 +1106,7 @@ export default function Trading() {
                 <div className="rounded-2xl bg-card/50 border border-border/30 p-3">
                   {/* Day headers */}
                   <div className="grid grid-cols-7 gap-1 mb-2">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                    {[t("trading.sun"), t("trading.mon"), t("trading.tue"), t("trading.wed"), t("trading.thu"), t("trading.fri"), t("trading.sat")].map((d) => (
                       <div key={d} className="text-center text-[9px] text-muted-foreground font-medium">{d}</div>
                     ))}
                   </div>
@@ -1131,15 +1131,15 @@ export default function Trading() {
 
                 {/* Legend */}
                 <div className="flex items-center justify-center gap-3 text-[9px] text-muted-foreground">
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-red/25" /> Loss</div>
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-secondary/30" /> No Trade</div>
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-green/12" /> Small Win</div>
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-green/40" /> Big Win</div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-red/25" /> {t("trading.legendLoss")}</div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-secondary/30" /> {t("trading.legendNoTrade")}</div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-green/12" /> {t("trading.legendSmallWin")}</div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neon-green/40" /> {t("trading.legendBigWin")}</div>
                 </div>
 
                 {/* Daily PnL Bar Chart */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">Daily PnL Distribution</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.dailyPnlDist")}</h4>
                   <div className="h-[120px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={pnlCalendar.filter(d => d.pnl !== 0)}>
@@ -1164,12 +1164,12 @@ export default function Trading() {
                 {/* Streak Info */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2.5 rounded-xl bg-neon-green/5 border border-neon-green/15">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Best Win Streak</p>
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{t("trading.bestWinStreak")}</p>
                     <p className="text-sm font-mono font-bold text-neon-green">5 days</p>
                     <p className="text-[9px] text-muted-foreground">Feb 14-20</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-neon-red/5 border border-neon-red/15">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Max Loss Streak</p>
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{t("trading.maxLossStreak")}</p>
                     <p className="text-sm font-mono font-bold text-neon-red">2 days</p>
                     <p className="text-[9px] text-muted-foreground">Feb 9-10</p>
                   </div>
@@ -1182,13 +1182,13 @@ export default function Trading() {
               <motion.div key="logs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
                 {/* Daily Summary */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20 mb-3">
-                  <h4 className="text-xs font-medium mb-2">Today's Summary</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.todaySummary")}</h4>
                   <div className="grid grid-cols-4 gap-2">
                     {[
-                      { label: "Trades", value: "4", color: "text-foreground" },
-                      { label: "PnL", value: "+$30.7", color: "text-neon-green" },
-                      { label: "Win Rate", value: "75%", color: "text-foreground" },
-                      { label: "Best", value: "+$15.1", color: "text-neon-green" },
+                      { label: t("trading.trades"), value: "4", color: "text-foreground" },
+                      { label: t("trading.pnlLabel"), value: "+$30.7", color: "text-neon-green" },
+                      { label: t("trading.winRate"), value: "75%", color: "text-foreground" },
+                      { label: t("trading.best"), value: "+$15.1", color: "text-neon-green" },
                     ].map((m) => (
                       <div key={m.label} className="text-center">
                         <p className="text-[9px] text-muted-foreground">{m.label}</p>
@@ -1203,8 +1203,8 @@ export default function Trading() {
                   <div className="w-12 h-12 rounded-2xl bg-secondary/30 flex items-center justify-center mb-3">
                     <BarChart3 size={20} className="text-muted-foreground" />
                   </div>
-                  <p className="text-sm text-muted-foreground">No trade history yet</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Your trades will appear here</p>
+                  <p className="text-sm text-muted-foreground">{t("trading.noTradeHistory")}</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">{t("trading.tradesWillAppear")}</p>
                 </div>
               </motion.div>
             )}
@@ -1215,12 +1215,12 @@ export default function Trading() {
                 {/* Create Alert Form */}
                 <div className="p-4 rounded-2xl bg-card/50 border border-border/30">
                   <h4 className="text-sm font-semibold font-display mb-3 flex items-center gap-2">
-                    <Bell size={14} className="text-neon-cyan" /> Set Price Alert
+                    <Bell size={14} className="text-neon-cyan" /> {t("trading.setPriceAlert")}
                   </h4>
                   <div className="space-y-2.5">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block">Token</label>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.token")}</label>
                         <select
                           value={newAlert.symbol}
                           onChange={(e) => setNewAlert(prev => ({ ...prev, symbol: e.target.value }))}
@@ -1232,19 +1232,19 @@ export default function Trading() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block">Direction</label>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.direction")}</label>
                         <select
                           value={newAlert.direction}
                           onChange={(e) => setNewAlert(prev => ({ ...prev, direction: e.target.value as "above" | "below" }))}
                           className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
                         >
-                          <option value="above">Price Above ↑</option>
-                          <option value="below">Price Below ↓</option>
+                          <option value="above">{t("trading.priceAbove")}</option>
+                          <option value="below">{t("trading.priceBelow")}</option>
                         </select>
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1 block">Target Price (USD)</label>
+                      <label className="text-[10px] text-muted-foreground mb-1 block">{t("trading.targetPriceUSD")}</label>
                       <input
                         type="number"
                         placeholder="e.g. 100000"
@@ -1272,7 +1272,7 @@ export default function Trading() {
                       }}
                       className="w-full h-9 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {createAlertMutation.isPending ? "Creating..." : "+ Create Alert"}
+                      {createAlertMutation.isPending ? t("trading.creating") : `+ ${t("trading.createAlert")}`}
                     </button>
                   </div>
                 </div>
@@ -1280,13 +1280,13 @@ export default function Trading() {
                 {/* Alerts List */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-muted-foreground">Active Alerts ({realAlerts.length})</h4>
+                    <h4 className="text-xs font-medium text-muted-foreground">{t("trading.activeAlerts")} ({realAlerts.length})</h4>
                   </div>
                   {realAlerts.length === 0 ? (
                     <div className="py-10 text-center">
                       <Bell size={32} className="mx-auto mb-3 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">No alerts yet</p>
-                      <p className="text-xs text-muted-foreground/60 mt-1">Set a price alert above to get notified</p>
+                      <p className="text-sm text-muted-foreground">{t("trading.noAlertsYet")}</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">{t("trading.setAlertHint")}</p>
                     </div>
                   ) : (
                     realAlerts.map((alert) => (
@@ -1307,7 +1307,7 @@ export default function Trading() {
                           <div>
                             <p className="text-xs font-semibold font-mono">{alert.tokenSymbol}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              {alert.condition === "above" ? "Above" : "Below"} ${parseFloat(alert.targetPrice).toLocaleString()}
+                              {alert.condition === "above" ? t("trading.above") : t("trading.below")} ${parseFloat(alert.targetPrice).toLocaleString()}
                             </p>
                           </div>
                         </div>
@@ -1356,7 +1356,7 @@ export default function Trading() {
                       className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                         detailTab === tab ? "bg-secondary text-foreground" : "text-muted-foreground"
                       }`}>
-                      {tab === "chart" ? "Chart" : tab === "stats" ? "Stats" : tab === "risk" ? "Risk" : "Trades"}
+                      {tab === "chart" ? t("trading.tabChart") : tab === "stats" ? t("trading.tabStats") : tab === "risk" ? t("trading.tabRisk") : t("trading.tabTrades")}
                     </button>
                   ))}
                 </div>
@@ -1367,7 +1367,7 @@ export default function Trading() {
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-medium">Cumulative PnL vs Benchmark</h4>
+                        <h4 className="text-xs font-medium">{t("trading.cumulativePnl")}</h4>
                         <span className="text-xs font-mono text-neon-green">+${selectedStrategy.totalProfit.toFixed(1)}</span>
                       </div>
                       <div className="h-[160px]">
@@ -1389,7 +1389,7 @@ export default function Trading() {
                       </div>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3">Monthly Returns ($)</h4>
+                      <h4 className="text-xs font-medium mb-3">{t("trading.monthlyReturns")}</h4>
                       <div className="h-[120px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={selectedStrategy.profitHistory.map((d, i, arr) => ({ date: d.date, monthly: i === 0 ? d.profit : d.profit - arr[i - 1].profit }))}>
@@ -1408,15 +1408,15 @@ export default function Trading() {
                 {detailTab === "stats" && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-neon-cyan" /> Performance Metrics</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-neon-cyan" /> {t("trading.performanceMetrics")}</h4>
                       <div className="space-y-2">
                         {[
-                          { label: "Sharpe Ratio", value: selectedStrategy.sharpeRatio.toFixed(2), color: selectedStrategy.sharpeRatio >= 2 ? "text-neon-green" : "text-yellow-400" },
-                          { label: "Profit Factor", value: selectedStrategy.profitFactor.toFixed(2), color: selectedStrategy.profitFactor >= 1.5 ? "text-neon-green" : "text-yellow-400" },
-                          { label: "Max Consecutive Loss", value: `${selectedStrategy.maxConsecutiveLoss}`, color: "text-foreground" },
-                          { label: "Avg Profit / Trade", value: `+$${selectedStrategy.avgProfit.toFixed(1)}`, color: "text-neon-green" },
-                          { label: "Avg Loss / Trade", value: `-$${Math.abs(selectedStrategy.avgLoss).toFixed(1)}`, color: "text-neon-red" },
-                          { label: "Profit/Loss Ratio", value: (selectedStrategy.avgProfit / Math.abs(selectedStrategy.avgLoss)).toFixed(2), color: "text-foreground" },
+                          { label: t("trading.sharpeRatio"), value: selectedStrategy.sharpeRatio.toFixed(2), color: selectedStrategy.sharpeRatio >= 2 ? "text-neon-green" : "text-yellow-400" },
+                          { label: t("trading.profitFactor"), value: selectedStrategy.profitFactor.toFixed(2), color: selectedStrategy.profitFactor >= 1.5 ? "text-neon-green" : "text-yellow-400" },
+                          { label: t("trading.maxConsecutiveLoss"), value: `${selectedStrategy.maxConsecutiveLoss}`, color: "text-foreground" },
+                          { label: t("trading.avgProfitTrade"), value: `+$${selectedStrategy.avgProfit.toFixed(1)}`, color: "text-neon-green" },
+                          { label: t("trading.avgLossTrade"), value: `-$${Math.abs(selectedStrategy.avgLoss).toFixed(1)}`, color: "text-neon-red" },
+                          { label: t("trading.plRatio"), value: (selectedStrategy.avgProfit / Math.abs(selectedStrategy.avgLoss)).toFixed(2), color: "text-foreground" },
                         ].map((item) => (
                           <div key={item.label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
                             <span className="text-[11px] text-muted-foreground">{item.label}</span>
@@ -1426,7 +1426,7 @@ export default function Trading() {
                       </div>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-2">Strategy Radar</h4>
+                      <h4 className="text-xs font-medium mb-2">{t("trading.strategyRadar")}</h4>
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={[
@@ -1450,10 +1450,10 @@ export default function Trading() {
                 {detailTab === "risk" && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Shield size={14} className="text-neon-purple" /> Risk Profile</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Shield size={14} className="text-neon-purple" /> {t("trading.riskProfile")}</h4>
                       <div className="flex items-center gap-3 mb-3">
                         <span className={`text-sm px-3 py-1 rounded-full border font-medium ${riskColor(selectedStrategy.riskLevel)}`}>
-                          {selectedStrategy.riskLevel === "low" ? "Low Risk" : selectedStrategy.riskLevel === "medium" ? "Medium Risk" : "High Risk"}
+                          {selectedStrategy.riskLevel === "low" ? t("trading.lowRiskFull") : selectedStrategy.riskLevel === "medium" ? t("trading.mediumRiskFull") : t("trading.highRiskFull")}
                         </span>
                         <span className="text-[11px] text-muted-foreground">Max DD: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
                       </div>
@@ -1464,13 +1464,13 @@ export default function Trading() {
                       </div>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Settings size={14} /> Risk Controls</h4>
+                      <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5"><Settings size={14} /> {t("trading.riskControls")}</h4>
                       <div className="space-y-2.5">
                         {[
-                          { label: "Stop Loss", value: `${selectedStrategy.stopLoss}%`, icon: TrendingDown, color: "text-neon-red" },
-                          { label: "Take Profit", value: `${selectedStrategy.takeProfit}%`, icon: TrendingUp, color: "text-neon-green" },
-                          { label: "Max Position", value: `$${selectedStrategy.maxPosition}`, icon: CircleDollarSign, color: "text-foreground" },
-                          { label: "Daily Loss Limit", value: `$${selectedStrategy.dailyLossLimit}`, icon: Shield, color: "text-yellow-400" },
+                          { label: t("trading.stopLossLabel"), value: `${selectedStrategy.stopLoss}%`, icon: TrendingDown, color: "text-neon-red" },
+                          { label: t("trading.takeProfitLabel"), value: `${selectedStrategy.takeProfit}%`, icon: TrendingUp, color: "text-neon-green" },
+                          { label: t("trading.maxPosition"), value: `$${selectedStrategy.maxPosition}`, icon: CircleDollarSign, color: "text-foreground" },
+                          { label: t("trading.dailyLossLimit"), value: `$${selectedStrategy.dailyLossLimit}`, icon: Shield, color: "text-yellow-400" },
                         ].map((item) => {
                           const Icon = item.icon;
                           return (
@@ -1488,12 +1488,12 @@ export default function Trading() {
                     <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/15">
                       <div className="flex items-center gap-2 mb-1.5">
                         <AlertTriangle size={14} className="text-destructive" />
-                        <span className="text-xs font-medium text-destructive">Risk Warnings</span>
+                        <span className="text-xs font-medium text-destructive">{t("trading.riskWarnings")}</span>
                       </div>
                       <ul className="space-y-1 text-[11px] text-muted-foreground">
-                        <li>• Past performance does not guarantee future results</li>
-                        <li>• Leverage amplifies both gains and losses</li>
-                        <li>• Only trade with funds you can afford to lose</li>
+                        <li>• {t("trading.riskWarn1")}</li>
+                        <li>• {t("trading.riskWarn2")}</li>
+                        <li>• {t("trading.riskWarn3")}</li>
                       </ul>
                     </div>
                   </div>
@@ -1526,13 +1526,13 @@ export default function Trading() {
               <div className="px-4 py-3 border-t border-border/30 flex gap-3 shrink-0">
                 <button onClick={() => { setModalType("createStrategy"); toast.info("Edit mode: modify your strategy parameters"); }}
                   className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
-                  <Settings size={14} /> Edit
+                  <Settings size={14} /> {t("trading.edit")}
                 </button>
                 <button onClick={() => toggleStrategyStatus(selectedStrategy.id)}
                   className={`flex-1 h-10 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                     selectedStrategy.status === "running" ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-neon-green/10 text-neon-green border border-neon-green/20"
                   }`}>
-                  {selectedStrategy.status === "running" ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+                  {selectedStrategy.status === "running" ? <><Pause size={14} /> {t("trading.pause")}</> : <><Play size={14} /> {t("trading.resume")}</>}
                 </button>
               </div>
             </motion.div>
@@ -1578,7 +1578,7 @@ export default function Trading() {
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">8-Week Performance</h4>
+                      <h4 className="text-xs font-medium mb-2">{t("trading.eightWeekPerf")}</h4>
                   <div className="h-[140px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={selectedTrader.profitHistory}>
@@ -1599,7 +1599,7 @@ export default function Trading() {
 
                 {/* Weekly Returns */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">Weekly Returns</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.weeklyReturns")}</h4>
                   <div className="flex gap-1 items-end h-[60px]">
                     {selectedTrader.weeklyReturns.map((ret, i) => (
                       <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
@@ -1615,13 +1615,13 @@ export default function Trading() {
                 {/* Details */}
                 <div className="space-y-2">
                   {[
-                    { label: "30d Trades", value: `${selectedTrader.trades30d}` },
-                    { label: "Max Drawdown", value: `${selectedTrader.maxDrawdown}%` },
-                    { label: "Avg Hold Time", value: selectedTrader.avgHoldTime },
-                    { label: "Avg Trade Size", value: selectedTrader.avgTradeSize },
-                    { label: "Consistency", value: `${selectedTrader.consistency}%` },
-                    { label: "Top Pairs", value: selectedTrader.topPairs.join(", ") },
-                    { label: "Risk Level", value: selectedTrader.riskLevel.charAt(0).toUpperCase() + selectedTrader.riskLevel.slice(1) },
+                    { label: t("trading.trades30d"), value: `${selectedTrader.trades30d}` },
+                    { label: t("trading.maxDrawdown"), value: `${selectedTrader.maxDrawdown}%` },
+                    { label: t("trading.avgHoldTime"), value: selectedTrader.avgHoldTime },
+                    { label: t("trading.avgTradeSize"), value: selectedTrader.avgTradeSize },
+                    { label: t("trading.consistency"), value: `${selectedTrader.consistency}%` },
+                    { label: t("trading.topPairs"), value: selectedTrader.topPairs.join(", ") },
+                    { label: t("trading.riskLevelLabel"), value: selectedTrader.riskLevel.charAt(0).toUpperCase() + selectedTrader.riskLevel.slice(1) },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between p-2 rounded-xl bg-secondary/20">
                       <span className="text-[11px] text-muted-foreground">{item.label}</span>
@@ -1637,11 +1637,11 @@ export default function Trading() {
                     selectedTrader.isFollowing ? "bg-secondary text-muted-foreground border border-border" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20"
                   }`}>
                   <Eye size={14} />
-                  {selectedTrader.isFollowing ? "Unfollow" : "Follow"}
+                  {selectedTrader.isFollowing ? t("trading.unfollow") : t("trading.follow")}
                 </button>
                 <button onClick={() => { setCopyTrader(selectedTrader); setModalType("copyConfig"); setSelectedTrader(null); }}
                   className="flex-1 h-10 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  <Copy size={14} /> Copy Trade
+                  <Copy size={14} /> {t("trading.copyTrade")}
                 </button>
               </div>
             </motion.div>
@@ -1658,36 +1658,36 @@ export default function Trading() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-t-3xl bg-card border-t border-border overflow-hidden max-h-[85vh] flex flex-col">
               <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between shrink-0">
-                <h3 className="font-bold font-display text-base">Create Strategy</h3>
+                <h3 className="font-bold font-display text-base">{t("trading.createStrategy")}</h3>
                 <button onClick={() => setModalType("none")} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {/* Name */}
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">Strategy Name *</label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.strategyName")}</label>
                   <input value={newStrategy.name} onChange={(e) => setNewStrategy(p => ({ ...p, name: e.target.value }))}
                     placeholder="e.g. BTC Momentum" className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none focus:border-neon-green/40" />
                 </div>
                 {/* Signal Source */}
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">Signal Source (Trader) *</label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.signalSource")}</label>
                   <select value={newStrategy.signalSource} onChange={(e) => setNewStrategy(p => ({ ...p, signalSource: e.target.value }))}
                     className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none focus:border-neon-green/40 appearance-none">
-                    <option value="">Select a trader...</option>
+                    <option value="">{t("trading.selectTrader")}</option>
                     {traders.map(tr => <option key={tr.id} value={tr.name}>{tr.avatar} {tr.name} (ROI +{tr.totalReturn}%)</option>)}
                   </select>
                 </div>
                 {/* Pair & Amount */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Trading Pair</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.pair")}</label>
                     <select value={newStrategy.pair} onChange={(e) => setNewStrategy(p => ({ ...p, pair: e.target.value }))}
                       className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none appearance-none">
                       {["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT", "LINK/USDT"].map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Amount / Trade ($)</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.amountPerTrade")}</label>
                     <input type="number" value={newStrategy.amount} onChange={(e) => setNewStrategy(p => ({ ...p, amount: e.target.value }))}
                       className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none font-mono" />
                   </div>
@@ -1695,14 +1695,14 @@ export default function Trading() {
                 {/* Leverage & Risk */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Leverage</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.leverage")}</label>
                     <select value={newStrategy.leverage} onChange={(e) => setNewStrategy(p => ({ ...p, leverage: e.target.value }))}
                       className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none appearance-none">
                       {["1", "2", "3", "5", "10", "20"].map(l => <option key={l} value={l}>{l}x</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Risk Level</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.riskLevelLabel")}</label>
                     <div className="flex gap-1.5">
                       {(["low", "medium", "high"] as const).map(r => (
                         <button key={r} onClick={() => setNewStrategy(p => ({ ...p, riskLevel: r }))}
@@ -1717,25 +1717,25 @@ export default function Trading() {
                 </div>
                 {/* Risk Controls */}
                 <div className="p-3 rounded-xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-[11px] font-medium mb-2 flex items-center gap-1.5"><Shield size={12} className="text-neon-purple" /> Risk Controls</h4>
+                  <h4 className="text-[11px] font-medium mb-2 flex items-center gap-1.5"><Shield size={12} className="text-neon-purple" /> {t("trading.riskControls")}</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Stop Loss (%)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
                       <input type="number" value={newStrategy.stopLoss} onChange={(e) => setNewStrategy(p => ({ ...p, stopLoss: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Take Profit (%)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
                       <input type="number" value={newStrategy.takeProfit} onChange={(e) => setNewStrategy(p => ({ ...p, takeProfit: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Max Position ($)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.maxPositionDollar")}</label>
                       <input type="number" value={newStrategy.maxPosition} onChange={(e) => setNewStrategy(p => ({ ...p, maxPosition: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Daily Loss Limit ($)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.dailyLossLimitDollar")}</label>
                       <input type="number" value={newStrategy.dailyLossLimit} onChange={(e) => setNewStrategy(p => ({ ...p, dailyLossLimit: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
@@ -1745,7 +1745,7 @@ export default function Trading() {
               <div className="px-4 py-3 border-t border-border/30 shrink-0">
                 <button onClick={handleCreateStrategy}
                   className="w-full h-11 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                  <Zap size={16} /> Create Strategy
+                  <Zap size={16} /> {t("trading.createStrategy")}
                 </button>
               </div>
             </motion.div>
@@ -1766,8 +1766,8 @@ export default function Trading() {
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{copyTrader.avatar}</span>
                     <div>
-                      <h3 className="font-bold font-display text-sm">Copy {copyTrader.name}</h3>
-                      <p className="text-[10px] text-muted-foreground">Configure your copy trading settings</p>
+                      <h3 className="font-bold font-display text-sm">{t("trading.copyTraderTitle").replace("{name}", copyTrader.name)}</h3>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.copyTraderDesc")}</p>
                     </div>
                   </div>
                   <button onClick={() => { setModalType("none"); setCopyTrader(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
@@ -1776,61 +1776,61 @@ export default function Trading() {
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {/* Copy Mode */}
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1.5 block">Copy Mode</label>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block">{t("trading.copyMode")}</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setCopyConfig(p => ({ ...p, mode: "fixed" }))}
                       className={`p-3 rounded-xl border text-left transition-colors ${
                         copyConfig.mode === "fixed" ? "border-neon-green/30 bg-neon-green/5" : "border-border/20 bg-secondary/20"
                       }`}>
                       <CircleDollarSign size={16} className={copyConfig.mode === "fixed" ? "text-neon-green mb-1" : "text-muted-foreground mb-1"} />
-                      <p className="text-xs font-medium">Fixed Amount</p>
-                      <p className="text-[10px] text-muted-foreground">Same $ per trade</p>
+                      <p className="text-xs font-medium">{t("trading.fixedAmount")}</p>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.fixedAmountDesc")}</p>
                     </button>
                     <button onClick={() => setCopyConfig(p => ({ ...p, mode: "proportional" }))}
                       className={`p-3 rounded-xl border text-left transition-colors ${
                         copyConfig.mode === "proportional" ? "border-neon-cyan/30 bg-neon-cyan/5" : "border-border/20 bg-secondary/20"
                       }`}>
                       <Percent size={16} className={copyConfig.mode === "proportional" ? "text-neon-cyan mb-1" : "text-muted-foreground mb-1"} />
-                      <p className="text-xs font-medium">Proportional</p>
-                      <p className="text-[10px] text-muted-foreground">% of trader's size</p>
+                      <p className="text-xs font-medium">{t("trading.proportional")}</p>
+                      <p className="text-[10px] text-muted-foreground">{t("trading.proportionalDesc")}</p>
                     </button>
                   </div>
                 </div>
                 {/* Amount / Proportion */}
                 {copyConfig.mode === "fixed" ? (
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Amount per Trade ($)</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.amountPerTrade")}</label>
                     <input type="number" value={copyConfig.amount} onChange={(e) => setCopyConfig(p => ({ ...p, amount: e.target.value }))}
                       className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none font-mono" />
                   </div>
                 ) : (
                   <div>
-                    <label className="text-[11px] text-muted-foreground mb-1 block">Proportion (%)</label>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.proportion")}</label>
                     <input type="number" value={copyConfig.proportion} onChange={(e) => setCopyConfig(p => ({ ...p, proportion: e.target.value }))}
                       className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none font-mono" />
                   </div>
                 )}
                 {/* Risk Settings */}
                 <div className="p-3 rounded-xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-[11px] font-medium mb-2 flex items-center gap-1.5"><Shield size={12} className="text-neon-purple" /> Risk Settings</h4>
+                  <h4 className="text-[11px] font-medium mb-2 flex items-center gap-1.5"><Shield size={12} className="text-neon-purple" /> {t("trading.riskSettings")}</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Stop Loss (%)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
                       <input type="number" value={copyConfig.stopLoss} onChange={(e) => setCopyConfig(p => ({ ...p, stopLoss: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Take Profit (%)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
                       <input type="number" value={copyConfig.takeProfit} onChange={(e) => setCopyConfig(p => ({ ...p, takeProfit: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Max per Trade ($)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.maxPerTrade")}</label>
                       <input type="number" value={copyConfig.maxPerTrade} onChange={(e) => setCopyConfig(p => ({ ...p, maxPerTrade: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Max Slippage (%)</label>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">{t("trading.maxSlippage")}</label>
                       <input type="number" value={copyConfig.slippage} onChange={(e) => setCopyConfig(p => ({ ...p, slippage: e.target.value }))}
                         className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
                     </div>
@@ -1838,28 +1838,28 @@ export default function Trading() {
                 </div>
                 {/* Daily Loss Limit */}
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">Daily Loss Limit ($)</label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">{t("trading.dailyLossLimitDollar")}</label>
                   <input type="number" value={copyConfig.maxDailyLoss} onChange={(e) => setCopyConfig(p => ({ ...p, maxDailyLoss: e.target.value }))}
                     className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none font-mono" />
-                  <p className="text-[10px] text-muted-foreground mt-1">Auto-pause copying when daily loss exceeds this limit</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{t("trading.autoPauseHint")}</p>
                 </div>
                 {/* Trader Stats Summary */}
                 <div className="p-3 rounded-xl bg-neon-green/5 border border-neon-green/15">
                   <div className="flex items-center gap-2 mb-1.5">
                     <Info size={12} className="text-neon-green" />
-                    <span className="text-[11px] font-medium text-neon-green">Trader Performance</span>
+                    <span className="text-[11px] font-medium text-neon-green">{t("trading.traderPerformance")}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
-                    <div><p className="text-[9px] text-muted-foreground">ROI</p><p className="text-xs font-mono font-bold text-neon-green">+{copyTrader.totalReturn}%</p></div>
-                    <div><p className="text-[9px] text-muted-foreground">Win Rate</p><p className="text-xs font-mono font-bold">{copyTrader.winRate}%</p></div>
-                    <div><p className="text-[9px] text-muted-foreground">Max DD</p><p className="text-xs font-mono font-bold text-neon-red">{copyTrader.maxDrawdown}%</p></div>
+                    <div><p className="text-[9px] text-muted-foreground">{t("trading.sortROI")}</p><p className="text-xs font-mono font-bold text-neon-green">+{copyTrader.totalReturn}%</p></div>
+                    <div><p className="text-[9px] text-muted-foreground">{t("trading.winRate")}</p><p className="text-xs font-mono font-bold">{copyTrader.winRate}%</p></div>
+                    <div><p className="text-[9px] text-muted-foreground">{t("trading.maxDrawdown")}</p><p className="text-xs font-mono font-bold text-neon-red">{copyTrader.maxDrawdown}%</p></div>
                   </div>
                 </div>
               </div>
               <div className="px-4 py-3 border-t border-border/30 shrink-0">
                 <button onClick={handleCopyTrade}
                   className="w-full h-11 rounded-xl bg-neon-green/10 text-neon-green border border-neon-green/20 hover:bg-neon-green/20 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                  <Copy size={16} /> Start Copy Trading
+                  <Copy size={16} /> {t("trading.startCopyTrading")}
                 </button>
               </div>
             </motion.div>
@@ -1876,40 +1876,39 @@ export default function Trading() {
               className="w-[90%] max-w-sm rounded-2xl bg-card border border-border p-5">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={20} className="text-destructive" />
-                <h3 className="font-bold font-display text-base">Close Position</h3>
+                <h3 className="font-bold font-display text-base">{t("trading.closePosition")}</h3>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Are you sure you want to close your <span className="font-mono font-medium text-foreground">{closePosition.pair}</span>{" "}
-                <span className={closePosition.side === "long" ? "text-neon-green" : "text-neon-red"}>{closePosition.side.toUpperCase()}</span> position at market price?
+                {t("trading.closePositionConfirm").replace("{pair}", closePosition.pair).replace("{side}", closePosition.side.toUpperCase())}
               </p>
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/20 mb-4 space-y-1.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Entry Price</span>
+                      <span className="text-muted-foreground">{t("trading.entry")}</span>
                   <span className="font-mono">${closePosition.entryPrice.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Current Price</span>
+                      <span className="text-muted-foreground">{t("trading.current")}</span>
                   <span className="font-mono">${closePosition.currentPrice.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Unrealized PnL</span>
+                      <span className="text-muted-foreground">{t("trading.unrealizedPnl")}</span>
                   <span className={`font-mono font-bold ${closePosition.unrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                     {closePosition.unrealizedPnl >= 0 ? "+" : ""}${closePosition.unrealizedPnl.toFixed(2)} ({closePosition.unrealizedPnlPercent >= 0 ? "+" : ""}{closePosition.unrealizedPnlPercent.toFixed(2)}%)
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Leverage</span>
+                      <span className="text-muted-foreground">{t("trading.leverage")}</span>
                   <span className="font-mono">{closePosition.leverage}x</span>
                 </div>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => { setModalType("none"); setClosePosition(null); }}
                   className="flex-1 h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">
-                  Cancel
+                  {t("trading.cancel")}
                 </button>
                 <button onClick={handleClosePosition}
                   className="flex-1 h-10 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 text-sm font-semibold transition-colors">
-                  Confirm Close
+                  {t("trading.confirmClose")}
                 </button>
               </div>
             </motion.div>
@@ -1926,7 +1925,7 @@ export default function Trading() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-t-3xl bg-card border-t border-border overflow-hidden max-h-[85vh] flex flex-col">
               <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between shrink-0">
-                <h3 className="font-bold font-display text-base flex items-center gap-2"><Scale size={18} className="text-neon-purple" /> Compare Traders</h3>
+                <h3 className="font-bold font-display text-base flex items-center gap-2"><Scale size={18} className="text-neon-purple" /> {t("trading.compareTraders")}</h3>
                 <button onClick={() => setModalType("none")} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
@@ -1943,14 +1942,14 @@ export default function Trading() {
                 {/* Comparison Table */}
                 <div className="rounded-xl border border-border/20 overflow-hidden">
                   {[
-                    { label: "Total ROI", values: compareTraders.map(tr => `+${tr.totalReturn}%`), colors: compareTraders.map(() => "text-neon-green") },
-                    { label: "Win Rate", values: compareTraders.map(tr => `${tr.winRate}%`), colors: compareTraders.map(tr => tr.winRate >= 70 ? "text-neon-green" : "text-foreground") },
-                    { label: "Sharpe Ratio", values: compareTraders.map(tr => tr.sharpeRatio.toFixed(2)), colors: compareTraders.map(tr => tr.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground") },
-                    { label: "Max Drawdown", values: compareTraders.map(tr => `${tr.maxDrawdown}%`), colors: compareTraders.map(() => "text-neon-red") },
-                    { label: "30d Trades", values: compareTraders.map(tr => `${tr.trades30d}`), colors: compareTraders.map(() => "text-foreground") },
-                    { label: "Followers", values: compareTraders.map(tr => `${tr.followers}`), colors: compareTraders.map(() => "text-foreground") },
-                    { label: "Consistency", values: compareTraders.map(tr => `${tr.consistency}%`), colors: compareTraders.map(tr => tr.consistency >= 80 ? "text-neon-green" : "text-yellow-400") },
-                    { label: "Avg Hold", values: compareTraders.map(tr => tr.avgHoldTime), colors: compareTraders.map(() => "text-foreground") },
+                    { label: t("trading.sortROI"), values: compareTraders.map(tr => `+${tr.totalReturn}%`), colors: compareTraders.map(() => "text-neon-green") },
+                    { label: t("trading.winRate"), values: compareTraders.map(tr => `${tr.winRate}%`), colors: compareTraders.map(tr => tr.winRate >= 70 ? "text-neon-green" : "text-foreground") },
+                    { label: t("trading.sharpeRatio"), values: compareTraders.map(tr => tr.sharpeRatio.toFixed(2)), colors: compareTraders.map(tr => tr.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground") },
+                    { label: t("trading.maxDrawdown"), values: compareTraders.map(tr => `${tr.maxDrawdown}%`), colors: compareTraders.map(() => "text-neon-red") },
+                    { label: t("trading.trades30d"), values: compareTraders.map(tr => `${tr.trades30d}`), colors: compareTraders.map(() => "text-foreground") },
+                    { label: t("trading.sortFollowers"), values: compareTraders.map(tr => `${tr.followers}`), colors: compareTraders.map(() => "text-foreground") },
+                    { label: t("trading.consistency"), values: compareTraders.map(tr => `${tr.consistency}%`), colors: compareTraders.map(tr => tr.consistency >= 80 ? "text-neon-green" : "text-yellow-400") },
+                    { label: t("trading.avgHoldTime"), values: compareTraders.map(tr => tr.avgHoldTime), colors: compareTraders.map(() => "text-foreground") },
                   ].map((row, i) => (
                     <div key={row.label} className={`flex items-center ${i % 2 === 0 ? "bg-secondary/10" : ""}`}>
                       <div className="w-24 shrink-0 px-2 py-2 text-[10px] text-muted-foreground">{row.label}</div>
@@ -1964,7 +1963,7 @@ export default function Trading() {
                 </div>
                 {/* Radar Comparison */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">Performance Radar</h4>
+                  <h4 className="text-xs font-medium mb-2">{t("trading.performanceRadar")}</h4>
                   <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={[
@@ -1998,7 +1997,7 @@ export default function Trading() {
               <div className="px-4 py-3 border-t border-border/30 shrink-0">
                 <button onClick={() => { setCompareList([]); setModalType("none"); }}
                   className="w-full h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">
-                  Clear Comparison
+                  {t("trading.clearComparison")}
                 </button>
               </div>
             </motion.div>
@@ -2014,16 +2013,16 @@ export default function Trading() {
               onClick={(e) => e.stopPropagation()}
               className="w-[90%] max-w-sm rounded-2xl bg-card border border-border p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold font-display text-base flex items-center gap-2"><Bell size={18} className="text-neon-cyan" /> Notifications</h3>
+                <h3 className="font-bold font-display text-base flex items-center gap-2"><Bell size={18} className="text-neon-cyan" /> {t("trading.notifications")}</h3>
                 <button onClick={() => { setModalType("none"); setSelectedStrategy(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={16} className="text-muted-foreground" /></button>
               </div>
               <p className="text-xs text-muted-foreground mb-3">{selectedStrategy.name}</p>
               <div className="space-y-2">
                 {[
-                  { key: "onTrade" as const, label: "New Trade Executed", desc: "Get notified when a trade is placed" },
-                  { key: "onStopLoss" as const, label: "Stop Loss Triggered", desc: "Alert when stop loss is hit" },
-                  { key: "onTakeProfit" as const, label: "Take Profit Reached", desc: "Alert when take profit is reached" },
-                  { key: "dailySummary" as const, label: "Daily Summary", desc: "Daily PnL report at 8:00 PM" },
+                  { key: "onTrade" as const, label: t("trading.notifOnTrade"), desc: t("trading.notifOnTradeDesc") },
+                  { key: "onStopLoss" as const, label: t("trading.notifOnStopLoss"), desc: t("trading.notifOnStopLossDesc") },
+                  { key: "onTakeProfit" as const, label: t("trading.notifOnTakeProfit"), desc: t("trading.notifOnTakeProfitDesc") },
+                  { key: "dailySummary" as const, label: t("trading.notifDailySummary"), desc: t("trading.notifDailySummaryDesc") },
                 ].map((item) => (
                   <div key={item.key} className="flex items-center justify-between p-3 rounded-xl bg-secondary/20 border border-border/20">
                     <div>
@@ -2047,7 +2046,7 @@ export default function Trading() {
               </div>
               <button onClick={() => { setModalType("none"); setSelectedStrategy(null); toast.success("Notification settings saved"); }}
                 className="w-full h-10 mt-4 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20 text-sm font-semibold transition-colors">
-                Save Settings
+                {t("trading.saveSettings")}
               </button>
             </motion.div>
           </motion.div>
