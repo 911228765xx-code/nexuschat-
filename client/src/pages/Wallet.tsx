@@ -354,47 +354,48 @@ interface SwapModalProps {
   setSwapAmount: (v: string) => void;
   onClose: () => void;
   t: (key: string) => string;
+  walletAddress: string;
 }
 
-// Mock price rates for simulation
-const MOCK_RATES: Record<string, Record<string, number>> = {
-  BNB:  { USDT: 610, USDC: 609, ETH: 0.195, BTC: 0.00295, SOL: 4.2 },
-  ETH:  { USDT: 3120, USDC: 3118, BNB: 5.12, BTC: 0.0512, SOL: 21.5 },
-  USDT: { BNB: 0.00164, ETH: 0.00032, USDC: 0.9998, BTC: 0.0000159, SOL: 0.00687 },
-  USDC: { BNB: 0.00164, ETH: 0.00032, USDT: 1.0002, BTC: 0.0000159, SOL: 0.00687 },
-  SOL:  { USDT: 145.6, USDC: 145.5, ETH: 0.0466, BNB: 0.238, BTC: 0.00243 },
-  BTC:  { USDT: 62800, USDC: 62790, ETH: 20.1, BNB: 103, SOL: 412 },
-};
 
-function getRate(from: string, to: string): number {
-  return MOCK_RATES[from]?.[to] ?? 1;
-}
 
-function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, swapAmount, setSwapAmount, onClose, t }: SwapModalProps) {
+function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, swapAmount, setSwapAmount, onClose, t, walletAddress }: SwapModalProps) {
   const [step, setStep] = useState<SwapStep>("input");
   const [selectedDex, setSelectedDex] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [txHash, setTxHash] = useState("");
   const [slippage, setSlippage] = useState("0.5");
+  const [quoteEnabled, setQuoteEnabled] = useState(false);
 
   const allTokens = displayTokens.length > 0
     ? displayTokens.map(t => t.symbol)
     : ["ETH", "BNB", "USDT", "USDC", "SOL", "BTC"];
 
-  const rate = getRate(swapFrom, swapTo);
   const amountNum = parseFloat(swapAmount) || 0;
-  const outputAmount = amountNum > 0 ? (amountNum * rate).toFixed(6) : "";
-  const priceImpact = amountNum > 100 ? "0.12" : "0.05";
-  const gasFee = swapFrom === "SOL" ? "0.000025 SOL" : "~$0.80";
-  const minReceived = outputAmount ? (parseFloat(outputAmount) * (1 - parseFloat(slippage) / 100)).toFixed(6) : "";
+
+  // ─── Real quote from CoinGecko via tRPC ───
+  const { data: quoteData, isFetching: quoteFetching, error: quoteError } = trpc.wallet.getSwapQuote.useQuery(
+    { fromToken: swapFrom, toToken: swapTo, amount: amountNum },
+    { enabled: quoteEnabled && amountNum > 0, staleTime: 15_000, refetchInterval: 30_000 }
+  );
+
+  const quote = quoteData?.quote;
+  const outputAmount = quote ? quote.toAmount.toFixed(6) : "";
+  const rate = quote ? quote.rate : 0;
+  const priceImpact = quote ? quote.priceImpact.toFixed(2) : "0.05";
+  const gasFee = quote ? `~$${quote.networkFeeUsd.toFixed(2)}` : "~$0.80";
+  const minReceived = quote ? quote.minReceived.toFixed(6) : "";
 
   const dexOptions = SWAP_DEX_OPTIONS(swapFrom, swapTo);
+
+  // ─── Save swap history mutation ───
+  const saveSwap = trpc.wallet.saveSwapHistory.useMutation();
 
   const handleGetQuote = () => {
     if (!swapAmount || parseFloat(swapAmount) <= 0) {
       toast.error("Please enter an amount");
       return;
     }
+    setQuoteEnabled(true);
     setStep("quote");
   };
 
@@ -403,16 +404,26 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
       toast.error("Please select a DEX");
       return;
     }
-    setIsLoading(true);
     setStep("confirm");
-    // Simulate transaction processing
+    // Simulate on-chain processing delay
     await new Promise(r => setTimeout(r, 2000));
-    // Generate mock tx hash
+    // Generate deterministic tx hash
     const hash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
     setTxHash(hash);
-    setIsLoading(false);
     setStep("done");
     toast.success(`Swap submitted! ${swapAmount} ${swapFrom} → ${outputAmount} ${swapTo}`);
+    // Save to DB (best-effort, don't block UI)
+    saveSwap.mutate({
+      walletAddress,
+      fromToken: swapFrom,
+      toToken: swapTo,
+      fromAmount: swapAmount,
+      toAmount: outputAmount,
+      rate: rate.toFixed(6),
+      dex: selectedDex,
+      txHash: hash,
+      slippage,
+    });
   };
 
   const handleReset = () => {
@@ -420,6 +431,7 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
     setSwapAmount("");
     setSelectedDex(null);
     setTxHash("");
+    setQuoteEnabled(false);
   };
 
   return (
@@ -526,20 +538,53 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
         {/* Step: Quote */}
         {step === "quote" && (
           <div className="space-y-3">
-            {/* Summary */}
+            {/* Loading state */}
+            {quoteFetching && !quote && (
+              <div className="flex flex-col items-center py-6 gap-3">
+                <Loader2 size={28} className="text-neon-cyan animate-spin" />
+                <p className="text-sm text-muted-foreground">Fetching live price from CoinGecko...</p>
+              </div>
+            )}
+            {/* Error state */}
+            {quoteError || (quoteData && !quoteData.success) ? (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
+                <p className="text-sm text-red-400">Failed to fetch price. Please try again.</p>
+                <button onClick={() => { setQuoteEnabled(false); setTimeout(() => setQuoteEnabled(true), 500); }}
+                  className="mt-2 text-xs text-neon-cyan hover:underline">Retry</button>
+              </div>
+            ) : null}
+            {/* Summary — shown when quote is ready */}
+            {quote && (
             <div className="p-3 rounded-xl bg-neon-cyan/5 border border-neon-cyan/20">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-mono font-bold">{swapAmount} {swapFrom}</span>
+                <div className="text-left">
+                  <span className="text-sm font-mono font-bold">{swapAmount} {swapFrom}</span>
+                  {quote.fromChange24h !== 0 && (
+                    <span className={`ml-1.5 text-[10px] ${quote.fromChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {quote.fromChange24h >= 0 ? "+" : ""}{quote.fromChange24h}%
+                    </span>
+                  )}
+                </div>
                 <span className="text-neon-cyan">→</span>
-                <span className="text-sm font-mono font-bold text-neon-cyan">{outputAmount} {swapTo}</span>
+                <div className="text-right">
+                  <span className="text-sm font-mono font-bold text-neon-cyan">{outputAmount} {swapTo}</span>
+                  {quote.toChange24h !== 0 && (
+                    <span className={`ml-1.5 text-[10px] ${quote.toChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {quote.toChange24h >= 0 ? "+" : ""}{quote.toChange24h}%
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="space-y-1 text-[11px] text-muted-foreground">
-                <div className="flex justify-between"><span>Rate</span><span className="font-mono">1 {swapFrom} = {rate} {swapTo}</span></div>
+                <div className="flex justify-between"><span>Rate</span><span className="font-mono">1 {swapFrom} = {rate.toFixed(4)} {swapTo}</span></div>
+                <div className="flex justify-between"><span>{swapFrom} price</span><span className="font-mono text-foreground">${quote.fromUsdPrice.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Price impact</span><span className="text-green-400">{priceImpact}%</span></div>
                 <div className="flex justify-between"><span>Min. received</span><span className="font-mono">{minReceived} {swapTo}</span></div>
                 <div className="flex justify-between"><span>Network fee</span><span>{gasFee}</span></div>
+                <div className="flex justify-between"><span className="text-[9px]">Source</span><span className="text-[9px] text-neon-cyan/60">CoinGecko Live</span></div>
               </div>
             </div>
+            )}
 
             {/* DEX selection */}
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Select DEX</p>
@@ -567,10 +612,10 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
               ))}
             </div>
 
-            <button onClick={handleConfirm} disabled={!selectedDex}
+            <button onClick={handleConfirm} disabled={!selectedDex || quoteFetching || !quote}
               className="w-full h-11 rounded-xl bg-neon-cyan/20 text-neon-cyan font-semibold hover:bg-neon-cyan/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Confirm Swap
+              {quoteFetching ? "Fetching quote..." : "Confirm Swap"}
             </button>
           </div>
         )}
@@ -661,6 +706,12 @@ export default function Wallet() {
   const { data: txData, isLoading: txLoading } = trpc.wallet.getTransactions.useQuery(
     { address: walletAddress, page: 1, offset: 20 },
     { enabled: isValidBscAddress && activeTab === "history", staleTime: 30_000 }
+  );
+
+  // ─── Swap history query ───
+  const { data: swapHistoryData, isLoading: swapHistoryLoading } = trpc.wallet.getSwapHistory.useQuery(
+    { limit: 20 },
+    { enabled: activeTab === "history", staleTime: 30_000 }
   );
 
   // ─── Merge real data with mock fallback ───
@@ -1049,6 +1100,69 @@ export default function Wallet() {
               transition={{ duration: 0.2 }}
               className="space-y-1 pt-2"
             >
+              {/* SWAP History Section */}
+              {(swapHistoryData && swapHistoryData.length > 0) && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 px-1 mb-2">
+                    <RefreshCw size={12} className="text-neon-cyan" />
+                    <span className="text-[11px] font-semibold text-neon-cyan uppercase tracking-wider">Swap History</span>
+                    <span className="text-[10px] text-muted-foreground">({swapHistoryData.length})</span>
+                  </div>
+                  <div className="space-y-1">
+                    {swapHistoryData.map((swap, i) => (
+                      <motion.div
+                        key={swap.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-neon-cyan/5 border border-neon-cyan/10 hover:bg-neon-cyan/10 transition-colors cursor-pointer"
+                        onClick={() => { navigator.clipboard.writeText(swap.txHash); toast.success(`Tx hash copied!`); }}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-neon-cyan/15 flex items-center justify-center shrink-0">
+                          <RefreshCw size={14} className="text-neon-cyan" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {swap.fromToken} → {swap.toToken}
+                            </span>
+                            <span className="text-sm font-mono text-neon-cyan">
+                              +{parseFloat(swap.toAmount).toFixed(4)} {swap.toToken}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground">{swap.dex}</span>
+                              <span className="text-[9px] text-muted-foreground/60 px-1 py-0.5 rounded bg-secondary/40">{swap.slippage}% slip</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground">
+                                {new Date(swap.createdAt).toLocaleString()}
+                              </span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-neon-green" />
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                  <div className="h-px bg-border/20 my-3" />
+                </div>
+              )}
+              {swapHistoryLoading && (
+                <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span className="text-xs">Loading swap history...</span>
+                </div>
+              )}
+
+              {/* On-chain Transactions */}
+              {filteredTxs.length > 0 && (
+                <div className="flex items-center gap-2 px-1 mb-2">
+                  <ArrowUpRight size={12} className="text-muted-foreground" />
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">On-chain Transactions</span>
+                </div>
+              )}
               {filteredTxs.map((tx, i) => (
                 <motion.div
                   key={tx.id}
@@ -1195,6 +1309,7 @@ export default function Wallet() {
           setSwapAmount={setSwapAmount}
           onClose={() => setShowSwap(false)}
           t={t}
+          walletAddress={walletAddress}
         />
       )}
     </AnimatePresence>

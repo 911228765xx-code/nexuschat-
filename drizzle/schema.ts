@@ -459,3 +459,27 @@ export const referrals = mysqlTable(
 
 export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = typeof referrals.$inferInsert;
+
+// ─── Swap History ─────────────────────────────────────────────────────────────
+export const swapHistory = mysqlTable(
+  "swap_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    walletAddress: varchar("walletAddress", { length: 64 }).notNull(),
+    fromToken: varchar("fromToken", { length: 20 }).notNull(),
+    toToken: varchar("toToken", { length: 20 }).notNull(),
+    fromAmount: varchar("fromAmount", { length: 50 }).notNull(),
+    toAmount: varchar("toAmount", { length: 50 }).notNull(),
+    rate: varchar("rate", { length: 50 }).notNull(),
+    dex: varchar("dex", { length: 50 }).notNull(),
+    txHash: varchar("txHash", { length: 70 }).notNull(),
+    slippage: varchar("slippage", { length: 10 }).default("0.5").notNull(),
+    status: mysqlEnum("status", ["pending", "success", "failed"]).default("success").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_swap_user").on(t.userId, t.createdAt)]
+);
+
+export type SwapHistory = typeof swapHistory.$inferSelect;
+export type InsertSwapHistory = typeof swapHistory.$inferInsert;
