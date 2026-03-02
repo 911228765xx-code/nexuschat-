@@ -209,3 +209,12 @@
 - [x] 诊断手机端白屏原因（构建错误/运行时错误/移动端兼容性）
 - [x] 修复 Profile 页 WalletConnect 订阅失败错误
 - [x] 确保移动端正常渲染
+
+## v41 WalletConnect 白名单 + 移动端适配优化
+
+- [x] WalletConnect Cloud 域名白名单配置（nexuschat-fyl7bqev.manus.space, nexuschat.best）
+- [x] 检查钱包页移动端布局（375px）
+- [x] 检查聊天页移动端布局（375px）
+- [x] 检查首页移动端布局（375px）
+- [x] 检查个人主页移动端布局（375px）
+- [x] 修复移动端溢出/遮挡/字体/间距问题

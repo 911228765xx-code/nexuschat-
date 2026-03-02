@@ -1140,7 +1140,7 @@ export default function TokenDetail() {
           {/* ═══════════ AI CHAT TAB ═══════════ */}
           {activeTab === "ai-chat" && (
             <motion.div key="ai-chat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="flex flex-col" style={{ minHeight: "calc(100vh - 320px)" }}>
+              className="flex flex-col" style={{ minHeight: "calc(100dvh - 320px)" }}>
               {/* Chat Messages */}
               <div className="flex-1 space-y-3 pb-4">
                 {/* Welcome message */}
