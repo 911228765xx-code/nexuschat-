@@ -865,7 +865,7 @@
   "settings.logout": "Log Out",
   "settings.loggedOut": "Logged out successfully",
   "settings.logoutConfirm": "Log Out?",
-  "settings.logoutConfirmDesc": "You will need to reconnect your wallet to log in again.",
+  "settings.logoutConfirmDesc": "You will need to log in again to access the app.",
   "settings.cancel": "Cancel",
   "settings.confirmLogout": "Log Out",
   "settings.twoFA": "Two-Factor Auth",

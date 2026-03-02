@@ -865,7 +865,7 @@
   "settings.logout": "退出登录",
   "settings.loggedOut": "已成功退出",
   "settings.logoutConfirm": "确认退出？",
-  "settings.logoutConfirmDesc": "退出后需要重新连接钱包才能登录。",
+  "settings.logoutConfirmDesc": "退出后需要重新登录才能访问应用。",
   "settings.cancel": "取消",
   "settings.confirmLogout": "退出",
   "settings.twoFA": "双重验证",

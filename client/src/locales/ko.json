@@ -865,7 +865,7 @@
   "settings.logout": "로그아웃",
   "settings.loggedOut": "로그아웃되었습니다",
   "settings.logoutConfirm": "로그아웃하시겠습니까?",
-  "settings.logoutConfirmDesc": "다시 로그인하려면 지갑을 재연결해야 합니다.",
+  "settings.logoutConfirmDesc": "앱을 이용하려면 다시 로그인해야 합니다.",
   "settings.cancel": "취소",
   "settings.confirmLogout": "로그아웃",
   "settings.twoFA": "2단계 인증",

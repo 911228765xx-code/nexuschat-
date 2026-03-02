@@ -861,7 +861,7 @@
   "settings.logout": "登出",
   "settings.loggedOut": "已成功登出",
   "settings.logoutConfirm": "確認登出？",
-  "settings.logoutConfirmDesc": "登出後需要重新連接錢包才能登入。",
+  "settings.logoutConfirmDesc": "登出後需要重新登入才能使用應用。",
   "settings.cancel": "取消",
   "settings.confirmLogout": "登出",
   "settings.twoFA": "雙重驗證",

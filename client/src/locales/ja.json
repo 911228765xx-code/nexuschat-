@@ -865,7 +865,7 @@
   "settings.logout": "ログアウト",
   "settings.loggedOut": "ログアウトしました",
   "settings.logoutConfirm": "ログアウトしますか？",
-  "settings.logoutConfirmDesc": "再度ログインするにはウォレットの再接続が必要です。",
+  "settings.logoutConfirmDesc": "アプリを利用するには再度ログインが必要です。",
   "settings.cancel": "キャンセル",
   "settings.confirmLogout": "ログアウト",
   "settings.twoFA": "二段階認証",

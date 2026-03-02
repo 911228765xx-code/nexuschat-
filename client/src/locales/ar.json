@@ -865,7 +865,7 @@
   "settings.logout": "تسجيل الخروج",
   "settings.loggedOut": "تم تسجيل الخروج",
   "settings.logoutConfirm": "تسجيل الخروج؟",
-  "settings.logoutConfirmDesc": "ستحتاج لإعادة ربط المحفظة لتسجيل الدخول مرة أخرى.",
+  "settings.logoutConfirmDesc": "ستحتاج لتسجيل الدخول مرة أخرى للوصول إلى التطبيق.",
   "settings.cancel": "إلغاء",
   "settings.confirmLogout": "خروج",
   "settings.twoFA": "المصادقة الثنائية",
