@@ -649,7 +649,7 @@ export default function Discover() {
         {searchQuery === "" && searchHistory.length > 0 && (
           <div className="pb-2 border-b border-border/20">
             <div className="flex items-center justify-between px-4 pt-1 pb-1">
-              <span className="text-[11px] text-muted-foreground font-medium">Recent Searches</span>
+              <span className="text-[11px] text-muted-foreground font-medium">{t("discover.recentSearches")}</span>
               <button
                 onClick={clearHistory}
                 className="text-[11px] text-muted-foreground/60 hover:text-neon-cyan transition-colors"
@@ -712,7 +712,7 @@ export default function Discover() {
                 }
               </span>
               {!isSearching && searchResults.length > 0 && (
-                <span className="text-[10px] text-neon-cyan/70">Backend search</span>
+                <span className="text-[10px] text-neon-cyan/70">{t("discover.backendSearch")}</span>
               )}
             </div>
             {isSearching ? (
@@ -724,7 +724,7 @@ export default function Discover() {
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Search size={36} className="text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">No posts found for “{debouncedQuery}”</p>
-                <p className="text-xs text-muted-foreground/60">Try different keywords or hashtags</p>
+                <p className="text-xs text-muted-foreground/60">{t("discover.tryDifferentKeywords")}</p>
               </div>
             ) : (
               <div className="space-y-0">
@@ -1210,7 +1210,7 @@ export default function Discover() {
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-sm font-semibold font-display truncate">{community.name}</span>
                         {community.isHot && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-neon-red/15 text-neon-red font-medium">HOT</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-neon-red/15 text-neon-red font-medium">{t("discover.hot")}</span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mb-2 line-clamp-1">{community.description}</p>
@@ -1337,7 +1337,7 @@ export default function Discover() {
                 onClick={(e) => e.stopPropagation()}
                 className="w-full bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-2"
               >
-                <h3 className="text-sm font-semibold font-display text-center mb-3">Share Post</h3>
+                <h3 className="text-sm font-semibold font-display text-center mb-3">{t("discover.sharePost")}</h3>
                 <button
                   onClick={() => {
                     const numId = parseInt(repostMenuPostId!, 10);
@@ -1351,8 +1351,8 @@ export default function Discover() {
                 >
                   <Repeat2 size={20} className="text-neon-green" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Repost</p>
-                    <p className="text-xs text-muted-foreground">Share instantly to your timeline</p>
+                    <p className="text-sm font-medium">{t("discover.repost")}</p>
+                    <p className="text-xs text-muted-foreground">{t("discover.repostDesc")}</p>
                   </div>
                 </button>
                 <button
@@ -1364,8 +1364,8 @@ export default function Discover() {
                 >
                   <Quote size={20} className="text-neon-cyan" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Quote Post</p>
-                    <p className="text-xs text-muted-foreground">Add your own commentary</p>
+                    <p className="text-sm font-medium">{t("discover.quotePost")}</p>
+                    <p className="text-xs text-muted-foreground">{t("discover.quotePostDesc")}</p>
                   </div>
                 </button>
                 <button

@@ -181,7 +181,7 @@ export default function Wallet() {
     switch (type) {
       case "send": return t("wallet.send") || "Send";
       case "receive": return t("wallet.receive") || "Receive";
-      case "swap": return "Swap";
+      case "swap": return t("wallet.swap");
       case "approve": return "Approve";
       case "mint": return "Mint";
       case "stake": return "Stake";
@@ -603,7 +603,7 @@ export default function Wallet() {
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Token</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.token")}</label>
                   <select value={sendToken} onChange={(e) => setSendToken(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
                     {displayTokens.length > 0
                       ? displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance.toFixed(4)}</option>)
@@ -620,8 +620,8 @@ export default function Wallet() {
                   <input type="number" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} placeholder="0.00" className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-1 py-1 bg-secondary/30 rounded-lg">
-                  <span>Gas Fee: <span className="text-neon-cyan font-mono">{activeChain.gas}</span></span>
-                  <span>Network: <span className="font-medium text-foreground">{activeChain.name}</span></span>
+                  <span>{t("wallet.gasFee")}: <span className="text-neon-cyan font-mono">{activeChain.gas}</span></span>
+                  <span>{t("wallet.network")}: <span className="font-medium text-foreground">{activeChain.name}</span></span>
                 </div>
                 <button onClick={() => { toast.success(`Sent ${sendAmount} ${sendToken} on ${sendChain}`); setShowSend(false); setSendAmount(""); setSendAddress(""); }}
                   disabled={!sendAmount || !sendAddress}
@@ -707,8 +707,8 @@ export default function Wallet() {
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-bold font-display mb-1">Swap</h3>
-              <p className="text-xs text-muted-foreground mb-4">Select a DEX to continue swapping</p>
+              <h3 className="font-bold font-display mb-1">{t("wallet.swap")}</h3>
+              <p className="text-xs text-muted-foreground mb-4">{t("wallet.selectDex")}</p>
               {/* Token pair preview */}
               <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-secondary/40 border border-border/20">
                 <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
@@ -721,7 +721,7 @@ export default function Wallet() {
                 <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
                   {["USDT", "USDC", "ETH", "BNB", "SOL", "BTC"].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <span className="ml-auto text-xs text-muted-foreground">Select pair</span>
+                <span className="ml-auto text-xs text-muted-foreground">{t("wallet.selectPair")}</span>
               </div>
               {/* DEX list */}
               <div className="space-y-2">
@@ -767,17 +767,17 @@ export default function Wallet() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
-                  <p className="text-[10px] text-muted-foreground">Chain</p>
+                  <p className="text-[10px] text-muted-foreground">{t("wallet.chain")}</p>
                   <p className="text-xs font-medium">{selectedNFT.chain}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
-                  <p className="text-[10px] text-muted-foreground">Floor</p>
+                  <p className="text-[10px] text-muted-foreground">{t("wallet.floor")}</p>
                   <p className="text-xs font-medium font-mono">⟠ {selectedNFT.floorPrice}</p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { toast.success("Listed for sale!"); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">List for Sale</button>
-                <button onClick={() => { toast.success("Transfer initiated"); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-secondary/60 text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">Transfer</button>
+                <button onClick={() => { toast.success(t("wallet.listedForSale")); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">{t("wallet.listForSale")}</button>
+                <button onClick={() => { toast.success(t("wallet.transferInitiated")); setSelectedNFT(null); }} className="flex-1 h-10 rounded-xl bg-secondary/60 text-foreground text-sm font-medium hover:bg-secondary/80 transition-colors">{t("wallet.transfer")}</button>
               </div>
             </div>
           </motion.div>

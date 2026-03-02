@@ -1430,12 +1430,12 @@ export default function Trading() {
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={[
-                            { metric: "Win Rate", value: selectedStrategy.winRate },
-                            { metric: "Sharpe", value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
-                            { metric: "Profit Factor", value: Math.min(selectedStrategy.profitFactor * 40, 100) },
-                            { metric: "Consistency", value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
-                            { metric: "Frequency", value: Math.min(selectedStrategy.trades * 2, 100) },
-                            { metric: "Risk Mgmt", value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
+                            { metric: t("trading.winRate"), value: selectedStrategy.winRate },
+                            { metric: t("trading.sharpe"), value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
+                            { metric: t("trading.profitFactor"), value: Math.min(selectedStrategy.profitFactor * 40, 100) },
+                            { metric: t("trading.consistency"), value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
+                            { metric: t("trading.frequency"), value: Math.min(selectedStrategy.trades * 2, 100) },
+                            { metric: t("trading.riskMgmt"), value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
                           ]}>
                             <PolarGrid stroke="var(--border)" />
                             <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
@@ -1455,7 +1455,7 @@ export default function Trading() {
                         <span className={`text-sm px-3 py-1 rounded-full border font-medium ${riskColor(selectedStrategy.riskLevel)}`}>
                           {selectedStrategy.riskLevel === "low" ? t("trading.lowRiskFull") : selectedStrategy.riskLevel === "medium" ? t("trading.mediumRiskFull") : t("trading.highRiskFull")}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">Max DD: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
+                        <span className="text-[11px] text-muted-foreground">{t("trading.maxDD")}: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
                       </div>
                       <div className="h-2 rounded-full bg-secondary overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${
@@ -1564,10 +1564,10 @@ export default function Trading() {
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: "ROI", value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
-                    { label: "Win Rate", value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
-                    { label: "Followers", value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
-                    { label: "Sharpe", value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
+                    { label: t("trading.roi"), value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
+                    { label: t("trading.winRate"), value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
+                    { label: t("trading.followers"), value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
+                    { label: t("trading.sharpe"), value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
                   ].map((m) => (
                     <div key={m.label} className="text-center p-1.5 rounded-xl bg-secondary/30">
                       <p className="text-[9px] text-muted-foreground">{m.label}</p>

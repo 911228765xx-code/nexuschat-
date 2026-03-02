@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import LightMarkdown from "@/components/LightMarkdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
+import { getLoginUrl } from "@/const";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -258,6 +259,7 @@ export default function Research() {
   const [aiReportMcap, setAiReportMcap] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareComment, setShareComment] = useState("");
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
 
 
@@ -291,9 +293,9 @@ export default function Research() {
     onError: (err) => toast.error("分享失败: " + err.message),
   });
   // SSE streaming research report
-  const handleSearch = useCallback(async () => {
-    if (!searchQuery.trim()) return;
-    const sym = searchQuery.trim().toUpperCase();
+  const handleSearch = useCallback(async (overrideToken?: string) => {
+    const sym = (overrideToken ?? searchQuery).trim().toUpperCase();
+    if (!sym) return;
     setIsSearching(true);
     setAiReportToken(sym);
     setAiReportContent("");
@@ -312,7 +314,7 @@ export default function Research() {
         body: JSON.stringify({ tokenSymbol: sym, mode: "quick" }),
       });
       if (!res.ok || !res.body) {
-        if (res.status === 401) { toast.info("请登录后使用 AI 研究报告功能"); setShowAiReport(false); setIsSearching(false); return; }
+        if (res.status === 401) { setShowAiReport(false); setIsSearching(false); setShowLoginPrompt(true); return; }
         if (res.status === 429) { toast.error("请求过于频繁，请稍后再试"); setShowAiReport(false); setIsSearching(false); return; }
         throw new Error(`HTTP ${res.status}`);
       }
@@ -355,6 +357,11 @@ export default function Research() {
       setIsSearching(false);
     }
   }, [searchQuery]);
+
+  const handleTokenClick = useCallback((token: string) => {
+    setSearchQuery(token);
+    handleSearch(token);
+  }, [handleSearch]);
 
   const toggleWatchlist = useCallback((id: string) => {
     setWatchlist(prev => {
@@ -472,7 +479,7 @@ export default function Research() {
             className="w-full h-10 pl-9 pr-20 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/20 transition-all"
           />
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={isSearching}
             className="absolute right-1.5 top-1/2 -translate-y-[calc(50%+6px)] px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-xs font-medium hover:bg-neon-purple/30 transition-colors disabled:opacity-50"
           >
@@ -532,7 +539,7 @@ export default function Research() {
             return (
               <button
                 key={token}
-                onClick={() => { setSearchQuery(token); handleSearch(); }}
+                onClick={() => handleTokenClick(token)}
                 className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/40 text-xs font-mono border border-border/20 hover:border-neon-cyan/30 transition-all group"
               >
                 <span className="text-muted-foreground group-hover:text-neon-cyan transition-colors">{token}</span>
@@ -679,6 +686,36 @@ export default function Research() {
           <span>Live</span>
         </div>
       </div>
+
+      {/* Login Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLoginPrompt(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#0f1629]/98 border border-[#a855f7]/40 shadow-2xl overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#a855f7]/30 to-[#00d4ff]/20 border border-[#a855f7]/30 flex items-center justify-center mx-auto mb-4">
+                <Sparkles size={24} className="text-[#a855f7]" />
+              </div>
+              <h3 className="text-lg font-bold text-white font-['Space_Grotesk'] mb-2">登录后使用 AI 投研</h3>
+              <p className="text-sm text-gray-400 mb-6 leading-relaxed">AI 投研报告功能需要登录账号才能使用，登录后可查看完整分析报告并保存历史记录。</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { window.location.href = getLoginUrl(); }}
+                  className="w-full h-11 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                >
+                  立即登录
+                </button>
+                <button
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="w-full h-11 rounded-xl bg-white/5 text-gray-400 text-sm hover:bg-white/10 transition-colors"
+                >
+                  暂不登录
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Report Modal */}
       {showAiReport && aiReportContent && (
