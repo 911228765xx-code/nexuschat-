@@ -238,3 +238,10 @@
 - [x] 首页检测已登录状态，自动跳转到 /app/chat
 - [x] 跳转前显示短暂加载动画，避免闪烁
 - [x] 未登录用户仍显示落地页
+
+## v45 PWA图标和启动屏优化
+- [x] 生成NexusChat品牌图标（192x192, 512x512, maskable）
+- [x] 生成favicon.ico（32x32, 16x16）
+- [x] 上传图标到CDN
+- [x] 更新manifest.json（icons, theme_color, background_color, screenshots）
+- [x] 更新首页loading splash screen使用品牌图标

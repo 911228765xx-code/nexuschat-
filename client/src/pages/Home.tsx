@@ -83,9 +83,11 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-            <MessageCircle size={22} className="text-white" />
-          </div>
+          <img
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
+            alt="NexusChat"
+            className="w-16 h-16 rounded-2xl"
+          />
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
@@ -107,9 +109,11 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-              <MessageCircle size={16} className="text-white" />
-            </div>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
+              alt="NexusChat"
+              className="w-8 h-8 rounded-lg"
+            />
             <span className="text-lg font-bold font-display">NexusChat</span>
           </div>
 
