@@ -37,6 +37,7 @@ const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
 const DownloadPage = lazy(() => import("./pages/Download"));
 const LoginPage = lazy(() => import("./pages/Login"));
+const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 
 // ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
 function PageLoader() {
@@ -271,6 +272,11 @@ function AppContent() {
       )}
 
       <RouteContent />
+
+      {/* PWA install banner — shown to mobile users who haven't installed yet */}
+      <Suspense fallback={null}>
+        <PWAInstallBanner />
+      </Suspense>
     </>
   );
 }
