@@ -121,8 +121,17 @@ export default function Settings() {
     logoutMutation.mutate();
   };
 
+  // NOTE: use div[role=switch] (not button) to avoid nested-button DOM errors
+  // when renderToggle is placed inside a <button> or role="button" parent.
   const renderToggle = (on: boolean, onChange: () => void) => (
-    <button onClick={onChange} className="shrink-0">
+    <div
+      role="switch"
+      aria-checked={on}
+      tabIndex={0}
+      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); onChange(); } }}
+      className="shrink-0 cursor-pointer"
+    >
       <div className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
         on ? "bg-neon-cyan/30 border border-neon-cyan/40" : "bg-secondary border border-border"
       }`}>
@@ -135,7 +144,7 @@ export default function Settings() {
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         />
       </div>
-    </button>
+    </div>
   );
 
   // ─── Security Section ───
