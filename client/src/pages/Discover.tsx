@@ -5,13 +5,15 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles, LogIn } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
 
 /* ─── Types ─── */
 interface Community {
@@ -102,6 +104,8 @@ export default function Discover() {
   const [activeTab, setActiveTab] = useState<"moments" | "communities" | "users">("moments");
   const [moments, setMoments] = useState<MomentPost[]>([]);
   const [showCompose, setShowCompose] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const { isAuthenticated } = useAuth();
   const [composeText, setComposeText] = useState("");
   const [commentInputId, setCommentInputId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -453,7 +457,16 @@ export default function Discover() {
     }
   }, [commentInputId]);
 
+  const requireLogin = (action: () => void) => {
+    if (!isAuthenticated) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    action();
+  };
+
   const toggleLike = (id: string) => {
+    if (!isAuthenticated) { setShowLoginPrompt(true); return; }
     // Optimistic UI update
     setMoments((prev) =>
       prev.map((m) => {
@@ -473,6 +486,7 @@ export default function Discover() {
   };
 
   const toggleBookmark = (id: string) => {
+    if (!isAuthenticated) { setShowLoginPrompt(true); return; }
     setMoments((prev) =>
       prev.map((m) =>
         m.id === id ? { ...m, isBookmarked: !m.isBookmarked } : m
@@ -497,6 +511,7 @@ export default function Discover() {
   };
 
   const openCommentInput = (id: string) => {
+    if (!isAuthenticated) { setShowLoginPrompt(true); return; }
     // Ensure comments are visible
     setMoments((prev) =>
       prev.map((m) =>
@@ -508,6 +523,7 @@ export default function Discover() {
   };
 
   const submitComment = (postId: string) => {
+    if (!isAuthenticated) { setShowLoginPrompt(true); return; }
     if (!commentText.trim()) return;
     const newComment: Comment = {
       id: `new-${Date.now()}`,
@@ -772,7 +788,7 @@ export default function Discover() {
             {/* Compose button */}
             <div className="px-4 py-3">
               <button
-                onClick={() => setShowCompose(true)}
+                onClick={() => requireLogin(() => setShowCompose(true))}
                 className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-card/50 border border-border/20 hover:border-neon-cyan/30 transition-all"
               >
                 <Avatar className="w-9 h-9 shrink-0">
@@ -1229,6 +1245,7 @@ export default function Discover() {
                     </div>
                     <button
                       onClick={() => {
+                        if (!isAuthenticated && !joinedCommunities.has(community.id)) { setShowLoginPrompt(true); return; }
                         const numId = parseInt(community.id, 10);
                         if (!isNaN(numId)) {
                           if (!joinedCommunities.has(community.id)) {
@@ -1285,6 +1302,7 @@ export default function Discover() {
                 </div>
                 <button
                   onClick={() => {
+                    if (!isAuthenticated) { setShowLoginPrompt(true); return; }
                     const numId = parseInt(user.id, 10);
                     if (!isNaN(numId)) {
                       if (followedUsers.has(user.id)) {
@@ -1378,6 +1396,75 @@ export default function Discover() {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* ─── Login Prompt Modal ─── */}
+      <AnimatePresence>
+        {showLoginPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+            onClick={() => setShowLoginPrompt(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-card border-t border-border/30 rounded-t-3xl p-6 space-y-5"
+            >
+              {/* Close button */}
+              <div className="flex items-center justify-between">
+                <button onClick={() => setShowLoginPrompt(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={20} />
+                </button>
+                <div className="w-8 h-1 rounded-full bg-border mx-auto" />
+                <div className="w-7" />
+              </div>
+
+              {/* Icon + Title */}
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-lg shadow-[#00d4ff]/20">
+                  <LogIn size={28} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground mb-1">登录后参与互动</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    使用 Manus 账号登录，发帖、点赞、评论，与社区共建 Web3 生态
+                  </p>
+                </div>
+              </div>
+
+              {/* Feature list */}
+              <div className="space-y-2">
+                {[
+                  { icon: "💬", text: "发布动态，分享你的 Web3 见解" },
+                  { icon: "❤️", text: "点赞、评论，与社区成员互动" },
+                  { icon: "🔖", text: "收藏精彩内容，随时回顾" },
+                ].map((item) => (
+                  <div key={item.text} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/40 border border-border/20">
+                    <span className="text-base">{item.icon}</span>
+                    <span className="text-xs text-foreground/80">{item.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <button
+                onClick={() => { window.location.href = getLoginUrl(window.location.pathname); }}
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-[#00d4ff]/20"
+              >
+                立即登录
+              </button>
+              <p className="text-center text-[10px] text-muted-foreground pb-2">
+                安全登录 · 无需密码 · 支持 Web3 钱包
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ─── Compose Modal ─── */}

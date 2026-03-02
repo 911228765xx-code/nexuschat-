@@ -200,12 +200,12 @@ function RouteContent() {
               </AppLayout>
             </Route>
             <Route path="/app/research/:token">
-              <AppLayout hideNav>
+              <AppLayout hideNav requireAuth={false}>
                 <TokenDetail />
               </AppLayout>
             </Route>
             <Route path="/app/research">
-              <AppLayout>
+              <AppLayout requireAuth={false}>
                 <Research />
               </AppLayout>
             </Route>

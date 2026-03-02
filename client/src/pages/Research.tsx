@@ -285,7 +285,8 @@ export default function Research() {
     },
   });
   // Auth state for share button
-  const { user: authUser } = useAuth();
+  const { user: authUser, isAuthenticated: isResearchAuthed } = useAuth();
+  const [showResearchLoginPrompt, setShowResearchLoginPrompt] = useState(false);
   // tRPC: direct post creation (for unauthenticated or no-reportId share)
   const createPost = trpc.posts.create.useMutation({
     onSuccess: () => {
@@ -389,6 +390,7 @@ export default function Research() {
   }, [searchQuery]);
 
   const toggleWatchlist = useCallback((id: string) => {
+    if (!isResearchAuthed) { setShowResearchLoginPrompt(true); return; }
     setWatchlist(prev => {
       const next = new Set(prev);
       if (next.has(id)) { next.delete(id); toast.info(t("research.removedFromWatchlist")); }
@@ -1697,8 +1699,9 @@ export default function Research() {
                             {t("research.shareToMoments")}
                           </button>
                           {(
-                            <button
-                              onClick={() => {
+                              <button
+                            onClick={() => {
+                                if (!isResearchAuthed) { setShowResearchLoginPrompt(true); return; }
                                 const targetPrice = prompt(`设置 ${report.token} 价格预警\n当前价格: ${report.price}\n请输入目标价格 (USD):`);
                                 if (!targetPrice || isNaN(Number(targetPrice))) return;
                                 const condition = Number(targetPrice) > report.priceNum ? "above" : "below";
@@ -1860,6 +1863,68 @@ export default function Research() {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* ─── Login Prompt Modal ─── */}
+      <AnimatePresence>
+        {showResearchLoginPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+            onClick={() => setShowResearchLoginPrompt(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-card border-t border-border/30 rounded-t-3xl p-6 space-y-5"
+            >
+              <div className="flex items-center justify-between">
+                <button onClick={() => setShowResearchLoginPrompt(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <span className="text-lg">×</span>
+                </button>
+                <div className="w-8 h-1 rounded-full bg-border mx-auto" />
+                <div className="w-7" />
+              </div>
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#a855f7] to-[#00d4ff] flex items-center justify-center shadow-lg shadow-[#a855f7]/20">
+                  <span className="text-2xl">🔐</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground mb-1">登录后解锁投研功能</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    登录 Manus 账号，收藏代币、设置价格预警、分享投研报告
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { icon: "⭐", text: "收藏代币到自定义自选股" },
+                  { icon: "🔔", text: "设置价格预警，行情到位第一时间知道" },
+                  { icon: "📊", text: "分享 AI 投研报告到社区动态" },
+                ].map((item) => (
+                  <div key={item.text} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/40 border border-border/20">
+                    <span className="text-base">{item.icon}</span>
+                    <span className="text-xs text-foreground/80">{item.text}</span>
+                  </div>
+                ))}
+              </div>
+              <a
+                href={`/api/oauth/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+                className="block w-full h-12 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-[#a855f7]/20 flex items-center justify-center"
+              >
+                立即登录
+              </a>
+              <p className="text-center text-[10px] text-muted-foreground pb-2">
+                安全登录 · 无需密码 · 支持 Web3 钱包
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
     </div>
