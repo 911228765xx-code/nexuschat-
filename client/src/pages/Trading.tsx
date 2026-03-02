@@ -494,18 +494,7 @@ export default function Trading() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Login Prompt — compact banner when not authenticated */}
-      {!isAuthenticated && (
-        <LoginPromptCard
-          pageName="跨单"
-          compact
-          features={[
-            "查看我的策略与跨单收益",
-            "关注优秀交易员并自动跨单",
-            "查看实时持仓与 PnL 日历",
-          ]}
-        />
-      )}
+      {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
       {/* Price Ticker */}
       <div className="bg-background/80 border-b border-border/20 overflow-hidden h-7 flex items-center">
         <div className="flex items-center gap-6 animate-ticker whitespace-nowrap" style={{ transform: `translateX(-${tickerOffset}px)` }}>

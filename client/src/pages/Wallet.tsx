@@ -25,6 +25,7 @@ interface Token {
   symbol: string;
   name: string;
   icon: string;
+  logoUrl?: string; // Real token logo URL (from Alchemy/CoinGecko)
   balance: number;
   value: number;
   price: number;
@@ -827,7 +828,8 @@ export default function Wallet() {
           id: tk.contractAddress,
           symbol: tk.symbol,
           name: tk.name,
-          icon: tk.logo ?? tk.symbol.charAt(0),
+          icon: tk.symbol.charAt(0),
+          logoUrl: tk.logo ?? undefined,
           balance: bal,
           value: tk.usdValue,
           price: tk.usdPrice,
@@ -923,19 +925,8 @@ export default function Wallet() {
         </div>
       </header>
 
-      {/* Login Prompt — shown when not authenticated */}
-      {!isAuthenticated && (
-        <LoginPromptCard
-          pageName="钱包"
-          features={[
-            "查看真实钱包资产与代币余额",
-            "同步链上交易历史记录",
-            "使用兑换、转账等完整功能",
-          ]}
-        />
-      )}
-      {/* Connect Wallet Prompt — shown when authenticated but no wallet connected */}
-      {isAuthenticated && !walletConnected && (
+      {/* Connect Wallet Prompt — shown when no wallet connected (no Manus login required to view on-chain assets) */}
+      {!walletConnected && (
         <div className="mx-4 mt-4 p-5 rounded-2xl bg-gradient-to-br from-neon-cyan/10 via-neon-purple/10 to-neon-green/5 border border-neon-cyan/20">
           <div className="flex flex-col items-center text-center gap-3">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-2xl">
@@ -1127,8 +1118,19 @@ export default function Wallet() {
                   transition={{ delay: i * 0.03 }}
                   className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer group"
                 >
-                  <div className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center text-lg shrink-0 group-hover:scale-105 transition-transform">
-                    {token.icon}
+                  <div className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center text-lg shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                    {token.logoUrl ? (
+                      <img
+                        src={token.logoUrl}
+                        alt={token.symbol}
+                        className="w-8 h-8 object-contain rounded-full"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          (e.currentTarget.nextSibling as HTMLElement | null)?.removeAttribute('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <span hidden={!!token.logoUrl} className="text-base font-bold">{token.icon}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
