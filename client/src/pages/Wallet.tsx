@@ -17,6 +17,7 @@ import WalletConnectModal from "@/components/WalletConnectModal";
 import { useBalance, useChainId } from "wagmi";
 import { mainnet, bsc, polygon, arbitrum } from "@/lib/wagmi";
 import { useAuth } from "@/_core/hooks/useAuth";
+import LoginPromptCard from "@/components/LoginPromptCard";
 
 /* ─── Types ─── */
 interface Token {
@@ -880,8 +881,19 @@ export default function Wallet() {
         </div>
       </header>
 
-      {/* Connect Wallet Prompt — shown when no wallet is connected */}
-      {!walletConnected && (
+      {/* Login Prompt — shown when not authenticated */}
+      {!isAuthenticated && (
+        <LoginPromptCard
+          pageName="钱包"
+          features={[
+            "查看真实钱包资产与代币余额",
+            "同步链上交易历史记录",
+            "使用兑换、转账等完整功能",
+          ]}
+        />
+      )}
+      {/* Connect Wallet Prompt — shown when authenticated but no wallet connected */}
+      {isAuthenticated && !walletConnected && (
         <div className="mx-4 mt-4 p-5 rounded-2xl bg-gradient-to-br from-neon-cyan/10 via-neon-purple/10 to-neon-green/5 border border-neon-cyan/20">
           <div className="flex flex-col items-center text-center gap-3">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-2xl">

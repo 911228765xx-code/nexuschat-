@@ -4,9 +4,12 @@
  *   - meQuery.data 有值 → 已登录
  *   - meQuery.data 为 null/undefined → 未登录
  * loading 期间 isAuthenticated = false，避免触发 protectedProcedure 报 10001。
+ *
+ * 自动刷新：监听 isAuthenticated 从 false → true（即登录成功），
+ * 立即 invalidate 所有 tRPC 查询，确保数据实时更新，无需手动刷新页面。
  */
 import { trpc } from "@/lib/trpc";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -49,6 +52,28 @@ export function useAuth(_options?: UseAuthOptions) {
       isAuthenticated: !!user,
     };
   }, [meQuery.data, meQuery.isLoading]);
+
+  // ─── Auto-refresh: invalidate all queries when user logs in ───────────────
+  // Track previous auth state to detect the false → true transition
+  const prevAuthRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    // Skip while still loading the initial session
+    if (meQuery.isLoading) return;
+
+    const wasAuthenticated = prevAuthRef.current;
+    const isNowAuthenticated = state.isAuthenticated;
+
+    // Detect login event: was not authenticated (or unknown), now is
+    if (wasAuthenticated === false && isNowAuthenticated === true) {
+      // Invalidate all tRPC queries so pages reload with fresh data
+      utils.invalidate().catch(() => {
+        // Non-fatal: queries will refetch on next focus
+      });
+    }
+
+    prevAuthRef.current = isNowAuthenticated;
+  }, [state.isAuthenticated, meQuery.isLoading, utils]);
 
   return {
     ...state,

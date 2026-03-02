@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/_core/hooks/useAuth";
+import LoginPromptCard from "@/components/LoginPromptCard";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -493,6 +494,18 @@ export default function Trading() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Login Prompt — compact banner when not authenticated */}
+      {!isAuthenticated && (
+        <LoginPromptCard
+          pageName="跨单"
+          compact
+          features={[
+            "查看我的策略与跨单收益",
+            "关注优秀交易员并自动跨单",
+            "查看实时持仓与 PnL 日历",
+          ]}
+        />
+      )}
       {/* Price Ticker */}
       <div className="bg-background/80 border-b border-border/20 overflow-hidden h-7 flex items-center">
         <div className="flex items-center gap-6 animate-ticker whitespace-nowrap" style={{ transform: `translateX(-${tickerOffset}px)` }}>

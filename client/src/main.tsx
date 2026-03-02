@@ -7,6 +7,9 @@ import App from "./App";
 import "./index.css";
 // Web3 providers (wagmi + rainbowkit) are lazily loaded to keep initial bundle small
 import { LazyWeb3Provider } from "@/components/LazyWeb3Provider";
+// Sentry error monitoring — initialize before anything else
+import { initSentry } from "@/lib/sentry";
+initSentry();
 
 // No-login mode: API errors are logged but never redirect to login page
 const queryClient = new QueryClient();

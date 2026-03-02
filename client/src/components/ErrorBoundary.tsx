@@ -7,6 +7,7 @@
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RefreshCw, Home, WifiOff, ServerCrash } from "lucide-react";
 import { Component, ReactNode } from "react";
+import { reportError } from "@/lib/sentry";
 
 interface Props {
   children: ReactNode;
@@ -80,6 +81,12 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error("[ErrorBoundary]", error.message, info.componentStack?.slice(0, 200));
+    // Report to Sentry (no-op if DSN not configured)
+    reportError(error, {
+      componentStack: info.componentStack?.slice(0, 500),
+      mode: this.props.mode ?? "page",
+      pageName: this.props.pageName,
+    });
   }
 
   handleRetry = () => {
