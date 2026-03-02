@@ -251,3 +251,10 @@
 - [ ] 修复 Service Worker 缓存策略（避免首次加载阻塞）
 - [ ] 优化 JS 包体积和加载顺序
 - [ ] 确保生产环境首次访问无需刷新即可正常显示
+
+## v47 移动端钱包连接优化
+- [ ] 检测移动端环境，WalletConnect 改为深度链接（直接跳转钱包 App）
+- [ ] 移动端显示热门钱包列表（Trust/MetaMask/OKX/imToken/TokenPocket/Coinbase）带深度链接
+- [ ] 桌面端保留二维码扫描模式
+- [ ] 连接失败时显示明确错误提示和替代方案
+- [ ] 添加更多热门钱包图标（OKX、imToken、TokenPocket、Bitget）
