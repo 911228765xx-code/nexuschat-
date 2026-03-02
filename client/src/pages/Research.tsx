@@ -259,7 +259,6 @@ export default function Research() {
   const [aiReportMcap, setAiReportMcap] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareComment, setShareComment] = useState("");
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
 
 
@@ -293,8 +292,8 @@ export default function Research() {
     onError: (err) => toast.error("分享失败: " + err.message),
   });
   // SSE streaming research report
-  const handleSearch = useCallback(async (overrideToken?: string) => {
-    const sym = (overrideToken ?? searchQuery).trim().toUpperCase();
+  const handleSearch = useCallback(async (directToken?: string) => {
+    const sym = (directToken ?? searchQuery).trim().toUpperCase();
     if (!sym) return;
     setIsSearching(true);
     setAiReportToken(sym);
@@ -358,10 +357,7 @@ export default function Research() {
     }
   }, [searchQuery]);
 
-  const handleTokenClick = useCallback((token: string) => {
-    setSearchQuery(token);
-    handleSearch(token);
-  }, [handleSearch]);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const toggleWatchlist = useCallback((id: string) => {
     setWatchlist(prev => {
@@ -539,7 +535,7 @@ export default function Research() {
             return (
               <button
                 key={token}
-                onClick={() => handleTokenClick(token)}
+                onClick={() => { setSearchQuery(token); handleSearch(token); }}
                 className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/40 text-xs font-mono border border-border/20 hover:border-neon-cyan/30 transition-all group"
               >
                 <span className="text-muted-foreground group-hover:text-neon-cyan transition-colors">{token}</span>
@@ -686,36 +682,6 @@ export default function Research() {
           <span>Live</span>
         </div>
       </div>
-
-      {/* Login Prompt Modal */}
-      {showLoginPrompt && (
-        <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLoginPrompt(false)} />
-          <div className="relative w-full max-w-sm rounded-2xl bg-[#0f1629]/98 border border-[#a855f7]/40 shadow-2xl overflow-hidden">
-            <div className="p-6 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#a855f7]/30 to-[#00d4ff]/20 border border-[#a855f7]/30 flex items-center justify-center mx-auto mb-4">
-                <Sparkles size={24} className="text-[#a855f7]" />
-              </div>
-              <h3 className="text-lg font-bold text-white font-['Space_Grotesk'] mb-2">登录后使用 AI 投研</h3>
-              <p className="text-sm text-gray-400 mb-6 leading-relaxed">AI 投研报告功能需要登录账号才能使用，登录后可查看完整分析报告并保存历史记录。</p>
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => { window.location.href = getLoginUrl(); }}
-                  className="w-full h-11 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-                >
-                  立即登录
-                </button>
-                <button
-                  onClick={() => setShowLoginPrompt(false)}
-                  className="w-full h-11 rounded-xl bg-white/5 text-gray-400 text-sm hover:bg-white/10 transition-colors"
-                >
-                  暂不登录
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AI Report Modal */}
       {showAiReport && aiReportContent && (
@@ -1724,6 +1690,34 @@ export default function Research() {
           );
         })()}
       </AnimatePresence>
+
+      {/* Login Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLoginPrompt(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl p-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#a855f7]/15 flex items-center justify-center mx-auto mb-4">
+              <Lock size={26} className="text-[#a855f7]" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-['Space_Grotesk'] mb-2">{t("research.loginRequired")}</h3>
+            <p className="text-sm text-muted-foreground mb-5">{t("research.loginRequiredDesc")}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLoginPrompt(false)}
+                className="flex-1 h-10 rounded-xl border border-border/30 text-sm text-muted-foreground hover:bg-secondary/40 transition-colors"
+              >
+                {t("research.cancel")}
+              </button>
+              <button
+                onClick={() => { window.location.href = getLoginUrl(); }}
+                className="flex-1 h-10 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                {t("research.loginNow")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

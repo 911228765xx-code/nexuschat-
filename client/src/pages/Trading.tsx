@@ -1430,12 +1430,12 @@ export default function Trading() {
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={[
-                            { metric: t("trading.winRate"), value: selectedStrategy.winRate },
-                            { metric: t("trading.sharpe"), value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
-                            { metric: t("trading.profitFactor"), value: Math.min(selectedStrategy.profitFactor * 40, 100) },
-                            { metric: t("trading.consistency"), value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
-                            { metric: t("trading.frequency"), value: Math.min(selectedStrategy.trades * 2, 100) },
-                            { metric: t("trading.riskMgmt"), value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
+                            { metric: t("trading.sortWinRate") || "Win%", value: selectedStrategy.winRate },
+                            { metric: t("trading.sharpe") || "Sharpe", value: Math.min(selectedStrategy.sharpeRatio * 30, 100) },
+                            { metric: t("trading.profitFactor") || "Profit Factor", value: Math.min(selectedStrategy.profitFactor * 40, 100) },
+                            { metric: t("trading.consistency") || "Consistency", value: 100 - Math.abs(selectedStrategy.maxDrawdown) * 5 },
+                            { metric: t("trading.frequency") || "Frequency", value: Math.min(selectedStrategy.trades * 2, 100) },
+                            { metric: t("trading.riskMgmt") || "Risk Mgmt", value: selectedStrategy.riskLevel === "low" ? 90 : selectedStrategy.riskLevel === "medium" ? 60 : 30 },
                           ]}>
                             <PolarGrid stroke="var(--border)" />
                             <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
@@ -1455,7 +1455,7 @@ export default function Trading() {
                         <span className={`text-sm px-3 py-1 rounded-full border font-medium ${riskColor(selectedStrategy.riskLevel)}`}>
                           {selectedStrategy.riskLevel === "low" ? t("trading.lowRiskFull") : selectedStrategy.riskLevel === "medium" ? t("trading.mediumRiskFull") : t("trading.highRiskFull")}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">{t("trading.maxDD")}: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
+                        <span className="text-[11px] text-muted-foreground">Max DD: <span className="font-mono text-neon-red">{selectedStrategy.maxDrawdown}%</span></span>
                       </div>
                       <div className="h-2 rounded-full bg-secondary overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${
@@ -1564,10 +1564,10 @@ export default function Trading() {
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: t("trading.roi"), value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
-                    { label: t("trading.winRate"), value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
-                    { label: t("trading.followers"), value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
-                    { label: t("trading.sharpe"), value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
+                    { label: t("trading.roi") || "ROI", value: `+${selectedTrader.totalReturn}%`, color: "text-neon-green" },
+                    { label: t("trading.sortWinRate") || "Win%", value: `${selectedTrader.winRate}%`, color: "text-neon-cyan" },
+                    { label: t("trading.followers") || "Followers", value: selectedTrader.followers > 1000 ? `${(selectedTrader.followers / 1000).toFixed(1)}K` : `${selectedTrader.followers}`, color: "text-foreground" },
+                    { label: t("trading.sharpe") || "Sharpe", value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
                   ].map((m) => (
                     <div key={m.label} className="text-center p-1.5 rounded-xl bg-secondary/30">
                       <p className="text-[9px] text-muted-foreground">{m.label}</p>
@@ -1967,11 +1967,11 @@ export default function Trading() {
                   <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={[
-                        { metric: "ROI", ...Object.fromEntries(compareTraders.map(tr => [tr.name, Math.min(tr.totalReturn / 5, 100)])) },
-                        { metric: "Win%", ...Object.fromEntries(compareTraders.map(tr => [tr.name, tr.winRate])) },
-                        { metric: "Sharpe", ...Object.fromEntries(compareTraders.map(tr => [tr.name, Math.min(tr.sharpeRatio * 30, 100)])) },
-                        { metric: "Consist.", ...Object.fromEntries(compareTraders.map(tr => [tr.name, tr.consistency])) },
-                        { metric: "Safety", ...Object.fromEntries(compareTraders.map(tr => [tr.name, 100 - Math.abs(tr.maxDrawdown) * 2])) },
+                        { metric: t("trading.roi") || "ROI", ...Object.fromEntries(compareTraders.map(tr => [tr.name, Math.min(tr.totalReturn / 5, 100)])) },
+                        { metric: t("trading.sortWinRate") || "Win%", ...Object.fromEntries(compareTraders.map(tr => [tr.name, tr.winRate])) },
+                        { metric: t("trading.sharpe") || "Sharpe", ...Object.fromEntries(compareTraders.map(tr => [tr.name, Math.min(tr.sharpeRatio * 30, 100)])) },
+                        { metric: t("trading.consistency") || "Consist.", ...Object.fromEntries(compareTraders.map(tr => [tr.name, tr.consistency])) },
+                        { metric: t("trading.riskMgmt") || "Safety", ...Object.fromEntries(compareTraders.map(tr => [tr.name, 100 - Math.abs(tr.maxDrawdown) * 2])) },
                       ]}>
                         <PolarGrid stroke="var(--border)" />
                         <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
