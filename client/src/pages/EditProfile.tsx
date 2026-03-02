@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface SocialLink {
   id: string;
@@ -59,8 +60,10 @@ export default function EditProfile() {
   const [hasChanges, setHasChanges] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // ─── tRPC: load real profile ───────────────────────────────────────────────
+    const { isAuthenticated } = useAuth();
+  // ─── tRPC: load real profile (protectedProcedure) ──────────────────────────────────
   const { data: profileData, isLoading: profileLoading } = trpc.user.getProfile.useQuery(undefined, {
+    enabled: isAuthenticated,
     retry: false,
   });
 

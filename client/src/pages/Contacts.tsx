@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useLocation } from "wouter";
 import { useI18n } from "@/contexts/I18nContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /* ─── Types ─── */
 interface Contact {
@@ -65,17 +66,18 @@ const defaultGroups: ContactGroup[] = [
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
   const trpcUtils = trpc.useUtils();
+  const { isAuthenticated } = useAuth();
 
-  // tRPC: get real following list
+  // tRPC: get real following list (protectedProcedure)
   const { data: followingData, refetch: refetchFollowing } = trpc.follow.getFollowing.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
 
-  // Load contact metadata (favorites, notes, tags) from backend
+  // Load contact metadata (favorites, notes, tags) from backend (protectedProcedure)
   const { data: contactMetaList } = trpc.contacts.listContactMeta.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
   const metaMap = useMemo(() => {
     const map = new Map<number, { isFavorite: boolean; note: string; tags: string[] }>();
@@ -138,10 +140,10 @@ export default function Contacts() {
     },
     onError: (e) => toast.error(e.message),
   });
-  // tRPC: real friend requests
+  // tRPC: real friend requests (protectedProcedure)
   const { data: incomingRequests, refetch: refetchIncoming } = trpc.contacts.listIncoming.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
   const acceptRequestMutation = trpc.contacts.acceptRequest.useMutation({
     onSuccess: () => {
@@ -171,10 +173,10 @@ export default function Contacts() {
     status: "pending" as FriendRequestStatus,
     direction: "incoming" as const,
   }));
-  // tRPC: real outgoing requests
+  // tRPC: real outgoing requests (protectedProcedure)
   const { data: outgoingRequests, refetch: refetchOutgoing } = trpc.contacts.listOutgoing.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
   // Map real outgoing requests to FriendRequest shape
   const realOutgoingRequests: FriendRequest[] = (outgoingRequests ?? []).map(r => ({

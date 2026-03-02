@@ -14,6 +14,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function Profile() {
   const { t, locale, setLocale } = useI18n();
@@ -25,8 +26,10 @@ export default function Profile() {
   // ✅ AppContext全局状态
   const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
 
-  // ─── Real stats from backend ───
+  const { isAuthenticated } = useAuth();
+  // ─── Real stats from backend (protectedProcedure) ───
   const { data: stats, isLoading: statsLoading } = trpc.user.getUserStats.useQuery(undefined, {
+    enabled: isAuthenticated,
     retry: false,
     staleTime: 30_000,
   });

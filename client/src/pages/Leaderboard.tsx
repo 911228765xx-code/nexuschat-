@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface LeaderboardEntry {
   rank: number;
@@ -45,7 +46,9 @@ export default function Leaderboard() {
     { limit: 50 },
     { staleTime: 60_000 }
   );
+  const { isAuthenticated } = useAuth();
   const { data: myRankData } = trpc.user.myRank.useQuery(undefined, {
+    enabled: isAuthenticated,
     retry: false,
   });
   const { data: inviteLbData, isLoading: inviteLbLoading } = trpc.user.inviteLeaderboard.useQuery(

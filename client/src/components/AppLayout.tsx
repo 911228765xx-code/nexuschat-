@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -24,9 +25,11 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const chatUnread = conversations.reduce((sum, c) => sum + c.unread, 0);
   const localNotifUnread = notifications.filter((n) => !n.read).length;
 
-  // Real unread count from backend (polls every 30s)
+  const { isAuthenticated } = useAuth();
+  // Real unread count from backend (protectedProcedure — only poll when logged in)
   const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
-    refetchInterval: 30_000,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 30_000 : false,
     staleTime: 20_000,
   });
   const notifUnread = unreadData?.count ?? localNotifUnread;

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface Task {
   id: string;
@@ -36,13 +37,15 @@ export default function TaskCenter() {
   const [checkinDay, setCheckinDay] = useState(3);
   const [todayChecked, setTodayChecked] = useState(false);
 
-  // ─── Real task data from backend ───
+  const { isAuthenticated } = useAuth();
+  // ─── Real task data from backend (protectedProcedure) ───
   const utils = trpc.useUtils();
   const { data: taskStatus, isLoading: tasksLoading } = trpc.user.getTaskStatus.useQuery(undefined, {
+    enabled: isAuthenticated,
     retry: false,
     staleTime: 30_000,
   });
-  const { data: myRank } = trpc.user.myRank.useQuery(undefined, { retry: false });
+  const { data: myRank } = trpc.user.myRank.useQuery(undefined, { enabled: isAuthenticated, retry: false });
 
   const completeTask = trpc.user.completeTask.useMutation({
     onSuccess: (result, variables) => {
