@@ -9,7 +9,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
 import AppLayout from "./components/AppLayout";
 import { AppProvider, useApp } from "./contexts/AppContext";
-import { useWallet } from "./contexts/WalletContext";
 
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
 // Onboarding uses framer-motion (79KB), socket.io (42KB) — both deferred
@@ -89,21 +88,24 @@ const PriceAlertSocket = lazy(() =>
 );
 
 /**
- * WalletSyncEffect — syncs the connected Web3 wallet address into AppContext profile
- * Must be rendered inside both AppProvider and WalletProvider
+ * WalletSyncEffect - lazy loaded to avoid pulling wagmi/Web3 into the main bundle.
+ * Syncs the connected Web3 wallet address into AppContext profile.
+ * Only loaded after the initial render, so it does NOT block the first paint.
  */
-function WalletSyncEffect() {
-  const { address, isConnected } = useWallet();
-  const { updateProfile } = useApp();
-
-  useEffect(() => {
-    if (isConnected && address) {
-      updateProfile({ walletAddress: address });
-    }
-  }, [address, isConnected, updateProfile]);
-
-  return null;
-}
+const WalletSyncEffect = lazy(() =>
+  import("./contexts/WalletContext").then((mod) => ({
+    default: function WalletSyncEffectImpl() {
+      const { address, isConnected } = mod.useWallet();
+      const { updateProfile } = useApp();
+      useEffect(() => {
+        if (isConnected && address) {
+          updateProfile({ walletAddress: address });
+        }
+      }, [address, isConnected, updateProfile]);
+      return null;
+    },
+  }))
+);
 
 function AppContent() {
   const [location] = useLocation();
@@ -114,8 +116,10 @@ function AppContent() {
 
   return (
     <>
-      {/* Sync connected wallet address into AppContext profile */}
-      <WalletSyncEffect />
+      {/* Sync connected wallet address into AppContext profile - lazy loaded to avoid Web3 bundle blocking first paint */}
+      <Suspense fallback={null}>
+        <WalletSyncEffect />
+      </Suspense>
 
       {/* Lazy-load socket.io connection after initial render */}
       <Suspense fallback={null}>
