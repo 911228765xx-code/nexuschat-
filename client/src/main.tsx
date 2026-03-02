@@ -59,6 +59,15 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// Register Service Worker for PWA offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW registration failure is non-fatal
+    });
+  });
+}
+
 window.__APP_RENDER_START__ = Date.now();
 try {
   createRoot(document.getElementById("root")!).render(

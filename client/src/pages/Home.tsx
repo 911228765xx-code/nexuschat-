@@ -12,6 +12,8 @@ import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Spa
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { Download } from "lucide-react";
 // Lazy-load WalletConnectModal — avoids pulling wagmi into the Home chunk
 const WalletConnectModal = lazy(() => import("@/components/WalletConnectModal"));
 
@@ -37,6 +39,8 @@ export default function Home() {
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const { canInstall, platform, triggerInstall, isInstalling } = usePWAInstall();
   const { address: walletAddress, isConnected: walletConnected, disconnect: disconnectWallet } = useWallet();
 
   const features = [
@@ -206,6 +210,23 @@ export default function Home() {
             >
               {t("home.learnMore")}
             </Button>
+            {canInstall && (
+              <Button
+                onClick={() => {
+                  if (platform === 'ios') {
+                    setShowIOSGuide(true);
+                  } else {
+                    triggerInstall();
+                  }
+                }}
+                disabled={isInstalling}
+                variant="outline"
+                className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent disabled:opacity-60"
+              >
+                <Download size={16} className="mr-2" />
+                {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
+              </Button>
+            )}
           </motion.div>
 
           {/* Stats */}
@@ -389,6 +410,49 @@ export default function Home() {
         <Suspense fallback={null}>
           <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
         </Suspense>
+      )}
+
+      {/* iOS PWA Install Guide Modal */}
+      {showIOSGuide && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowIOSGuide(false)}
+        >
+          <div
+            className="w-full max-w-sm mx-4 mb-6 rounded-2xl bg-[#0d1117] border border-[#00ff88]/20 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+                <MessageCircle size={20} className="text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-white">{t('pwa.installTitle')}</p>
+                <p className="text-xs text-muted-foreground">{t('pwa.installSubtitle')}</p>
+              </div>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-3">
+                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                <p className="text-gray-300">{t('pwa.iosStep2')} <span className="text-white font-medium">{t('pwa.iosStep2b')}</span></p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                <p className="text-gray-300">{t('pwa.iosStep3')}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowIOSGuide(false)}
+              className="mt-5 w-full h-10 rounded-xl bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 text-sm font-medium hover:bg-[#00ff88]/25 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
