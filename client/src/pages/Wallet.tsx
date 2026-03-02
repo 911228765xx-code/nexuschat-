@@ -13,6 +13,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useWallet } from "@/contexts/WalletContext";
+import WalletConnectModal from "@/components/WalletConnectModal";
 
 /* ─── Types ─── */
 interface Token {
@@ -690,8 +691,9 @@ export default function Wallet() {
   const [sendChain, setSendChain] = useState("Ethereum");
 
   // ─── Real wallet from WalletContext ───
-  const { address: connectedAddress } = useWallet();
-  const walletAddress = connectedAddress || "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18";
+  const { address: connectedAddress, isConnected: walletConnected } = useWallet();
+  const walletAddress = connectedAddress || "";
+  const [showConnectPrompt, setShowConnectPrompt] = useState(false);
 
   // ─── BscScan API queries ───
   const isValidBscAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
@@ -832,6 +834,32 @@ export default function Wallet() {
           </button>
         </div>
       </header>
+
+      {/* Connect Wallet Prompt — shown when no wallet is connected */}
+      {!walletConnected && (
+        <div className="mx-4 mt-4 p-5 rounded-2xl bg-gradient-to-br from-neon-cyan/10 via-neon-purple/10 to-neon-green/5 border border-neon-cyan/20">
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-2xl">
+              💼
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white mb-1">连接您的 Web3 钱包</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                连接 MetaMask、WalletConnect 等钱包，查看您的真实资产、代币余额和交易记录
+              </p>
+            </div>
+            <button
+              onClick={() => setShowConnectPrompt(true)}
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+            >
+              连接钱包
+            </button>
+            <p className="text-xs text-gray-600">
+              支持 Ethereum · BNB Chain · Polygon · Arbitrum · Optimism · Base
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Balance Overview Card */}
       <div className="px-4 pt-4 pb-2">
@@ -1355,6 +1383,12 @@ export default function Wallet() {
       )}
     </AnimatePresence>
     </div>
+
+    {/* Connect Wallet Modal — triggered from the connect prompt */}
+    <WalletConnectModal
+      open={showConnectPrompt}
+      onClose={() => setShowConnectPrompt(false)}
+    />
     </>
   );
 }

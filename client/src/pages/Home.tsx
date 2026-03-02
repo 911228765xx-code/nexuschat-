@@ -5,6 +5,7 @@
  */
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, lazy, Suspense } from "react";
+import { useWallet } from "@/contexts/WalletContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight } from "lucide-react";
@@ -35,6 +36,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);
+  const { address: walletAddress, isConnected: walletConnected, disconnect: disconnectWallet } = useWallet();
 
   const features = [
     {
@@ -75,14 +77,25 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            <Button
-              onClick={() => setWalletOpen(true)}
-              className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 px-3 hidden sm:flex"
-              variant="outline"
-            >
-              <Wallet size={14} className="mr-1.5" />
-              {t("nav.connectWallet")}
-            </Button>
+            {walletConnected ? (
+              <Button
+                onClick={() => setWalletOpen(true)}
+                className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3 hidden sm:flex"
+                variant="outline"
+              >
+                <div className="w-2 h-2 rounded-full bg-[#00ff88] mr-1.5 animate-pulse" />
+                {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setWalletOpen(true)}
+                className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 px-3 hidden sm:flex"
+                variant="outline"
+              >
+                <Wallet size={14} className="mr-1.5" />
+                {t("nav.connectWallet")}
+              </Button>
+            )}
             <Button
               onClick={() => setLocation("/app/chat")}
               className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-9 px-4"

@@ -189,3 +189,11 @@
 - [x] 服务端 console.log 全部替换为 pino 结构化日志（db.ts、index.ts、priceAlertChecker.ts、socket.ts、coinGeckoCache.ts）
 - [x] 新增 server/utils/logger.ts（pino 配置，JSON 格式 + ISO 时间戳）
 - [x] 147 个测试全部通过，0 TS 错误
+
+## v38 Web3 真实钱包连接完善
+
+- [ ] 安装 wagmi + viem 依赖并配置 WalletConnect ProjectID
+- [ ] 重写 WalletContext 使用 wagmi hooks（useAccount, useConnect, useDisconnect）
+- [ ] 更新 WalletConnectModal 支持 MetaMask 直连 + WalletConnect 二维码扫描
+- [ ] 更新钱包页面移除硬编码演示地址，使用真实连接地址
+- [ ] 导航栏"连接钱包"按钮状态同步（已连接显示地址缩写+断开选项）
