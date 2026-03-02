@@ -2,12 +2,14 @@ import { useState, lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { AnimatePresence, motion } from "framer-motion";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
 import AppLayout from "./components/AppLayout";
 import { AppProvider } from "./contexts/AppContext";
+
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
 // Onboarding uses framer-motion (79KB), socket.io (42KB) — both deferred
 const Onboarding = lazy(() => import("./components/Onboarding"));
@@ -35,31 +37,42 @@ const PostDetail = lazy(() => import("./pages/PostDetail"));
 const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
 
-// ─── Minimal loading fallback ────────────────────────────────────────────────
+// ─── Skeleton loader — dark bg, no flash ─────────────────────────────────────
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-[#00d4ff]/30 border-t-[#00d4ff] rounded-full animate-spin" />
-        <span className="text-xs text-muted-foreground">Loading...</span>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="w-2 h-2 rounded-full bg-[#00d4ff]/40 animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-/**
- * PriceAlertSocketLoader — dynamically imports usePriceAlertSocket after initial render
- * This keeps socket.io out of the initial bundle
- */
-function PriceAlertSocketLoader() {
-  useEffect(() => {
-    // Dynamically import the hook module after mount to avoid socket.io in initial bundle
-    import("./hooks/usePriceAlertSocket").then(({ usePriceAlertSocket: _hook }) => {
-      // The hook is imported but we can't call it here (hooks rules)
-      // Instead we use a separate component below
-    });
-  }, []);
-  return null;
+// ─── Page transition wrapper ──────────────────────────────────────────────────
+const pageVariants = {
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] } },
+  exit: { opacity: 0, y: -4, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] as [number, number, number, number] } },
+};
+
+function PageTransition({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      style={{ willChange: "opacity, transform" }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 /**
@@ -75,11 +88,12 @@ const PriceAlertSocket = lazy(() =>
 );
 
 function AppContent() {
+  const [location] = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
   });
-  // make sure to consider if you need authentication for certain routes
+
   return (
     <>
       {/* Lazy-load socket.io connection after initial render */}
@@ -92,124 +106,129 @@ function AppContent() {
           <Onboarding onComplete={() => setShowOnboarding(false)} />
         </Suspense>
       )}
-      <Suspense fallback={<PageLoader />}>
-        <Switch>
-          <Route path="/">
-            <Home />
-          </Route>
-          <Route path="/app/group/:id">
-            <AppLayout hideNav>
-              <GroupChatRoom />
-            </AppLayout>
-          </Route>
-          <Route path="/app/dm/:userId">
-            <AppLayout hideNav>
-              <DMChat />
-            </AppLayout>
-          </Route>
-          <Route path="/app/chat/:id">
-            <AppLayout>
-              <ChatRoom />
-            </AppLayout>
-          </Route>
-          <Route path="/app/chat">
-            <AppLayout>
-              <Chat />
-            </AppLayout>
-          </Route>
-          <Route path="/app/create-group">
-            <AppLayout hideNav>
-              <CreateGroup />
-            </AppLayout>
-          </Route>
-          <Route path="/app/edit-profile">
-            <AppLayout hideNav>
-              <EditProfile />
-            </AppLayout>
-          </Route>
-          <Route path="/app/wallet">
-            <AppLayout hideNav>
-              <Wallet />
-            </AppLayout>
-          </Route>
-          <Route path="/app/contacts">
-            <AppLayout hideNav>
-              <Contacts />
-            </AppLayout>
-          </Route>
-          <Route path="/app/notifications">
-            <AppLayout hideNav>
-              <Notifications />
-            </AppLayout>
-          </Route>
-          <Route path="/app/invite">
-            <AppLayout hideNav>
-              <InviteFriends />
-            </AppLayout>
-          </Route>
-          <Route path="/app/tasks">
-            <AppLayout hideNav>
-              <TaskCenter />
-            </AppLayout>
-          </Route>
-          <Route path="/app/leaderboard">
-            <AppLayout hideNav>
-              <Leaderboard />
-            </AppLayout>
-          </Route>
-          <Route path="/app/settings">
-            <AppLayout hideNav>
-              <Settings />
-            </AppLayout>
-          </Route>
-          <Route path="/app/discover">
-            <AppLayout>
-              <Discover />
-            </AppLayout>
-          </Route>
-          <Route path="/app/post/:id">
-            <AppLayout hideNav>
-              <PostDetail />
-            </AppLayout>
-          </Route>
-          <Route path="/app/research/:token">
-            <AppLayout hideNav>
-              <TokenDetail />
-            </AppLayout>
-          </Route>
-          <Route path="/app/research">
-            <AppLayout>
-              <Research />
-            </AppLayout>
-          </Route>
-          <Route path="/app/watchlist">
-            <AppLayout hideNav>
-              <Watchlist />
-            </AppLayout>
-          </Route>
-          <Route path="/app/trading">
-            <AppLayout>
-              <Trading />
-            </AppLayout>
-          </Route>
-          <Route path="/app/profile">
-            <AppLayout>
-              <Profile />
-            </AppLayout>
-          </Route>
-          <Route path="/app">
-            <AppLayout>
-              <Chat />
-            </AppLayout>
-          </Route>
-          <Route path="/404">
-            <NotFound />
-          </Route>
-          <Route>
-            <NotFound />
-          </Route>
-        </Switch>
-      </Suspense>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <Suspense fallback={<PageLoader />} key={location}>
+          <PageTransition key={location}>
+            <Switch location={location}>
+              <Route path="/">
+                <Home />
+              </Route>
+              <Route path="/app/group/:id">
+                <AppLayout hideNav>
+                  <GroupChatRoom />
+                </AppLayout>
+              </Route>
+              <Route path="/app/dm/:userId">
+                <AppLayout hideNav>
+                  <DMChat />
+                </AppLayout>
+              </Route>
+              <Route path="/app/chat/:id">
+                <AppLayout>
+                  <ChatRoom />
+                </AppLayout>
+              </Route>
+              <Route path="/app/chat">
+                <AppLayout>
+                  <Chat />
+                </AppLayout>
+              </Route>
+              <Route path="/app/create-group">
+                <AppLayout hideNav>
+                  <CreateGroup />
+                </AppLayout>
+              </Route>
+              <Route path="/app/edit-profile">
+                <AppLayout hideNav>
+                  <EditProfile />
+                </AppLayout>
+              </Route>
+              <Route path="/app/wallet">
+                <AppLayout hideNav>
+                  <Wallet />
+                </AppLayout>
+              </Route>
+              <Route path="/app/contacts">
+                <AppLayout hideNav>
+                  <Contacts />
+                </AppLayout>
+              </Route>
+              <Route path="/app/notifications">
+                <AppLayout hideNav>
+                  <Notifications />
+                </AppLayout>
+              </Route>
+              <Route path="/app/invite">
+                <AppLayout hideNav>
+                  <InviteFriends />
+                </AppLayout>
+              </Route>
+              <Route path="/app/tasks">
+                <AppLayout hideNav>
+                  <TaskCenter />
+                </AppLayout>
+              </Route>
+              <Route path="/app/leaderboard">
+                <AppLayout hideNav>
+                  <Leaderboard />
+                </AppLayout>
+              </Route>
+              <Route path="/app/settings">
+                <AppLayout hideNav>
+                  <Settings />
+                </AppLayout>
+              </Route>
+              <Route path="/app/discover">
+                <AppLayout>
+                  <Discover />
+                </AppLayout>
+              </Route>
+              <Route path="/app/post/:id">
+                <AppLayout hideNav>
+                  <PostDetail />
+                </AppLayout>
+              </Route>
+              <Route path="/app/research/:token">
+                <AppLayout hideNav>
+                  <TokenDetail />
+                </AppLayout>
+              </Route>
+              <Route path="/app/research">
+                <AppLayout>
+                  <Research />
+                </AppLayout>
+              </Route>
+              <Route path="/app/watchlist">
+                <AppLayout hideNav>
+                  <Watchlist />
+                </AppLayout>
+              </Route>
+              <Route path="/app/trading">
+                <AppLayout>
+                  <Trading />
+                </AppLayout>
+              </Route>
+              <Route path="/app/profile">
+                <AppLayout>
+                  <Profile />
+                </AppLayout>
+              </Route>
+              <Route path="/app">
+                <AppLayout>
+                  <Chat />
+                </AppLayout>
+              </Route>
+              <Route path="/404">
+                <NotFound />
+              </Route>
+              <Route>
+                <NotFound />
+              </Route>
+            </Switch>
+          </PageTransition>
+        </Suspense>
+      </AnimatePresence>
     </>
   );
 }

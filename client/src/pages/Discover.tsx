@@ -59,6 +59,7 @@ interface MomentPost {
   commentList: Comment[];
   showComments: boolean;
   reportId?: number | null;
+  authorId?: number | null;
 }
 
 /* ─── Mock Data ─── */
@@ -318,6 +319,7 @@ export default function Discover() {
     commentList: [],
     showComments: false,
     reportId: (p as any).reportId ?? null,
+    authorId: p.authorId ?? null,
   }), []);
 
   // Merge server posts into moments (append on page change, replace on page 0)
@@ -370,6 +372,24 @@ export default function Discover() {
       }
     },
   });
+
+  // ─── tRPC: Delete post mutation ───
+  const deletePostMutation = trpc.posts.delete.useMutation({
+    onSuccess: (_, vars) => {
+      setMoments((prev) => prev.filter((m) => m.id !== String(vars.postId)));
+      utils.posts.list.invalidate();
+      toast.success("帖子已删除");
+    },
+    onError: (err) => {
+      toast.error("删除失败: " + err.message);
+    },
+  });
+
+  // ─── Current user (for ownership check) ───
+  const { data: meData } = trpc.auth.me.useQuery();
+
+  // ─── Post options menu state ───
+  const [optionsMenuPostId, setOptionsMenuPostId] = useState<string | null>(null);
 
   // ─── Infinite Scroll State (remaining) ───
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -796,12 +816,47 @@ export default function Discover() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-muted-foreground/50">{post.timestamp}</span>
-                          <button
-                            onClick={() => toast(t("discover.moreOptions") || "More options")}
-                            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
-                          >
-                            <MoreHorizontal size={15} />
-                          </button>
+                          <div className="relative">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setOptionsMenuPostId(optionsMenuPostId === post.id ? null : post.id); }}
+                              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+                            >
+                              <MoreHorizontal size={15} />
+                            </button>
+                            <AnimatePresence>
+                              {optionsMenuPostId === post.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.92, y: -4 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.92, y: -4 }}
+                                  transition={{ duration: 0.12 }}
+                                  className="absolute right-0 top-7 z-50 min-w-[120px] rounded-xl bg-card border border-border/30 shadow-xl overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {meData && post.authorId != null && String(meData.id) === String(post.authorId) ? (
+                                    <button
+                                      onClick={() => {
+                                        setOptionsMenuPostId(null);
+                                        deletePostMutation.mutate({ postId: Number(post.id) });
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                                    >
+                                      <X size={13} />
+                                      删除帖子
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => { setOptionsMenuPostId(null); toast("举报功能即将上线"); }}
+                                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary/40 transition-colors"
+                                    >
+                                      <Share2 size={13} />
+                                      举报
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
                         </div>
                       </div>
 

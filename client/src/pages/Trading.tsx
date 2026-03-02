@@ -314,7 +314,7 @@ export default function Trading() {
 
   const totalProfit = strategies.reduce((s, st) => s + st.totalProfit, 0);
   const totalTrades = strategies.reduce((s, st) => s + st.trades, 0);
-  const avgWinRate = Math.round(strategies.reduce((s, st) => s + st.winRate, 0) / strategies.length);
+  const avgWinRate = strategies.length > 0 ? Math.round(strategies.reduce((s, st) => s + st.winRate, 0) / strategies.length) : 0;
   // Use real positions from backend
   const displayPositions: Position[] = realPositions.map(p => ({
     id: String(p.id),
