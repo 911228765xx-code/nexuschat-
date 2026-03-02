@@ -10,7 +10,7 @@ import { sdk } from "../_core/sdk";
 import { ENV } from "../_core/env";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
-// Rate limiting: 5 requests per 60 seconds per user (heavy endpoint)
+// Rate limiting: 5 requests per 60 seconds per IP (heavy endpoint)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(userId: string): boolean {
@@ -187,17 +187,17 @@ function extractVizData(content: string, token: any, mode: string) {
 }
 
 export async function handleResearchStream(req: Request, res: Response) {
-  // Auth
-  let user: any;
+  // Try to get user for saving reports (optional auth)
+  let user: any = null;
   try {
     user = await sdk.authenticateRequest(req as any);
   } catch {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+    // Not authenticated - allow anonymous access
   }
 
-  // Rate limit
-  if (!checkRateLimit(user.id)) {
+  // Rate limit by user ID if logged in, otherwise by IP
+  const rateLimitKey = user?.id ?? (req.ip ?? "anonymous");
+  if (!checkRateLimit(rateLimitKey)) {
     res.status(429).json({ error: "Rate limit exceeded. Please wait 60 seconds." });
     return;
   }
