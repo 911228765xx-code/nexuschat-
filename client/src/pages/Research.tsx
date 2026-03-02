@@ -964,7 +964,7 @@ export default function Research() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">登录后可发布</span>
                   <a
-                    href={`/api/oauth/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+                    href={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
                     className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-sm text-white font-medium hover:opacity-90 transition-opacity"
                   >
                     登录并发布
@@ -1914,7 +1914,7 @@ export default function Research() {
                 ))}
               </div>
               <a
-                href={`/api/oauth/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+                href={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
                 className="block w-full h-12 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-[#a855f7]/20 flex items-center justify-center"
               >
                 立即登录

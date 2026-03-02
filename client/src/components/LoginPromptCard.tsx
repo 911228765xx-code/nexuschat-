@@ -3,7 +3,6 @@
  * 在需要登录的页面中显示，引导用户登录以解锁完整功能
  */
 import { LogIn, Sparkles, Shield, Zap } from "lucide-react";
-import { getLoginUrl } from "@/const";
 
 interface LoginPromptCardProps {
   /** 页面名称，用于个性化提示 */
@@ -26,7 +25,7 @@ export default function LoginPromptCard({
   compact = false,
 }: LoginPromptCardProps) {
   const handleLogin = () => {
-    window.location.href = getLoginUrl();
+    window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname)}`;
   };
 
   if (compact) {

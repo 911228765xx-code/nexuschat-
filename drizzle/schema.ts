@@ -24,6 +24,7 @@ export const users = mysqlTable("users", {
   bio: text("bio"),
   username: varchar("username", { length: 50 }),
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
+  passwordHash: varchar("passwordHash", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

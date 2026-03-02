@@ -1454,7 +1454,7 @@ export default function Discover() {
 
               {/* CTA */}
               <button
-                onClick={() => { window.location.href = getLoginUrl(window.location.pathname); }}
+                onClick={() => { window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname)}`; }}
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-[#00d4ff]/20"
               >
                 立即登录

@@ -17,7 +17,6 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -37,11 +36,11 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
   const { isAuthenticated, loading: authLoading } = useAuth();
 
   // ─── Global login guard ────────────────────────────────────────────────────
-  // Redirect to Manus OAuth login if user is not authenticated (only for protected routes).
+  // Redirect to internal /login page if user is not authenticated (only for protected routes).
   // Wait until auth check completes (authLoading=false) before redirecting.
   useEffect(() => {
     if (requireAuth && !authLoading && !isAuthenticated) {
-      window.location.href = getLoginUrl();
+      window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname)}`;
     }
   }, [requireAuth, authLoading, isAuthenticated]);
 

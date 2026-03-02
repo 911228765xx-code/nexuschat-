@@ -36,6 +36,7 @@ const PostDetail = lazy(() => import("./pages/PostDetail"));
 const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
 const DownloadPage = lazy(() => import("./pages/Download"));
+const LoginPage = lazy(() => import("./pages/Login"));
 
 // ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
 function PageLoader() {
@@ -120,6 +121,9 @@ function RouteContent() {
           <Switch location={location}>
             <Route path="/">
               <Home />
+            </Route>
+            <Route path="/login">
+              <LoginPage />
             </Route>
             <Route path="/download">
               <DownloadPage />
