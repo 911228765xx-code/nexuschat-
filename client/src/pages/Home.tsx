@@ -210,23 +210,24 @@ export default function Home() {
             >
               {t("home.learnMore")}
             </Button>
-            {canInstall && (
-              <Button
-                onClick={() => {
-                  if (platform === 'ios') {
-                    setShowIOSGuide(true);
-                  } else {
-                    triggerInstall();
-                  }
-                }}
-                disabled={isInstalling}
-                variant="outline"
-                className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent disabled:opacity-60"
-              >
-                <Download size={16} className="mr-2" />
-                {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
-              </Button>
-            )}
+            <Button
+              onClick={() => {
+                if (platform === 'ios') {
+                  setShowIOSGuide(true);
+                } else if (canInstall) {
+                  triggerInstall();
+                } else {
+                  // Fallback: show generic install guide
+                  setShowIOSGuide(true);
+                }
+              }}
+              disabled={isInstalling}
+              variant="outline"
+              className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent disabled:opacity-60"
+            >
+              <Download size={16} className="mr-2" />
+              {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
+            </Button>
           </motion.div>
 
           {/* Stats */}
@@ -412,7 +413,7 @@ export default function Home() {
         </Suspense>
       )}
 
-      {/* iOS PWA Install Guide Modal */}
+      {/* PWA Install Guide Modal */}
       {showIOSGuide && (
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm"
@@ -431,20 +432,41 @@ export default function Home() {
                 <p className="text-xs text-muted-foreground">{t('pwa.installSubtitle')}</p>
               </div>
             </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-                <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
+
+            {platform === 'ios' ? (
+              /* iOS Safari steps */
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <p className="text-gray-300">{t('pwa.iosStep2')} <span className="text-white font-medium">{t('pwa.iosStep2b')}</span></p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                  <p className="text-gray-300">{t('pwa.iosStep3')}</p>
+                </div>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-                <p className="text-gray-300">{t('pwa.iosStep2')} <span className="text-white font-medium">{t('pwa.iosStep2b')}</span></p>
+            ) : (
+              /* Android / Desktop: show browser menu tip */
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <p className="text-gray-300">Open <span className="text-white font-medium">nexuschat.best</span> in Chrome browser</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⋮ menu</span> in the top-right corner</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                  <p className="text-gray-300">Tap <span className="text-white font-medium">“Add to Home screen”</span> or <span className="text-white font-medium">“Install app”</span></p>
+                </div>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
-                <p className="text-gray-300">{t('pwa.iosStep3')}</p>
-              </div>
-            </div>
+            )}
+
             <button
               onClick={() => setShowIOSGuide(false)}
               className="mt-5 w-full h-10 rounded-xl bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 text-sm font-medium hover:bg-[#00ff88]/25 transition-colors"
