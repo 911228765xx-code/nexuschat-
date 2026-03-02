@@ -3,15 +3,20 @@
  * Bottom tab navigation with glassmorphism effect + dynamic unread badges from AppContext
  * 5 tabs: Chat / Discover / Research / Trading / Profile
  * NOTE: framer-motion removed — uses CSS animations to keep initial bundle small
+ *
+ * GLOBAL LOGIN GUARD: All /app/* routes require authentication.
+ * Unauthenticated users are redirected to the Manus OAuth login page.
  */
 import { useLocation, Link } from "wouter";
-import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
+import { MessageCircle, Compass, Brain, TrendingUp, User, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -26,7 +31,17 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const chatUnread = conversations.reduce((sum, c) => sum + c.unread, 0);
   const localNotifUnread = notifications.filter((n) => !n.read).length;
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
+  // ─── Global login guard ────────────────────────────────────────────────────
+  // Redirect to Manus OAuth login if user is not authenticated.
+  // Wait until auth check completes (authLoading=false) before redirecting.
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      window.location.href = getLoginUrl();
+    }
+  }, [authLoading, isAuthenticated]);
+
   // Real unread count from backend (protectedProcedure — only poll when logged in)
   const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -42,6 +57,32 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
     { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 0 },
     { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
   ];
+
+  // Show full-screen loading spinner while auth check is in progress
+  if (authLoading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+          <MessageCircle size={24} className="text-white" />
+        </div>
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <p className="text-xs text-muted-foreground">正在验证登录状态...</p>
+      </div>
+    );
+  }
+
+  // Not authenticated — show redirect message while useEffect fires
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+          <MessageCircle size={24} className="text-white" />
+        </div>
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <p className="text-xs text-muted-foreground">正在跳转到登录页...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
