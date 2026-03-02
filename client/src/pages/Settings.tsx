@@ -106,12 +106,13 @@ export default function Settings() {
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
       toast.success(t("settings.loggedOut"));
-      setTimeout(() => setLocation("/"), 500);
+      // Hard redirect to /login to clear React Query cache and force re-auth
+      setTimeout(() => { window.location.href = "/login"; }, 500);
     },
     onError: () => {
-      // Even if server call fails, clear local state and redirect
+      // Even if server call fails, redirect to login page
       toast.success(t("settings.loggedOut"));
-      setTimeout(() => setLocation("/"), 500);
+      setTimeout(() => { window.location.href = "/login"; }, 500);
     },
   });
   const handleLogout = () => {

@@ -39,8 +39,8 @@ export function useAuth(_options?: UseAuthOptions) {
       // Clear local cache
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
-      // Redirect to app home page (login/landing page), NOT to Manus external page
-      window.location.href = "/";
+      // Redirect to internal /login page (hard refresh clears React Query cache)
+      window.location.href = "/login";
     }
   }, [logoutMutation, utils]);
 

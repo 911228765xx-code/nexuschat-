@@ -26,7 +26,7 @@ export default function Profile() {
   // ✅ AppContext全局状态
   const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   // ─── Real stats from backend (protectedProcedure) ───
   const { data: stats, isLoading: statsLoading } = trpc.user.getUserStats.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -331,9 +331,12 @@ export default function Profile() {
             </a>
           </motion.div>
 
-          {/* Logout — redirect to settings */}
+          {/* Logout — clear session and redirect to /login */}
           <button
-            onClick={() => setLocation("/app/settings")}
+            onClick={() => {
+              logout();
+              setTimeout(() => { window.location.href = "/login"; }, 500);
+            }}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-destructive/5 border border-destructive/15 text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
             <LogOut size={16} />
