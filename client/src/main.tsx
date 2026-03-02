@@ -36,6 +36,29 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+// Suppress WalletConnect/Reown unhandled promise rejections that cause white screen on mobile
+// These errors occur when the WalletConnect relay WebSocket is rejected due to domain not being
+// in the allowlist. They are non-fatal and should not crash the app.
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const msg = reason?.message || String(reason || '');
+  const isWalletConnectError = (
+    msg.includes('Subscribing to') ||
+    msg.includes('Connection interrupted') ||
+    msg.includes('WebSocket connection') ||
+    msg.includes('origin not allowed') ||
+    msg.includes('Unauthorized') ||
+    msg.includes('walletconnect') ||
+    msg.includes('relay.walletconnect') ||
+    msg.includes('wc@2') ||
+    msg.includes('No matching key')
+  );
+  if (isWalletConnectError) {
+    event.preventDefault(); // prevent unhandled rejection from crashing the app
+    return;
+  }
+});
+
 window.__APP_RENDER_START__ = Date.now();
 try {
   createRoot(document.getElementById("root")!).render(

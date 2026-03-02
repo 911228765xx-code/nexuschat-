@@ -12,8 +12,13 @@ import {
 } from "wagmi/chains";
 
 /**
- * Suppress Reown/WalletConnect analytics requests that trigger
- * "Origin not found on Allowlist" errors in dev/preview environments.
+ * Suppress Reown/WalletConnect analytics fetch requests that trigger
+ * "Origin not found on Allowlist" console errors in dev/preview environments.
+ * 
+ * NOTE: WalletConnect WebSocket relay errors (code 3000 Unauthorized) occur when
+ * the domain is not in the WalletConnect Cloud allowlist. These are suppressed
+ * globally via the unhandledrejection handler in main.tsx and are non-fatal.
+ * To fully resolve: add your domain to https://cloud.walletconnect.com allowlist.
  */
 (() => {
   if (typeof window === "undefined") return;
@@ -33,7 +38,8 @@ import {
     if (
       urlStr.includes("pulse.walletconnect") ||
       urlStr.includes("api.web3modal") ||
-      urlStr.includes("getAnalyticsConfig")
+      urlStr.includes("getAnalyticsConfig") ||
+      urlStr.includes("notify.walletconnect")
     ) {
       return Promise.resolve(
         new Response(JSON.stringify({ success: true }), {
