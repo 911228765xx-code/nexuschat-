@@ -293,7 +293,7 @@ export default function Discover() {
 
   // ─── tRPC: Fetch posts from backend (with pagination) ───
   const PAGE_SIZE = 20;
-  const { data: serverPostsData } = trpc.posts.list.useQuery(
+  const { data: serverPostsData, isLoading: postsLoading } = trpc.posts.list.useQuery(
     { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
     { staleTime: 10_000, refetchOnWindowFocus: false }
   );
@@ -787,6 +787,33 @@ export default function Discover() {
                   className="w-5 h-5 border-2 border-neon-cyan/30 border-t-neon-cyan rounded-full"
                 />
                 <span className="text-xs text-muted-foreground">{t("discover.refreshing") || "Refreshing..."}</span>
+              </div>
+            )}
+
+            {/* Moments Feed Skeleton */}
+            {postsLoading && moments.length === 0 && (
+              <div className="space-y-0">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="px-4 py-4 border-b border-border/10">
+                    <div className="flex gap-3">
+                      <div className="w-10 h-10 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="flex gap-2">
+                          <div className="h-3.5 w-24 bg-secondary/60 animate-pulse rounded" />
+                          <div className="h-3.5 w-16 bg-secondary/40 animate-pulse rounded" />
+                        </div>
+                        <div className="h-3 w-full bg-secondary/50 animate-pulse rounded" />
+                        <div className="h-3 w-4/5 bg-secondary/40 animate-pulse rounded" />
+                        <div className="h-3 w-3/5 bg-secondary/30 animate-pulse rounded" />
+                        <div className="flex gap-6 pt-1">
+                          <div className="h-3 w-12 bg-secondary/40 animate-pulse rounded" />
+                          <div className="h-3 w-12 bg-secondary/40 animate-pulse rounded" />
+                          <div className="h-3 w-12 bg-secondary/40 animate-pulse rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

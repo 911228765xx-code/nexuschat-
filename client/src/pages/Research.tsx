@@ -407,7 +407,7 @@ export default function Research() {
   };
 
   // Market overview stats from CoinGecko + Fear & Greed API
-  const { data: marketOverview } = trpc.trading.getMarketOverview.useQuery(undefined, {
+  const { data: marketOverview, isLoading: marketLoading } = trpc.trading.getMarketOverview.useQuery(undefined, {
     staleTime: 120_000,
     refetchInterval: 300_000,
   });
@@ -602,6 +602,20 @@ export default function Research() {
 
       {/* Market Overview Bar */}
       <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto border-b border-border/15 bg-gradient-to-r from-neon-purple/[0.03] via-card/50 to-neon-cyan/[0.03] scrollbar-hide">
+        {/* Skeleton while market data loads */}
+        {marketLoading && (
+          <>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/30 border border-border/20">
+                <div className="w-3 h-3 rounded bg-secondary/60 animate-pulse" />
+                <div className="flex flex-col gap-1">
+                  <div className="h-2 w-10 bg-secondary/40 animate-pulse rounded" />
+                  <div className="h-3 w-14 bg-secondary/60 animate-pulse rounded" />
+                </div>
+              </div>
+            ))}
+          </>
+        )}
         {/* AI Score */}
         <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neon-purple/10 border border-neon-purple/25 hover:border-neon-purple/40 transition-colors">
           <BarChart3 size={11} className="text-neon-purple" />

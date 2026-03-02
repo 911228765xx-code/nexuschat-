@@ -49,7 +49,7 @@ export default function Chat() {
   // No-login mode: auth state not needed
 
   // tRPC: real DM conversations
-  const { data: dmConversations } = trpc.chat.listDMConversations.useQuery(
+  const { data: dmConversations, isLoading: dmLoading } = trpc.chat.listDMConversations.useQuery(
     undefined,
     { refetchInterval: 30_000, staleTime: 15_000 }
   );
@@ -264,7 +264,24 @@ export default function Chat() {
         onRefresh={async () => { await new Promise(r => setTimeout(r, 1000)); toast.success(t("chat.refreshed") || "Refreshed!"); }}
         className="flex-1"
       >
-        {filtered.length === 0 && (
+        {/* Skeleton while DM list loads */}
+        {dmLoading && conversations.length === 0 && (
+          <div className="px-4 pt-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 py-3 border-b border-border/10">
+                <div className="w-12 h-12 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex justify-between">
+                    <div className="h-3.5 w-28 bg-secondary/60 animate-pulse rounded" />
+                    <div className="h-3 w-12 bg-secondary/40 animate-pulse rounded" />
+                  </div>
+                  <div className="h-3 w-3/4 bg-secondary/40 animate-pulse rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!dmLoading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <div className="w-16 h-16 rounded-2xl bg-secondary/40 flex items-center justify-center">
               <MessageSquare size={28} className="text-muted-foreground/40" />

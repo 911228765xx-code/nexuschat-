@@ -6,17 +6,55 @@ import logger from './utils/logger';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+/** Reset the db instance — next getDb() call will reconnect. */
+export function resetDbPool() {
+  _db = null;
+  logger.warn("Database: Instance reset — will reconnect on next query");
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL) return null;
+  if (!_db) {
     try {
+      // Pass the URL string directly; drizzle-orm/mysql2 creates an internal pool
       _db = drizzle(process.env.DATABASE_URL);
+      logger.info("Database: Connected");
     } catch (error) {
       logger.warn({ err: error }, "Database: Failed to connect");
       _db = null;
     }
   }
   return _db;
+}
+
+/** Execute a DB query with automatic retry on connection errors. */
+export async function withDbRetry<T>(
+  fn: (db: ReturnType<typeof drizzle>) => Promise<T>,
+  retries = 2
+): Promise<T | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const db = await getDb();
+    if (!db) return null;
+    try {
+      return await fn(db);
+    } catch (err: unknown) {
+      const isConnErr =
+        err instanceof Error &&
+        (err.message.includes("ECONNRESET") ||
+          err.message.includes("ECONNREFUSED") ||
+          err.message.includes("ETIMEDOUT") ||
+          err.message.includes("Connection lost"));
+      if (isConnErr && attempt < retries) {
+        logger.warn({ attempt, err }, "Database: Connection error, resetting pool and retrying");
+        resetDbPool();
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  return null;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

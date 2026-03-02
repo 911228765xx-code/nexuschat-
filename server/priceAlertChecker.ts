@@ -8,7 +8,7 @@
  *   2. Marks the alert as triggered (isTriggered = true, isActive = false).
  */
 
-import { getDb } from "./db";
+import { withDbRetry } from "./db";
 import { priceAlerts, notifications } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { emitToUser } from "./socket";
@@ -39,16 +39,15 @@ async function fetchPrices(tokenIds: string[]): Promise<Record<string, number>> 
 }
 
 async function checkAlerts() {
-  const db = await getDb();
-  if (!db) return;
+  // Fetch all active, non-triggered alerts (auto-retries on ECONNRESET)
+  const activeAlerts = await withDbRetry((db) =>
+    db
+      .select()
+      .from(priceAlerts)
+      .where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.isTriggered, false)))
+  );
 
-  // Fetch all active, non-triggered alerts
-  const activeAlerts = await db
-    .select()
-    .from(priceAlerts)
-    .where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.isTriggered, false)));
-
-  if (activeAlerts.length === 0) return;
+  if (!activeAlerts || activeAlerts.length === 0) return;
 
   // Collect unique token IDs and fetch prices
   const tokenIds = activeAlerts.map((a) => a.tokenId);
@@ -70,10 +69,12 @@ async function checkAlerts() {
     if (!triggered) continue;
 
     // 1. Mark alert as triggered
-    await db
-      .update(priceAlerts)
-      .set({ isTriggered: true, isActive: false })
-      .where(eq(priceAlerts.id, alert.id));
+    await withDbRetry((db) =>
+      db
+        .update(priceAlerts)
+        .set({ isTriggered: true, isActive: false })
+        .where(eq(priceAlerts.id, alert.id))
+    );
 
     // 2. Insert a system notification for the user
     const directionLabel = alert.condition === "above" ? "above ↑" : "below ↓";
@@ -81,15 +82,17 @@ async function checkAlerts() {
       `🔔 Price Alert: ${alert.tokenSymbol} is now $${currentPrice.toLocaleString()} — ` +
       `your target of $${target.toLocaleString()} (${directionLabel}) has been reached!`;
 
-    await db.insert(notifications).values({
-      userId: alert.userId,
-      type: "system",
-      fromUserId: null,
-      fromUserName: "NexusChat",
-      fromUserAvatar: "🔔",
-      content,
-      isRead: false,
-    });
+    await withDbRetry((db) =>
+      db.insert(notifications).values({
+        userId: alert.userId,
+        type: "system",
+        fromUserId: null,
+        fromUserName: "NexusChat",
+        fromUserAvatar: "🔔",
+        content,
+        isRead: false,
+      })
+    );
 
     // 3. Push real-time Socket.IO notification to the user (if online)
     emitToUser(alert.userId, "price_alert", {
@@ -109,7 +112,7 @@ async function checkAlerts() {
 }
 
 export function startPriceAlertChecker() {
-  logger.info("PriceAlert: Checker started \u2014 interval: 2 min");
+  logger.info("PriceAlert: Checker started — interval: 2 min");
   // Run immediately on startup, then on interval
   checkAlerts().catch((err) => logger.error({ err }, "PriceAlert: check failed"));
   setInterval(() => {
