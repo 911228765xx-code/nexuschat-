@@ -15,25 +15,17 @@ const cache = new Map<string, CacheEntry<any>>();
 
 // Default TTLs (in ms)
 const TTL = {
-  prices: 60_000,       // 1 min for price data
-  chart: 300_000,       // 5 min for chart data
-  trending: 600_000,    // 10 min for trending
-  tokenDetail: 120_000, // 2 min for token detail
-  search: 300_000,      // 5 min for search results
+  prices: 30_000,       // 30s for price data (near real-time)
+  chart: 180_000,       // 3 min for chart data
+  trending: 300_000,    // 5 min for trending
+  tokenDetail: 30_000,  // 30s for token detail (near real-time)
+  search: 60_000,       // 1 min for search results
 };
 
-// Rate limiter: track last request time
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1500; // 1.5s between requests (safe for free tier)
+// In-flight deduplication: prevent multiple concurrent requests for the same key
+const inFlight = new Map<string, Promise<any>>();
 
-async function rateLimitedFetch(url: string, timeoutMs = 8000): Promise<Response> {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
-  }
-  lastRequestTime = Date.now();
-
+async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -47,7 +39,7 @@ async function rateLimitedFetch(url: string, timeoutMs = 8000): Promise<Response
 }
 
 /**
- * Fetch with cache + exponential backoff retry
+ * Fetch with cache + exponential backoff retry + in-flight deduplication
  */
 export async function cachedFetch<T>(
   cacheKey: string,
@@ -56,53 +48,67 @@ export async function cachedFetch<T>(
   parser: (res: Response) => Promise<T>,
   maxRetries = 2,
 ): Promise<T | null> {
-  // Check cache first
+  // Check cache first (fresh data)
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 
-  // Fetch with retry
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await rateLimitedFetch(url);
+  // Deduplicate in-flight requests for the same key
+  if (inFlight.has(cacheKey)) {
+    return inFlight.get(cacheKey)!;
+  }
 
-      if (res.status === 429) {
-        // Rate limited — wait with exponential backoff
-        const waitMs = Math.min(2000 * Math.pow(2, attempt), 30000);
-        logger.warn({ cacheKey, waitMs, attempt: attempt + 1, maxAttempts: maxRetries + 1 }, `CoinGecko: 429 rate limited, retrying in ${waitMs}ms`);
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
+  const fetchPromise = (async () => {
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetchWithTimeout(url);
 
-      if (!res.ok) {
-        throw new Error(`CoinGecko API error: ${res.status}`);
-      }
+        if (res.status === 429) {
+          // Rate limited — wait with exponential backoff
+          const waitMs = Math.min(2000 * Math.pow(2, attempt), 15000);
+          logger.warn({ cacheKey, waitMs, attempt: attempt + 1, maxAttempts: maxRetries + 1 }, `CoinGecko: 429 rate limited, retrying in ${waitMs}ms`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
 
-      const data = await parser(res);
+        if (!res.ok) {
+          throw new Error(`CoinGecko API error: ${res.status}`);
+        }
 
-      // Store in cache
-      cache.set(cacheKey, { data, expiresAt: Date.now() + ttlMs });
+        const data = await parser(res);
 
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      if (attempt < maxRetries) {
-        const waitMs = 1000 * Math.pow(2, attempt);
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        // Store in cache
+        cache.set(cacheKey, { data, expiresAt: Date.now() + ttlMs });
+
+        return data;
+      } catch (err) {
+        lastError = err as Error;
+        if (attempt < maxRetries) {
+          const waitMs = 500 * Math.pow(2, attempt);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
       }
     }
-  }
 
-  // If all retries failed, return stale cache if available
-  if (cached) {
-    logger.warn({ cacheKey }, "CoinGecko: All retries failed, returning stale cache");
-    return cached.data;
-  }
+    // If all retries failed, return stale cache if available
+    if (cached) {
+      logger.warn({ cacheKey }, "CoinGecko: All retries failed, returning stale cache");
+      return cached.data;
+    }
 
-  logger.error({ cacheKey, err: lastError }, "CoinGecko: All retries failed");
-  return null;
+    logger.error({ cacheKey, err: lastError }, "CoinGecko: All retries failed");
+    return null;
+  })();
+
+  inFlight.set(cacheKey, fetchPromise);
+  try {
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    inFlight.delete(cacheKey);
+  }
 }
 
 /**
@@ -111,8 +117,8 @@ export async function cachedFetch<T>(
 export function cleanupCache(): void {
   const now = Date.now();
   for (const [key, entry] of Array.from(cache.entries())) {
-    // Keep stale entries for up to 10 minutes as fallback
-    if (entry.expiresAt + 600_000 < now) {
+    // Keep stale entries for up to 5 minutes as fallback
+    if (entry.expiresAt + 300_000 < now) {
       cache.delete(key);
     }
   }

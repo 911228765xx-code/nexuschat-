@@ -317,6 +317,8 @@ export default function Research() {
     setAiReportPrice(null);
     setAiReportMcap(null);
     setAiReportId(null);
+    setAiKeyMetrics([]);
+    setAiScore(null);
 
     try {
       const res = await fetch("/api/research/stream", {
@@ -333,17 +335,15 @@ export default function Research() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
+
+      const processEvent = (eventText: string) => {
+        for (const line of eventText.split("\n")) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6).trim();
+          if (!payload || payload === "[DONE]") continue;
           try {
-            const json = JSON.parse(trimmed.slice(6));
+            const json = JSON.parse(payload);
             if (json.token) setAiReportContent(prev => (prev ?? "") + json.token);
             if (json.done) {
               setIsSearching(false);
@@ -361,7 +361,23 @@ export default function Research() {
               toast.success(`AI 研究报告已生成: ${json.meta?.tokenName ?? sym}`);
             }
             if (json.error) { toast.error("报告生成失败: " + json.error); setIsSearching(false); }
-          } catch { /* skip */ }
+          } catch { /* skip malformed */ }
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          // Process any remaining buffer
+          if (buffer.trim()) processEvent(buffer);
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        // Split on double-newline (SSE event boundary)
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const event of events) {
+          if (event.trim()) processEvent(event);
         }
       }
     } catch (err: any) {
@@ -772,50 +788,62 @@ export default function Research() {
             </div>
 
             {/* Key Metrics Grid - Visualized Data Cards */}
-            {aiKeyMetrics.length > 0 && (
+            {(aiKeyMetrics.length > 0 || isSearching) && (
               <div className="px-4 py-3 border-b border-white/[0.06] bg-[#060b18] shrink-0">
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {aiKeyMetrics.slice(0, 5).map((m, i) => (
-                    <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] hover:border-[#a855f7]/20 transition-colors">
-                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 truncate">{m.label}</p>
-                      <p className={`text-xs font-bold font-mono truncate ${
-                        m.isChange
-                          ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
-                          : "text-white"
-                      }`}>{m.value}</p>
-                      {m.isProgress && m.progressVal !== undefined && (
-                        <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-[#a855f7] to-[#00d4ff] rounded-full"
-                            style={{ width: `${Math.min(100, m.progressVal)}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {/* Second row for remaining metrics */}
-                {aiKeyMetrics.length > 5 && (
-                  <div className="grid grid-cols-4 gap-2 mt-2">
-                    {aiKeyMetrics.slice(5).map((m, i) => (
-                      <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06]">
-                        <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 truncate">{m.label}</p>
-                        <p className={`text-xs font-bold font-mono truncate ${
-                          m.isChange
-                            ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
-                            : "text-white"
-                        }`}>{m.value}</p>
-                        {m.isProgress && m.progressVal !== undefined && (
-                          <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-[#a855f7] to-[#00d4ff] rounded-full"
-                              style={{ width: `${Math.min(100, m.progressVal)}%` }}
-                            />
-                          </div>
-                        )}
+                {isSearching && aiKeyMetrics.length === 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] animate-pulse">
+                        <div className="h-2 bg-white/10 rounded mb-2 w-3/4" />
+                        <div className="h-3 bg-white/15 rounded w-full" />
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {aiKeyMetrics.slice(0, 5).map((m, i) => (
+                        <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] hover:border-[#a855f7]/20 transition-colors">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 truncate">{m.label}</p>
+                          <p className={`text-xs font-bold font-mono truncate ${
+                            m.isChange
+                              ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                              : "text-white"
+                          }`}>{m.value}</p>
+                          {m.isProgress && m.progressVal !== undefined && (
+                            <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-[#a855f7] to-[#00d4ff] rounded-full"
+                                style={{ width: `${Math.min(100, m.progressVal)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {aiKeyMetrics.length > 5 && (
+                      <div className="grid grid-cols-4 gap-2 mt-2">
+                        {aiKeyMetrics.slice(5).map((m, i) => (
+                          <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06]">
+                            <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 truncate">{m.label}</p>
+                            <p className={`text-xs font-bold font-mono truncate ${
+                              m.isChange
+                                ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                                : "text-white"
+                            }`}>{m.value}</p>
+                            {m.isProgress && m.progressVal !== undefined && (
+                              <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#a855f7] to-[#00d4ff] rounded-full"
+                                  style={{ width: `${Math.min(100, m.progressVal)}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

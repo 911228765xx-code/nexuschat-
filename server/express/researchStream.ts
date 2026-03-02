@@ -1,23 +1,22 @@
 /**
  * Research Stream — SSE endpoint for streaming AI research reports
  * POST /api/research/stream
- * 
- * Authenticates via session cookie, fetches CoinGecko + Fear & Greed data,
+ *
+ * Fetches real-time data from CryptoCompare (free, no API key needed),
  * streams LLM report token-by-token via SSE, then sends vizData at the end.
  */
 import type { Request, Response } from "express";
 import { sdk } from "../_core/sdk";
 import { ENV } from "../_core/env";
-import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
-// Rate limiting: 5 requests per 60 seconds per IP (heavy endpoint)
+// Rate limiting: 5 requests per 60 seconds per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
-function checkRateLimit(userId: string): boolean {
+function checkRateLimit(key: string): boolean {
   const now = Date.now();
-  const entry = rateLimitMap.get(userId);
+  const entry = rateLimitMap.get(key);
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
+    rateLimitMap.set(key, { count: 1, resetAt: now + 60_000 });
     return true;
   }
   if (entry.count >= 5) return false;
@@ -25,41 +24,148 @@ function checkRateLimit(userId: string): boolean {
   return true;
 }
 
-const fmtUsd = (v: number | null | undefined) =>
-  v ? (v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${v.toFixed(2)}`) : "N/A";
-const fmtPct = (v: number | null | undefined) =>
-  v !== null && v !== undefined ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "N/A";
-const fmtNum = (v: number | null | undefined) =>
-  v ? (v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v.toFixed(0)) : "N/A";
+// Simple in-memory cache
+const cache = new Map<string, { data: any; expiresAt: number }>();
 
-async function fetchAllData(symbol: string) {
-  // Parallel fetch: token data + global market + fear & greed + BTC price
-  const [tokenData, globalData, fearGreedData, btcData, priceHistory] = await Promise.allSettled([
-    // Token detail
-    (async () => {
-      const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
-      const searchData = await cachedFetch<any>(`token:search:${symbol.toLowerCase()}`, searchUrl, TTL.search, (r) => r.json());
-      const coin = searchData?.coins?.[0];
-      if (!coin) return null;
-      const detailUrl = `https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&community_data=false&developer_data=false`;
-      return cachedFetch<any>(`token:detail:${coin.id}`, detailUrl, TTL.tokenDetail, (r) => r.json());
-    })(),
-    // Global market
-    cachedFetch<any>("global:market", "https://api.coingecko.com/api/v3/global", TTL.prices, (r) => r.json()),
-    // Fear & Greed
-    cachedFetch<any>("fear:greed", "https://api.alternative.me/fng/?limit=1", TTL.prices, (r) => r.json()),
-    // BTC price
-    cachedFetch<any>("btc:price", "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", TTL.prices, (r) => r.json()),
-    // 30d price history (fetched separately to avoid rate limit)
-    null,
+async function fetchWithCache<T>(key: string, url: string, ttlMs: number): Promise<T | null> {
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    if (!res.ok) return cached?.data ?? null;
+    const data = await res.json();
+    cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    return data;
+  } catch {
+    return cached?.data ?? null;
+  }
+}
+
+const fmtUsd = (v: number | null | undefined) =>
+  v != null ? (v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${v.toFixed(2)}`) : "N/A";
+const fmtPct = (v: number | null | undefined) =>
+  v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "N/A";
+const fmtNum = (v: number | null | undefined) =>
+  v != null ? (v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v.toFixed(0)) : "N/A";
+
+interface TokenData {
+  symbol: string;
+  name: string;
+  price: number | null;
+  change24h: number | null;
+  change7d: number | null;
+  change30d: number | null;
+  marketCap: number | null;
+  rank: number | null;
+  volume24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
+  supply: number | null;
+  ath: number | null;
+}
+
+interface MarketData {
+  btcDominance: number | null;
+  totalMarketCap: number | null;
+  fearGreedValue: number | null;
+  fearGreedLabel: string | null;
+}
+
+async function fetchTokenData(symbol: string): Promise<TokenData> {
+  const sym = symbol.toUpperCase();
+
+  // Fetch current price + market data from CryptoCompare
+  const [priceData, histData] = await Promise.all([
+    fetchWithCache<any>(
+      `cc:price:${sym}`,
+      `https://min-api.cryptocompare.com/data/pricemultifull?fsyms=${sym}&tsyms=USD`,
+      30_000
+    ),
+    fetchWithCache<any>(
+      `cc:hist:${sym}`,
+      `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${sym}&tsym=USD&limit=31`,
+      120_000
+    ),
   ]);
 
-  const token = tokenData.status === "fulfilled" ? tokenData.value : null;
-  const global = globalData.status === "fulfilled" ? globalData.value?.data : null;
-  const fg = fearGreedData.status === "fulfilled" ? fearGreedData.value?.data?.[0] : null;
-  const btc = btcData.status === "fulfilled" ? btcData.value?.bitcoin?.usd : null;
+  const raw = priceData?.RAW?.[sym]?.USD ?? null;
+  const histPoints: any[] = histData?.Data?.Data ?? [];
 
-  return { token, global, fg, btc };
+  let change7d: number | null = null;
+  let change30d: number | null = null;
+  if (histPoints.length >= 31) {
+    const priceNow = histPoints[histPoints.length - 1]?.close;
+    const price7d = histPoints[histPoints.length - 8]?.close;
+    const price30d = histPoints[0]?.close;
+    if (priceNow && price7d) change7d = (priceNow - price7d) / price7d * 100;
+    if (priceNow && price30d) change30d = (priceNow - price30d) / price30d * 100;
+  }
+
+  // Get market cap rank from top 200 list
+  const topCoinsRes = await fetchWithCache<any>(
+    "cc:top200",
+    "https://min-api.cryptocompare.com/data/top/mktcapfull?limit=200&tsym=USD",
+    120_000
+  );
+  let rank: number | null = null;
+  const topCoinsList: any[] = Array.isArray(topCoinsRes?.Data) ? topCoinsRes.Data : [];
+  if (topCoinsList.length > 0) {
+    const idx = topCoinsList.findIndex((c: any) => c.CoinInfo?.Name?.toUpperCase() === sym);
+    if (idx >= 0) rank = idx + 1;
+  }
+
+  return {
+    symbol: sym,
+    name: raw?.FROMSYMBOL ?? sym,
+    price: raw?.PRICE ?? null,
+    change24h: raw?.CHANGEPCT24HOUR ?? null,
+    change7d,
+    change30d,
+    marketCap: raw?.MKTCAP ?? null,
+    rank,
+    volume24h: raw?.TOTALVOLUME24HTO ?? null,
+    high24h: raw?.HIGH24HOUR ?? null,
+    low24h: raw?.LOW24HOUR ?? null,
+    supply: raw?.SUPPLY ?? null,
+    ath: null, // CryptoCompare free tier doesn't provide ATH
+  };
+}
+
+async function fetchMarketData(): Promise<MarketData> {
+  const [btcData, fgData] = await Promise.all([
+    fetchWithCache<any>(
+      "cc:btc:dom",
+      "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC&tsyms=USD",
+      30_000
+    ),
+    fetchWithCache<any>(
+      "fg:index",
+      "https://api.alternative.me/fng/?limit=1",
+      300_000
+    ),
+  ]);
+
+  // BTC dominance approximation from market cap
+  const btcMcap = btcData?.RAW?.BTC?.USD?.MKTCAP ?? null;
+  // Total crypto market cap from CryptoCompare global
+  const globalData = await fetchWithCache<any>(
+    "cc:global",
+    "https://min-api.cryptocompare.com/data/top/mktcapfull?limit=1&tsym=USD",
+    60_000
+  );
+
+  const fg = fgData?.data?.[0] ?? null;
+
+  return {
+    btcDominance: null, // Will be estimated from BTC mcap
+    totalMarketCap: btcMcap ? btcMcap / 0.55 : null, // rough estimate
+    fearGreedValue: fg ? parseInt(fg.value) : null,
+    fearGreedLabel: fg?.value_classification ?? null,
+  };
 }
 
 function buildSystemPrompt(mode: string): string {
@@ -69,47 +175,27 @@ function buildSystemPrompt(mode: string): string {
   return "你是一位顶级加密货币研究机构的首席分析师，擅长多维度深度分析。你的报告以数据驱动、逻辑严密、观点鲜明著称。每句话必须包含具体数字或明确观点，禁止套话废话。回复使用中文。";
 }
 
-function buildPrompt(symbol: string, mode: string, token: any, global: any, fg: any, btc: number | null): string {
-  const md = token?.market_data;
-  const price = md?.current_price?.usd;
-  const change24h = md?.price_change_percentage_24h;
-  const change7d = md?.price_change_percentage_7d;
-  const change30d = md?.price_change_percentage_30d;
-  const marketCap = md?.market_cap?.usd;
-  const rank = token?.market_cap_rank;
-  const volume24h = md?.total_volume?.usd;
-  const ath = md?.ath?.usd;
-  const athChange = md?.ath_change_percentage?.usd;
-  const circSupply = md?.circulating_supply;
-  const maxSupply = md?.max_supply;
-  const sentiment = token?.sentiment_votes_up_percentage;
-  const fdv = md?.fully_diluted_valuation?.usd;
-  const volMcap = volume24h && marketCap ? (volume24h / marketCap * 100).toFixed(2) : null;
+function buildPrompt(token: TokenData, market: MarketData, mode: string): string {
+  const volMcap = token.volume24h && token.marketCap ? (token.volume24h / token.marketCap * 100).toFixed(2) : null;
 
-  const tokenSection = token ? `=== ${token.name} (${symbol.toUpperCase()}) 实时数据 ===
-价格: ${price ? `$${price.toLocaleString()}` : "N/A"}
-24h: ${fmtPct(change24h)} | 7d: ${fmtPct(change7d)} | 30d: ${fmtPct(change30d)}
-市值: ${fmtUsd(marketCap)} (排名 #${rank ?? "N/A"}) | FDV: ${fmtUsd(fdv)}
-24h 成交量: ${fmtUsd(volume24h)}${volMcap ? ` (量/市值比: ${volMcap}%)` : ""}
-ATH: ${ath ? `$${ath.toLocaleString()}` : "N/A"} (距ATH ${fmtPct(athChange)})
-流通量: ${fmtNum(circSupply)}${maxSupply ? ` / 最大: ${fmtNum(maxSupply)}` : ""}
-社区情绪: ${sentiment ? `${sentiment.toFixed(0)}% 看涨` : "N/A"}` : `代币: ${symbol.toUpperCase()}\n（无法获取实时数据）`;
+  const tokenSection = `=== ${token.name} (${token.symbol}) 实时数据 ===
+价格: ${token.price ? `$${token.price.toLocaleString()}` : "N/A"}
+24h: ${fmtPct(token.change24h)} | 7d: ${fmtPct(token.change7d)} | 30d: ${fmtPct(token.change30d)}
+市值: ${fmtUsd(token.marketCap)}${token.rank ? ` (排名 #${token.rank})` : ""}
+24h 成交量: ${fmtUsd(token.volume24h)}${volMcap ? ` (量/市值比: ${volMcap}%)` : ""}
+24h 最高: ${token.high24h ? `$${token.high24h.toLocaleString()}` : "N/A"} / 最低: ${token.low24h ? `$${token.low24h.toLocaleString()}` : "N/A"}
+流通量: ${fmtNum(token.supply)}`;
 
-  const globalSection = global ? `\n=== 宏观市场 ===
-BTC 主导率: ${global.market_cap_percentage?.btc?.toFixed(1) ?? "N/A"}%
-ETH 主导率: ${global.market_cap_percentage?.eth?.toFixed(1) ?? "N/A"}%
-加密总市值: ${fmtUsd(global.total_market_cap?.usd)}
-24h 总成交量: ${fmtUsd(global.total_volume?.usd)}
-BTC 价格: ${btc ? `$${btc.toLocaleString()}` : "N/A"}` : "";
+  const marketSection = market.fearGreedValue != null
+    ? `\n=== 市场情绪 ===\n恐惧贪婪指数: ${market.fearGreedValue} (${market.fearGreedLabel})\n总市值估算: ${fmtUsd(market.totalMarketCap)}`
+    : "";
 
-  const fgSection = fg ? `\n恐惧贪婪指数: ${fg.value} (${fg.value_classification})` : "";
-
-  const baseContext = tokenSection + globalSection + fgSection;
+  const baseContext = tokenSection + marketSection;
 
   if (mode === "quick") {
     return `${baseContext}
 
-请对 ${symbol.toUpperCase()} 进行快速研判（250-350字）：
+请对 ${token.symbol} 进行快速研判（250-350字）：
 1. **核心判断**：一句话给出明确方向（看涨/看跌/中性）及理由
 2. **关键数据**：引用上述数据中最重要的2-3个指标支撑判断
 3. **操作建议**：具体的入场/观望/离场建议（含价格参考）
@@ -120,7 +206,7 @@ BTC 价格: ${btc ? `$${btc.toLocaleString()}` : "N/A"}` : "";
 
   return `${baseContext}
 
-请对 ${symbol.toUpperCase()} 进行深度投研分析（600-800字），包含以下章节：
+请对 ${token.symbol} 进行深度投研分析（600-800字），包含以下章节：
 
 ## 市场概况
 引用具体数据描述当前价格位置、趋势和市场情绪
@@ -129,10 +215,10 @@ BTC 价格: ${btc ? `$${btc.toLocaleString()}` : "N/A"}` : "";
 基于价格变化数据分析支撑/阻力位，趋势判断
 
 ## 基本面分析
-代币经济学（供应量/FDV/成交量比）、项目价值评估
+代币经济学（供应量/成交量比）、项目价值评估
 
 ## 宏观环境
-结合BTC主导率、恐惧贪婪指数分析市场大环境影响
+结合恐惧贪婪指数分析市场大环境影响
 
 ## 风险评估
 列出主要风险因素，给出风险等级（低/中/高）
@@ -143,44 +229,51 @@ BTC 价格: ${btc ? `$${btc.toLocaleString()}` : "N/A"}` : "";
 在报告结尾给出：**综合评分: X/10** | **风险等级: 低/中/高** | **市场情绪: 看涨/中性/看跌**`;
 }
 
-function extractVizData(content: string, token: any, mode: string) {
-  const md = token?.market_data;
-  
+function extractVizData(content: string, token: TokenData) {
   // Extract AI score
   const scoreMatch = content.match(/综合评分[：:]\s*(\d+)\s*\/\s*10/);
   const aiScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
 
   // Extract sentiment
   let sentiment: "bullish" | "neutral" | "bearish" = "neutral";
-  if (content.includes("看涨") || content.includes("bullish")) sentiment = "bullish";
-  else if (content.includes("看跌") || content.includes("bearish")) sentiment = "bearish";
+  if (content.includes("市场情绪: 看涨") || content.includes("市场情绪：看涨") || content.includes("核心判断.*看涨")) sentiment = "bullish";
+  else if (content.includes("市场情绪: 看跌") || content.includes("市场情绪：看跌")) sentiment = "bearish";
+  else if (content.includes("看涨") && !content.includes("看跌")) sentiment = "bullish";
+  else if (content.includes("看跌") && !content.includes("看涨")) sentiment = "bearish";
 
   // Extract risk level
   let riskLevel: "low" | "medium" | "high" = "medium";
   if (content.includes("风险等级: 低") || content.includes("风险等级：低") || content.includes("低风险")) riskLevel = "low";
   else if (content.includes("风险等级: 高") || content.includes("风险等级：高") || content.includes("高风险")) riskLevel = "high";
 
-  // Key metrics
-  const price = md?.current_price?.usd;
-  const change24h = md?.price_change_percentage_24h;
-  const change7d = md?.price_change_percentage_7d;
-  const change30d = md?.price_change_percentage_30d;
-  const marketCap = md?.market_cap?.usd;
-  const rank = token?.market_cap_rank;
-  const volume24h = md?.total_volume?.usd;
-  const volMcap = volume24h && marketCap ? (volume24h / marketCap * 100) : null;
-  const sentimentScore = token?.sentiment_votes_up_percentage;
+  const volMcap = token.volume24h && token.marketCap ? (token.volume24h / token.marketCap * 100) : null;
 
   const keyMetrics = [
-    { label: "当前价格", value: price ? `$${price.toLocaleString()}` : "N/A" },
-    { label: "24h 涨跌", value: change24h !== undefined ? `${change24h >= 0 ? "+" : ""}${change24h?.toFixed(2)}%` : "N/A", isChange: true, changeVal: change24h },
-    { label: "7d 涨跌", value: change7d !== undefined ? `${change7d >= 0 ? "+" : ""}${change7d?.toFixed(2)}%` : "N/A", isChange: true, changeVal: change7d },
-    { label: "30d 涨跌", value: change30d !== undefined ? `${change30d >= 0 ? "+" : ""}${change30d?.toFixed(2)}%` : "N/A", isChange: true, changeVal: change30d },
-    { label: "市值", value: fmtUsd(marketCap) },
-    { label: "市值排名", value: rank ? `#${rank}` : "N/A" },
-    { label: "24h 成交量", value: fmtUsd(volume24h) },
+    { label: "当前价格", value: token.price ? `$${token.price.toLocaleString()}` : "N/A" },
+    {
+      label: "24h 涨跌",
+      value: token.change24h != null ? `${token.change24h >= 0 ? "+" : ""}${token.change24h.toFixed(2)}%` : "N/A",
+      isChange: true,
+      changeVal: token.change24h,
+    },
+    {
+      label: "7d 涨跌",
+      value: token.change7d != null ? `${token.change7d >= 0 ? "+" : ""}${token.change7d.toFixed(2)}%` : "N/A",
+      isChange: true,
+      changeVal: token.change7d,
+    },
+    {
+      label: "30d 涨跌",
+      value: token.change30d != null ? `${token.change30d >= 0 ? "+" : ""}${token.change30d.toFixed(2)}%` : "N/A",
+      isChange: true,
+      changeVal: token.change30d,
+    },
+    { label: "市值", value: fmtUsd(token.marketCap) },
+    { label: "市值排名", value: token.rank ? `#${token.rank}` : "N/A" },
+    { label: "24h 成交量", value: fmtUsd(token.volume24h) },
     { label: "量/市值比", value: volMcap ? `${volMcap.toFixed(2)}%` : "N/A" },
-    { label: "社区情绪", value: sentimentScore ? `${sentimentScore.toFixed(0)}% 看涨` : "N/A", isProgress: true, progressVal: sentimentScore },
+    { label: "24h 最高", value: token.high24h ? `$${token.high24h.toLocaleString()}` : "N/A" },
+    { label: "24h 最低", value: token.low24h ? `$${token.low24h.toLocaleString()}` : "N/A" },
   ];
 
   return { aiScore, sentiment, riskLevel, keyMetrics };
@@ -226,12 +319,15 @@ export async function handleResearchStream(req: Request, res: Response) {
   };
 
   try {
-    // Fetch all data
-    const { token, global, fg, btc } = await fetchAllData(tokenSymbol);
+    // Fetch all data in parallel
+    const [token, market] = await Promise.all([
+      fetchTokenData(tokenSymbol),
+      fetchMarketData(),
+    ]);
 
     // Build prompt
     const systemPrompt = buildSystemPrompt(mode);
-    const userPrompt = buildPrompt(tokenSymbol, mode, token, global, fg, btc);
+    const userPrompt = buildPrompt(token, market, mode);
 
     // Call LLM with streaming
     const apiUrl = ENV.forgeApiUrl
@@ -304,16 +400,38 @@ export async function handleResearchStream(req: Request, res: Response) {
     }
 
     // Send vizData after streaming completes
-    const vizData = extractVizData(fullContent, token, mode);
+    const vizData = extractVizData(fullContent, token);
     sendEvent(JSON.stringify({
       done: true,
       vizData,
       meta: {
-        tokenName: token?.name ?? tokenSymbol.toUpperCase(),
-        price: token?.market_data?.current_price?.usd ?? null,
-        marketCap: token?.market_data?.market_cap?.usd ?? null,
+        tokenName: token.name,
+        price: token.price,
+        marketCap: token.marketCap,
       },
     }));
+
+    // Save report to DB if user is logged in
+    if (user) {
+      try {
+        const { getDb } = await import("../db");
+        const { researchReports } = await import("../../drizzle/schema");
+        const db = await getDb();
+        if (!db) throw new Error("DB unavailable");
+        await db.insert(researchReports).values({
+          userId: user.id,
+          tokenSymbol: tokenSymbol.toUpperCase(),
+          tokenName: token.name,
+          reportContent: fullContent,
+          sentiment: vizData.sentiment,
+          riskLevel: vizData.riskLevel,
+          priceAtReport: token.price ? `$${token.price.toLocaleString()}` : undefined,
+          marketCapAtReport: fmtUsd(token.marketCap),
+        });
+      } catch {
+        // Ignore DB errors for anonymous users
+      }
+    }
   } catch (err: any) {
     if (!res.writableEnded) {
       sendEvent(JSON.stringify({ error: err.message ?? "Unknown error" }));
