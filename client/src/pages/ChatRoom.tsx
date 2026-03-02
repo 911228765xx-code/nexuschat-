@@ -5,6 +5,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useSocket } from "@/hooks/useSocket";
 import { ArrowLeft, Send, Smile, Image as ImageIcon, MoreVertical, Bot, X, Reply, Gift, ArrowUpDown, ChevronDown, Wallet, Mic, MapPin, FileText, Play, Pause, Volume2, Download, Plus, Copy, Forward, Star, Trash2 } from "lucide-react";
 import EnhancedInput from "@/components/EnhancedInput";
 import SwipeMessage from "@/components/SwipeMessage";
@@ -126,42 +128,67 @@ export default function ChatRoom() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Auth state for WebSocket
+  const { user } = useAuth();
+  const socket = useSocket({ userId: user?.id, userName: user?.name || user?.email || "User" });
+
   // Parse groupId from URL param (DM rooms use numeric IDs)
   const groupId = id ? parseInt(id, 10) : NaN;
   const isValidRoom = !isNaN(groupId) && groupId > 0;
 
-  // tRPC: poll messages from backend every 3s
+  // tRPC: load initial messages once (WebSocket handles real-time updates)
   const { data: serverMessages } = trpc.chat.getMessages.useQuery(
     { groupId, limit: 50 },
     {
       enabled: isValidRoom,
-      refetchInterval: 3000,
-      staleTime: 2000,
+      staleTime: Infinity,
     }
   );
 
-  // Merge server messages with local optimistic messages
+  // Load initial messages from server
   useEffect(() => {
     if (!serverMessages || serverMessages.length === 0) return;
-    setMessages((prev) => {
-      const serverIds = new Set(serverMessages.map((m) => String(m.id)));
-      // Keep local-only optimistic messages (timestamp-based IDs)
-      const localOnly = prev.filter((m) => !serverIds.has(m.id) && Number(m.id) > 1_700_000_000_000);
-      const mapped: Message[] = serverMessages.map((m) => ({
+    setMessages(() => {
+      return serverMessages.map((m) => ({
         id: String(m.id),
         sender: m.senderName ?? "Unknown",
         senderAvatar: m.senderAvatar ?? "👤",
         content: m.content,
         time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-        isMine: false,
+        isMine: m.senderId === user?.id,
         readStatus: "read" as const,
         ...(m.mediaUrl ? { imageUrl: m.mediaUrl } : {}),
       }));
-      return [...mapped, ...localOnly];
     });
-  }, [serverMessages]);
+  }, [serverMessages, user?.id]);
 
-  // tRPC: save DM message (non-blocking)
+  // Join group room and listen for real-time messages via WebSocket
+  useEffect(() => {
+    if (!socket.connected || !isValidRoom) return;
+    socket.joinGroup(groupId);
+    const off = socket.onMessage((msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === String(msg.id))) return prev;
+        const newMsg: Message = {
+          id: String(msg.id),
+          sender: msg.senderName,
+          senderAvatar: msg.senderName?.slice(0, 1).toUpperCase() || "?",
+          content: msg.content,
+          time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          isMine: msg.senderId === user?.id,
+          readStatus: "read" as const,
+          ...(msg.mediaUrl ? { imageUrl: msg.mediaUrl } : {}),
+        };
+        return [...prev, newMsg];
+      });
+    });
+    return () => {
+      off();
+      socket.leaveGroup(groupId);
+    };
+  }, [socket.connected, isValidRoom, groupId, user?.id]);
+
+  // tRPC: save DM message (non-blocking fallback)
   const saveMessage = trpc.chat.saveMessage.useMutation({
     onError: (err) => console.warn("[ChatRoom] save failed:", err.message),
   });
@@ -190,9 +217,14 @@ export default function ChatRoom() {
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readStatus: "read" as const } : m));
     }, 2500);
     setMessages((prev) => [...prev, newMsg]);
-    // Persist to backend (best-effort)
+    // Send via WebSocket if connected (handles both broadcast + DB save on server)
     if (input.trim() && isValidRoom) {
-      saveMessage.mutate({ groupId, content: input });
+      if (socket.connected) {
+        socket.sendMessage({ groupId, content: input });
+      } else {
+        // Fallback: save via tRPC if socket not connected
+        saveMessage.mutate({ groupId, content: input });
+      }
     }
     setInput("");
     setReplyTo(null);

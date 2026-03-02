@@ -16,6 +16,7 @@ import { copyTradingRouter } from "./routers/copyTrading";
 import { settingsRouter } from "./routers/settings";
 import { referralRouter } from "./routers/referral";
 import { emailAuthRouter } from "./routers/emailAuth";
+import { webPushRouter } from "./routers/webPush";
 
 export const appRouter = router({
   system: systemRouter,
@@ -47,6 +48,7 @@ export const appRouter = router({
   settings: settingsRouter,
   referral: referralRouter,
   emailAuth: emailAuthRouter,
+  webPush: webPushRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -484,3 +484,19 @@ export const swapHistory = mysqlTable(
 
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type InsertSwapHistory = typeof swapHistory.$inferInsert;
+
+// ── Web Push Subscriptions ──────────────────────────────────────────────────
+export const pushSubscriptions = mysqlTable(
+  "push_subscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: varchar("auth", { length: 100 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_push_user").on(t.userId)]
+);
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;

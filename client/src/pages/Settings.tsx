@@ -16,6 +16,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type SettingsSection = "main" | "security" | "privacy" | "about";
 
@@ -458,6 +459,8 @@ export default function Settings() {
               <span className="flex-1 text-sm text-left">{t("settings.notifications")}</span>
               <ChevronRight size={14} className="text-muted-foreground" />
             </button>
+            {/* Push Notifications */}
+            <PushNotificationToggle />
           </div>
         </div>
 
@@ -601,6 +604,68 @@ export default function Settings() {
       {section === "security" && renderSecurity()}
       {section === "privacy" && renderPrivacy()}
       {section === "about" && renderAbout()}
+    </div>
+  );
+}
+
+// ── Push Notification Toggle ─────────────────────────────────────────────────
+function PushNotificationToggle() {
+  const { t } = useI18n();
+  const { permission, isSubscribed, isLoading, isSupported, subscribe, unsubscribe } =
+    usePushNotifications();
+
+  if (!isSupported) return null;
+
+  const handleToggle = () => {
+    if (isSubscribed) {
+      unsubscribe();
+    } else {
+      subscribe();
+    }
+  };
+
+  const label =
+    permission === "denied"
+      ? t("settings.pushDenied") || "推送通知（已被浏览器拒绝）"
+      : t("settings.pushNotifications") || "推送通知";
+
+  const desc =
+    permission === "denied"
+      ? t("settings.pushDeniedDesc") || "请在浏览器设置中允许通知权限"
+      : isSubscribed
+      ? t("settings.pushEnabled") || "已开启，新消息将推送到此设备"
+      : t("settings.pushDisabled") || "开启后可在后台收到新消息提醒";
+
+  return (
+    <div className="w-full flex items-center gap-3 px-3.5 py-3">
+      <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">
+        <Bell size={16} className={isSubscribed ? "text-neon-cyan" : "text-foreground"} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm">{label}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{desc}</p>
+      </div>
+      {permission !== "denied" && (
+        <button
+          onClick={handleToggle}
+          disabled={isLoading}
+          className="shrink-0"
+        >
+          <div
+            className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
+              isSubscribed
+                ? "bg-neon-cyan/30 border border-neon-cyan/40"
+                : "bg-secondary border border-border"
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-all duration-300 ${
+                isSubscribed ? "bg-neon-cyan left-[calc(100%-22px)]" : "bg-muted-foreground left-[2px]"
+              }`}
+            />
+          </div>
+        </button>
+      )}
     </div>
   );
 }

@@ -1,13 +1,12 @@
 /**
- * NexusChat Service Worker v4
+ * NexusChat Service Worker v5
  * Strategy:
  *   - Static assets (JS/CSS/fonts): Cache-first (long-lived, hashed filenames)
  *   - Navigation (HTML): Network-first with cache fallback (always fresh HTML)
  *   - API calls: Network-only (always fresh)
- * v4: Changed navigation to network-first to fix PWA black screen on launch.
- *     Version bump clears all v3 caches.
+ * v5: Added Web Push notification support (push + notificationclick events).
  */
-const CACHE_VERSION = "nexuschat-v4";
+const CACHE_VERSION = "nexuschat-v5";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -93,24 +92,71 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Navigation (HTML pages): network-first with cache fallback
-  // Always try to get fresh HTML first so blocking theme script is always current.
-  // Falls back to cache only when offline.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            // Update cache with fresh HTML
             const clone = response.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put("/", clone));
           }
           return response;
         })
         .catch(() =>
-          // Offline fallback: serve cached shell
           caches.match("/").then((cached) => cached || caches.match("/"))
         )
     );
     return;
   }
+});
+
+// ---- Web Push: receive push notification ----
+self.addEventListener("push", (event) => {
+  let data = { title: "NexusChat", body: "你有一条新消息", url: "/app/chat", icon: "/icons/icon-192x192.png", badge: "/icons/icon-72x72.png" };
+
+  if (event.data) {
+    try {
+      data = { ...data, ...JSON.parse(event.data.text()) };
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon,
+    badge: data.badge,
+    data: { url: data.url },
+    vibrate: [200, 100, 200],
+    tag: "nexuschat-message",
+    renotify: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+// ---- Web Push: handle notification click ----
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || "/app/chat";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        // If app is already open, focus it and navigate
+        for (const client of clients) {
+          if (client.url.includes(self.location.origin) && "focus" in client) {
+            client.focus();
+            client.navigate(targetUrl);
+            return;
+          }
+        }
+        // Otherwise open a new window
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+      })
+  );
 });

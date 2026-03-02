@@ -3,6 +3,7 @@ import { Server as HttpServer } from "http";
 import { getDb } from "./db";
 import { messages } from "../drizzle/schema";
 import logger from "./utils/logger";
+import { sendPushToUser } from "./routers/webPush";
 
 interface ChatMessage {
   groupId: number;
@@ -40,8 +41,9 @@ export function initSocketIO(httpServer: HttpServer) {
   // Auth middleware
   io.use(async (socket, next) => {
     try {
-      // For now, allow all connections (auth via cookie handled at HTTP level)
-      (socket as any).userId = socket.handshake.auth?.userId;
+      // Parse userId as number (client sends it as string)
+      const rawId = socket.handshake.auth?.userId;
+      (socket as any).userId = rawId ? parseInt(String(rawId), 10) : undefined;
       (socket as any).userName = socket.handshake.auth?.userName;
       next();
     } catch (err) {
@@ -121,6 +123,52 @@ export function initSocketIO(httpServer: HttpServer) {
       } catch (err) {
         logger.error({ err }, "Socket.io: Error saving message");
         socket.emit("error", { message: "Failed to send message" });
+      }
+    });
+
+    // Send DM message
+    socket.on("send_dm", async (data: { receiverId: number; content: string; messageType?: string; mediaUrl?: string }) => {
+      try {
+        const db = await getDb();
+        if (!db || !userId) {
+          socket.emit("error", { message: "Not authenticated" });
+          return;
+        }
+        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+        const [result] = await db.insert(messages).values({
+          senderId: senderIdNum,
+          receiverId: data.receiverId,
+          content: data.content,
+          messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
+          mediaUrl: data.mediaUrl ?? undefined,
+        });
+        const messageId = (result as any).insertId;
+        const outgoingMessage = {
+          id: messageId,
+          senderId: senderIdNum,
+          receiverId: data.receiverId,
+          senderName: userName,
+          content: data.content,
+          messageType: data.messageType || "text",
+          mediaUrl: data.mediaUrl,
+          createdAt: new Date(),
+        };
+        // Push to receiver if online
+        emitToUser(data.receiverId, "new_dm", outgoingMessage);
+        // Echo back to sender
+        socket.emit("dm_sent", outgoingMessage);
+        // Send Web Push if receiver is offline (not connected via socket)
+        const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId)!.size > 0;
+        if (!receiverOnline) {
+          sendPushToUser(data.receiverId, {
+            title: `${userName} 发来消息`,
+            body: data.content.length > 80 ? data.content.slice(0, 80) + "..." : data.content,
+            url: `/app/dm/${senderIdNum}`,
+          }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
+        }
+      } catch (err) {
+        logger.error({ err }, "Socket.io: Error saving DM");
+        socket.emit("error", { message: "Failed to send DM" });
       }
     });
 
