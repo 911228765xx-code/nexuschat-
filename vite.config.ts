@@ -233,20 +233,17 @@ function vitePluginInlinePreloadHelper(): Plugin {
       }
       const internalName = exportMatch[1]; // e.g. "jh"
 
-      // Find the preload function definition
+      // Strategy: Extract the COMPLETE preload block from vendor-metamask by finding
+      // the start of the const declaration that contains the IIFE feature detection.
+      // The block looks like:
+      //   const Bh=(function(){...return..."modulepreload"...})(),Kh=function(e){return"/"+e},ya={},jh=function(t,n,r){...}
+      // We need to find the 'const' keyword that starts this block.
+
+      // Find the preload function definition end first (to know the full block boundary)
       const preloadFnIdx = mmCode.indexOf(`${internalName}=function(`);
       if (preloadFnIdx < 0) {
         console.log(`[inline-preload-helper] Preload function ${internalName} not found`);
         return;
-      }
-
-      // Find the start of the helper block (includes feature detection + URL resolver + cache)
-      let blockStart = preloadFnIdx;
-      const featureDetectIdx = mmCode.lastIndexOf('"modulepreload"', preloadFnIdx);
-      if (featureDetectIdx > 0) {
-        const commaStart = mmCode.lastIndexOf(',', featureDetectIdx);
-        const semicolonStart = mmCode.lastIndexOf(';', featureDetectIdx);
-        blockStart = Math.max(commaStart, semicolonStart) + 1;
       }
 
       // Find the end of the preload function (matching braces)
@@ -261,13 +258,62 @@ function vitePluginInlinePreloadHelper(): Plugin {
         }
       }
 
+      // Find the start of the const block by locating the last import statement.
+      // The preload helper block starts right after all import statements.
+      // Pattern in vendor-metamask: import{...}from"...";const Bh=(function(){...})(),...,jh=function(...){...}
+      // We need to find the position right after the last import statement ends.
+      let blockStart = -1;
+      
+      // Find all import statement end positions (they end with ';" or just '"')
+      // The last import ends with from"..."; and then const starts
+      const lastImportEnd = (() => {
+        // Find all positions of 'from"' in the code before preloadFnIdx
+        let lastPos = -1;
+        let searchFrom = 0;
+        while (searchFrom < preloadFnIdx) {
+          const fromIdx = mmCode.indexOf('from"', searchFrom);
+          if (fromIdx < 0 || fromIdx >= preloadFnIdx) break;
+          // Find the end of this import (closing quote + semicolon)
+          const closeQuote = mmCode.indexOf('"', fromIdx + 5);
+          if (closeQuote < 0) break;
+          // After the closing quote, there may be a semicolon
+          let endPos = closeQuote + 1;
+          if (mmCode[endPos] === ';') endPos++;
+          lastPos = endPos;
+          searchFrom = endPos;
+        }
+        return lastPos;
+      })();
+      
+      if (lastImportEnd > 0) {
+        // Skip any whitespace after the last import
+        let pos = lastImportEnd;
+        while (pos < mmCode.length && (mmCode[pos] === ' ' || mmCode[pos] === '\n' || mmCode[pos] === '\r')) pos++;
+        if (mmCode.startsWith('const ', pos)) {
+          blockStart = pos;
+        }
+      }
+
+      if (blockStart < 0) {
+        console.log("[inline-preload-helper] Could not find block start after imports, falling back to preloadFnIdx");
+        blockStart = preloadFnIdx;
+      }
+
       let helperCode = mmCode.slice(blockStart, fnEnd).trim();
 
       // Replace the internal name with the local alias used in index.js
       helperCode = helperCode.replace(new RegExp(`\\b${internalName}\\b`, 'g'), localAlias);
 
-      // Build the inline replacement: declare all variables from the helper block
-      const inlineDecl = `const ${helperCode};`;
+      // Build the inline replacement: the extracted code is already a full const declaration
+      // so we just use it directly (it starts with 'const ')
+      const inlineDecl = `${helperCode};`;
+
+      // Validate the generated code doesn't have syntax errors
+      if (inlineDecl.includes('const return') || inlineDecl.includes('const \n')) {
+        console.error('[inline-preload-helper] SYNTAX ERROR detected in generated code! Aborting patch.');
+        console.error('[inline-preload-helper] Generated:', inlineDecl.substring(0, 200));
+        return;
+      }
 
       // Replace the import statement with the inline declaration
       const patchedIndex = indexCode.replace(importMatch[0], inlineDecl);
@@ -277,9 +323,16 @@ function vitePluginInlinePreloadHelper(): Plugin {
         return;
       }
 
+      // Final validation: check no syntax errors in patched code
+      if (patchedIndex.includes('const return')) {
+        console.error('[inline-preload-helper] SYNTAX ERROR in patched index.js! Aborting.');
+        return;
+      }
+
       fs.writeFileSync(indexPath, patchedIndex, "utf8");
       console.log(`[inline-preload-helper] Successfully inlined preload helper into ${indexFile}`);
       console.log(`[inline-preload-helper] Removed sync dependency on ${metamaskFile}`);
+      console.log(`[inline-preload-helper] Inline code preview: ${inlineDecl.substring(0, 150)}`);
     },
   };
 }
