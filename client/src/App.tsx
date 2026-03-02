@@ -11,7 +11,6 @@ import AppLayout from "./components/AppLayout";
 import { AppProvider, useApp } from "./contexts/AppContext";
 
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
-// Onboarding uses framer-motion (79KB), socket.io (42KB) — both deferred
 const Onboarding = lazy(() => import("./components/Onboarding"));
 
 // ─── Lazy-loaded page components (code splitting) ────────────────────────────
@@ -38,7 +37,7 @@ const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
 const DownloadPage = lazy(() => import("./pages/Download"));
 
-// ─── Skeleton loader — dark bg, no flash ─────────────────────────────────────
+// ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
 function PageLoader() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -57,9 +56,9 @@ function PageLoader() {
 
 // ─── Page transition wrapper ──────────────────────────────────────────────────
 const pageVariants = {
-  initial: { opacity: 0, y: 6 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] } },
-  exit: { opacity: 0, y: -4, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] as [number, number, number, number] } },
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] } },
+  exit: { opacity: 0, y: -3, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] as [number, number, number, number] } },
 };
 
 function PageTransition({ children }: { children: React.ReactNode }) {
@@ -90,8 +89,6 @@ const PriceAlertSocket = lazy(() =>
 
 /**
  * WalletSyncEffect - lazy loaded to avoid pulling wagmi/Web3 into the main bundle.
- * Syncs the connected Web3 wallet address into AppContext profile.
- * Only loaded after the initial render, so it does NOT block the first paint.
  */
 const WalletSyncEffect = lazy(() =>
   import("./contexts/WalletContext").then((mod) => ({
@@ -108,8 +105,144 @@ const WalletSyncEffect = lazy(() =>
   }))
 );
 
-function AppContent() {
+/**
+ * RouteContent — single persistent Suspense boundary (no key=location).
+ * Already-loaded chunks never re-trigger loading spinner on navigation.
+ * Only truly unloaded chunks show the skeleton on first visit.
+ */
+function RouteContent() {
   const [location] = useLocation();
+
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AnimatePresence mode="wait" initial={false}>
+        <PageTransition key={location}>
+          <Switch location={location}>
+            <Route path="/">
+              <Home />
+            </Route>
+            <Route path="/download">
+              <DownloadPage />
+            </Route>
+            <Route path="/app/group/:id">
+              <AppLayout hideNav>
+                <GroupChatRoom />
+              </AppLayout>
+            </Route>
+            <Route path="/app/dm/:userId">
+              <AppLayout hideNav>
+                <DMChat />
+              </AppLayout>
+            </Route>
+            <Route path="/app/chat/:id">
+              <AppLayout>
+                <ChatRoom />
+              </AppLayout>
+            </Route>
+            <Route path="/app/chat">
+              <AppLayout>
+                <Chat />
+              </AppLayout>
+            </Route>
+            <Route path="/app/create-group">
+              <AppLayout hideNav>
+                <CreateGroup />
+              </AppLayout>
+            </Route>
+            <Route path="/app/edit-profile">
+              <AppLayout hideNav>
+                <EditProfile />
+              </AppLayout>
+            </Route>
+            <Route path="/app/wallet">
+              <AppLayout hideNav>
+                <Wallet />
+              </AppLayout>
+            </Route>
+            <Route path="/app/contacts">
+              <AppLayout hideNav>
+                <Contacts />
+              </AppLayout>
+            </Route>
+            <Route path="/app/notifications">
+              <AppLayout hideNav>
+                <Notifications />
+              </AppLayout>
+            </Route>
+            <Route path="/app/invite">
+              <AppLayout hideNav>
+                <InviteFriends />
+              </AppLayout>
+            </Route>
+            <Route path="/app/tasks">
+              <AppLayout hideNav>
+                <TaskCenter />
+              </AppLayout>
+            </Route>
+            <Route path="/app/leaderboard">
+              <AppLayout hideNav>
+                <Leaderboard />
+              </AppLayout>
+            </Route>
+            <Route path="/app/settings">
+              <AppLayout hideNav>
+                <Settings />
+              </AppLayout>
+            </Route>
+            <Route path="/app/discover">
+              <AppLayout>
+                <Discover />
+              </AppLayout>
+            </Route>
+            <Route path="/app/post/:id">
+              <AppLayout hideNav>
+                <PostDetail />
+              </AppLayout>
+            </Route>
+            <Route path="/app/research/:token">
+              <AppLayout hideNav>
+                <TokenDetail />
+              </AppLayout>
+            </Route>
+            <Route path="/app/research">
+              <AppLayout>
+                <Research />
+              </AppLayout>
+            </Route>
+            <Route path="/app/watchlist">
+              <AppLayout hideNav>
+                <Watchlist />
+              </AppLayout>
+            </Route>
+            <Route path="/app/trading">
+              <AppLayout>
+                <Trading />
+              </AppLayout>
+            </Route>
+            <Route path="/app/profile">
+              <AppLayout>
+                <Profile />
+              </AppLayout>
+            </Route>
+            <Route path="/app">
+              <AppLayout>
+                <Chat />
+              </AppLayout>
+            </Route>
+            <Route path="/404">
+              <NotFound />
+            </Route>
+            <Route>
+              <NotFound />
+            </Route>
+          </Switch>
+        </PageTransition>
+      </AnimatePresence>
+    </Suspense>
+  );
+}
+
+function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
@@ -117,7 +250,7 @@ function AppContent() {
 
   return (
     <>
-      {/* Sync connected wallet address into AppContext profile - lazy loaded to avoid Web3 bundle blocking first paint */}
+      {/* Sync connected wallet address into AppContext profile */}
       <Suspense fallback={null}>
         <WalletSyncEffect />
       </Suspense>
@@ -133,131 +266,7 @@ function AppContent() {
         </Suspense>
       )}
 
-      <AnimatePresence mode="wait" initial={false}>
-        <Suspense fallback={<PageLoader />} key={location}>
-          <PageTransition key={location}>
-            <Switch location={location}>
-              <Route path="/">
-                <Home />
-              </Route>
-              <Route path="/download">
-                <DownloadPage />
-              </Route>
-              <Route path="/app/group/:id">
-                <AppLayout hideNav>
-                  <GroupChatRoom />
-                </AppLayout>
-              </Route>
-              <Route path="/app/dm/:userId">
-                <AppLayout hideNav>
-                  <DMChat />
-                </AppLayout>
-              </Route>
-              <Route path="/app/chat/:id">
-                <AppLayout>
-                  <ChatRoom />
-                </AppLayout>
-              </Route>
-              <Route path="/app/chat">
-                <AppLayout>
-                  <Chat />
-                </AppLayout>
-              </Route>
-              <Route path="/app/create-group">
-                <AppLayout hideNav>
-                  <CreateGroup />
-                </AppLayout>
-              </Route>
-              <Route path="/app/edit-profile">
-                <AppLayout hideNav>
-                  <EditProfile />
-                </AppLayout>
-              </Route>
-              <Route path="/app/wallet">
-                <AppLayout hideNav>
-                  <Wallet />
-                </AppLayout>
-              </Route>
-              <Route path="/app/contacts">
-                <AppLayout hideNav>
-                  <Contacts />
-                </AppLayout>
-              </Route>
-              <Route path="/app/notifications">
-                <AppLayout hideNav>
-                  <Notifications />
-                </AppLayout>
-              </Route>
-              <Route path="/app/invite">
-                <AppLayout hideNav>
-                  <InviteFriends />
-                </AppLayout>
-              </Route>
-              <Route path="/app/tasks">
-                <AppLayout hideNav>
-                  <TaskCenter />
-                </AppLayout>
-              </Route>
-              <Route path="/app/leaderboard">
-                <AppLayout hideNav>
-                  <Leaderboard />
-                </AppLayout>
-              </Route>
-              <Route path="/app/settings">
-                <AppLayout hideNav>
-                  <Settings />
-                </AppLayout>
-              </Route>
-              <Route path="/app/discover">
-                <AppLayout>
-                  <Discover />
-                </AppLayout>
-              </Route>
-              <Route path="/app/post/:id">
-                <AppLayout hideNav>
-                  <PostDetail />
-                </AppLayout>
-              </Route>
-              <Route path="/app/research/:token">
-                <AppLayout hideNav>
-                  <TokenDetail />
-                </AppLayout>
-              </Route>
-              <Route path="/app/research">
-                <AppLayout>
-                  <Research />
-                </AppLayout>
-              </Route>
-              <Route path="/app/watchlist">
-                <AppLayout hideNav>
-                  <Watchlist />
-                </AppLayout>
-              </Route>
-              <Route path="/app/trading">
-                <AppLayout>
-                  <Trading />
-                </AppLayout>
-              </Route>
-              <Route path="/app/profile">
-                <AppLayout>
-                  <Profile />
-                </AppLayout>
-              </Route>
-              <Route path="/app">
-                <AppLayout>
-                  <Chat />
-                </AppLayout>
-              </Route>
-              <Route path="/404">
-                <NotFound />
-              </Route>
-              <Route>
-                <NotFound />
-              </Route>
-            </Switch>
-          </PageTransition>
-        </Suspense>
-      </AnimatePresence>
+      <RouteContent />
     </>
   );
 }

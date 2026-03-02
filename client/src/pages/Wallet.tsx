@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useWallet } from "@/contexts/WalletContext";
 import WalletConnectModal from "@/components/WalletConnectModal";
+import { useBalance, useChainId } from "wagmi";
+import { mainnet, bsc, polygon, arbitrum } from "@/lib/wagmi";
 
 /* ─── Types ─── */
 interface Token {
@@ -693,9 +695,24 @@ export default function Wallet() {
   // ─── Real wallet from WalletContext ───
   const { address: connectedAddress, isConnected: walletConnected } = useWallet();
   const walletAddress = connectedAddress || "";
+  const connectedChainId = useChainId();
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
 
-  // ─── BscScan API queries ───
+  // ─── wagmi: native balance on currently connected chain ───
+  const typedAddress = connectedAddress as `0x${string}` | undefined;
+  const { data: nativeBalance, isLoading: nativeLoading } = useBalance({
+    address: typedAddress,
+    query: { enabled: !!typedAddress && walletConnected, staleTime: 15_000 },
+  });
+
+  // ─── ETH balance on Ethereum mainnet (always useful regardless of current chain) ───
+  const { data: ethMainnetBalance } = useBalance({
+    address: typedAddress,
+    chainId: mainnet.id,
+    query: { enabled: !!typedAddress && walletConnected && connectedChainId !== mainnet.id, staleTime: 30_000 },
+  });
+
+  // ─── BscScan API queries (BSC token list) ───
   const isValidBscAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
   const { data: bnbData, isLoading: bnbLoading } = trpc.wallet.getBalance.useQuery(
     { address: walletAddress },
@@ -716,42 +733,66 @@ export default function Wallet() {
     { enabled: activeTab === "history", staleTime: 30_000 }
   );
 
-  // ─── Merge real data with mock fallback ───
+  // ─── Merge real data: wagmi native + ETH mainnet + BSC tokens ───
   const displayTokens = useMemo(() => {
-    if (!isValidBscAddress || (!bnbData && !tokenData)) return [];
+    if (!walletConnected || !connectedAddress) return [];
     const result: Token[] = [];
-    if (bnbData && parseFloat(bnbData.bnbBalanceFormatted) > 0) {
+
+    // Native balance on current chain (from wagmi — real-time)
+    if (nativeBalance && parseFloat(nativeBalance.formatted) > 0) {
+      const chainName = connectedChainId === bsc.id ? "BSC"
+        : connectedChainId === polygon.id ? "Polygon"
+        : connectedChainId === arbitrum.id ? "Arbitrum"
+        : "Ethereum";
       result.push({
-        id: "bnb",
-        symbol: "BNB",
-        name: "BNB",
-        icon: "⬡",
-        balance: parseFloat(bnbData.bnbBalanceFormatted),
-        value: bnbData.usdValue ? parseFloat(bnbData.usdValue) : 0,
-        price: bnbData.usdValue && parseFloat(bnbData.bnbBalanceFormatted) > 0
-          ? parseFloat(bnbData.usdValue) / parseFloat(bnbData.bnbBalanceFormatted)
-          : 0,
+        id: `native-${connectedChainId}`,
+        symbol: nativeBalance.symbol,
+        name: nativeBalance.symbol === "BNB" ? "BNB Chain" : nativeBalance.symbol === "MATIC" ? "Polygon" : "Ethereum",
+        icon: nativeBalance.symbol === "BNB" ? "⬡" : nativeBalance.symbol === "MATIC" ? "⬡" : "⟠",
+        balance: parseFloat(nativeBalance.formatted),
+        value: nativeBalance.symbol === "BNB" && bnbData?.usdValue ? parseFloat(bnbData.usdValue) : 0,
+        price: 0,
         change24h: 0,
-        chain: "BSC",
+        chain: chainName,
       });
     }
+
+    // ETH on mainnet when connected to a different chain
+    if (ethMainnetBalance && parseFloat(ethMainnetBalance.formatted) > 0) {
+      result.push({
+        id: "eth-mainnet",
+        symbol: "ETH",
+        name: "Ethereum",
+        icon: "⟠",
+        balance: parseFloat(ethMainnetBalance.formatted),
+        value: 0,
+        price: 0,
+        change24h: 0,
+        chain: "Ethereum",
+      });
+    }
+
+    // BEP-20 tokens from BscScan
     if (tokenData) {
       tokenData.forEach((tk) => {
-        result.push({
-          id: tk.contractAddress,
-          symbol: tk.symbol,
-          name: tk.name,
-          icon: tk.symbol.charAt(0),
-          balance: parseFloat(tk.balanceFormatted),
-          value: 0,
-          price: 0,
-          change24h: 0,
-          chain: "BSC",
-        });
+        const bal = parseFloat(tk.balanceFormatted);
+        if (bal > 0) {
+          result.push({
+            id: tk.contractAddress,
+            symbol: tk.symbol,
+            name: tk.name,
+            icon: tk.symbol.charAt(0),
+            balance: bal,
+            value: 0,
+            price: 0,
+            change24h: 0,
+            chain: "BSC",
+          });
+        }
       });
     }
     return result;
-  }, [bnbData, tokenData, isValidBscAddress]);
+  }, [nativeBalance, ethMainnetBalance, tokenData, bnbData, walletConnected, connectedAddress, connectedChainId]);
 
   const displayTxs = useMemo((): Transaction[] => {
     if (!txData || txData.length === 0) return [];
