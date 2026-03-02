@@ -304,28 +304,51 @@ function vitePluginInlinePreloadHelper(): Plugin {
       // Replace the internal name with the local alias used in index.js
       helperCode = helperCode.replace(new RegExp(`\\b${internalName}\\b`, 'g'), localAlias);
 
-      // Build the inline replacement: the extracted code is already a full const declaration
-      // so we just use it directly (it starts with 'const ')
+      // Build the inline declaration - only the preload function itself (not the IIFE helper vars)
+      // We just need: const <alias>=function(t,n,r){...}
+      // The IIFE feature detection (Bh, Kh, ya) are helpers for the preload function
+      // We need to inline the ENTIRE block: const Bh=...,Kh=...,ya={},<alias>=function(...){...}
+      // But rename the internal name to the local alias used in index.js
       const inlineDecl = `${helperCode};`;
 
-      // Validate the generated code doesn't have syntax errors
-      if (inlineDecl.includes('const return') || inlineDecl.includes('const \n')) {
-        console.error('[inline-preload-helper] SYNTAX ERROR detected in generated code! Aborting patch.');
-        console.error('[inline-preload-helper] Generated:', inlineDecl.substring(0, 200));
+      // CRITICAL FIX: ES Module spec requires ALL import statements to be at the top.
+      // We must NOT replace an import statement in the middle of the import list with non-import code.
+      // Instead:
+      //   1. REMOVE the vendor-metamask import statement from index.js
+      //   2. INSERT the inline declaration AFTER all import statements
+      
+      // Step 1: Remove the vendor-metamask import statement
+      let patchedIndex = indexCode.replace(importMatch[0], '');
+      
+      // Step 2: Find the position AFTER all import statements in the patched code
+      // Find the last import statement end position using exec loop
+      const importRe = /import\{[^}]+\}from"[^"]+";?/g;
+      let lastImportMatch: RegExpExecArray | null = null;
+      let m: RegExpExecArray | null;
+      while ((m = importRe.exec(patchedIndex)) !== null) {
+        lastImportMatch = m;
+      }
+      if (!lastImportMatch) {
+        console.error('[inline-preload-helper] No imports found in index.js after removal');
         return;
       }
-
-      // Replace the import statement with the inline declaration
-      const patchedIndex = indexCode.replace(importMatch[0], inlineDecl);
+      const insertPos = lastImportMatch.index + lastImportMatch[0].length;
+      
+      // Step 3: Insert the inline declaration right after the last import
+      patchedIndex = patchedIndex.slice(0, insertPos) + inlineDecl + patchedIndex.slice(insertPos);
 
       if (patchedIndex === indexCode) {
         console.log("[inline-preload-helper] No changes made to index.js");
         return;
       }
 
-      // Final validation: check no syntax errors in patched code
-      if (patchedIndex.includes('const return')) {
-        console.error('[inline-preload-helper] SYNTAX ERROR in patched index.js! Aborting.');
+      // Validate: ensure no import statement appears AFTER the inline declaration
+      // (i.e., after the last original import position + inlineDecl length)
+      const afterInlinePos = insertPos + inlineDecl.length;
+      const codeAfterInline = patchedIndex.slice(afterInlinePos, afterInlinePos + 200);
+      if (/^import\{/.test(codeAfterInline)) {
+        console.error('[inline-preload-helper] VALIDATION FAILED: import statement found right after inline code!');
+        console.error('[inline-preload-helper] Code after inline:', codeAfterInline.substring(0, 100));
         return;
       }
 
@@ -376,36 +399,31 @@ export default defineConfig({
         // This keeps vendor-web3, vendor-misc etc. as truly async chunks.
         hoistTransitiveImports: false,
         manualChunks(id: string) {
-          // DEBUG: log modules that end up in vendor-misc
-          if (process.env.DEBUG_CHUNKS && id.includes('node_modules') && 
-              !id.includes('wagmi') && !id.includes('@rainbow') && !id.includes('viem') &&
-              !id.includes('@reown') && !id.includes('@walletconnect') && !id.includes('@noble') &&
-              !id.includes('@scure') && !id.includes('@adraffy') && !id.includes('@coinbase') &&
-              !id.includes('coinbase-wallet') && !id.includes('react-dom') && !id.includes('react/') &&
-              !id.includes('scheduler') && !id.includes('@tanstack') && !id.includes('@trpc') &&
-              !id.includes('socket.io') && !id.includes('engine.io') && !id.includes('qrcode') &&
-              !id.includes('@radix-ui') && !id.includes('superjson') && !id.includes('wouter') &&
-              !id.includes('clsx') && !id.includes('tailwind-merge') && !id.includes('next-themes') &&
-              !id.includes('sonner') && !id.includes('lucide-react') && !id.includes('framer-motion') &&
-              !id.includes('recharts') && !id.includes('d3-') && !id.includes('WalletContext') &&
-              !id.includes('Web3ProviderImpl') && !id.includes('/lib/wagmi') && !id.includes('/lib/trpc') &&
-              !id.includes('/_core/hooks/useAuth') && !id.includes('xmlhttprequest-ssl')
-          ) {
-            console.log('[vendor-misc candidate]', id.replace(/.*node_modules\//, '').split('/').slice(0,2).join('/'));
-          }
-          // MetaMask SDK (separate chunk to prevent Stencil.js dynamic import
-          // from placing Vite preload function in vendor-web3)
+          // ================================================================
+          // SIMPLIFIED CHUNK STRATEGY - Eliminates circular dependencies
+          // 
+          // Root cause of white screen: The previous strategy split React
+          // ecosystem packages (react-dom, use-callback-ref, sonner, etc.)
+          // across multiple chunks (vendor-react, vendor-core, vendor-misc,
+          // vendor-radix), creating circular import chains:
+          //   vendor-react → vendor-core → vendor-react (TDZ error!)
+          //
+          // Fix: Keep ALL non-Web3 packages in a single "vendor" chunk.
+          // Only isolate Web3 packages (wagmi/RainbowKit/MetaMask) which
+          // are lazily loaded and don't participate in the React init chain.
+          // ================================================================
+
+          // MetaMask SDK — separate chunk to prevent Stencil.js dynamic import
+          // from placing the Vite preload helper in vendor-web3
           if (
             id.includes("@metamask/sdk") ||
             id.includes("@metamask/sdk-analytics")
           ) {
             return "vendor-metamask";
           }
-          // Wallet / Web3 libs — ALL packages that wagmi/RainbowKit depend on
-          // CRITICAL: Must include ALL transitive deps to prevent vendor-misc from
-          // importing vendor-web3 (which would re-create the sync loading chain)
+
+          // All Web3 / wallet packages — lazily loaded, never in the React init chain
           if (
-            // Core wagmi/viem/rainbowkit
             id.includes("wagmi") ||
             id.includes("@rainbow-me") ||
             id.includes("viem") ||
@@ -416,32 +434,22 @@ export default defineConfig({
             id.includes("@adraffy") ||
             id.includes("@coinbase") ||
             id.includes("coinbase-wallet") ||
-            // NOTE: @metamask/sdk is in vendor-metamask (separate chunk) to prevent
-            // its Stencil.js dynamic import from placing the Vite preload function in vendor-web3
-            // MetaMask SDK dependencies (non-SDK packages)
             id.includes("@metamask/rpc-errors") ||
             id.includes("@metamask/safe-event-emitter") ||
             id.includes("@metamask/superstruct") ||
             id.includes("@metamask/utils") ||
-            // Base/Coinbase wallet
             id.includes("@base-org") ||
-            // Safe wallet
             id.includes("@safe-global") ||
-            // Ethereum JSON-RPC infrastructure
             id.includes("eth-block-tracker") ||
             id.includes("eth-json-rpc-filters") ||
             id.includes("eth-query") ||
             id.includes("eth-rpc-errors") ||
             id.includes("json-rpc-engine") ||
             id.includes("json-rpc-random-id") ||
-            // ox (Ethereum primitives used by viem)
             id.includes("/ox/") ||
             id.includes("/ox/_") ||
-            // MIPD (Multi Injected Provider Discovery)
             id.includes("mipd") ||
-            // abitype (TypeScript types for Ethereum ABIs)
             id.includes("abitype") ||
-            // Crypto primitives used by Web3
             id.includes("keccak") ||
             id.includes("sha.js") ||
             id.includes("/bs58/") ||
@@ -449,134 +457,64 @@ export default defineConfig({
             id.includes("multiformats") ||
             id.includes("uint8arrays") ||
             id.includes("to-buffer") ||
-            // Vanilla Extract (used by RainbowKit for CSS-in-JS)
             id.includes("@vanilla-extract") ||
-            // Lit (used by some wallet connectors)
             id.includes("@lit/") ||
             id.includes("/lit-element/") ||
             id.includes("/lit-html/") ||
             id.includes("/lit/") ||
-            // valtio (state management used by wagmi)
             id.includes("valtio") ||
             id.includes("derive-valtio") ||
             id.includes("proxy-compare") ||
-            // zustand (state management used by wagmi)
             id.includes("zustand") ||
-            // openapi-fetch (used by Safe wallet)
             id.includes("openapi-fetch") ||
-            // idb-keyval (IndexedDB, used by wallet connectors)
             id.includes("idb-keyval") ||
-            // async-mutex (used by eth-block-tracker)
             id.includes("async-mutex") ||
-            // pify (used by eth-block-tracker)
             id.includes("/pify/") ||
-            // detect-browser/detect-node (used by MetaMask SDK)
             id.includes("detect-browser") ||
             id.includes("detect-node-es") ||
-            // ua-parser-js (used by MetaMask SDK)
             id.includes("ua-parser-js") ||
-            // eventemitter2 (used by MetaMask SDK)
             id.includes("eventemitter2") ||
-            // pino (used by MetaMask SDK)
             id.includes("/pino/") ||
-            // get-nonce (used by SIWE/RainbowKit)
             id.includes("get-nonce") ||
-            // cross-fetch (used by wallet connectors)
             id.includes("cross-fetch") ||
-            // html2canvas (used by some wallet UIs)
             id.includes("html2canvas") ||
-            // react-remove-scroll and related (used by RainbowKit modal)
-            // These share the __webpack_nonce__ getter with @vanilla-extract
-            // so they MUST be in the same chunk to avoid cross-chunk deps
-            // NOTE: use-callback-ref is in vendor-core (shared with Radix UI)
             id.includes("react-remove-scroll") ||
             id.includes("react-style-singleton") ||
             id.includes("use-sidecar") ||
-            // Source files
-            id.includes("WalletContext") ||
+            // NOTE: use-callback-ref is intentionally NOT here.
+            // It is shared by both @radix-ui (in vendor) and RainbowKit (vendor-web3).
+            // Putting it in vendor-web3 would create: vendor -> vendor-web3 -> vendor (circular!)
+            // Leaving it in vendor means vendor-web3 imports from vendor (one-way, no cycle).
+            //
+            // NOTE: WalletContext is intentionally NOT here.
+            // WalletContext imports trpc (lib/trpc.ts), and trpc is needed by index.js.
+            // If WalletContext were in vendor-web3, Rollup would put trpc in vendor-web3 too,
+            // causing index.js to statically import vendor-web3 (4.5MB sync load = white screen!)
+            // WalletContext is only used inside Web3ProviderImpl (lazy loaded), so it's safe
+            // to leave it in the default vendor chunk.
             id.includes("Web3ProviderImpl") ||
             id.includes("/lib/wagmi")
           ) {
             return "vendor-web3";
           }
-          // Charts / data-viz (~300KB)
-          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
-            return "vendor-charts";
-          }
-          // Animation (~200KB)
-          if (id.includes("framer-motion")) {
-            return "vendor-motion";
-          }
-          // Icons (~150KB)
-          if (id.includes("lucide-react")) {
-            return "vendor-icons";
-          }
-          // React core (~150KB)
-          if (id.includes("react-dom") || id.includes("react/") || id.includes("scheduler")) {
-            return "vendor-react";
-          }
-          // @tanstack/react-query in its own chunk - shared by both tRPC and wagmi.
-          // Keeping it separate prevents wagmi from being merged into vendor-trpc
-          // and avoids vendor-web3 being hoisted into index.js's sync deps.
-          if (id.includes("@tanstack")) {
-            return "vendor-query";
-          }
-          // tRPC only (~50KB)
-          // Also include source files that use tRPC to prevent them from being
-          // merged into vendor-web3 by Rollup's shared-module algorithm
-          if (
-            id.includes("@trpc") ||
-            id.includes("/lib/trpc") ||
-            id.includes("/_core/hooks/useAuth") ||
-            id.includes("/hooks/useAuth")
-          ) {
-            return "vendor-trpc";
-          }
-          // NOTE: shiki, mermaid, katex, streamdown have been removed from the app
-          // LightMarkdown component is used instead (pure JS, ~0KB extra)
-          // Socket.IO client (lazy-loaded for chat pages)
+
+          // Heavy async-only libraries — lazy loaded, isolated to prevent
+          // them from inflating the initial bundle
           if (id.includes("socket.io") || id.includes("engine.io") || id.includes("xmlhttprequest-ssl")) {
             return "vendor-socketio";
           }
-          // QR code (used only in wallet/invite pages)
-          if (id.includes("qrcode") || id.includes("qr-code") || id.includes("qrcode.react")) {
-            return "vendor-qrcode";
-          }
-          // D3 (used only in charts/trading pages)
-          if (id.includes("/d3-") || id.includes("d3-array") || id.includes("d3-scale") || id.includes("d3-shape") || id.includes("d3-path") || id.includes("d3-color") || id.includes("d3-format") || id.includes("d3-interpolate") || id.includes("d3-time")) {
+          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
             return "vendor-charts";
           }
-          // Radix UI primitives
-          if (id.includes("@radix-ui")) {
-            return "vendor-radix";
+          if (id.includes("framer-motion")) {
+            return "vendor-motion";
           }
-          // Superjson (used in tRPC, keep small)
-          if (id.includes("superjson")) {
-            return "vendor-trpc";
-          }
-          // Core routing + utility libs used directly by App.tsx/main.tsx
-          // These MUST be in a separate chunk so vendor-misc can be deferred
-          // NOTE: use-callback-ref is used by BOTH Radix UI (vendor-react/vendor-radix)
-          // AND RainbowKit (vendor-web3). It MUST be in vendor-core to avoid
-          // vendor-react/vendor-radix importing from vendor-web3 (sync chain!)
-          if (
-            id.includes("/wouter") ||
-            id.includes("/clsx") ||
-            id.includes("/clsx/") ||
-            id.includes("/tailwind-merge") ||
-            id.includes("/class-variance-authority") ||
-            id.includes("/next-themes") ||
-            id.includes("/sonner") ||
-            id.includes("/cmdk") ||
-            id.includes("/vaul") ||
-            // use-callback-ref: shared by Radix UI AND RainbowKit
-            id.includes("use-callback-ref")
-          ) {
-            return "vendor-core";
-          }
-          // Remaining node_modules
+
+          // All remaining node_modules → single "vendor" chunk
+          // This prevents circular dependencies between vendor sub-chunks
+          // by keeping all React ecosystem packages together.
           if (id.includes("node_modules")) {
-            return "vendor-misc";
+            return "vendor";
           }
         },
       },

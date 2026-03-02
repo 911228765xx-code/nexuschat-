@@ -1,7 +1,26 @@
+/**
+ * IMPORTANT: This file MUST NOT import trpc or any non-Web3 packages that
+ * would create a dependency from vendor-web3 → vendor (causing sync loading
+ * of the 4.5MB Web3 bundle on every page load = white screen on mobile).
+ * Use fetch directly instead of trpc to keep the dependency graph one-directional.
+ */
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useAccount, useDisconnect, useBalance } from "wagmi";
-import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+
+/** Call tRPC wallet.updateAddress via raw fetch to avoid importing trpc client */
+async function updateWalletAddress(address: string, chain: string) {
+  try {
+    await fetch("/api/trpc/wallet.updateAddress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ json: { address, chain } }),
+    });
+  } catch (err) {
+    console.error("Failed to update wallet:", err);
+  }
+}
 
 interface WalletContextType {
   address: string | undefined;
@@ -27,20 +46,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { data: balanceData } = useBalance({ address });
   const [prevAddress, setPrevAddress] = useState<string | undefined>(undefined);
 
-  const updateWallet = trpc.wallet.updateAddress.useMutation({
-    onSuccess: () => {
-      toast.success("钱包已绑定到账户");
-    },
-    onError: (err) => {
-      console.error("Failed to update wallet:", err);
-    },
-  });
-
   // When wallet connects, sync address to backend
   useEffect(() => {
     if (address && address !== prevAddress && isConnected) {
       setPrevAddress(address);
-      updateWallet.mutate({ address, chain: "BSC" });
+      updateWalletAddress(address, "BSC").then(() => {
+        toast.success("钱包已绑定到账户");
+      }).catch(console.error);
     }
     if (!isConnected && prevAddress) {
       setPrevAddress(undefined);

@@ -54,12 +54,19 @@ const trpcClient = trpc.createClient({
   ],
 });
 
-createRoot(document.getElementById("root")!).render(
-  <trpc.Provider client={trpcClient} queryClient={queryClient}>
-    <QueryClientProvider client={queryClient}>
-      <LazyWeb3Provider>
-        <App />
-      </LazyWeb3Provider>
-    </QueryClientProvider>
-  </trpc.Provider>
-);
+window.__APP_RENDER_START__ = Date.now();
+try {
+  createRoot(document.getElementById("root")!).render(
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <LazyWeb3Provider>
+          <App />
+        </LazyWeb3Provider>
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
+  window.__APP_RENDER_DONE__ = Date.now();
+} catch(e) {
+  window.__APP_RENDER_ERROR__ = String(e);
+  console.error('RENDER FAILED:', e);
+}
