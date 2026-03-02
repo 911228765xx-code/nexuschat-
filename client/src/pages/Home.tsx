@@ -4,7 +4,7 @@
  * 多语言支持 + 钱包连接弹窗
  */
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useEffect } from "react";
 import { useWallet } from "@/contexts/WalletContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -36,6 +36,14 @@ export default function Home() {
   let { user, loading, error, logout } = useAuth();
 
   const [, setLocation] = useLocation();
+
+  // Auto-redirect logged-in users directly to the social (chat) page
+  // This makes the App feel native: open → straight to content, no landing page
+  useEffect(() => {
+    if (!loading && user) {
+      setLocation('/app/chat');
+    }
+  }, [loading, user, setLocation]);
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -68,6 +76,29 @@ export default function Home() {
     { icon: Brain, titleKey: "pain.3t", descKey: "pain.3d" },
     { icon: Zap, titleKey: "pain.4t", descKey: "pain.4d" },
   ];
+
+  // While checking auth state, show a minimal splash screen
+  // This prevents the landing page from flashing before redirect
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+            <MessageCircle size={22} className="text-white" />
+          </div>
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-[#00d4ff]/50 animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.8s' }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
