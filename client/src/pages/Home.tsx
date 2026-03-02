@@ -213,11 +213,21 @@ export default function Home() {
             <Button
               onClick={() => {
                 if (platform === 'ios') {
+                  // iOS: show Safari install guide
                   setShowIOSGuide(true);
+                } else if (platform === 'android') {
+                  // Android: download APK from CDN
+                  const link = document.createElement('a');
+                  link.href = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.0-android_d637d435.zip';
+                  link.download = 'NexusChat-v1.0.0-android.zip';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
                 } else if (canInstall) {
+                  // Desktop Chrome: PWA install prompt
                   triggerInstall();
                 } else {
-                  // Fallback: show generic install guide
+                  // Fallback: show install guide
                   setShowIOSGuide(true);
                 }
               }}
