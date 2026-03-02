@@ -245,3 +245,9 @@
 - [x] 上传图标到CDN
 - [x] 更新manifest.json（icons, theme_color, background_color, screenshots）
 - [x] 更新首页loading splash screen使用品牌图标
+
+## v46 首次加载性能优化
+- [ ] 排查首次加载慢和需要刷新才能显示的根本原因
+- [ ] 修复 Service Worker 缓存策略（避免首次加载阻塞）
+- [ ] 优化 JS 包体积和加载顺序
+- [ ] 确保生产环境首次访问无需刷新即可正常显示

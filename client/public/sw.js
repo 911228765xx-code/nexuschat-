@@ -1,19 +1,17 @@
 /**
- * NexusChat Service Worker
- * Strategy: Cache-first for static assets, network-first for API calls.
+ * NexusChat Service Worker v3
+ * Strategy:
+ *   - Static assets (JS/CSS/fonts): Cache-first (long-lived, hashed filenames)
+ *   - Navigation (HTML): Stale-while-revalidate (instant load + background update)
+ *   - API calls: Network-only (always fresh)
  * Version bump triggers cache refresh on deploy.
  */
-const CACHE_VERSION = "nexuschat-v1";
+const CACHE_VERSION = "nexuschat-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-// Assets to pre-cache on install (app shell)
-const PRECACHE_URLS = [
-  "/",
-  "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
-];
+// Only precache the HTML shell — icons are on CDN, no local files to precache
+const PRECACHE_URLS = ["/"];
 
 // ---- Install: pre-cache app shell ----
 self.addEventListener("install", (event) => {
@@ -50,16 +48,32 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   if (url.origin !== self.location.origin) return;
 
-  // API calls: network-first, no cache
+  // API calls: network-only, no cache
   if (url.pathname.startsWith("/api/")) return;
 
-  // Static assets (JS/CSS/images/fonts): cache-first
+  // Static assets with content-hashed filenames: cache-first (permanent cache)
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(RUNTIME_CACHE).then((c) => c.put(request, clone));
+            }
+            return response;
+          })
+      )
+    );
+    return;
+  }
+
+  // favicon and manifest: cache-first
   if (
-    url.pathname.startsWith("/assets/") ||
-    url.pathname.endsWith(".png") ||
-    url.pathname.endsWith(".ico") ||
-    url.pathname.endsWith(".webp") ||
-    url.pathname.endsWith(".woff2")
+    url.pathname === "/favicon.ico" ||
+    url.pathname === "/manifest.json" ||
+    url.pathname === "/robots.txt"
   ) {
     event.respondWith(
       caches.match(request).then(
@@ -77,11 +91,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation (HTML): network-first, fallback to cached "/"
+  // Navigation (HTML pages): stale-while-revalidate
+  // Serve cached version instantly, then update cache in background
+  // This eliminates the "need to refresh" problem
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() =>
-        caches.match("/").then((r) => r || fetch("/"))
+      caches.open(STATIC_CACHE).then((cache) =>
+        cache.match("/").then((cached) => {
+          const networkFetch = fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                cache.put("/", response.clone());
+              }
+              return response;
+            })
+            .catch(() => cached);
+
+          // Return cached immediately if available, otherwise wait for network
+          return cached || networkFetch;
+        })
       )
     );
     return;
