@@ -127,20 +127,53 @@ export const walletRouter = router({
       if (!data || data.status !== "1" || !Array.isArray(data.result)) {
         return [];
       }
-
-      return data.result
+      const tokens = data.result
         .filter((t) => parseFloat(t.balance) > 0)
         .slice(0, 20)
         .map((t) => ({
           name: t.tokenName,
           symbol: t.tokenSymbol,
           decimals: parseInt(t.tokenDecimal, 10),
-          contractAddress: t.contractAddress,
+          contractAddress: t.contractAddress.toLowerCase(),
           balance: t.balance,
           balanceFormatted: (
             parseFloat(t.balance) / Math.pow(10, parseInt(t.tokenDecimal, 10))
-          ).toFixed(4),
+          ).toFixed(6),
+          usdPrice: 0,
+          usdValue: 0,
+          change24h: 0,
         }));
+
+      // ── Enrich with CoinGecko BSC contract prices ──────────────────────────
+      if (tokens.length > 0) {
+        try {
+          const contractList = tokens.map((t) => t.contractAddress).join(",");
+          const cacheKey = `bsc-token-prices-${contractList.slice(0, 64)}`;
+          const priceUrl = `https://api.coingecko.com/api/v3/simple/token_price/binance-smart-chain?contract_addresses=${contractList}&vs_currencies=usd&include_24hr_change=true`;
+          const priceData = await cachedFetch<Record<string, { usd?: number; usd_24h_change?: number }>>(
+            cacheKey,
+            priceUrl,
+            TTL.prices,
+            (res) => res.json(),
+          );
+          if (priceData) {
+            for (const token of tokens) {
+              const p = priceData[token.contractAddress];
+              if (p?.usd) {
+                const bal = parseFloat(token.balanceFormatted);
+                token.usdPrice = p.usd;
+                token.usdValue = parseFloat((bal * p.usd).toFixed(2));
+                token.change24h = parseFloat((p.usd_24h_change ?? 0).toFixed(2));
+              }
+            }
+          }
+        } catch {
+          // Price enrichment is best-effort — return tokens without prices on failure
+        }
+      }
+
+      // Sort by USD value descending
+      return tokens.sort((a, b) => b.usdValue - a.usdValue);
     }),
 
   // ─── Get swap quote from CoinGecko ──────────────────────────────────────────

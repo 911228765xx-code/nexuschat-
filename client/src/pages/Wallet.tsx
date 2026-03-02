@@ -787,19 +787,18 @@ export default function Wallet() {
     if (tokenData) {
       tokenData.forEach((tk) => {
         const bal = parseFloat(tk.balanceFormatted);
-        if (bal > 0) {
-          result.push({
-            id: tk.contractAddress,
-            symbol: tk.symbol,
-            name: tk.name,
-            icon: tk.symbol.charAt(0),
-            balance: bal,
-            value: 0,
-            price: 0,
-            change24h: 0,
-            chain: "BSC",
-          });
-        }
+        if (bal <= 0 && (tk.usdValue ?? 0) <= 0) return;
+        result.push({
+          id: tk.contractAddress,
+          symbol: tk.symbol,
+          name: tk.name,
+          icon: tk.symbol.charAt(0),
+          balance: bal,
+          value: tk.usdValue ?? 0,
+          price: tk.usdPrice ?? 0,
+          change24h: tk.change24h ?? 0,
+          chain: "BSC",
+        });
       });
     }
 
