@@ -57,24 +57,9 @@ function PageLoader() {
 }
 
 // ─── Page transition wrapper ──────────────────────────────────────────────────
-const pageVariants = {
-  initial: { opacity: 0, y: 4 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.15, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] } },
-  exit: { opacity: 0, y: -3, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] as [number, number, number, number] } },
-};
-
+// No animation: instant route switch prevents black-screen flash on mobile
 function PageTransition({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      style={{ willChange: "opacity, transform" }}
-    >
-      {children}
-    </motion.div>
-  );
+  return <>{children}</>;
 }
 
 /**
@@ -117,8 +102,8 @@ function RouteContent() {
 
   return (
     <Suspense fallback={<PageLoader />}>
-      <AnimatePresence mode="wait" initial={false}>
-        <PageTransition key={location}>
+      <AnimatePresence mode="sync" initial={false}>
+        <PageTransition key={undefined}>
           <Switch location={location}>
             <Route path="/">
               <Home />
