@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useI18n } from "@/contexts/I18nContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -100,10 +101,13 @@ export default function Trading() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
-  // ─── Backend strategies ──────────────────────────────────────────────────
+  // ─── Auth state ───────────────────────────────────────────────────────────────────
+  const { isAuthenticated } = useAuth();
+
+  // ─── Backend strategies ──────────────────────────────────────────
   const { data: backendStrategies, refetch: refetchStrategies } = trpc.copyTrading.myStrategies.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
   const upsertStrategyMutation = trpc.copyTrading.upsertStrategy.useMutation({
     onSuccess: () => { refetchStrategies(); toast.success("Strategy saved!"); },
@@ -173,7 +177,7 @@ export default function Trading() {
   const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
   // Load real traders from backend, fallback to demo data
   const { data: backendTraders } = trpc.copyTrading.listTraders.useQuery(undefined, { staleTime: 30_000 });
-  const { data: followedTraderIds } = trpc.copyTrading.myFollowedTraders.useQuery(undefined, { staleTime: 30_000 });
+  const { data: followedTraderIds } = trpc.copyTrading.myFollowedTraders.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
   const followedSet = useMemo(() => new Set(followedTraderIds ?? []), [followedTraderIds]);
   const trpcUtils = trpc.useUtils();
 

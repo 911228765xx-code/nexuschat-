@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface Contact {
   id: string;
@@ -57,11 +58,9 @@ export default function CreateGroup() {
   });
   const [adminIds, setAdminIds] = useState<string[]>([]);
   const [allowInvite, setAllowInvite] = useState(true);
-  const [muteNewMembers, setMuteNewMembers] = useState(false);
-
-  // ─── Load real contacts from backend ────────────────────────────────────
-  const { data: friendsData } = trpc.contacts.listFriends.useQuery(undefined, { staleTime: 60_000 });
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [muteNewMembers, setMuteNewMembers] = useState(false);  // ─── Load real contacts from backend ────────────────────────────────────────
+  const { isAuthenticated } = useAuth();
+  const { data: friendsData } = trpc.contacts.listFriends.useQuery(undefined, { enabled: isAuthenticated, staleTime: 60_000 }); const [debouncedSearch, setDebouncedSearch] = useState("");
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);

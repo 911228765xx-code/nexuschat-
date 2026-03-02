@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import PullToRefresh from "@/components/PullToRefresh";
 import { toast } from "sonner";
 
@@ -45,13 +46,12 @@ export default function Chat() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
+  const { isAuthenticated } = useAuth();
 
-  // No-login mode: auth state not needed
-
-  // tRPC: real DM conversations
+  // tRPC: real DM conversations (protectedProcedure — skip when not logged in)
   const { data: dmConversations, isLoading: dmLoading } = trpc.chat.listDMConversations.useQuery(
     undefined,
-    { refetchInterval: 30_000, staleTime: 15_000 }
+    { enabled: isAuthenticated, refetchInterval: isAuthenticated ? 30_000 : false, staleTime: 15_000 }
   );
 
   // tRPC: public groups list
@@ -61,10 +61,10 @@ export default function Chat() {
   );
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
 
-  // tRPC: real unread notification count (poll every 30s)
+  // tRPC: real unread notification count (protectedProcedure — skip when not logged in)
   const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
     undefined,
-    { refetchInterval: 30000 }
+    { enabled: isAuthenticated, refetchInterval: isAuthenticated ? 30_000 : false }
   );
 
   // ✅ AppContext全局状态

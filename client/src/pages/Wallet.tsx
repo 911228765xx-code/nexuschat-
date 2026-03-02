@@ -16,6 +16,7 @@ import { useWallet } from "@/contexts/WalletContext";
 import WalletConnectModal from "@/components/WalletConnectModal";
 import { useBalance, useChainId } from "wagmi";
 import { mainnet, bsc, polygon, arbitrum } from "@/lib/wagmi";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /* ─── Types ─── */
 interface Token {
@@ -692,6 +693,9 @@ export default function Wallet() {
   const [receiveChain, setReceiveChain] = useState(() => getLastReceiveChain());
   const [sendChain, setSendChain] = useState("Ethereum");
 
+  // ─── Auth state ───
+  const { isAuthenticated } = useAuth();
+
   // ─── Real wallet from WalletContext ───
   const { address: connectedAddress, isConnected: walletConnected } = useWallet();
   const walletAddress = connectedAddress || "";
@@ -727,10 +731,10 @@ export default function Wallet() {
     { enabled: isValidBscAddress && activeTab === "history", staleTime: 30_000, refetchOnMount: "always", refetchOnWindowFocus: false }
   );
 
-  // ─── Swap history query ───
+  // ─── Swap history query (protectedProcedure — only call when logged in) ───
   const { data: swapHistoryData, isLoading: swapHistoryLoading } = trpc.wallet.getSwapHistory.useQuery(
     { limit: 20 },
-    { enabled: activeTab === "history", staleTime: 30_000 }
+    { enabled: isAuthenticated && activeTab === "history", staleTime: 30_000 }
   );
 
   // ─── Merge real data: wagmi native + ETH mainnet + BSC tokens ───
