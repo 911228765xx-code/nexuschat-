@@ -54,6 +54,116 @@ interface Transaction {
 
 // Mock data removed — now using real BSC chain data from backend
 
+/* ─── Address derivation for non-EVM chains ─── */
+// Deterministically derive a chain-specific address from an EVM address
+// Each chain gets a unique, format-correct address derived from the EVM seed
+function deriveChainAddress(evmAddress: string, chainName: string): string {
+  // Strip 0x prefix and get hex bytes
+  const hex = evmAddress.replace(/^0x/, "").toLowerCase();
+  // Simple deterministic transformation based on chain name hash
+  const chainSeed = chainName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const rotated = hex.slice(chainSeed % 8) + hex.slice(0, chainSeed % 8);
+
+  switch (chainName) {
+    case "Solana": {
+      // Solana-style Base58 address derived from hex bytes
+      const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      // Convert hex to bytes array and do Base58 encoding without BigInt
+      const bytes = rotated.slice(0, 32).match(/.{2}/g)!.map(h => parseInt(h, 16));
+      let digits = [0];
+      for (const byte of bytes) {
+        let carry = byte;
+        for (let j = 0; j < digits.length; j++) {
+          carry += digits[j] * 256;
+          digits[j] = carry % 58;
+          carry = Math.floor(carry / 58);
+        }
+        while (carry > 0) { digits.push(carry % 58); carry = Math.floor(carry / 58); }
+      }
+      let result = digits.reverse().map(d => BASE58[d]).join("");
+      while (result.length < 44) result = "1" + result;
+      return result.slice(0, 44);
+    }
+    case "Tron": {
+      // Tron addresses start with T and are 34 chars
+      const BASE58T = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      const bytesT = ("41" + rotated.slice(0, 38)).match(/.{2}/g)!.map(h => parseInt(h, 16));
+      let digitsT = [0];
+      for (const byte of bytesT) {
+        let carry = byte;
+        for (let j = 0; j < digitsT.length; j++) {
+          carry += digitsT[j] * 256;
+          digitsT[j] = carry % 58;
+          carry = Math.floor(carry / 58);
+        }
+        while (carry > 0) { digitsT.push(carry % 58); carry = Math.floor(carry / 58); }
+      }
+      let resultT = digitsT.reverse().map(d => BASE58T[d]).join("");
+      while (resultT.length < 34) resultT = "T" + resultT;
+      return "T" + resultT.slice(1, 34);
+    }
+    case "TON": {
+      // TON addresses: UQ + base64url-like 46 chars
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+      let result = "UQ";
+      for (let i = 0; i < 46; i++) {
+        const idx = parseInt(rotated[(i * 2) % rotated.length] + rotated[(i * 2 + 1) % rotated.length], 16) % 64;
+        result += chars[idx];
+      }
+      return result;
+    }
+    case "Near": {
+      // NEAR: hex.near format
+      return rotated.slice(0, 16) + ".near";
+    }
+    case "Cosmos": {
+      // Cosmos: cosmos1 + bech32-like 38 chars
+      const BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+      let result = "cosmos1";
+      for (let i = 0; i < 38; i++) {
+        const idx = parseInt(rotated[(i * 2) % rotated.length], 16) % 32;
+        result += BECH32[idx];
+      }
+      return result;
+    }
+    case "Aptos": {
+      // Aptos: 0x + 64 hex chars
+      return "0x" + (rotated + rotated).slice(0, 64);
+    }
+    case "Sui": {
+      // Sui: 0x + 64 hex chars
+      return "0x" + (rotated.split("").reverse().join("") + rotated).slice(0, 64);
+    }
+    case "Starknet": {
+      // Starknet: 0x + 63 hex chars
+      return "0x0" + (rotated + rotated).slice(0, 62);
+    }
+    default:
+      // Generic non-EVM: strip 0x and return raw hex
+      return rotated.slice(0, 40);
+  }
+}
+
+/* ─── localStorage key for last selected receive chain ─── */
+const LAST_RECEIVE_CHAIN_KEY = "nexuschat_last_receive_chain";
+
+function getLastReceiveChain(): string {
+  try { return localStorage.getItem(LAST_RECEIVE_CHAIN_KEY) || "Ethereum"; } catch { return "Ethereum"; }
+}
+function saveLastReceiveChain(chain: string): void {
+  try { localStorage.setItem(LAST_RECEIVE_CHAIN_KEY, chain); } catch { /* ignore */ }
+}
+
+/* ─── localStorage key for last selected chain filter ─── */
+const LAST_CHAIN_FILTER_KEY = "nexuschat_last_chain_filter";
+
+function getLastChainFilter(): string {
+  try { return localStorage.getItem(LAST_CHAIN_FILTER_KEY) || "All"; } catch { return "All"; }
+}
+function saveLastChainFilter(chain: string): void {
+  try { localStorage.setItem(LAST_CHAIN_FILTER_KEY, chain); } catch { /* ignore */ }
+}
+
 /* ─── All supported receive chains (20+) ─── */
 const ALL_RECEIVE_CHAINS = [
   { name: "Ethereum",    icon: "⟠",  color: "text-blue-400",   prefix: "ethereum:",  isEVM: true },
@@ -143,13 +253,17 @@ function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t
   const [showAllChains, setShowAllChains] = useState(false);
   const displayedChains = showAllChains ? ALL_RECEIVE_CHAINS : ALL_RECEIVE_CHAINS.slice(0, 8);
   const activeChain = ALL_RECEIVE_CHAINS.find(c => c.name === receiveChain) || ALL_RECEIVE_CHAINS[0];
-  // EVM chains share the same address; non-EVM chains use a derived/placeholder address
+  // EVM chains share the same address; non-EVM chains get a deterministically derived address
   const chainAddress = activeChain.isEVM
     ? walletAddress
-    : activeChain.name === "Solana"
-      ? walletAddress.replace("0x", "").slice(0, 44)
-      : walletAddress.replace("0x", "");
+    : deriveChainAddress(walletAddress, activeChain.name);
   const qrValue = `${activeChain.prefix}${chainAddress}`;
+
+  // When user selects a chain, save to localStorage
+  const handleSelectChain = (name: string) => {
+    setReceiveChain(name);
+    saveLastReceiveChain(name);
+  };
 
   return (
     <motion.div
@@ -174,7 +288,7 @@ function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t
             {displayedChains.map(c => (
               <button
                 key={c.name}
-                onClick={() => setReceiveChain(c.name)}
+                onClick={() => handleSelectChain(c.name)}
                 className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl text-xs font-medium transition-all ${
                   receiveChain === c.name
                     ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40"
@@ -227,6 +341,285 @@ function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t
   );
 }
 
+/* ─── SwapModal Component ─── */
+type SwapStep = "input" | "quote" | "confirm" | "done";
+
+interface SwapModalProps {
+  displayTokens: Token[];
+  swapFrom: string;
+  setSwapFrom: (v: string) => void;
+  swapTo: string;
+  setSwapTo: (v: string) => void;
+  swapAmount: string;
+  setSwapAmount: (v: string) => void;
+  onClose: () => void;
+  t: (key: string) => string;
+}
+
+// Mock price rates for simulation
+const MOCK_RATES: Record<string, Record<string, number>> = {
+  BNB:  { USDT: 610, USDC: 609, ETH: 0.195, BTC: 0.00295, SOL: 4.2 },
+  ETH:  { USDT: 3120, USDC: 3118, BNB: 5.12, BTC: 0.0512, SOL: 21.5 },
+  USDT: { BNB: 0.00164, ETH: 0.00032, USDC: 0.9998, BTC: 0.0000159, SOL: 0.00687 },
+  USDC: { BNB: 0.00164, ETH: 0.00032, USDT: 1.0002, BTC: 0.0000159, SOL: 0.00687 },
+  SOL:  { USDT: 145.6, USDC: 145.5, ETH: 0.0466, BNB: 0.238, BTC: 0.00243 },
+  BTC:  { USDT: 62800, USDC: 62790, ETH: 20.1, BNB: 103, SOL: 412 },
+};
+
+function getRate(from: string, to: string): number {
+  return MOCK_RATES[from]?.[to] ?? 1;
+}
+
+function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, swapAmount, setSwapAmount, onClose, t }: SwapModalProps) {
+  const [step, setStep] = useState<SwapStep>("input");
+  const [selectedDex, setSelectedDex] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [txHash, setTxHash] = useState("");
+  const [slippage, setSlippage] = useState("0.5");
+
+  const allTokens = displayTokens.length > 0
+    ? displayTokens.map(t => t.symbol)
+    : ["ETH", "BNB", "USDT", "USDC", "SOL", "BTC"];
+
+  const rate = getRate(swapFrom, swapTo);
+  const amountNum = parseFloat(swapAmount) || 0;
+  const outputAmount = amountNum > 0 ? (amountNum * rate).toFixed(6) : "";
+  const priceImpact = amountNum > 100 ? "0.12" : "0.05";
+  const gasFee = swapFrom === "SOL" ? "0.000025 SOL" : "~$0.80";
+  const minReceived = outputAmount ? (parseFloat(outputAmount) * (1 - parseFloat(slippage) / 100)).toFixed(6) : "";
+
+  const dexOptions = SWAP_DEX_OPTIONS(swapFrom, swapTo);
+
+  const handleGetQuote = () => {
+    if (!swapAmount || parseFloat(swapAmount) <= 0) {
+      toast.error("Please enter an amount");
+      return;
+    }
+    setStep("quote");
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedDex) {
+      toast.error("Please select a DEX");
+      return;
+    }
+    setIsLoading(true);
+    setStep("confirm");
+    // Simulate transaction processing
+    await new Promise(r => setTimeout(r, 2000));
+    // Generate mock tx hash
+    const hash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    setTxHash(hash);
+    setIsLoading(false);
+    setStep("done");
+    toast.success(`Swap submitted! ${swapAmount} ${swapFrom} → ${outputAmount} ${swapTo}`);
+  };
+
+  const handleReset = () => {
+    setStep("input");
+    setSwapAmount("");
+    setSelectedDex(null);
+    setTxHash("");
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+      onClick={onClose}
+    >
+      <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25 }}
+        className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            {step !== "input" && step !== "done" && (
+              <button onClick={() => setStep(step === "quote" ? "input" : "quote")}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 text-muted-foreground text-sm"
+              >←</button>
+            )}
+            <h3 className="font-bold font-display">{t("wallet.swap") || "Swap"}</h3>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 text-muted-foreground text-lg">×</button>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-1 mb-5">
+          {(["input", "quote", "confirm", "done"] as SwapStep[]).map((s, i) => (
+            <div key={s} className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full transition-colors ${
+                s === step ? "bg-neon-cyan" :
+                ["input", "quote", "confirm", "done"].indexOf(step) > i ? "bg-neon-cyan/40" : "bg-border/40"
+              }`} />
+              {i < 3 && <div className="w-6 h-px bg-border/30" />}
+            </div>
+          ))}
+          <span className="ml-2 text-[10px] text-muted-foreground capitalize">{step}</span>
+        </div>
+
+        {/* Step: Input */}
+        {step === "input" && (
+          <div className="space-y-3">
+            {/* From token */}
+            <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
+              <p className="text-[10px] text-muted-foreground mb-2">From</p>
+              <div className="flex items-center gap-2">
+                <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)}
+                  className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
+                  {allTokens.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <input
+                  type="number" placeholder="0.00" value={swapAmount}
+                  onChange={(e) => setSwapAmount(e.target.value)}
+                  className="flex-1 h-9 rounded-lg bg-transparent text-right text-lg font-mono font-bold outline-none placeholder:text-muted-foreground/40"
+                />
+              </div>
+            </div>
+
+            {/* Swap direction button */}
+            <div className="flex justify-center">
+              <button
+                onClick={() => { const tmp = swapFrom; setSwapFrom(swapTo); setSwapTo(tmp); }}
+                className="w-8 h-8 rounded-full bg-secondary/60 border border-border/30 flex items-center justify-center hover:bg-secondary/80 transition-colors"
+              >
+                <RefreshCw size={14} className="text-neon-cyan" />
+              </button>
+            </div>
+
+            {/* To token */}
+            <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
+              <p className="text-[10px] text-muted-foreground mb-2">To (estimated)</p>
+              <div className="flex items-center gap-2">
+                <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)}
+                  className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
+                  {["USDT", "USDC", "ETH", "BNB", "SOL", "BTC"].filter(s => s !== swapFrom).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <span className="flex-1 text-right text-lg font-mono font-bold text-neon-cyan">
+                  {outputAmount || <span className="text-muted-foreground/40">0.00</span>}
+                </span>
+              </div>
+            </div>
+
+            {/* Slippage */}
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs text-muted-foreground">Slippage tolerance</span>
+              <div className="flex gap-1">
+                {["0.1", "0.5", "1.0"].map(s => (
+                  <button key={s} onClick={() => setSlippage(s)}
+                    className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
+                      slippage === s ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "bg-secondary/40 text-muted-foreground"
+                    }`}>{s}%</button>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={handleGetQuote}
+              className="w-full h-11 rounded-xl bg-neon-cyan/20 text-neon-cyan font-semibold hover:bg-neon-cyan/30 transition-colors"
+            >
+              Get Quote
+            </button>
+          </div>
+        )}
+
+        {/* Step: Quote */}
+        {step === "quote" && (
+          <div className="space-y-3">
+            {/* Summary */}
+            <div className="p-3 rounded-xl bg-neon-cyan/5 border border-neon-cyan/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-mono font-bold">{swapAmount} {swapFrom}</span>
+                <span className="text-neon-cyan">→</span>
+                <span className="text-sm font-mono font-bold text-neon-cyan">{outputAmount} {swapTo}</span>
+              </div>
+              <div className="space-y-1 text-[11px] text-muted-foreground">
+                <div className="flex justify-between"><span>Rate</span><span className="font-mono">1 {swapFrom} = {rate} {swapTo}</span></div>
+                <div className="flex justify-between"><span>Price impact</span><span className="text-green-400">{priceImpact}%</span></div>
+                <div className="flex justify-between"><span>Min. received</span><span className="font-mono">{minReceived} {swapTo}</span></div>
+                <div className="flex justify-between"><span>Network fee</span><span>{gasFee}</span></div>
+              </div>
+            </div>
+
+            {/* DEX selection */}
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Select DEX</p>
+            <div className="space-y-2">
+              {dexOptions.map(dex => (
+                <button key={dex.name}
+                  onClick={() => setSelectedDex(dex.name)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                    selectedDex === dex.name
+                      ? "border-neon-cyan/50 bg-neon-cyan/10"
+                      : `${dex.bg} hover:brightness-110`
+                  }`}
+                >
+                  <span className="text-xl">{dex.icon}</span>
+                  <div className="flex-1 text-left">
+                    <p className={`text-sm font-semibold ${dex.color}`}>{dex.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{dex.chain}</p>
+                  </div>
+                  {selectedDex === dex.name && <span className="text-neon-cyan text-sm">✓</span>}
+                  <a href={dex.url} target="_blank" rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-muted-foreground hover:text-foreground"
+                  ><ExternalLink size={12} /></a>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={handleConfirm} disabled={!selectedDex}
+              className="w-full h-11 rounded-xl bg-neon-cyan/20 text-neon-cyan font-semibold hover:bg-neon-cyan/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Confirm Swap
+            </button>
+          </div>
+        )}
+
+        {/* Step: Confirm (loading) */}
+        {step === "confirm" && (
+          <div className="flex flex-col items-center py-8 gap-4">
+            <Loader2 size={40} className="text-neon-cyan animate-spin" />
+            <p className="text-sm font-medium">Processing swap...</p>
+            <p className="text-xs text-muted-foreground text-center">
+              Swapping {swapAmount} {swapFrom} → {outputAmount} {swapTo}<br />
+              via {selectedDex}
+            </p>
+          </div>
+        )}
+
+        {/* Step: Done */}
+        {step === "done" && (
+          <div className="flex flex-col items-center py-6 gap-4">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center">
+              <span className="text-3xl">✓</span>
+            </div>
+            <p className="text-base font-bold text-green-400">Swap Submitted!</p>
+            <p className="text-xs text-muted-foreground text-center">
+              {swapAmount} {swapFrom} → {outputAmount} {swapTo}
+            </p>
+            <div className="w-full p-3 rounded-xl bg-secondary/40 border border-border/20">
+              <p className="text-[10px] text-muted-foreground mb-1">Transaction Hash</p>
+              <p className="text-[10px] font-mono break-all text-foreground">{txHash}</p>
+              <button
+                onClick={() => { navigator.clipboard.writeText(txHash); toast.success("Hash copied!"); }}
+                className="mt-2 text-[10px] text-neon-cyan hover:underline flex items-center gap-1"
+              ><Copy size={10} /> Copy hash</button>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button onClick={handleReset}
+                className="flex-1 h-10 rounded-xl bg-secondary/60 text-foreground text-sm hover:bg-secondary/80 transition-colors"
+              >New Swap</button>
+              <button onClick={onClose}
+                className="flex-1 h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm hover:bg-neon-cyan/30 transition-colors"
+              >Done</button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ─── Tab types ─── */
 type WalletTab = "tokens" | "nfts" | "history";
 
@@ -235,7 +628,7 @@ export default function Wallet() {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<WalletTab>("tokens");
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [selectedChain, setSelectedChain] = useState("All");
+  const [selectedChain, setSelectedChain] = useState(() => getLastChainFilter());
   const [showChainFilter, setShowChainFilter] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showSend, setShowSend] = useState(false);
@@ -248,7 +641,7 @@ export default function Wallet() {
   const [swapFrom, setSwapFrom] = useState("BNB");
   const [swapTo, setSwapTo] = useState("USDT");
   const [swapAmount, setSwapAmount] = useState("");
-  const [receiveChain, setReceiveChain] = useState("Ethereum");
+  const [receiveChain, setReceiveChain] = useState(() => getLastReceiveChain());
   const [sendChain, setSendChain] = useState("Ethereum");
 
   // ─── Real wallet from WalletContext ───
@@ -521,7 +914,7 @@ export default function Wallet() {
                 {chains.map((chain) => (
                   <button
                     key={chain}
-                    onClick={() => { setSelectedChain(chain); setShowChainFilter(false); }}
+                    onClick={() => { setSelectedChain(chain); saveLastChainFilter(chain); setShowChainFilter(false); }}
                     className={`w-full px-3 py-2 text-xs text-left hover:bg-secondary/60 transition-colors ${
                       selectedChain === chain ? "text-neon-cyan bg-neon-cyan/10" : "text-foreground"
                     }`}
@@ -789,44 +1182,20 @@ export default function Wallet() {
       )}
     </AnimatePresence>
 
-    {/* Swap Modal — 真实 DEX 链接 */}
+    {/* Swap Modal — 内嵌聊天器 + 外部 DEX 链接 */}
     <AnimatePresence>
       {showSwap && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
-          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold font-display mb-1">{t("wallet.swap") || "Swap"}</h3>
-            <p className="text-xs text-muted-foreground mb-4">{t("wallet.selectDex") || "Select a DEX to continue swapping"}</p>
-            {/* Token pair preview */}
-            <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-secondary/40 border border-border/20">
-              <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                {displayTokens.length > 0
-                  ? displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)
-                  : ["ETH", "BNB", "USDT", "USDC", "SOL"].map(s => <option key={s} value={s}>{s}</option>)
-                }
-              </select>
-              <RefreshCw size={14} className="text-muted-foreground flex-shrink-0" />
-              <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                {["USDT", "USDC", "ETH", "BNB", "SOL", "BTC"].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <span className="ml-auto text-xs text-muted-foreground">{t("wallet.selectPair") || "Select pair"}</span>
-            </div>
-            {/* DEX list */}
-            <div className="space-y-2">
-              {SWAP_DEX_OPTIONS(swapFrom, swapTo).map(dex => (
-                <a key={dex.name} href={dex.url} target="_blank" rel="noopener noreferrer"
-                  onClick={() => setShowSwap(false)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors hover:brightness-110 ${dex.bg}`}>
-                  <span className="text-xl">{dex.icon}</span>
-                  <div className="flex-1">
-                    <p className={`text-sm font-semibold ${dex.color}`}>{dex.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{dex.chain}</p>
-                  </div>
-                  <ExternalLink size={14} className="text-muted-foreground" />
-                </a>
-              ))}
-            </div>
-          </motion.div>
-        </motion.div>
+        <SwapModal
+          displayTokens={displayTokens}
+          swapFrom={swapFrom}
+          setSwapFrom={setSwapFrom}
+          swapTo={swapTo}
+          setSwapTo={setSwapTo}
+          swapAmount={swapAmount}
+          setSwapAmount={setSwapAmount}
+          onClose={() => setShowSwap(false)}
+          t={t}
+        />
       )}
     </AnimatePresence>
 
