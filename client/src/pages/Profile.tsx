@@ -3,7 +3,9 @@
  * 身份卡片、核心数据、功能入口、主题切换、设置
  * v1.9: AppContext全局状态接入
  */
-import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2 } from "lucide-react";
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2, Globe, Home, Languages } from "lucide-react";
+import { LOCALES } from "@/contexts/I18nContext";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -14,9 +16,11 @@ import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 
 export default function Profile() {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const [, setLocation] = useLocation();
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const currentLocale = LOCALES.find(l => l.code === locale) || LOCALES[0];
 
   // ✅ AppContext全局状态
   const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
@@ -269,6 +273,59 @@ export default function Profile() {
                 </button>
               </Link>
             </div>
+          </motion.div>
+
+          {/* Language Switcher */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("profile.language") || "Language"}</h3>
+            <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
+              <button
+                onClick={() => setShowLangPicker(!showLangPicker)}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-secondary/30 active:bg-secondary/50 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+                  <Languages size={16} className="text-neon-cyan" />
+                </div>
+                <span className="flex-1 text-sm text-left">{currentLocale.flag} {currentLocale.name}</span>
+                <ChevronRight size={14} className={`text-muted-foreground transition-transform ${showLangPicker ? 'rotate-90' : ''}`} />
+              </button>
+              {showLangPicker && (
+                <div className="border-t border-border/10 divide-y divide-border/10">
+                  {LOCALES.map(l => (
+                    <button
+                      key={l.code}
+                      onClick={() => { setLocale(l.code); setShowLangPicker(false); }}
+                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-secondary/30 transition-colors ${
+                        locale === l.code ? 'bg-neon-cyan/5' : ''
+                      }`}
+                    >
+                      <span className="text-lg leading-none">{l.flag}</span>
+                      <span className={`flex-1 text-sm text-left ${locale === l.code ? 'text-neon-cyan font-medium' : ''}`}>{l.name}</span>
+                      {locale === l.code && <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Back to Website */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28 }}
+          >
+            <a
+              href="/"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-neon-cyan/5 border border-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/10 transition-colors"
+            >
+              <Home size={16} />
+              {t("profile.backToHome") || "Back to Website"}
+            </a>
           </motion.div>
 
           {/* Logout — redirect to settings */}

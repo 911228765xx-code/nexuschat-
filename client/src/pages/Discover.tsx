@@ -582,8 +582,13 @@ export default function Discover() {
     }
 
     const newPost: MomentPost = {
-      id: Date.now().toString(),
-      author: { name: "me.eth", avatar: "🦊", isVerified: false, handle: "0x71C7...3a9b" },
+      id: `optimistic-${Date.now()}`,
+      author: {
+        name: meData?.username || (meData?.walletAddress ? `${meData.walletAddress.slice(0, 6)}...${meData.walletAddress.slice(-4)}` : "me.eth"),
+        avatar: meData?.avatar || "🦊",
+        isVerified: false,
+        handle: meData?.walletAddress ? `${meData.walletAddress.slice(0, 6)}...${meData.walletAddress.slice(-4)}` : "0x71C7...3a9b",
+      },
       content: composeText,
       timestamp: t("discover.justNow") || "Just now",
       likes: 0,

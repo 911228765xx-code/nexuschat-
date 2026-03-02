@@ -12,7 +12,7 @@ export interface LocaleInfo {
 export const LOCALES: LocaleInfo[] = [
   { code: "en", name: "English", flag: "🇺🇸", dir: "ltr" },
   { code: "zh-CN", name: "简体中文", flag: "🇨🇳", dir: "ltr" },
-  { code: "zh-TW", name: "繁體中文", flag: "🇹🇼", dir: "ltr" },
+  { code: "zh-TW", name: "繁體中文", flag: "🇭🇰", dir: "ltr" },
   { code: "ja", name: "日本語", flag: "🇯🇵", dir: "ltr" },
   { code: "ko", name: "한국어", flag: "🇰🇷", dir: "ltr" },
   { code: "ar", name: "العربية", flag: "🇸🇦", dir: "rtl" },
