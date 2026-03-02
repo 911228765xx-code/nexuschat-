@@ -8,7 +8,7 @@ import { useState, lazy, Suspense } from "react";
 import { useWallet } from "@/contexts/WalletContext";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight } from "lucide-react";
+import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -36,6 +36,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { address: walletAddress, isConnected: walletConnected, disconnect: disconnectWallet } = useWallet();
 
   const features = [
@@ -69,18 +70,21 @@ export default function Home() {
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/20">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          {/* Logo */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
               <MessageCircle size={16} className="text-white" />
             </div>
             <span className="text-lg font-bold font-display">NexusChat</span>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Desktop nav buttons */}
+          <div className="hidden sm:flex items-center gap-3">
             <LanguageSwitcher />
             {walletConnected ? (
               <Button
                 onClick={() => setWalletOpen(true)}
-                className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3 hidden sm:flex"
+                className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3"
                 variant="outline"
               >
                 <div className="w-2 h-2 rounded-full bg-[#00ff88] mr-1.5 animate-pulse" />
@@ -89,7 +93,7 @@ export default function Home() {
             ) : (
               <Button
                 onClick={() => setWalletOpen(true)}
-                className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 px-3 hidden sm:flex"
+                className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 px-3"
                 variant="outline"
               >
                 <Wallet size={14} className="mr-1.5" />
@@ -105,7 +109,54 @@ export default function Home() {
               <ArrowRight size={14} className="ml-1" />
             </Button>
           </div>
+
+          {/* Mobile: Enter App button + Hamburger */}
+          <div className="flex sm:hidden items-center gap-2">
+            <Button
+              onClick={() => setLocation("/app/chat")}
+              className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-xs h-8 px-3"
+              variant="outline"
+            >
+              {t("nav.enterApp")}
+              <ArrowRight size={12} className="ml-1" />
+            </Button>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-gray-300"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden border-t border-border/20 bg-background/95 backdrop-blur-xl px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">{t("nav.language") || "语言"}</span>
+              <LanguageSwitcher />
+            </div>
+            {walletConnected ? (
+              <Button
+                onClick={() => { setWalletOpen(true); setMobileMenuOpen(false); }}
+                className="w-full bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 justify-start"
+                variant="outline"
+              >
+                <div className="w-2 h-2 rounded-full bg-[#00ff88] mr-2 animate-pulse" />
+                {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { setWalletOpen(true); setMobileMenuOpen(false); }}
+                className="w-full bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 justify-start"
+                variant="outline"
+              >
+                <Wallet size={14} className="mr-2" />
+                {t("nav.connectWallet")}
+              </Button>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
