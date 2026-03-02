@@ -2,7 +2,7 @@
   "name": "NexusChat — AI-Powered Web3 Social Trading",
   "short_name": "NexusChat",
   "description": "Chat, research, and trade crypto with AI-powered insights. Web3 native social platform.",
-  "start_url": "/",
+  "start_url": "/app/chat",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#0a0a0f",

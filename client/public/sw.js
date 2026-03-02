@@ -1,12 +1,13 @@
 /**
- * NexusChat Service Worker v3
+ * NexusChat Service Worker v4
  * Strategy:
  *   - Static assets (JS/CSS/fonts): Cache-first (long-lived, hashed filenames)
- *   - Navigation (HTML): Stale-while-revalidate (instant load + background update)
+ *   - Navigation (HTML): Network-first with cache fallback (always fresh HTML)
  *   - API calls: Network-only (always fresh)
- * Version bump triggers cache refresh on deploy.
+ * v4: Changed navigation to network-first to fix PWA black screen on launch.
+ *     Version bump clears all v3 caches.
  */
-const CACHE_VERSION = "nexuschat-v3";
+const CACHE_VERSION = "nexuschat-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -91,26 +92,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation (HTML pages): stale-while-revalidate
-  // Serve cached version instantly, then update cache in background
-  // This eliminates the "need to refresh" problem
+  // Navigation (HTML pages): network-first with cache fallback
+  // Always try to get fresh HTML first so blocking theme script is always current.
+  // Falls back to cache only when offline.
   if (request.mode === "navigate") {
     event.respondWith(
-      caches.open(STATIC_CACHE).then((cache) =>
-        cache.match("/").then((cached) => {
-          const networkFetch = fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                cache.put("/", response.clone());
-              }
-              return response;
-            })
-            .catch(() => cached);
-
-          // Return cached immediately if available, otherwise wait for network
-          return cached || networkFetch;
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            // Update cache with fresh HTML
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put("/", clone));
+          }
+          return response;
         })
-      )
+        .catch(() =>
+          // Offline fallback: serve cached shell
+          caches.match("/").then((cached) => cached || caches.match("/"))
+        )
     );
     return;
   }
