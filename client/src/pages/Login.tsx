@@ -1,7 +1,10 @@
 /**
  * Login — 应用内登录/注册页面
- * 支持邮箱/密码登录 + 注册，以及 Manus OAuth 备用登录
- * Cyberpunk Noir 风格：纯 CSS 动画（移除 framer-motion 和 canvas，确保移动端可靠渲染）
+ * 最大移动端兼容性版本：
+ * - 无 canvas、无 framer-motion
+ * - 无 backdrop-blur / backdrop-filter（Android Chrome 已知渲染 bug）
+ * - 无 blur-[Npx] CSS filter（同上）
+ * - 纯实色背景，inline style 确保所有 Android/iOS 浏览器正常渲染
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -12,7 +15,6 @@ import { toast } from "sonner";
 
 type Mode = "login" | "register";
 
-// ── Main Login Component ───────────────────────────────────────────────────────
 export default function Login() {
   const [, setLocation] = useLocation();
   const [mode, setMode] = useState<Mode>("login");
@@ -33,9 +35,8 @@ export default function Login() {
   })();
 
   const loginMutation = trpc.emailAuth.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("登录成功，欢迎回来！");
-      // Hard redirect ensures React Query cache is fully cleared on mobile
       window.location.href = returnPath;
     },
     onError: (err) => {
@@ -44,7 +45,7 @@ export default function Login() {
   });
 
   const registerMutation = trpc.emailAuth.register.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("注册成功，欢迎加入 NexusChat！");
       window.location.href = returnPath;
     },
@@ -53,12 +54,14 @@ export default function Login() {
     },
   });
 
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!email.trim()) newErrors.email = "请输入邮箱";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "邮箱格式不正确";
     if (!password) newErrors.password = "请输入密码";
-    else if (password.length < 8) newErrors.password = "密码至少 8 位";
+    else if (password.length < 6) newErrors.password = "密码至少 6 位";
     if (mode === "register" && !name.trim()) newErrors.name = "请输入昵称";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -74,198 +77,377 @@ export default function Login() {
     }
   };
 
-  const isPending = loginMutation.isPending || registerMutation.isPending;
+  // ─── Inline styles (avoids Tailwind class purging issues and CSS filter bugs) ──
+  const S = {
+    page: {
+      minHeight: "100dvh",
+      backgroundColor: "#050810",
+      display: "flex",
+      flexDirection: "column" as const,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "16px",
+      position: "relative" as const,
+    },
+    backBtn: {
+      position: "absolute" as const,
+      top: "20px",
+      left: "16px",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      fontSize: "13px",
+      color: "rgba(0,212,255,0.7)",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: "8px 4px",
+      zIndex: 10,
+    },
+    logoWrap: {
+      display: "flex",
+      flexDirection: "column" as const,
+      alignItems: "center",
+      marginBottom: "28px",
+    },
+    logoIcon: {
+      width: "56px",
+      height: "56px",
+      borderRadius: "16px",
+      background: "linear-gradient(135deg, #00d4ff, #a855f7)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: "12px",
+    },
+    logoTitle: {
+      fontSize: "22px",
+      fontWeight: 700,
+      color: "#ffffff",
+      margin: 0,
+      letterSpacing: "-0.3px",
+    },
+    logoSub: {
+      fontSize: "11px",
+      color: "rgba(0,212,255,0.6)",
+      marginTop: "4px",
+      fontFamily: "monospace",
+      letterSpacing: "1px",
+    },
+    card: {
+      width: "100%",
+      maxWidth: "360px",
+      // Solid background — NO backdrop-blur (Android Chrome rendering bug)
+      backgroundColor: "#0d1225",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: "20px",
+      padding: "24px",
+    },
+    tabRow: {
+      display: "flex",
+      backgroundColor: "rgba(255,255,255,0.05)",
+      borderRadius: "12px",
+      padding: "4px",
+      marginBottom: "24px",
+      gap: "4px",
+    },
+    tabActive: {
+      flex: 1,
+      padding: "9px",
+      borderRadius: "8px",
+      fontSize: "14px",
+      fontWeight: 600,
+      border: "1px solid rgba(0,212,255,0.3)",
+      cursor: "pointer",
+      backgroundColor: "rgba(0,212,255,0.12)",
+      color: "#ffffff",
+    },
+    tabInactive: {
+      flex: 1,
+      padding: "9px",
+      borderRadius: "8px",
+      fontSize: "14px",
+      fontWeight: 500,
+      border: "1px solid transparent",
+      cursor: "pointer",
+      backgroundColor: "transparent",
+      color: "rgba(255,255,255,0.4)",
+    },
+    fieldWrap: {
+      marginBottom: "16px",
+    },
+    label: {
+      display: "block",
+      fontSize: "11px",
+      color: "rgba(0,212,255,0.6)",
+      marginBottom: "6px",
+      fontFamily: "monospace",
+      letterSpacing: "0.5px",
+    },
+    inputWrap: {
+      position: "relative" as const,
+    },
+    input: (hasError: boolean) => ({
+      width: "100%",
+      height: "44px",
+      paddingLeft: "36px",
+      paddingRight: "16px",
+      backgroundColor: "rgba(255,255,255,0.05)",
+      border: `1px solid ${hasError ? "#f87171" : "rgba(255,255,255,0.1)"}`,
+      borderRadius: "12px",
+      color: "#ffffff",
+      fontSize: "14px",
+      outline: "none",
+      boxSizing: "border-box" as const,
+      fontFamily: "inherit",
+    }),
+    inputWithEye: (hasError: boolean) => ({
+      width: "100%",
+      height: "44px",
+      paddingLeft: "36px",
+      paddingRight: "44px",
+      backgroundColor: "rgba(255,255,255,0.05)",
+      border: `1px solid ${hasError ? "#f87171" : "rgba(255,255,255,0.1)"}`,
+      borderRadius: "12px",
+      color: "#ffffff",
+      fontSize: "14px",
+      outline: "none",
+      boxSizing: "border-box" as const,
+      fontFamily: "inherit",
+    }),
+    iconLeft: {
+      position: "absolute" as const,
+      left: "12px",
+      top: "50%",
+      transform: "translateY(-50%)",
+      color: "rgba(255,255,255,0.3)",
+      pointerEvents: "none" as const,
+    },
+    eyeBtn: {
+      position: "absolute" as const,
+      right: "12px",
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "rgba(255,255,255,0.3)",
+      padding: "4px",
+      display: "flex",
+      alignItems: "center",
+    },
+    errorText: {
+      fontSize: "11px",
+      color: "#f87171",
+      marginTop: "4px",
+    },
+    submitBtn: (disabled: boolean) => ({
+      width: "100%",
+      height: "48px",
+      background: disabled
+        ? "rgba(0,212,255,0.25)"
+        : "linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)",
+      border: "none",
+      borderRadius: "12px",
+      color: "#ffffff",
+      fontSize: "15px",
+      fontWeight: 600,
+      cursor: disabled ? "not-allowed" : "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px",
+      marginTop: "8px",
+      opacity: disabled ? 0.7 : 1,
+    }),
+    divider: {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      margin: "20px 0",
+    },
+    dividerLine: {
+      flex: 1,
+      height: "1px",
+      backgroundColor: "rgba(255,255,255,0.08)",
+    },
+    dividerText: {
+      fontSize: "12px",
+      color: "rgba(255,255,255,0.25)",
+      fontFamily: "monospace",
+    },
+    oauthBtn: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px",
+      width: "100%",
+      height: "44px",
+      backgroundColor: "rgba(168,85,247,0.08)",
+      border: "1px solid rgba(168,85,247,0.2)",
+      borderRadius: "12px",
+      color: "rgba(255,255,255,0.7)",
+      fontSize: "14px",
+      textDecoration: "none",
+      boxSizing: "border-box" as const,
+    },
+    terms: {
+      fontSize: "11px",
+      color: "rgba(255,255,255,0.2)",
+      textAlign: "center" as const,
+      marginTop: "16px",
+      lineHeight: 1.6,
+      fontFamily: "monospace",
+    },
+    termsLink: {
+      color: "rgba(0,212,255,0.5)",
+      textDecoration: "none",
+    },
+  };
 
   return (
-    <div className="min-h-screen bg-[#050810] flex flex-col items-center justify-center px-4 relative overflow-hidden">
-      {/* Pure CSS background — no canvas, no framer-motion, reliable on all mobile browsers */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        {/* Grid lines via CSS background-image */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
-        {/* Radial glow blobs */}
-        <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] rounded-full bg-[#00d4ff]/8 blur-[120px]" />
-        <div className="absolute bottom-1/3 right-1/4 w-[400px] h-[400px] rounded-full bg-[#a855f7]/8 blur-[100px]" />
-        <div className="absolute top-2/3 left-1/4 w-[300px] h-[300px] rounded-full bg-[#00ff88]/5 blur-[80px]" />
-        {/* CSS scan line animation */}
-        <div
-          className="absolute left-0 right-0 h-[40px]"
-          style={{
-            background: "linear-gradient(to bottom, transparent, rgba(0,212,255,0.06), transparent)",
-            animation: "scanLine 6s linear infinite",
-          }}
-        />
-      </div>
-
+    <div style={S.page}>
       {/* Back button */}
-      <button
-        onClick={() => setLocation("/")}
-        className="absolute top-6 left-4 flex items-center gap-2 text-sm text-[#00d4ff]/60 hover:text-[#00d4ff] transition-colors z-10"
-      >
-        <ArrowLeft size={16} />
+      <button onClick={() => setLocation("/")} style={S.backBtn}>
+        <ArrowLeft size={15} />
         返回首页
       </button>
 
       {/* Logo */}
-      <div className="flex flex-col items-center mb-8 z-10">
-        <div className="relative mb-3">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] blur-xl opacity-50 scale-110" />
-          <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-2xl">
-            <MessageCircle size={28} className="text-white" />
-          </div>
+      <div style={S.logoWrap}>
+        <div style={S.logoIcon}>
+          <MessageCircle size={28} color="white" />
         </div>
-        <h1 className="text-2xl font-bold text-white tracking-wide">NexusChat</h1>
-        <p className="text-sm text-[#00d4ff]/60 mt-1 font-mono tracking-wider">Web3 社交 · AI 投研 · 链上交易</p>
+        <h1 style={S.logoTitle}>NexusChat</h1>
+        <p style={S.logoSub}>Web3 社交 · AI 投研 · 链上交易</p>
       </div>
 
-      {/* Card */}
-      <div className="w-full max-w-sm relative z-10">
-        {/* Card border glow */}
-        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-[#00d4ff]/20 via-transparent to-[#a855f7]/20 pointer-events-none" />
-        <div className="relative rounded-2xl bg-[#0a0f1e]/80 backdrop-blur-xl border border-white/5 p-6 shadow-2xl">
+      {/* Card — solid background, NO backdrop-blur */}
+      <div style={S.card}>
 
-          {/* Tab switcher */}
-          <div className="flex rounded-xl bg-white/5 border border-white/5 p-1 mb-6">
-            {(["login", "register"] as Mode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { setMode(m); setErrors({}); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                  mode === m
-                    ? "bg-gradient-to-r from-[#00d4ff]/20 to-[#a855f7]/20 text-white border border-[#00d4ff]/30 shadow-sm shadow-[#00d4ff]/10"
-                    : "text-white/40 hover:text-white/70"
-                }`}
-              >
-                {m === "login" ? "登录" : "注册"}
-              </button>
-            ))}
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name field — register only, plain conditional render (no AnimatePresence) */}
-            {mode === "register" && (
-              <div className="space-y-1">
-                <label className="text-xs text-[#00d4ff]/60 font-medium font-mono">昵称</label>
-                <div className="relative">
-                  <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="你的显示名称"
-                    autoComplete="nickname"
-                    className={`w-full h-11 pl-9 pr-4 rounded-xl bg-white/5 border text-sm text-white placeholder:text-white/20 outline-none focus:border-[#00d4ff]/50 transition-all ${
-                      errors.name ? "border-red-500/60" : "border-white/10"
-                    }`}
-                  />
-                </div>
-                {errors.name && <p className="text-xs text-red-400">{errors.name}</p>}
-              </div>
-            )}
-
-            {/* Email */}
-            <div className="space-y-1">
-              <label className="text-xs text-[#00d4ff]/60 font-medium font-mono">邮箱</label>
-              <div className="relative">
-                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  autoComplete="email"
-                  className={`w-full h-11 pl-9 pr-4 rounded-xl bg-white/5 border text-sm text-white placeholder:text-white/20 outline-none focus:border-[#00d4ff]/50 transition-all ${
-                    errors.email ? "border-red-500/60" : "border-white/10"
-                  }`}
-                />
-              </div>
-              {errors.email && <p className="text-xs text-red-400">{errors.email}</p>}
-            </div>
-
-            {/* Password */}
-            <div className="space-y-1">
-              <label className="text-xs text-[#00d4ff]/60 font-medium font-mono">密码</label>
-              <div className="relative">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === "register" ? "至少 8 位" : "输入密码"}
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  className={`w-full h-11 pl-9 pr-10 rounded-xl bg-white/5 border text-sm text-white placeholder:text-white/20 outline-none focus:border-[#00d4ff]/50 transition-all ${
-                    errors.password ? "border-red-500/60" : "border-white/10"
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-              {errors.password && <p className="text-xs text-red-400">{errors.password}</p>}
-            </div>
-
-            {/* Submit */}
+        {/* Tab switcher */}
+        <div style={S.tabRow}>
+          {(["login", "register"] as Mode[]).map((m) => (
             <button
-              type="submit"
-              disabled={isPending}
-              className="relative w-full h-12 rounded-xl font-semibold text-sm text-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 overflow-hidden"
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setErrors({}); }}
+              style={mode === m ? S.tabActive : S.tabInactive}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#00d4ff] to-[#a855f7]" />
-              <div className="absolute inset-0 shadow-lg shadow-[#00d4ff]/30 rounded-xl" />
-              <span className="relative">
-                {isPending ? (
-                  <span className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> 处理中...</span>
-                ) : (
-                  mode === "login" ? "登录" : "创建账号"
-                )}
-              </span>
+              {m === "login" ? "登录" : "注册"}
             </button>
-          </form>
+          ))}
+        </div>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-white/30 font-mono">或</span>
-            <div className="flex-1 h-px bg-white/10" />
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          {/* Name field (register only) */}
+          {mode === "register" && (
+            <div style={S.fieldWrap}>
+              <label style={S.label}>昵称</label>
+              <div style={S.inputWrap}>
+                <span style={S.iconLeft}><User size={14} /></span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="你的显示名称"
+                  autoComplete="nickname"
+                  style={S.input(!!errors.name)}
+                />
+              </div>
+              {errors.name && <p style={S.errorText}>{errors.name}</p>}
+            </div>
+          )}
+
+          {/* Email */}
+          <div style={S.fieldWrap}>
+            <label style={S.label}>邮箱</label>
+            <div style={S.inputWrap}>
+              <span style={S.iconLeft}><Mail size={14} /></span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                autoComplete="email"
+                style={S.input(!!errors.email)}
+              />
+            </div>
+            {errors.email && <p style={S.errorText}>{errors.email}</p>}
           </div>
 
-          {/* Manus OAuth */}
-          <a
-            href={getLoginUrl(returnPath)}
-            className="flex items-center justify-center gap-2.5 w-full h-11 rounded-xl border border-[#a855f7]/20 bg-[#a855f7]/5 text-sm text-white/70 hover:text-white hover:bg-[#a855f7]/10 hover:border-[#a855f7]/40 transition-all"
-          >
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-              <MessageCircle size={11} className="text-white" />
+          {/* Password */}
+          <div style={S.fieldWrap}>
+            <label style={S.label}>密码</label>
+            <div style={S.inputWrap}>
+              <span style={S.iconLeft}><Lock size={14} /></span>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "register" ? "至少 6 位" : "输入密码"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                style={S.inputWithEye(!!errors.password)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={S.eyeBtn}
+              >
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
             </div>
-            使用 Manus 账号登录
-          </a>
+            {errors.password && <p style={S.errorText}>{errors.password}</p>}
+          </div>
 
-          <p className="text-center text-[11px] text-white/20 mt-5 leading-relaxed font-mono">
-            继续即表示你同意我们的
-            <span className="text-[#00d4ff]/60 cursor-pointer hover:text-[#00d4ff] transition-colors"> 服务条款 </span>
-            和
-            <span className="text-[#00d4ff]/60 cursor-pointer hover:text-[#00d4ff] transition-colors"> 隐私政策</span>
-          </p>
+          {/* Submit */}
+          <button type="submit" disabled={isPending} style={S.submitBtn(isPending)}>
+            {isPending ? (
+              <>
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                {mode === "login" ? "登录中..." : "注册中..."}
+              </>
+            ) : (
+              mode === "login" ? "登录" : "创建账号"
+            )}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div style={S.divider}>
+          <div style={S.dividerLine} />
+          <span style={S.dividerText}>或</span>
+          <div style={S.dividerLine} />
         </div>
+
+        {/* Manus OAuth */}
+        <a href={getLoginUrl(returnPath)} style={S.oauthBtn}>
+          <div style={{ width: "18px", height: "18px", borderRadius: "6px", background: "linear-gradient(135deg, #00d4ff, #a855f7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MessageCircle size={10} color="white" />
+          </div>
+          使用 Manus 账号登录
+        </a>
+
+        {/* Terms */}
+        <p style={S.terms}>
+          继续即表示你同意我们的{" "}
+          <a href="/terms" style={S.termsLink}>服务条款</a>
+          {" "}和{" "}
+          <a href="/privacy" style={S.termsLink}>隐私政策</a>
+        </p>
       </div>
 
-      {/* CSS keyframe for scan line */}
+      {/* Spinner keyframe */}
       <style>{`
-        @keyframes scanLine {
-          0% { top: -40px; }
-          100% { top: 100%; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        input[type="email"], input[type="password"], input[type="text"] {
+          -webkit-appearance: none;
+          appearance: none;
+        }
+        input[type="email"]:focus, input[type="password"]:focus, input[type="text"]:focus {
+          border-color: rgba(0,212,255,0.5) !important;
+          box-shadow: 0 0 0 2px rgba(0,212,255,0.1);
         }
       `}</style>
     </div>
