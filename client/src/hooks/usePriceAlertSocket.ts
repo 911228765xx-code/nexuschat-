@@ -33,11 +33,11 @@ function getAlertSocket(): Socket {
 }
 
 export function usePriceAlertSocket() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const registeredRef = useRef(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!user) return;
 
     const socket = getAlertSocket();
 
@@ -77,5 +77,5 @@ export function usePriceAlertSocket() {
       socket.off("price_alert", onPriceAlert);
       registeredRef.current = false;
     };
-  }, [isAuthenticated, user]);
+  }, [user]);
 }

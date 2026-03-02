@@ -7,7 +7,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Star, Bell, BellOff, Trash2, Plus, Search,
   ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown,
@@ -66,13 +65,12 @@ const TOKEN_META: Record<string, { icon: string; category: string; name: string 
 export default function Watchlist() {
   const { t } = useI18n();
   const [, setLocation] = useLocation();
-  const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
 
-  // ─── tRPC: load watchlist from DB when authenticated ────────────────────────
+  // ─── tRPC: load watchlist from DB ──────────────────────────────────────
   const { data: dbWatchlist } = trpc.watchlist.getWatchlist.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
 
   // tRPC mutations for add/remove
@@ -125,9 +123,9 @@ export default function Watchlist() {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
-  // Sync DB items into local state when authenticated
+  // Sync DB items into local state
   useEffect(() => {
-    if (isAuthenticated && dbWatchlist !== undefined) {
+    if (dbWatchlist !== undefined) {
       // Preserve alert settings from existing local state when syncing
       setWatchlist(prev => {
         if (dbItems.length === 0) return [];
@@ -138,7 +136,7 @@ export default function Watchlist() {
         });
       });
     }
-  }, [isAuthenticated, dbItems, dbWatchlist]);
+  }, [dbItems, dbWatchlist]);
 
   const signalColor = (s: string) => s === "strongBuy" ? "text-neon-green" : s === "buy" ? "text-neon-green/80" : s === "neutral" ? "text-yellow-500" : s === "sell" ? "text-neon-red/80" : "text-neon-red";
   const signalBg = (s: string) => s === "strongBuy" ? "bg-neon-green/10" : s === "buy" ? "bg-neon-green/8" : s === "neutral" ? "bg-yellow-500/10" : s === "sell" ? "bg-neon-red/8" : "bg-neon-red/10";
@@ -193,7 +191,7 @@ export default function Watchlist() {
     const item = watchlist.find(w => w.id === id);
     // Optimistic remove
     setWatchlist(prev => prev.filter(w => w.id !== id));
-    if (isAuthenticated && item) {
+    if (item) {
       removeTokenMutation.mutate({ tokenId: item.token.toLowerCase() });
     } else {
       toast.info(t("research.removedFromWatchlist"));
@@ -203,9 +201,7 @@ export default function Watchlist() {
   const handleBulkRemove = () => {
     const toRemove = watchlist.filter(w => selectedItems.has(w.id));
     setWatchlist(prev => prev.filter(w => !selectedItems.has(w.id)));
-    if (isAuthenticated) {
-      toRemove.forEach(item => removeTokenMutation.mutate({ tokenId: item.token.toLowerCase() }));
-    }
+    toRemove.forEach(item => removeTokenMutation.mutate({ tokenId: item.token.toLowerCase() }));
     toast.info(`${selectedItems.size} ${t("research.tokensRemoved")}`);
     setSelectedItems(new Set());
     setIsEditing(false);
@@ -218,25 +214,18 @@ export default function Watchlist() {
       change7d: Math.round((Math.random() - 0.2) * 15 * 10) / 10, aiScore: Math.round((6 + Math.random() * 3) * 10) / 10,
       signal: "neutral", alertEnabled: false, alertPrice: "", category: token.category,
       marketCap: "—", volume24h: "—",
-    };
-    if (isAuthenticated) {
-      // Persist to DB; invalidate will sync list
-      const meta = TOKEN_META[token.token] ?? { name: token.token };
-      addTokenMutation.mutate({
-        tokenId: token.token.toLowerCase(),
-        tokenSymbol: token.token,
-        tokenName: meta.name ?? token.token,
-      });
-      // Optimistic local add
-      setWatchlist(prev => {
-        if (prev.some(w => w.token === token.token)) return prev;
-        return [...prev, newItem];
-      });
-    } else {
-      setWatchlist(prev => [...prev, newItem]);
-      toast.success(`${token.token} ${t("research.addedToWatchlist")}`);
-    }
-    setShowAddModal(false);
+    };    // Persist to DB; invalidate will sync list
+    const meta = TOKEN_META[token.token] ?? { name: token.token };
+    addTokenMutation.mutate({
+      tokenId: token.token.toLowerCase(),
+      tokenSymbol: token.token,
+      tokenName: meta.name ?? token.token,
+    });
+    // Optimistic local add
+    setWatchlist(prev => {
+      if (prev.some(w => w.token === token.token)) return prev;
+      return [...prev, newItem];
+    });setShowAddModal(false);
   };
 
   // tRPC: real-time prices from CoinGecko (refresh every 60s)
@@ -279,7 +268,7 @@ export default function Watchlist() {
               </h1>
               <p className="text-[10px] text-muted-foreground">
                 {watchlist.length} {t("research.tokens")} · {alertCount} {t("research.alerts")}
-                {isAuthenticated && <span className="ml-1 text-neon-cyan/60">· Synced</span>}
+                <span className="ml-1 text-neon-cyan/60">· Synced</span>
               </p>
             </div>
           </div>

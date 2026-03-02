@@ -5,7 +5,6 @@
  */
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   TrendingUp, Plus, Play, Pause, Zap, ArrowUpRight, ArrowDownRight,
   Settings, AlertTriangle, X, Calendar, BarChart3,
@@ -102,10 +101,9 @@ export default function Trading() {
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
   // ─── Backend strategies ──────────────────────────────────────────────────
-  const { isAuthenticated } = useAuth();
   const { data: backendStrategies, refetch: refetchStrategies } = trpc.copyTrading.myStrategies.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   const upsertStrategyMutation = trpc.copyTrading.upsertStrategy.useMutation({
     onSuccess: () => { refetchStrategies(); toast.success("Strategy saved!"); },

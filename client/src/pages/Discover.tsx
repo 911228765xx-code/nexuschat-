@@ -8,7 +8,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -108,7 +107,6 @@ export default function Discover() {
   const [likeAnimations, setLikeAnimations] = useState<Record<string, boolean>>({});
   const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
-  const { isAuthenticated } = useAuth();
   // ─── tRPC: Real groups from backend ───
   const { data: groupsData, refetch: refetchGroups } = trpc.chat.listGroups.useQuery(
     { limit: 30 },
@@ -1145,19 +1143,12 @@ export default function Discover() {
                     <button
                       onClick={() => {
                         const numId = parseInt(community.id, 10);
-                        if (isAuthenticated && !isNaN(numId)) {
+                        if (!isNaN(numId)) {
                           if (!joinedCommunities.has(community.id)) {
                             joinGroupMutation.mutate({ groupId: numId });
                           } else {
                             setLocation(`/app/group/${community.id}`);
                           }
-                        } else {
-                          setJoinedCommunities(prev => {
-                            const next = new Set(prev);
-                            if (next.has(community.id)) next.delete(community.id); else next.add(community.id);
-                            return next;
-                          });
-                          toast.success(joinedCommunities.has(community.id) ? (t("discover.leftCommunity") || "Left community") : (t("discover.joinedCommunity") || "Joined!"));
                         }
                       }}
                       disabled={joinGroupMutation.isPending}

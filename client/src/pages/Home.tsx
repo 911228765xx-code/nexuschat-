@@ -30,7 +30,7 @@ const fadeUp = {
 export default function Home() {
   // The userAuth hooks provides authentication state
   // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  let { user, loading, error, logout } = useAuth();
 
   const [, setLocation] = useLocation();
   const { t } = useI18n();

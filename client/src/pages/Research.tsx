@@ -6,7 +6,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Search, TrendingUp, TrendingDown, Shield, Code, ChevronDown, ChevronUp,
   Sparkles, Share2, Check, ExternalLink, AlertTriangle, Activity,
@@ -260,19 +259,18 @@ export default function Research() {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareComment, setShareComment] = useState("");
 
-  // ─── Auth state ───
-  const { isAuthenticated, loading: authLoading } = useAuth();
+
 
    // tRPC: report history
   const [showHistory, setShowHistory] = useState(false);
   const { data: reportHistory, refetch: refetchHistory } = trpc.research.getHistory.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   // tRPC: price alerts
   const { data: serverAlerts, refetch: refetchAlerts } = trpc.research.myAlerts.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   const createResearchAlert = trpc.research.createAlert.useMutation({
     onSuccess: () => {
@@ -295,10 +293,6 @@ export default function Research() {
   // SSE streaming research report
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    if (!isAuthenticated) {
-      toast.info("请登录后使用 AI 研究报告功能");
-      return;
-    }
     const sym = searchQuery.trim().toUpperCase();
     setIsSearching(true);
     setAiReportToken(sym);
@@ -360,7 +354,7 @@ export default function Research() {
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, isAuthenticated]);
+  }, [searchQuery]);
 
   const toggleWatchlist = useCallback((id: string) => {
     setWatchlist(prev => {
@@ -487,7 +481,7 @@ export default function Research() {
         </div>
 
         {/* History Reports Button */}
-        {isAuthenticated && reportHistory && reportHistory.length > 0 && (
+        {reportHistory && reportHistory.length > 0 && (
           <div className="pb-3">
             <button
               onClick={() => setShowHistory(prev => !prev)}
@@ -1514,7 +1508,7 @@ export default function Research() {
                             <Share2 size={13} />
                             {t("research.shareToMoments")}
                           </button>
-                          {isAuthenticated && (
+                          {(
                             <button
                               onClick={() => {
                                 const targetPrice = prompt(`设置 ${report.token} 价格预警\n当前价格: ${report.price}\n请输入目标价格 (USD):`);

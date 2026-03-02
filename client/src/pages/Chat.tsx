@@ -17,7 +17,6 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import PullToRefresh from "@/components/PullToRefresh";
 import { toast } from "sonner";
-import { useAuth } from "@/_core/hooks/useAuth";
 
 interface SearchResult {
   id: string;
@@ -47,13 +46,12 @@ export default function Chat() {
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
 
-  // ─── Auth state ───
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  // No-login mode: auth state not needed
 
   // tRPC: real DM conversations
   const { data: dmConversations } = trpc.chat.listDMConversations.useQuery(
     undefined,
-    { enabled: isAuthenticated, refetchInterval: 30_000, staleTime: 15_000 }
+    { refetchInterval: 30_000, staleTime: 15_000 }
   );
 
   // tRPC: public groups list
@@ -66,7 +64,7 @@ export default function Chat() {
   // tRPC: real unread notification count (poll every 30s)
   const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
     undefined,
-    { refetchInterval: 30000, enabled: isAuthenticated }
+    { refetchInterval: 30000 }
   );
 
   // ✅ AppContext全局状态
@@ -122,7 +120,7 @@ export default function Chat() {
 
   const { data: userSearchData, isFetching: isUserSearching } = trpc.user.searchUsers.useQuery(
     { query: debouncedGlobalSearch },
-    { enabled: isAuthenticated && debouncedGlobalSearch.trim().length >= 2, staleTime: 15_000 }
+    { enabled: debouncedGlobalSearch.trim().length >= 2, staleTime: 15_000 }
   );
 
   // Convert user search results to SearchResult format
@@ -396,7 +394,6 @@ export default function Chat() {
                       whileTap={{ scale: 0.98 }}
                       className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20 border border-border/10 hover:border-neon-purple/20 transition-all cursor-pointer"
                       onClick={() => {
-                        if (!isAuthenticated) return;
                         joinGroupMutation.mutate(
                           { groupId: group.id },
                           {

@@ -6,7 +6,6 @@
  */
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Search, UserPlus, Star, Copy, Edit3, ArrowLeft, X, Check, MoreVertical,
   Users, FolderPlus, Clock, UserCheck, UserX, ChevronDown, ChevronRight,
@@ -65,19 +64,18 @@ const defaultGroups: ContactGroup[] = [
 /* ─── Component ─── */
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
-  const { isAuthenticated } = useAuth();
   const trpcUtils = trpc.useUtils();
 
   // tRPC: get real following list
   const { data: followingData, refetch: refetchFollowing } = trpc.follow.getFollowing.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
 
   // Load contact metadata (favorites, notes, tags) from backend
   const { data: contactMetaList } = trpc.contacts.listContactMeta.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   const metaMap = useMemo(() => {
     const map = new Map<number, { isFavorite: boolean; note: string; tags: string[] }>();
@@ -127,7 +125,7 @@ export default function Contacts() {
   // tRPC: search users for adding contact
   const { data: searchResults, isFetching: isSearching } = trpc.user.searchUsers.useQuery(
     { query: userSearchQuery },
-    { enabled: isAuthenticated && userSearchQuery.trim().length >= 1, staleTime: 5_000 }
+    { enabled: userSearchQuery.trim().length >= 1, staleTime: 5_000 }
   );
   // tRPC: send friend request
   const sendRequestMutation = trpc.contacts.sendRequest.useMutation({
@@ -143,7 +141,7 @@ export default function Contacts() {
   // tRPC: real friend requests
   const { data: incomingRequests, refetch: refetchIncoming } = trpc.contacts.listIncoming.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   const acceptRequestMutation = trpc.contacts.acceptRequest.useMutation({
     onSuccess: () => {
@@ -176,7 +174,7 @@ export default function Contacts() {
   // tRPC: real outgoing requests
   const { data: outgoingRequests, refetch: refetchOutgoing } = trpc.contacts.listOutgoing.useQuery(
     undefined,
-    { enabled: isAuthenticated, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   // Map real outgoing requests to FriendRequest shape
   const realOutgoingRequests: FriendRequest[] = (outgoingRequests ?? []).map(r => ({
@@ -840,9 +838,8 @@ export default function Contacts() {
                 </button>
               </div>
 
-              {isAuthenticated ? (
-                /* Authenticated: search by username */
-                <div className="space-y-3">
+              {/* Search by username */}
+              <div className="space-y-3">
                   <div className="relative">
                     <label className="text-[11px] text-muted-foreground font-medium mb-1 block">搜索用户名</label>
                     <input
@@ -890,27 +887,12 @@ export default function Contacts() {
                     </div>
                   )}
                 </div>
-              ) : (
-                /* Not authenticated: wallet address fallback */
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.addressLabel") || "Wallet Address or ENS"}</label>
-                    <input
-                      autoFocus
-                      value={addAddress}
-                      onChange={(e) => setAddAddress(e.target.value)}
-                      placeholder="0x... or name.eth"
-                      className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all font-mono"
-                    />
-                  </div>
-                </div>
-              )}
 
               <button
                 onClick={handleAddContact}
-                disabled={isAuthenticated ? !selectedUserId || sendRequestMutation.isPending : !addAddress.trim()}
+                disabled={!selectedUserId || sendRequestMutation.isPending}
                 className={`w-full h-11 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                  (isAuthenticated ? selectedUserId && !sendRequestMutation.isPending : addAddress.trim())
+                  selectedUserId && !sendRequestMutation.isPending
                     ? "bg-gradient-to-r from-neon-cyan to-neon-purple text-background hover:opacity-90"
                     : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                 }`}

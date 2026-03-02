@@ -27,7 +27,7 @@ interface DMMessage {
 export default function DMChat() {
   const { userId: userIdStr } = useParams<{ userId: string }>();
   const [, setLocation] = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const otherUserId = parseInt(userIdStr ?? "0", 10);
 
@@ -40,7 +40,7 @@ export default function DMChat() {
   const { data: history, refetch } = trpc.chat.getDMHistory.useQuery(
     { otherUserId, limit: 60 },
     {
-      enabled: isAuthenticated && otherUserId > 0,
+      enabled: otherUserId > 0,
       refetchInterval: 15_000,
       staleTime: 5_000,
     }
@@ -85,7 +85,7 @@ export default function DMChat() {
 
   // Socket.IO: listen for incoming DMs
   useEffect(() => {
-    if (!isAuthenticated || !user?.id) return;
+    if (!user?.id) return;
     const myUserId = user.id;
     const socket = io(window.location.origin, {
       path: "/api/socket.io",
@@ -114,7 +114,7 @@ export default function DMChat() {
       });
     });
     return () => { socket.disconnect(); };
-  }, [isAuthenticated, user?.id, otherUserId]);
+  }, [user?.id, otherUserId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function DMChat() {
     const content = input.trim();
     setInput("");
     sendDM.mutate({ receiverId: otherUserId, content });
-  }, [input, isAuthenticated, user, otherUserId, sendDM]);
+  }, [input, user, otherUserId, sendDM]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
