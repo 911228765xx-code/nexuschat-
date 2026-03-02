@@ -273,7 +273,7 @@ function AppContent() {
 
 function App() {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary mode="app">
       <ThemeProvider defaultTheme="dark" switchable>
         <I18nProvider>
           <AppProvider>

@@ -7,6 +7,7 @@
 import { useLocation, Link } from "wouter";
 import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
 import type { ReactNode } from "react";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
@@ -44,9 +45,11 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
-      {/* Main content area */}
+      {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
-        {children}
+        <ErrorBoundary mode="page">
+          {children}
+        </ErrorBoundary>
       </main>
 
       {/* Bottom Tab Navigation */}
