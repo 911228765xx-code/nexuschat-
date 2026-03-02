@@ -54,6 +54,179 @@ interface Transaction {
 
 // Mock data removed — now using real BSC chain data from backend
 
+/* ─── All supported receive chains (20+) ─── */
+const ALL_RECEIVE_CHAINS = [
+  { name: "Ethereum",    icon: "⟠",  color: "text-blue-400",   prefix: "ethereum:",  isEVM: true },
+  { name: "BSC",         icon: "⬡",  color: "text-yellow-400", prefix: "bnb:",       isEVM: true },
+  { name: "Polygon",     icon: "⬡",  color: "text-purple-400", prefix: "polygon:",   isEVM: true },
+  { name: "Arbitrum",    icon: "◆",  color: "text-blue-300",   prefix: "arbitrum:",  isEVM: true },
+  { name: "Optimism",    icon: "🔴",  color: "text-red-400",    prefix: "optimism:",  isEVM: true },
+  { name: "Base",        icon: "🔵",  color: "text-blue-500",   prefix: "base:",      isEVM: true },
+  { name: "Avalanche",   icon: "⚡",  color: "text-red-500",    prefix: "avax:",      isEVM: true },
+  { name: "Fantom",      icon: "👻",  color: "text-blue-400",   prefix: "ftm:",       isEVM: true },
+  { name: "zkSync Era",  icon: "🔷",  color: "text-indigo-400", prefix: "zksync:",    isEVM: true },
+  { name: "Linea",       icon: "🟢",  color: "text-green-400",  prefix: "linea:",     isEVM: true },
+  { name: "Scroll",      icon: "📜",  color: "text-orange-400", prefix: "scroll:",    isEVM: true },
+  { name: "Mantle",      icon: "💚",  color: "text-green-300",  prefix: "mantle:",    isEVM: true },
+  { name: "Solana",      icon: "◎",  color: "text-green-400",  prefix: "solana:",    isEVM: false },
+  { name: "Tron",        icon: "🔴",  color: "text-red-400",    prefix: "tron:",      isEVM: false },
+  { name: "TON",         icon: "💰",  color: "text-blue-300",   prefix: "ton:",       isEVM: false },
+  { name: "Near",        icon: "🌌",  color: "text-gray-300",   prefix: "near:",      isEVM: false },
+  { name: "Cosmos",      icon: "⚛️",  color: "text-purple-300", prefix: "cosmos:",    isEVM: false },
+  { name: "Aptos",       icon: "🌀",  color: "text-teal-400",   prefix: "aptos:",     isEVM: false },
+  { name: "Sui",         icon: "💧",  color: "text-blue-400",   prefix: "sui:",       isEVM: false },
+  { name: "Starknet",    icon: "⭐",  color: "text-yellow-300", prefix: "starknet:",  isEVM: false },
+];
+
+/* ─── DEX options for SWAP ─── */
+const SWAP_DEX_OPTIONS = (from: string, to: string) => [
+  {
+    name: "Uniswap",
+    chain: "Ethereum / Arbitrum / Polygon / Base",
+    icon: "🦄",
+    color: "text-pink-400",
+    bg: "bg-pink-500/10 border-pink-500/20",
+    url: `https://app.uniswap.org/swap?inputCurrency=${from}&outputCurrency=${to}`,
+  },
+  {
+    name: "PancakeSwap",
+    chain: "BSC / Ethereum / Arbitrum",
+    icon: "🥞",
+    color: "text-yellow-400",
+    bg: "bg-yellow-500/10 border-yellow-500/20",
+    url: `https://pancakeswap.finance/swap?inputCurrency=${from}&outputCurrency=${to}`,
+  },
+  {
+    name: "Jupiter",
+    chain: "Solana",
+    icon: "☉️",
+    color: "text-green-400",
+    bg: "bg-green-500/10 border-green-500/20",
+    url: `https://jup.ag/swap/${from}-${to}`,
+  },
+  {
+    name: "1inch",
+    chain: "Multi-chain Aggregator",
+    icon: "🔱",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10 border-blue-500/20",
+    url: `https://app.1inch.io/#/1/simple/swap/${from}/${to}`,
+  },
+  {
+    name: "Curve Finance",
+    chain: "Ethereum / Polygon / Arbitrum",
+    icon: "🏙️",
+    color: "text-orange-400",
+    bg: "bg-orange-500/10 border-orange-500/20",
+    url: `https://curve.fi/#/ethereum/swap`,
+  },
+  {
+    name: "dYdX",
+    chain: "Perpetuals / Derivatives",
+    icon: "⚡",
+    color: "text-neon-purple",
+    bg: "bg-purple-500/10 border-purple-500/20",
+    url: "https://dydx.exchange/trade",
+  },
+];
+
+/* ─── ReceiveModal Component ─── */
+interface ReceiveModalProps {
+  walletAddress: string;
+  receiveChain: string;
+  setReceiveChain: (chain: string) => void;
+  onClose: () => void;
+  t: (key: string) => string;
+}
+
+function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t }: ReceiveModalProps) {
+  const [showAllChains, setShowAllChains] = useState(false);
+  const displayedChains = showAllChains ? ALL_RECEIVE_CHAINS : ALL_RECEIVE_CHAINS.slice(0, 8);
+  const activeChain = ALL_RECEIVE_CHAINS.find(c => c.name === receiveChain) || ALL_RECEIVE_CHAINS[0];
+  // EVM chains share the same address; non-EVM chains use a derived/placeholder address
+  const chainAddress = activeChain.isEVM
+    ? walletAddress
+    : activeChain.name === "Solana"
+      ? walletAddress.replace("0x", "").slice(0, 44)
+      : walletAddress.replace("0x", "");
+  const qrValue = `${activeChain.prefix}${chainAddress}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }}
+        className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-5 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold font-display">{t("wallet.receive") || "Receive"}</h3>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors text-muted-foreground text-lg">×</button>
+        </div>
+
+        {/* Chain grid selector */}
+        <div className="mb-4">
+          <p className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider">{t("wallet.selectChain") || "Select Network"}</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {displayedChains.map(c => (
+              <button
+                key={c.name}
+                onClick={() => setReceiveChain(c.name)}
+                className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                  receiveChain === c.name
+                    ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40"
+                    : "bg-secondary/40 text-muted-foreground border border-border/20 hover:border-border/40"
+                }`}
+              >
+                <span className={`text-base ${c.color}`}>{c.icon}</span>
+                <span className="text-[9px] leading-tight text-center truncate w-full">{c.name}</span>
+              </button>
+            ))}
+          </div>
+          {!showAllChains && (
+            <button
+              onClick={() => setShowAllChains(true)}
+              className="w-full mt-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors text-center border border-dashed border-border/30 rounded-xl"
+            >
+              + {ALL_RECEIVE_CHAINS.length - 8} {t("wallet.moreChains") || "more chains"}
+            </button>
+          )}
+        </div>
+
+        {/* QR Code */}
+        <div className="bg-white rounded-2xl p-4 mx-auto w-48 h-48 flex items-center justify-center mb-4">
+          <QRCodeSVG value={qrValue} size={160} level="M" includeMargin={false} />
+        </div>
+
+        {/* Active chain info */}
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-secondary/40 border border-border/20">
+          <span className={`text-lg ${activeChain.color}`}>{activeChain.icon}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-muted-foreground">{activeChain.name} {t("wallet.address") || "Address"}</p>
+            <p className="text-xs font-mono truncate text-foreground">{chainAddress.slice(0, 16)}...{chainAddress.slice(-8)}</p>
+          </div>
+        </div>
+
+        {/* Full address */}
+        <div className="bg-secondary/40 rounded-xl px-3 py-2.5 mb-3">
+          <p className="text-[10px] text-muted-foreground mb-1">{t("wallet.fullAddress") || "Full Address"}</p>
+          <p className="text-[11px] font-mono break-all text-foreground leading-relaxed">{chainAddress}</p>
+        </div>
+
+        <button
+          onClick={() => { navigator.clipboard.writeText(chainAddress); toast.success(`${activeChain.name} address copied!`); }}
+          className="w-full h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2"
+        >
+          <Copy size={14} /> {t("wallet.copyAddress") || "Copy Address"}
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ─── Tab types ─── */
 type WalletTab = "tokens" | "nfts" | "history";
 
@@ -529,70 +702,38 @@ export default function Wallet() {
           )}
         </AnimatePresence>
       </div>
-    {/* QR Code Modal — 多链接收 */}
+    {/* QR Code Modal — 多链接收 (showQR via header button) */}
     <AnimatePresence>
-      {showQR && (() => {
-        const RECEIVE_CHAINS = [
-          { name: "Ethereum", icon: "⟠", color: "text-blue-400", prefix: "ethereum:", address: walletAddress },
-          { name: "BSC", icon: "⬡", color: "text-yellow-400", prefix: "bnb:", address: walletAddress },
-          { name: "Polygon", icon: "⬡", color: "text-purple-400", prefix: "polygon:", address: walletAddress },
-          { name: "Arbitrum", icon: "◆", color: "text-blue-300", prefix: "arbitrum:", address: walletAddress },
-          { name: "Solana", icon: "◎", color: "text-green-400", prefix: "solana:", address: walletAddress.replace("0x", "").slice(0, 44) },
-        ];
-        const activeChain = RECEIVE_CHAINS.find(c => c.name === receiveChain) || RECEIVE_CHAINS[0];
-        const qrValue = `${activeChain.prefix}${activeChain.address}`;
-        return (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowQR(false)}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-center font-bold font-display mb-3">{t("wallet.receive") || "Receive"}</h3>
-              {/* Chain selector */}
-              <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-                {RECEIVE_CHAINS.map(c => (
-                  <button key={c.name} onClick={() => setReceiveChain(c.name)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      receiveChain === c.name ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40" : "bg-secondary/40 text-muted-foreground border border-border/20"
-                    }`}>
-                    <span className={c.color}>{c.icon}</span> {c.name}
-                  </button>
-                ))}
-              </div>
-              {/* QR Code */}
-              <div className="bg-white rounded-2xl p-4 mx-auto w-52 h-52 flex items-center justify-center mb-4">
-                <QRCodeSVG value={qrValue} size={176} level="M" includeMargin={false} />
-              </div>
-              {/* Address */}
-              <div className="bg-secondary/40 rounded-xl px-3 py-2.5 mb-3">
-                <p className="text-[10px] text-muted-foreground mb-1">{activeChain.name} Address</p>
-                <p className="text-xs font-mono break-all text-foreground">{activeChain.address}</p>
-              </div>
-              <button onClick={() => { navigator.clipboard.writeText(activeChain.address); toast.success(`${activeChain.name} address copied!`); }}
-                className="w-full h-10 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2">
-                <Copy size={14} /> {t("wallet.copyAddress") || "Copy Address"}
-              </button>
-            </motion.div>
-          </motion.div>
-        );
-      })()}
+      {showQR && (
+        <ReceiveModal
+          walletAddress={walletAddress}
+          receiveChain={receiveChain}
+          setReceiveChain={setReceiveChain}
+          onClose={() => setShowQR(false)}
+          t={t}
+        />
+      )}
     </AnimatePresence>
 
     {/* Send Modal — 多链发送 */}
     <AnimatePresence>
       {showSend && (() => {
-        const SEND_CHAINS = [
+        const SEND_CHAINS_LOCAL = [
           { name: "Ethereum", icon: "⟠", color: "text-blue-400", gas: "~$1.20", placeholder: "0x..." },
           { name: "BSC", icon: "⬡", color: "text-yellow-400", gas: "~$0.05", placeholder: "0x..." },
           { name: "Polygon", icon: "⬡", color: "text-purple-400", gas: "~$0.01", placeholder: "0x..." },
           { name: "Arbitrum", icon: "◆", color: "text-blue-300", gas: "~$0.10", placeholder: "0x..." },
+          { name: "Optimism", icon: "🔴", color: "text-red-400", gas: "~$0.05", placeholder: "0x..." },
           { name: "Solana", icon: "◎", color: "text-green-400", gas: "~$0.001", placeholder: "Enter Solana address..." },
         ];
-        const activeChain = SEND_CHAINS.find(c => c.name === sendChain) || SEND_CHAINS[0];
+        const activeChain = SEND_CHAINS_LOCAL.find(c => c.name === sendChain) || SEND_CHAINS_LOCAL[0];
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSend(false)}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-bold font-display mb-3">{t("wallet.send") || "Send"}</h3>
               {/* Chain selector */}
               <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-                {SEND_CHAINS.map(c => (
+                {SEND_CHAINS_LOCAL.map(c => (
                   <button key={c.name} onClick={() => setSendChain(c.name)}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                       sendChain === c.name ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40" : "bg-secondary/40 text-muted-foreground border border-border/20"
@@ -635,113 +776,58 @@ export default function Wallet() {
       })()}
     </AnimatePresence>
 
-    {/* Receive Modal */}
+    {/* Receive Modal — 20+ 链支持 */}
     <AnimatePresence>
       {showReceive && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowReceive(false)}>
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="w-full max-w-sm bg-card rounded-2xl border border-border/30 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-center font-bold font-display mb-2">{t("wallet.receive") || "Receive"}</h3>
-            <p className="text-center text-xs text-muted-foreground mb-4">{t("wallet.receiveDesc") || "Share your address to receive tokens"}</p>
-            <div className="space-y-3">
-              {["Ethereum", "Solana", "Bitcoin"].map(chain => (
-                <button key={chain} onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success(`${chain} address copied!`); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20 hover:border-neon-cyan/30 transition-colors">
-                  <div className="w-8 h-8 rounded-lg bg-neon-cyan/10 flex items-center justify-center text-xs font-bold text-neon-cyan">{chain[0]}</div>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium">{chain}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate">{walletAddress.slice(0, 12)}...{walletAddress.slice(-6)}</p>
-                  </div>
-                  <Copy size={14} className="text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        </motion.div>
+        <ReceiveModal
+          walletAddress={walletAddress}
+          receiveChain={receiveChain}
+          setReceiveChain={setReceiveChain}
+          onClose={() => setShowReceive(false)}
+          t={t}
+        />
       )}
     </AnimatePresence>
 
     {/* Swap Modal — 真实 DEX 链接 */}
     <AnimatePresence>
-      {showSwap && (() => {
-        const DEX_OPTIONS = [
-          {
-            name: "Uniswap",
-            chain: "Ethereum / Arbitrum / Polygon",
-            icon: "🦄",
-            color: "text-pink-400",
-            bg: "bg-pink-500/10 border-pink-500/20",
-            url: `https://app.uniswap.org/swap?inputCurrency=${swapFrom}&outputCurrency=${swapTo}`,
-          },
-          {
-            name: "PancakeSwap",
-            chain: "BSC / Ethereum",
-            icon: "🥞",
-            color: "text-yellow-400",
-            bg: "bg-yellow-500/10 border-yellow-500/20",
-            url: `https://pancakeswap.finance/swap?inputCurrency=${swapFrom}&outputCurrency=${swapTo}`,
-          },
-          {
-            name: "Jupiter",
-            chain: "Solana",
-            icon: "☉️",
-            color: "text-green-400",
-            bg: "bg-green-500/10 border-green-500/20",
-            url: `https://jup.ag/swap/${swapFrom}-${swapTo}`,
-          },
-          {
-            name: "1inch",
-            chain: "Multi-chain Aggregator",
-            icon: "🔱",
-            color: "text-blue-400",
-            bg: "bg-blue-500/10 border-blue-500/20",
-            url: `https://app.1inch.io/#/1/simple/swap/${swapFrom}/${swapTo}`,
-          },
-          {
-            name: "dYdX",
-            chain: "Perpetuals / Derivatives",
-            icon: "⚡",
-            color: "text-neon-purple",
-            bg: "bg-purple-500/10 border-purple-500/20",
-            url: "https://dydx.exchange/trade",
-          },
-        ];
-        return (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
-            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-bold font-display mb-1">{t("wallet.swap") || "Swap"}</h3>
-              <p className="text-xs text-muted-foreground mb-4">{t("wallet.selectDex") || "Select a DEX to continue swapping"}</p>
-              {/* Token pair preview */}
-              <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-secondary/40 border border-border/20">
-                <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                  {displayTokens.length > 0
-                    ? displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)
-                    : ["ETH", "BNB", "USDT", "USDC", "SOL"].map(s => <option key={s} value={s}>{s}</option>)
-                  }
-                </select>
-                <RefreshCw size={14} className="text-muted-foreground flex-shrink-0" />
-                <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
-                  {["USDT", "USDC", "ETH", "BNB", "SOL", "BTC"].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <span className="ml-auto text-xs text-muted-foreground">{t("wallet.selectPair") || "Select pair"}</span>
-              </div>
-              {/* DEX list */}
-              <div className="space-y-2">
-                {DEX_OPTIONS.map(dex => (
-                  <a key={dex.name} href={dex.url} target="_blank" rel="noopener noreferrer"
-                    onClick={() => setShowSwap(false)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-colors hover:brightness-110 ${dex.bg}`}>
-                    <span className="text-xl">{dex.icon}</span>
-                    <div className="flex-1">
-                      <p className={`text-sm font-semibold ${dex.color}`}>{dex.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{dex.chain}</p>
-                    </div>
-                    <ExternalLink size={14} className="text-muted-foreground" />
-                  </a>
-                ))}
-              </div>
-            </motion.div>
+      {showSwap && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowSwap(false)}>
+          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold font-display mb-1">{t("wallet.swap") || "Swap"}</h3>
+            <p className="text-xs text-muted-foreground mb-4">{t("wallet.selectDex") || "Select a DEX to continue swapping"}</p>
+            {/* Token pair preview */}
+            <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-secondary/40 border border-border/20">
+              <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
+                {displayTokens.length > 0
+                  ? displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol}</option>)
+                  : ["ETH", "BNB", "USDT", "USDC", "SOL"].map(s => <option key={s} value={s}>{s}</option>)
+                }
+              </select>
+              <RefreshCw size={14} className="text-muted-foreground flex-shrink-0" />
+              <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="h-8 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm">
+                {["USDT", "USDC", "ETH", "BNB", "SOL", "BTC"].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <span className="ml-auto text-xs text-muted-foreground">{t("wallet.selectPair") || "Select pair"}</span>
+            </div>
+            {/* DEX list */}
+            <div className="space-y-2">
+              {SWAP_DEX_OPTIONS(swapFrom, swapTo).map(dex => (
+                <a key={dex.name} href={dex.url} target="_blank" rel="noopener noreferrer"
+                  onClick={() => setShowSwap(false)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors hover:brightness-110 ${dex.bg}`}>
+                  <span className="text-xl">{dex.icon}</span>
+                  <div className="flex-1">
+                    <p className={`text-sm font-semibold ${dex.color}`}>{dex.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{dex.chain}</p>
+                  </div>
+                  <ExternalLink size={14} className="text-muted-foreground" />
+                </a>
+              ))}
+            </div>
           </motion.div>
-        );
-      })()}
+        </motion.div>
+      )}
     </AnimatePresence>
 
     {/* NFT Detail Modal */}
@@ -788,3 +874,4 @@ export default function Wallet() {
     </>
   );
 }
+
