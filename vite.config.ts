@@ -365,6 +365,10 @@ const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(
 export default defineConfig({
   plugins,
   resolve: {
+    // Force Vite to use a single copy of React across all packages.
+    // Without this, @sentry/react (and wagmi/rainbowkit) can resolve their own
+    // peer-dep copy of React, causing "Invalid hook call" crashes at runtime.
+    dedupe: ["react", "react-dom", "react/jsx-runtime"],
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
