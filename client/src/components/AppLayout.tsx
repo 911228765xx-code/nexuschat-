@@ -4,8 +4,9 @@
  * 5 tabs: Chat / Discover / Research / Trading / Profile
  * NOTE: framer-motion removed — uses CSS animations to keep initial bundle small
  *
- * GLOBAL LOGIN GUARD: All /app/* routes require authentication.
- * Unauthenticated users are redirected to the Manus OAuth login page.
+ * GLOBAL LOGIN GUARD: All /app/* routes require authentication by default.
+ * Pass requireAuth={false} to allow guest access (e.g. Discover, Trading public view).
+ * Unauthenticated users on protected routes are redirected to the Manus OAuth login page.
  */
 import { useLocation, Link } from "wouter";
 import { MessageCircle, Compass, Brain, TrendingUp, User, Loader2 } from "lucide-react";
@@ -21,9 +22,11 @@ import { getLoginUrl } from "@/const";
 interface AppLayoutProps {
   children: ReactNode;
   hideNav?: boolean;
+  /** Set to false to allow guest (unauthenticated) access. Defaults to true. */
+  requireAuth?: boolean;
 }
 
-export default function AppLayout({ children, hideNav }: AppLayoutProps) {
+export default function AppLayout({ children, hideNav, requireAuth = true }: AppLayoutProps) {
   const [location] = useLocation();
   const { t } = useI18n();
   const { conversations, notifications } = useApp();
@@ -34,13 +37,13 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
   const { isAuthenticated, loading: authLoading } = useAuth();
 
   // ─── Global login guard ────────────────────────────────────────────────────
-  // Redirect to Manus OAuth login if user is not authenticated.
+  // Redirect to Manus OAuth login if user is not authenticated (only for protected routes).
   // Wait until auth check completes (authLoading=false) before redirecting.
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (requireAuth && !authLoading && !isAuthenticated) {
       window.location.href = getLoginUrl();
     }
-  }, [authLoading, isAuthenticated]);
+  }, [requireAuth, authLoading, isAuthenticated]);
 
   // Real unread count from backend (protectedProcedure — only poll when logged in)
   const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
@@ -58,8 +61,8 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
     { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
   ];
 
-  // Show full-screen loading spinner while auth check is in progress
-  if (authLoading) {
+  // Show full-screen loading spinner while auth check is in progress (protected routes only)
+  if (requireAuth && authLoading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
@@ -71,8 +74,8 @@ export default function AppLayout({ children, hideNav }: AppLayoutProps) {
     );
   }
 
-  // Not authenticated — show redirect message while useEffect fires
-  if (!isAuthenticated) {
+  // Not authenticated on protected route — show redirect message while useEffect fires
+  if (requireAuth && !isAuthenticated) {
     return (
       <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">

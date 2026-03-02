@@ -44,7 +44,23 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // Parse returnPath from state payload for post-login redirect
+      // State format: btoa(JSON.stringify({ redirectUri, returnPath }))
+      let returnPath = "/";
+      try {
+        const statePayload = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
+        if (statePayload?.returnPath && typeof statePayload.returnPath === "string") {
+          // Only allow relative paths (starting with /) to prevent open redirect attacks
+          const path = statePayload.returnPath as string;
+          if (path.startsWith("/") && !path.startsWith("//")) {
+            returnPath = path;
+          }
+        }
+      } catch {
+        // Legacy state format (plain btoa of redirectUri) — fall back to home
+      }
+
+      res.redirect(302, returnPath);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

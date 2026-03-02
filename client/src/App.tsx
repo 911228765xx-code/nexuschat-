@@ -190,7 +190,7 @@ function RouteContent() {
               </AppLayout>
             </Route>
             <Route path="/app/discover">
-              <AppLayout>
+              <AppLayout requireAuth={false}>
                 <Discover />
               </AppLayout>
             </Route>
@@ -215,7 +215,7 @@ function RouteContent() {
               </AppLayout>
             </Route>
             <Route path="/app/trading">
-              <AppLayout>
+              <AppLayout requireAuth={false}>
                 <Trading />
               </AppLayout>
             </Route>
