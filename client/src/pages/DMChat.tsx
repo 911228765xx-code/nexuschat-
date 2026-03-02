@@ -122,7 +122,7 @@ export default function DMChat() {
   }, [localMessages]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || !isAuthenticated) return;
+    if (!input.trim()) return;
     const myId = user?.id ?? 0;
     const tempId = `temp-${Date.now()}`;
     const optimistic: DMMessage = {
@@ -146,15 +146,6 @@ export default function DMChat() {
       handleSend();
     }
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
-        <Lock size={40} className="text-neon-cyan" />
-        <p className="text-sm text-muted-foreground text-center">请先登录以使用私信功能</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full bg-background">
