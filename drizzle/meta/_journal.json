@@ -120,6 +120,13 @@
       "when": 1772524634271,
       "tag": "0016_awesome_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1772529158950,
+      "tag": "0017_curved_salo",
+      "breakpoints": true
     }
   ]
 }

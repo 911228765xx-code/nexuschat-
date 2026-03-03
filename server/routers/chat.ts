@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chatGroups, groupMembers, messages, users } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql, or, ne } from "drizzle-orm";
+import { chatGroups, groupMembers, messages, users, groupUnreadCounts } from "../../drizzle/schema";
+import { eq, and, desc, lt, sql, or, ne, gt } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
@@ -380,6 +380,100 @@ export const chatRouter = router({
       const { url } = await storagePut(key, buffer, input.mimeType);
       return { url };
     }),
+
+  // ─── Mark group as read (update lastReadMessageId) ──────────────────────────
+  markGroupRead: protectedProcedure
+    .input(z.object({ groupId: z.number(), lastMessageId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { ok: true };
+      // Upsert: update if exists, insert if not
+      const existing = await db
+        .select({ id: groupUnreadCounts.id })
+        .from(groupUnreadCounts)
+        .where(and(eq(groupUnreadCounts.userId, ctx.user.id), eq(groupUnreadCounts.groupId, input.groupId)))
+        .limit(1);
+      if (existing.length > 0) {
+        await db
+          .update(groupUnreadCounts)
+          .set({ lastReadMessageId: input.lastMessageId })
+          .where(and(eq(groupUnreadCounts.userId, ctx.user.id), eq(groupUnreadCounts.groupId, input.groupId)));
+      } else {
+        await db.insert(groupUnreadCounts).values({
+          userId: ctx.user.id,
+          groupId: input.groupId,
+          lastReadMessageId: input.lastMessageId,
+        });
+      }
+      return { ok: true };
+    }),
+
+  // ─── Get unread counts for all joined groups ──────────────────────────────
+  getUnreadCounts: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return {};
+    // Get all groups the user has joined
+    const joinedGroups = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(eq(groupMembers.userId, ctx.user.id));
+    if (joinedGroups.length === 0) return {};
+
+    const result: Record<number, number> = {};
+    await Promise.all(joinedGroups.map(async ({ groupId }) => {
+      // Get user's lastReadMessageId for this group
+      const [unreadRow] = await db
+        .select({ lastReadMessageId: groupUnreadCounts.lastReadMessageId })
+        .from(groupUnreadCounts)
+        .where(and(eq(groupUnreadCounts.userId, ctx.user.id), eq(groupUnreadCounts.groupId, groupId)))
+        .limit(1);
+      const lastReadId = unreadRow?.lastReadMessageId ?? 0;
+      // Count messages after lastReadMessageId
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(messages)
+        .where(and(
+          eq(messages.groupId, groupId),
+          eq(messages.isDeleted, false),
+          gt(messages.id, lastReadId),
+        ));
+      result[groupId] = countRow?.count ?? 0;
+    }));
+    return result;
+  }),
+
+  // ─── Auto-join sample groups for new users ───────────────────────────────
+  autoJoinSampleGroups: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { joined: 0 };
+    // Find the 4 sample groups (the ones created by bot_nexus_bot)
+    const sampleGroups = await db
+      .select({ id: chatGroups.id })
+      .from(chatGroups)
+      .where(eq(chatGroups.isPublic, true))
+      .orderBy(chatGroups.id)
+      .limit(4);
+    let joined = 0;
+    for (const group of sampleGroups) {
+      const existing = await db
+        .select({ id: groupMembers.id })
+        .from(groupMembers)
+        .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (existing.length > 0) continue;
+      await db.insert(groupMembers).values({
+        groupId: group.id,
+        userId: ctx.user.id,
+        role: "member",
+      });
+      await db
+        .update(chatGroups)
+        .set({ memberCount: sql`memberCount + 1` })
+        .where(eq(chatGroups.id, group.id));
+      joined++;
+    }
+    return { joined };
+  }),
 
   // Soft-delete a message (only sender can delete)
   deleteMessage: protectedProcedure

@@ -533,3 +533,18 @@ export const pushSubscriptions = mysqlTable(
 );
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+// ─── Group Unread Counts ─────────────────────────────────────────────────────
+// Tracks the last-read message ID per user per group, used to compute unread badge counts
+export const groupUnreadCounts = mysqlTable(
+  "group_unread_counts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    groupId: int("groupId").notNull(),
+    lastReadMessageId: bigint("lastReadMessageId", { mode: "number" }).default(0).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_unread_user_group").on(t.userId, t.groupId)]
+);
+export type GroupUnreadCount = typeof groupUnreadCounts.$inferSelect;

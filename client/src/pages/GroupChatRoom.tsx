@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { formatChatTimestamp } from "@/lib/timeFormat";
 import { useParams, useLocation } from "wouter";
 import { useSocket, SocketMessage } from "@/hooks/useSocket";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -246,7 +247,7 @@ export default function GroupChatRoom() {
         senderAvatar: m.senderAvatar ?? "👤",
         senderRole: "member" as const,
         content: m.content,
-        time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
       }));
       setMessages(prev => {
@@ -281,12 +282,23 @@ export default function GroupChatRoom() {
         senderAvatar: m.senderAvatar ?? "👤",
         senderRole: "member" as const,
         content: m.content,
-        time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
       }));
       return [...mapped, ...localOnly];
     });
   }, [serverMessages, user]);
+
+  // tRPC: mark group as read when messages are loaded
+  const markGroupReadMutation = trpc.chat.markGroupRead.useMutation();
+  useEffect(() => {
+    if (!isValidGroup || !serverMessages || serverMessages.length === 0) return;
+    const lastMsg = serverMessages[serverMessages.length - 1];
+    if (lastMsg) {
+      markGroupReadMutation.mutate({ groupId, lastMessageId: Number(lastMsg.id) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isValidGroup, groupId, serverMessages?.length]);
 
   // tRPC: save message to backend (non-blocking, optimistic UI)
   const saveMessage = trpc.chat.saveMessage.useMutation({

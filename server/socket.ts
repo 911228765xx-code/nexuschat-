@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { messages } from "../drizzle/schema";
 import logger from "./utils/logger";
 import { sendPushToUser } from "./routers/webPush";
+import { triggerBotAutoReply } from "./botAutoReply";
 
 interface ChatMessage {
   groupId: number;
@@ -125,6 +126,10 @@ export function initSocketIO(httpServer: HttpServer) {
 
         // Broadcast to all in the group (including sender)
         io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
+
+        // Trigger Bot auto-reply (non-blocking, fire-and-forget)
+        triggerBotAutoReply(data.groupId, typeof userId === "number" ? userId : parseInt(String(userId)), data.content)
+          .catch((err: unknown) => logger.warn({ err }, "Socket: BotAutoReply trigger failed"));
       } catch (err) {
         logger.error({ err }, "Socket.io: Error saving message");
         socket.emit("error", { message: "Failed to send message" });

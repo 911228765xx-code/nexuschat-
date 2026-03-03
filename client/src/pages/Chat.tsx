@@ -6,6 +6,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { formatMessageTime } from "@/lib/timeFormat";
 import {
   Search, Plus, Users, Lock, Shield, X, Clock, ArrowUp,
   Pin, BellOff, Bell, Trash2, Archive, MoreHorizontal, Filter,
@@ -62,10 +63,29 @@ export default function Chat() {
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
 
   // tRPC: my joined groups (protectedProcedure)
-  const { data: myGroupsData } = trpc.chat.myGroups.useQuery(
+  const { data: myGroupsData, refetch: refetchMyGroups } = trpc.chat.myGroups.useQuery(
     undefined,
     { enabled: isAuthenticated, staleTime: 30_000, refetchInterval: isAuthenticated ? 60_000 : false }
   );
+
+  // tRPC: unread counts per group
+  const { data: unreadCountsData } = trpc.chat.getUnreadCounts.useQuery(
+    undefined,
+    { enabled: isAuthenticated, refetchInterval: isAuthenticated ? 30_000 : false, staleTime: 15_000 }
+  );
+
+  // tRPC: auto-join sample groups for new users (runs once on login)
+  const autoJoinMutation = trpc.chat.autoJoinSampleGroups.useMutation();
+  useEffect(() => {
+    if (isAuthenticated) {
+      autoJoinMutation.mutate(undefined, {
+        onSuccess: (res) => {
+          if (res.joined > 0) refetchMyGroups();
+        },
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // tRPC: real unread notification count (protectedProcedure — skip when not logged in)
   const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
@@ -94,8 +114,8 @@ export default function Chat() {
       name: g.name,
       avatar: g.avatar ? g.avatar : g.name.slice(0, 2),
       lastMessage: g.lastSender ? `${g.lastSender}: ${g.lastMessage}` : (g.lastMessage || g.description || ''),
-      time: g.lastMessageAt ? new Date(g.lastMessageAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
-      unread: 0,
+      time: g.lastMessageAt ? formatMessageTime(new Date(g.lastMessageAt)) : '',
+      unread: unreadCountsData?.[g.id] ?? 0,
       isGroup: true,
       isOnline: false,
       isPinned: false,
@@ -109,7 +129,7 @@ export default function Chat() {
       name: dm.name,
       avatar: dm.avatar ? dm.avatar.slice(0, 2).toUpperCase() : dm.name?.slice(0, 1) ?? "U",
       lastMessage: dm.lastMessage,
-      time: new Date(dm.lastMessageAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      time: formatMessageTime(new Date(dm.lastMessageAt)),
       unread: 0,
       isGroup: false,
       isOnline: false,
