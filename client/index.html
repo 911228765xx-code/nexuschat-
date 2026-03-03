@@ -302,6 +302,25 @@
       })();
     </script>
 
+    <!-- Force clear old SW caches on every page load to prevent stale JS bundles -->
+    <script>
+      (function() {
+        // Unregister old service workers and clear all caches
+        // This ensures users always get the latest version after a publish
+        if ('serviceWorker' in navigator && 'caches' in window) {
+          // Clear ALL caches immediately (async, non-blocking)
+          caches.keys().then(function(keys) {
+            keys.forEach(function(key) {
+              // Only clear old version caches (not current v6)
+              if (!key.includes('nexuschat-v6')) {
+                caches.delete(key);
+              }
+            });
+          });
+        }
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script

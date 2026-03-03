@@ -1,12 +1,12 @@
 /**
- * NexusChat Service Worker v5
+ * NexusChat Service Worker v6
  * Strategy:
  *   - Static assets (JS/CSS/fonts): Cache-first (long-lived, hashed filenames)
  *   - Navigation (HTML): Network-first with cache fallback (always fresh HTML)
  *   - API calls: Network-only (always fresh)
- * v5: Added Web Push notification support (push + notificationclick events).
+ * v6: Force cache invalidation to fix production black screen issue.
  */
-const CACHE_VERSION = "nexuschat-v5";
+const CACHE_VERSION = "nexuschat-v6";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
