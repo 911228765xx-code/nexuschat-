@@ -496,19 +496,19 @@ export default function Research() {
 
         {/* Search */}
         <div className="relative pb-3">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
+          <Search size={16} className="absolute left-3 top-[20px] -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             placeholder={t("research.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full h-10 pl-9 pr-20 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/20 transition-all"
+            className="w-full h-10 pl-9 pr-20 rounded-xl bg-secondary/60 border border-border/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/20 transition-all"
           />
           <button
             onClick={() => handleSearch()}
             disabled={isSearching}
-            className="absolute right-1.5 top-1/2 -translate-y-[calc(50%+6px)] px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-xs font-medium hover:bg-neon-purple/30 transition-colors disabled:opacity-50"
+            className="absolute right-1.5 top-[20px] -translate-y-1/2 px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-xs font-medium hover:bg-neon-purple/30 transition-colors disabled:opacity-50"
           >
             {isSearching ? <RefreshCw size={14} className="animate-spin" /> : t("research.analyze")}
           </button>
@@ -853,23 +853,7 @@ export default function Research() {
             {/* Report Content - Styled Markdown */}
             <div className="flex-1 overflow-y-auto">
               {aiReportContent ? (
-                <div className="px-5 py-4 prose prose-invert prose-sm max-w-none
-                  [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-white [&_h1]:font-['Space_Grotesk'] [&_h1]:mt-5 [&_h1]:mb-3 [&_h1]:pb-2 [&_h1]:border-b [&_h1]:border-[#a855f7]/20
-                  [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-[#00d4ff] [&_h2]:font-['Space_Grotesk'] [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2
-                  [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-[#a855f7] [&_h3]:mt-3 [&_h3]:mb-1.5 [&_h3]:uppercase [&_h3]:tracking-wider
-                  [&_p]:text-gray-300 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2
-                  [&_strong]:text-white [&_strong]:font-semibold
-                  [&_em]:text-[#00d4ff] [&_em]:not-italic
-                  [&_ul]:space-y-1 [&_ul]:my-2
-                  [&_li]:text-gray-300 [&_li]:text-sm [&_li]:leading-relaxed [&_li]:pl-1
-                  [&_li]:before:content-['▸'] [&_li]:before:text-[#a855f7] [&_li]:before:mr-2 [&_li]:before:text-xs
-                  [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_table]:my-3
-                  [&_th]:text-[#a855f7] [&_th]:font-semibold [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:border-b [&_th]:border-[#a855f7]/20 [&_th]:bg-[#a855f7]/5
-                  [&_td]:text-gray-300 [&_td]:py-1.5 [&_td]:px-3 [&_td]:border-b [&_td]:border-white/[0.04]
-                  [&_tr:hover_td]:bg-white/[0.02]
-                  [&_code]:text-[#00d4ff] [&_code]:bg-[#00d4ff]/8 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
-                  [&_blockquote]:border-l-2 [&_blockquote]:border-[#a855f7]/50 [&_blockquote]:pl-3 [&_blockquote]:text-gray-400 [&_blockquote]:italic [&_blockquote]:my-2
-                ">
+                <div className="px-5 py-4 report-markdown">
                   <LightMarkdown>{aiReportContent}</LightMarkdown>
                 </div>
               ) : (

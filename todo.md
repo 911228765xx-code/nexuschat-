@@ -380,3 +380,13 @@
 - [x] 修复 index.html 内联骨架屏样式中 body font-family 使用系统字体覆盖了 Inter 字体的问题
 - [x] 修复搜索框图标垂直定位偏移（top-[18px] 替代 calc 计算）
 - [x] 搜索框 input 显式添加 font-sans 类确保字体一致性
+
+## v61 全站排版修复
+- [ ] 修复 Discover/Research/Contacts 等页面搜索框字体（font-sans + 图标定位）
+- [ ] 修复 AI 投研页面整体文字排版问题
+- [ ] 修复历史研究报告弹窗打开后文字排版混乱
+
+## v61 全站排版修复
+- [x] 修复 Contacts/Discover/Research 页面搜索框图标垂直定位（-translate-y-[calc(50%+6px)] → top-[18px]）
+- [x] 修复 Research.tsx 历史报告弹窗 prose + LightMarkdown 双重样式冲突导致文字混乱
+- [x] 统一搜索框添加 font-sans 类

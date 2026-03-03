@@ -642,20 +642,20 @@ export default function Discover() {
         {/* Search */}
         <div className="relative pb-3">
           {isSearching
-            ? <Loader2 size={15} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-neon-cyan animate-spin" />
-            : <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
+            ? <Loader2 size={15} className="absolute left-3 top-[18px] -translate-y-1/2 text-neon-cyan animate-spin pointer-events-none" />
+            : <Search size={16} className="absolute left-3 top-[18px] -translate-y-1/2 text-muted-foreground pointer-events-none" />
           }
           <input
             type="text"
             placeholder={t("discover.search") || "Search posts, tags..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-8 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+            className="w-full h-9 pl-9 pr-8 rounded-xl bg-secondary/60 border border-border/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute right-2.5 top-[18px] -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X size={14} />
             </button>
