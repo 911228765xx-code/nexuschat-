@@ -17,7 +17,7 @@ import {
   UserMinus, VolumeX, Volume2, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import VoiceRecorder from "@/components/VoiceRecorder";
@@ -101,7 +101,8 @@ export default function GroupChatRoom() {
   const members: GroupMember[] = (membersData ?? []).map(m => ({
     id: String(m.id),
     name: m.name || m.username || `User ${m.id}`,
-    avatar: (m.name || m.username || "U")[0].toUpperCase(),
+    // Preserve full avatar URL if it's a URL, otherwise use first letter
+    avatar: m.avatar ?? (m.name || m.username || "U")[0].toUpperCase(),
     role: m.role as "owner" | "admin" | "member",
     status: "online" as const,
     address: m.username ?? "",
@@ -196,11 +197,13 @@ export default function GroupChatRoom() {
         return [...prev, {
           id: String(msg.id),
           sender: msg.senderName,
-          senderAvatar: "👤",
+          senderAvatar: msg.senderAvatar ?? "👤",
           senderRole: "member" as const,
           content: msg.content,
           time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
           isMine,
+          messageType: (msg.messageType as "text" | "image" | "file") ?? "text",
+          mediaUrl: msg.mediaUrl ?? undefined,
         }];
       });
     });
@@ -583,7 +586,8 @@ export default function GroupChatRoom() {
                 <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                   {!msg.isMine && (
                     <Avatar className={`w-7 h-7 shrink-0 mt-1 ${msg.isAI ? "ring-1 ring-neon-purple/50" : ""}`}>
-                      <AvatarFallback className="bg-secondary text-xs">{msg.senderAvatar}</AvatarFallback>
+                      {msg.senderAvatar?.startsWith("http") && <AvatarImage src={msg.senderAvatar} alt={msg.sender} className="object-cover" />}
+                      <AvatarFallback className="bg-secondary text-xs">{msg.senderAvatar?.startsWith("http") ? (msg.sender?.[0]?.toUpperCase() ?? "?") : (msg.senderAvatar ?? "?")}</AvatarFallback>
                     </Avatar>
                   )}
                   <div className="relative">
@@ -692,7 +696,7 @@ export default function GroupChatRoom() {
               </div>
               {filteredMentionMembers.map((member) => (
                 <button key={member.id} onClick={() => insertMention(member.name)} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/50 transition-colors">
-                  <Avatar className="w-7 h-7"><AvatarFallback className="bg-secondary text-xs">{member.avatar}</AvatarFallback></Avatar>
+                  <Avatar className="w-7 h-7">{member.avatar?.startsWith("http") && <AvatarImage src={member.avatar} alt={member.name} className="object-cover" />}<AvatarFallback className="bg-secondary text-xs">{member.avatar?.startsWith("http") ? (member.name?.[0]?.toUpperCase() ?? "?") : (member.avatar ?? "?")}</AvatarFallback></Avatar>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-1">{getRoleBadge(member.role)}<span className="text-xs font-medium truncate">{member.name}</span></div>
                   </div>
@@ -867,7 +871,7 @@ export default function GroupChatRoom() {
                 {members.map((member) => (
                   <button key={member.id} className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors" onClick={() => setMemberActionTarget(member)}>
                     <div className="relative">
-                      <Avatar className="w-8 h-8"><AvatarFallback className="bg-secondary text-xs">{member.avatar}</AvatarFallback></Avatar>
+                      <Avatar className="w-8 h-8">{member.avatar?.startsWith("http") && <AvatarImage src={member.avatar} alt={member.name} className="object-cover" />}<AvatarFallback className="bg-secondary text-xs">{member.avatar?.startsWith("http") ? (member.name?.[0]?.toUpperCase() ?? "?") : (member.avatar ?? "?")}</AvatarFallback></Avatar>
                       <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${getStatusColor(member.status)}`} />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
@@ -897,7 +901,7 @@ export default function GroupChatRoom() {
                     <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 300 }} onClick={(e) => e.stopPropagation()} className="w-full bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-2">
                       {/* Member Info */}
                       <div className="flex items-center gap-3 pb-3 border-b border-border/20">
-                        <Avatar className="w-12 h-12"><AvatarFallback className="bg-secondary text-lg">{memberActionTarget.avatar}</AvatarFallback></Avatar>
+                        <Avatar className="w-12 h-12">{memberActionTarget.avatar?.startsWith("http") && <AvatarImage src={memberActionTarget.avatar} alt={memberActionTarget.name} className="object-cover" />}<AvatarFallback className="bg-secondary text-lg">{memberActionTarget.avatar?.startsWith("http") ? (memberActionTarget.name?.[0]?.toUpperCase() ?? "?") : (memberActionTarget.avatar ?? "?")}</AvatarFallback></Avatar>
                         <div>
                           <div className="flex items-center gap-1.5">{getRoleBadge(memberActionTarget.role)}<span className="font-semibold font-display text-sm">{memberActionTarget.name}</span></div>
                           <p className="text-[10px] text-muted-foreground capitalize">{memberActionTarget.role}</p>

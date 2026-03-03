@@ -1,7 +1,8 @@
 import { Server as SocketIOServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { getDb } from "./db";
-import { messages } from "../drizzle/schema";
+import { messages, users } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import logger from "./utils/logger";
 import { sendPushToUser } from "./routers/webPush";
 import { triggerBotAutoReply } from "./botAutoReply";
@@ -49,8 +50,19 @@ export function initSocketIO(httpServer: HttpServer) {
     try {
       // Parse userId as number (client sends it as string)
       const rawId = socket.handshake.auth?.userId;
-      (socket as any).userId = rawId ? parseInt(String(rawId), 10) : undefined;
+      const parsedId = rawId ? parseInt(String(rawId), 10) : undefined;
+      (socket as any).userId = parsedId;
       (socket as any).userName = socket.handshake.auth?.userName;
+      // Fetch user avatar from DB so it can be included in outgoing messages
+      if (parsedId) {
+        try {
+          const db = await getDb();
+          if (db) {
+            const [userRow] = await db.select({ avatar: users.avatar }).from(users).where(eq(users.id, parsedId)).limit(1);
+            (socket as any).userAvatar = userRow?.avatar ?? null;
+          }
+        } catch (_) { /* non-fatal */ }
+      }
       next();
     } catch (err) {
       next(new Error("Authentication failed"));
@@ -60,6 +72,7 @@ export function initSocketIO(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     const userId = (socket as any).userId as number | undefined;
     const userName = (socket as any).userName || "Anonymous";
+    const userAvatar = (socket as any).userAvatar as string | null | undefined;
 
     logger.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
 
@@ -118,6 +131,7 @@ export function initSocketIO(httpServer: HttpServer) {
           groupId: data.groupId,
           senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
           senderName: userName,
+          senderAvatar: userAvatar ?? null,
           content: data.content,
           messageType: data.messageType || "text",
           mediaUrl: data.mediaUrl,

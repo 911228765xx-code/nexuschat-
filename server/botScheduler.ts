@@ -165,16 +165,17 @@ async function sendBotMessage(groupId: number, botName: string, content: string)
       id: result.id,
       groupId,
       senderId: botId,
+      senderName: bot?.name ?? botName,
+      senderAvatar: bot?.avatar ?? null,
       content,
       messageType: "text",
       createdAt: new Date(),
-      sender: bot || { id: botId, name: botName, avatar: null, username: botName },
     };
 
-    // 广播到群房间（Socket.IO room）
+    // 广播到群房间（Socket.IO room）— 使用与 botAutoReply 相同的事件名
     const io = getSocketIO();
     if (io) {
-      io.to(`group:${groupId}`).emit("newMessage", messagePayload);
+      io.to(`group:${groupId}`).emit("new_message", messagePayload);
     }
   } catch (err) {
     logger.warn({ err }, "BotScheduler: Socket广播失败（非致命）");

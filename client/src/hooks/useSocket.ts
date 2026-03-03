@@ -10,6 +10,7 @@ export interface SocketMessage {
   groupId: number;
   senderId: number;
   senderName: string;
+  senderAvatar?: string | null;
   content: string;
   messageType: "text" | "image" | "file";
   mediaUrl?: string;
