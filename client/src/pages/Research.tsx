@@ -460,10 +460,10 @@ export default function Research() {
   }, [marketOverview]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
 
       {/* Header */}
-      <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
+      <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30 overflow-hidden">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-neon-purple" />

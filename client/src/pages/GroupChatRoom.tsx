@@ -91,6 +91,8 @@ export default function GroupChatRoom() {
   // ─── Message context menu (long press / right click) ─────────────────────
   const [contextMenu, setContextMenu] = useState<{ msg: GroupMessage; x: number; y: number } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─── Leave Group confirmation ───────────────────────────────────────────────
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   // ─── Group Settings modal ─────────────────────────────────────────────────
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [editGroupName, setEditGroupName] = useState("");
@@ -953,7 +955,7 @@ export default function GroupChatRoom() {
 
               {/* Leave Group */}
               <div className="p-3 border-t border-border/20">
-                <button onClick={() => { if (confirm(t("group.leaveConfirm") || "确定要退出该群组吗？")) { leaveGroupMutation.mutate({ groupId }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-neon-red hover:bg-neon-red/10 transition-colors text-sm">
+                <button onClick={() => setShowLeaveConfirm(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-neon-red hover:bg-neon-red/10 transition-colors text-sm">
                   <LogOut size={16} />{t("group.leaveGroup")}
                 </button>
               </div>

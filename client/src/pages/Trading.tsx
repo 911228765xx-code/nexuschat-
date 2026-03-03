@@ -493,7 +493,7 @@ export default function Trading() {
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
       {/* Price Ticker */}
       <div className="bg-background border-b border-border/20 overflow-hidden h-7 flex items-center">
