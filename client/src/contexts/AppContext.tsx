@@ -45,6 +45,8 @@ export interface Conversation {
   isOnline?: boolean;
   isPinned?: boolean;
   isMuted?: boolean;
+  /** For DM conversations: the other user's ID for routing to /app/dm/:dmUserId */
+  dmUserId?: string;
 }
 
 export interface Notification {
@@ -177,13 +179,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Conversations
   const [conversations, setConversations] = useState<Conversation[]>(() =>
     loadFromStorage("conversations", [
-      { id: "1", name: "vitalik.eth", avatar: "V", lastMessage: "ETH 2.0 staking yield looks great 🚀", time: "now", unread: 3, isGroup: false, isTokenGated: false, isOnline: true },
+      { id: "dm-demo-1", name: "vitalik.eth", avatar: "V", lastMessage: "ETH 2.0 staking yield looks great 🚀", time: "now", unread: 3, isGroup: false, isTokenGated: false, isOnline: true, dmUserId: "demo-1" },
       { id: "2", name: "BAYC Holders 🐵", avatar: "🐵", lastMessage: "Alice: New roadmap is out!", time: "5m", unread: 12, isGroup: true, isTokenGated: true },
-      { id: "3", name: "0xDeFi...3a9b", avatar: "D", lastMessage: "/research SOL report generated", time: "15m", unread: 0, isGroup: false, isTokenGated: false, isOnline: true },
+      { id: "dm-demo-3", name: "0xDeFi...3a9b", avatar: "D", lastMessage: "/research SOL report generated", time: "15m", unread: 0, isGroup: false, isTokenGated: false, isOnline: true, dmUserId: "demo-3" },
       { id: "4", name: "NexusChat Official", avatar: "N", lastMessage: "Admin: v0.2.0 released!", time: "1h", unread: 5, isGroup: true, isTokenGated: false },
-      { id: "5", name: "satoshi.btc", avatar: "S", lastMessage: "BTC on-chain data shows whale accumulation", time: "2h", unread: 0, isGroup: false, isTokenGated: false, isOnline: false },
+      { id: "dm-demo-5", name: "satoshi.btc", avatar: "S", lastMessage: "BTC on-chain data shows whale accumulation", time: "2h", unread: 0, isGroup: false, isTokenGated: false, isOnline: false, dmUserId: "demo-5" },
       { id: "6", name: "DeFi Alpha 🔒", avatar: "🔑", lastMessage: "Bob: This new LP has 200%+ APY", time: "3h", unread: 0, isGroup: true, isTokenGated: true },
-      { id: "7", name: "punk6529.eth", avatar: "P", lastMessage: "NFT market is recovering, watch Blur data", time: "1d", unread: 0, isGroup: false, isTokenGated: false, isOnline: false },
+      { id: "dm-demo-7", name: "punk6529.eth", avatar: "P", lastMessage: "NFT market is recovering, watch Blur data", time: "1d", unread: 0, isGroup: false, isTokenGated: false, isOnline: false, dmUserId: "demo-7" },
     ])
   );
 

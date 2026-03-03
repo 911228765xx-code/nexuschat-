@@ -306,4 +306,77 @@ export const chatRouter = router({
         .orderBy(groupMembers.role, groupMembers.joinedAt)
         .limit(200);
     }),
+
+  // Get group info (name, description, memberCount, avatar)
+  getGroupInfo: publicProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db
+        .select()
+        .from(chatGroups)
+        .where(eq(chatGroups.id, input.groupId))
+        .limit(1);
+      return rows[0] ?? null;
+    }),
+
+  // Get user info by userId (for DM partner display)
+  getUserInfo: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          username: users.username,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      return rows[0] ?? null;
+    }),
+
+  // Upload chat image to S3
+  uploadChatImage: protectedProcedure
+    .input(z.object({
+      base64: z.string().max(5_000_000), // ~3.7MB raw file
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const { storagePut } = await import("../storage");
+      const buffer = Buffer.from(input.base64, "base64");
+      const ext = input.mimeType.split("/")[1] ?? "jpg";
+      const key = `chat-images/${ctx.user.id}/${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      return { url };
+    }),
+
+  // Soft-delete a message (only sender can delete)
+  deleteMessage: protectedProcedure
+    .input(z.object({ messageId: z.number() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Verify ownership
+      const rows = await db
+        .select({ senderId: messages.senderId })
+        .from(messages)
+        .where(eq(messages.id, input.messageId))
+        .limit(1);
+      if (!rows[0] || rows[0].senderId !== ctx.user.id) {
+        throw new Error("Not authorized");
+      }
+      await db
+        .update(messages)
+        .set({ isDeleted: true })
+        .where(eq(messages.id, input.messageId));
+      return { ok: true };
+    }),
 });
+

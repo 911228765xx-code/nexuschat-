@@ -78,7 +78,7 @@ export default function ChatRoom() {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const recordingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  // isTyping is derived from typingUsers below; placeholder to avoid scroll effect issue
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [showRedPacket, setShowRedPacket] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -101,13 +101,10 @@ export default function ChatRoom() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages]);
 
-  // Simulate typing indicator after user sends a message
-  const simulateTyping = useCallback(() => {
-    setIsTyping(true);
-    setTimeout(() => setIsTyping(false), 2000 + Math.random() * 2000);
-  }, []);
+  // Dummy to satisfy old call site (typing is now real)
+  const simulateTyping = useCallback(() => {}, []);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -162,7 +159,43 @@ export default function ChatRoom() {
     });
   }, [serverMessages, user?.id]);
 
-  // Join group room and listen for real-time messages via WebSocket
+  // Real typing indicator: track who is typing via Socket.IO
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const typingTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const isTyping = typingUsers.size > 0;
+  // Ref for sendTyping to avoid stale closure
+  const sendTypingRef = useRef(socket.sendTyping);
+  useEffect(() => { sendTypingRef.current = socket.sendTyping; }, [socket.sendTyping]);
+  // Emit typing start/stop when user types
+  const typingEmitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleInputTyping = useCallback(() => {
+    if (!isValidRoom) return;
+    sendTypingRef.current(groupId, true);
+    if (typingEmitTimer.current) clearTimeout(typingEmitTimer.current);
+    typingEmitTimer.current = setTimeout(() => {
+      sendTypingRef.current(groupId, false);
+    }, 2000);
+  }, [groupId, isValidRoom]);
+  // Listen for real typing events from other users
+  useEffect(() => {
+    if (!socket.connected || !isValidRoom) return;
+    const offTyping = socket.onTyping((data) => {
+      const uid = data.userId;
+      if (data.isTyping) {
+        setTypingUsers(prev => { const s = new Set(Array.from(prev)); s.add(uid); return s; });
+        // Auto-clear after 3s in case stop event is missed
+        if (typingTimerRef.current[uid]) clearTimeout(typingTimerRef.current[uid]);
+        typingTimerRef.current[uid] = setTimeout(() => {
+          setTypingUsers(prev => { const s = new Set(Array.from(prev)); s.delete(uid); return s; });
+        }, 3000);
+      } else {
+        setTypingUsers(prev => { const s = new Set(Array.from(prev)); s.delete(uid); return s; });
+        if (typingTimerRef.current[uid]) clearTimeout(typingTimerRef.current[uid]);
+      }
+    });
+    return () => { offTyping(); };
+  }, [socket.connected, isValidRoom, groupId]);
+
   useEffect(() => {
     if (!socket.connected || !isValidRoom) return;
     socket.joinGroup(groupId);
@@ -191,6 +224,12 @@ export default function ChatRoom() {
   // tRPC: save DM message (non-blocking fallback)
   const saveMessage = trpc.chat.saveMessage.useMutation({
     onError: (err) => console.warn("[ChatRoom] save failed:", err.message),
+  });
+  // tRPC: upload chat image to S3
+  const uploadChatImage = trpc.chat.uploadChatImage.useMutation();
+  // tRPC: delete message (soft-delete on server)
+  const deleteMessageMutation = trpc.chat.deleteMessage.useMutation({
+    onError: (err) => console.warn("[ChatRoom] delete failed:", err.message),
   });
 
   const handleSend = useCallback(() => {
@@ -318,9 +357,26 @@ export default function ChatRoom() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 3.5 * 1024 * 1024) {
+      toast.error("Image too large (max 3.5MB)");
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setImagePreview(ev.target?.result as string);
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      // Show local preview immediately
+      setImagePreview(dataUrl);
+      // Upload to S3 in background
+      try {
+        const base64 = dataUrl.split(",")[1];
+        const mimeType = file.type || "image/jpeg";
+        const result = await uploadChatImage.mutateAsync({ base64, mimeType });
+        // Replace local preview with S3 URL
+        setImagePreview(result.url);
+      } catch (err) {
+        console.warn("[ChatRoom] image upload failed, using local preview:", err);
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -752,7 +808,18 @@ export default function ChatRoom() {
               { icon: Reply, label: t("chat.replyAction"), action: () => { const msg = messages.find(m => m.id === contextMenu.msgId); if (msg) setReplyTo(msg); setContextMenu(null); } },
               { icon: Forward, label: t("chat.forward"), action: () => { setForwardMsgId(contextMenu.msgId); setShowForward(true); setContextMenu(null); } },
               { icon: Star, label: t("chat.favorite"), action: () => { toast.success(t("chat.favorited")); setContextMenu(null); } },
-              { icon: Trash2, label: t("chat.deleteMsg"), action: () => { setMessages(prev => prev.filter(m => m.id !== contextMenu.msgId)); toast.success(t("chat.msgDeleted")); setContextMenu(null); }, danger: true },
+              { icon: Trash2, label: t("chat.deleteMsg"), action: () => {
+                const msgId = contextMenu.msgId;
+                // Optimistic local delete
+                setMessages(prev => prev.filter(m => m.id !== msgId));
+                toast.success(t("chat.msgDeleted"));
+                setContextMenu(null);
+                // Persist to server if numeric ID (real DB message)
+                const numId = parseInt(msgId, 10);
+                if (!isNaN(numId)) {
+                  deleteMessageMutation.mutate({ messageId: numId });
+                }
+              }, danger: true },
             ].map((item, i) => {
               const Icon = item.icon;
               return (
@@ -1195,7 +1262,7 @@ export default function ChatRoom() {
           <div className="flex-1">
             <EnhancedInput
               value={input}
-              onChange={setInput}
+              onChange={(v) => { setInput(v); handleInputTyping(); }}
               onSend={handleSend}
               placeholder={t("chat.inputPlaceholder")}
             />

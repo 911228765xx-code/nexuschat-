@@ -46,12 +46,11 @@ export default function DMChat() {
     }
   );
 
-  // tRPC: get partner user info via leaderboard (reuse existing)
-  const { data: leaderboard } = trpc.user.leaderboard.useQuery(
-    { limit: 100 },
-    { staleTime: 60_000 }
+  // tRPC: get partner user info directly by userId
+  const { data: partnerInfo } = trpc.chat.getUserInfo.useQuery(
+    { userId: otherUserId },
+    { enabled: otherUserId > 0, staleTime: 60_000 }
   );
-  const partnerInfo = leaderboard?.find(u => u.id === otherUserId);
   const partnerName = partnerInfo?.name ?? partnerInfo?.username ?? `User #${otherUserId}`;
   const partnerAvatar = partnerInfo?.avatar;
 

@@ -283,3 +283,20 @@
 - [x] 添加热门钱包图标（SVG/PNG CDN）
 - [x] 连接失败时显示明确错误提示
 - [x] 运行测试，TypeScript 0 错误
+
+## v50 社交聊天全面改进
+- [x] 后端：chat.uploadChatImage 接口（接收 base64/buffer → S3 → 返回 URL）
+- [x] 后端：chat.deleteMessage 接口（软删除，仅发送者可删）
+- [x] 后端：chat.getUserInfo 接口（根据 userId 获取用户信息，替代 leaderboard 查找）
+- [x] 数据库：messageReactions 表（messageId, userId, emoji）
+- [x] 前端 ChatRoom：图片选择后上传到 S3，发送 mediaUrl 而非 base64
+- [x] 前端 ChatRoom：删除消息接入后端 deleteMessage
+- [x] 前端 ChatRoom：打字指示器接入真实 Socket（sendTyping + onTyping）
+- [x] 前端 DMChat：对方用户信息改用 getUserInfo 接口
+- [x] 运行测试，TypeScript 0 错误
+
+## v50 视频问题修复（优先级最高）
+- [x] 修复 ChatRoom 黑屏：AppContext mock DM 会话（id="1","3","5","7"）点击后路由到 /app/chat/:id，但该路由对应 ChatRoom（群聊），应路由到 /app/dm/:userId
+- [x] 修复 GroupChatRoom 群名称和成员数接入真实数据（getGroupInfo + getGroupMembers）
+- [x] 前端 ChatRoom 图片上传接 S3、删除持久化、打字指示器真实 Socket
+- [x] DMChat 对方用户信息改用 getUserInfo（替代 leaderboard 查找）

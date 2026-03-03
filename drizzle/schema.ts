@@ -92,6 +92,23 @@ export const messages = mysqlTable(
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
 
+// ─── Message Reactions ───────────────────────────────────────────────────────
+export const messageReactions = mysqlTable(
+  "message_reactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    messageId: bigint("messageId", { mode: "number" }).notNull(),
+    userId: int("userId").notNull(),
+    emoji: varchar("emoji", { length: 10 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_msg_reactions").on(t.messageId, t.userId, t.emoji),
+  ]
+);
+
+export type MessageReaction = typeof messageReactions.$inferSelect;
+
 // ─── Discover Posts ───────────────────────────────────────────────────────────
 export const posts = mysqlTable(
   "posts",

@@ -72,6 +72,11 @@ export default function GroupChatRoom() {
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  // ─── Real group info from DB ──────────────────────────────────────────
+  const { data: groupInfo } = trpc.chat.getGroupInfo.useQuery(
+    { groupId: groupId },
+    { enabled: isValidGroup, staleTime: 60_000 }
+  );
   // ─── Real group members from DB ────────────────────────────────────────
   const { data: membersData } = trpc.chat.getGroupMembers.useQuery(
     { groupId: groupId },
@@ -317,7 +322,7 @@ export default function GroupChatRoom() {
             🚀
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold font-display truncate">DeFi Alpha Hunters</h2>
+            <h2 className="text-sm font-semibold font-display truncate">{groupInfo?.name ?? "DeFi Alpha Hunters"}</h2>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Users size={10} />
               {members.length} {t("group.members")} · {onlineCount} {t("group.online")}
@@ -651,7 +656,7 @@ export default function GroupChatRoom() {
                     🚀
                   </div>
                   <div>
-                    <h4 className="font-display font-bold text-base">DeFi Alpha Hunters</h4>
+                    <h4 className="font-display font-bold text-base">{groupInfo?.name ?? "DeFi Alpha Hunters"}</h4>
                     <p className="text-xs text-muted-foreground">{members.length} {t("group.members")}</p>
                   </div>
                 </div>

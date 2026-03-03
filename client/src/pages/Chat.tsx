@@ -95,9 +95,9 @@ export default function Chat() {
       isPinned: false,
       isMuted: false,
       isTokenGated: false,
-      isVerified: false,
-      _dmUserId: dm.userId,
-    })),
+      dmUserId: String(dm.userId),
+    } as import("@/contexts/AppContext").Conversation)),
+
   ].filter((conv, idx, arr) => arr.findIndex(c => c.id === conv.id) === idx);
 
   // Sort: pinned first, then by time
@@ -309,7 +309,7 @@ export default function Chat() {
           const isPinned = conv.isPinned;
           const isLast = index === filtered.length - 1;
           return (
-            <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : (conv as any)._dmUserId ? `/app/dm/${(conv as any)._dmUserId}` : `/app/chat/${conv.id}`}>
+            <Link key={conv.id} href={conv.isGroup ? `/app/group/${conv.id}` : conv.dmUserId ? `/app/dm/${conv.dmUserId}` : `/app/chat/${conv.id}`}>
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
