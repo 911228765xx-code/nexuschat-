@@ -384,6 +384,9 @@ export default defineConfig({
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
   define: {
+    // Inject build timestamp to ensure unique bundle hash on every build
+    // This prevents CDN from serving stale cached bundles after deployment
+    "import.meta.env.VITE_BUILD_TIME": JSON.stringify(new Date().toISOString()),
     // Inject platform-injected VITE_ env vars that are in process.env but not in .env files
     "import.meta.env.VITE_WALLETCONNECT_PROJECT_ID": JSON.stringify(
       process.env.VITE_WALLETCONNECT_PROJECT_ID || ""
