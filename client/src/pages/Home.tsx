@@ -5,7 +5,7 @@
  */
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, lazy, Suspense, useEffect } from "react";
-import { useWallet } from "@/contexts/WalletContext";
+import { useWallet } from "@/hooks/useWallet";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight, Menu, X } from "lucide-react";

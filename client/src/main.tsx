@@ -5,8 +5,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
-// Web3 providers (wagmi + rainbowkit) are lazily loaded to keep initial bundle small
-import { LazyWeb3Provider } from "@/components/LazyWeb3Provider";
+// Web3 providers are loaded on-demand inside Wallet page only
 // Sentry error monitoring — initialize before anything else
 import { initSentry } from "@/lib/sentry";
 initSentry();
@@ -76,9 +75,7 @@ try {
   createRoot(document.getElementById("root")!).render(
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <LazyWeb3Provider>
-          <App />
-        </LazyWeb3Provider>
+        <App />
       </QueryClientProvider>
     </trpc.Provider>
   );

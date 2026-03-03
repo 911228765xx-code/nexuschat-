@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense, useEffect } from "react";
+import { useWallet as useStandaloneWallet } from "./hooks/useWallet";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -71,22 +72,18 @@ const PriceAlertSocket = lazy(() =>
 );
 
 /**
- * WalletSyncEffect - lazy loaded to avoid pulling wagmi/Web3 into the main bundle.
+ * WalletSyncEffect - uses standalone useWallet (window.ethereum only, no wagmi dependency)
  */
-const WalletSyncEffect = lazy(() =>
-  import("./contexts/WalletContext").then((mod) => ({
-    default: function WalletSyncEffectImpl() {
-      const { address, isConnected } = mod.useWallet();
-      const { updateProfile } = useApp();
-      useEffect(() => {
-        if (isConnected && address) {
-          updateProfile({ walletAddress: address });
-        }
-      }, [address, isConnected, updateProfile]);
-      return null;
-    },
-  }))
-);
+function WalletSyncEffect() {
+  const { address, isConnected } = useStandaloneWallet();
+  const { updateProfile } = useApp();
+  useEffect(() => {
+    if (isConnected && address) {
+      updateProfile({ walletAddress: address });
+    }
+  }, [address, isConnected, updateProfile]);
+  return null;
+}
 
 /**
  * RouteContent — single persistent Suspense boundary (no key=location).
@@ -233,9 +230,7 @@ function AppContent() {
   return (
     <>
       {/* Sync connected wallet address into AppContext profile */}
-      <Suspense fallback={null}>
-        <WalletSyncEffect />
-      </Suspense>
+      <WalletSyncEffect />
 
       {/* Lazy-load socket.io connection after initial render */}
       <Suspense fallback={null}>

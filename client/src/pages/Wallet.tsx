@@ -3,7 +3,7 @@
  * 代币持仓列表、NFT画廊、交易历史记录
  * 三个Tab切换 + 总资产概览
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Copy, ExternalLink, Eye, EyeOff, Send, QrCode, Plus, Filter, ChevronDown, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -12,10 +12,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useWallet } from "@/contexts/WalletContext";
-import WalletConnectModal from "@/components/WalletConnectModal";
-import { useBalance, useChainId } from "wagmi";
-import { mainnet, bsc, polygon, arbitrum } from "@/lib/wagmi";
+import { useWallet } from "@/hooks/useWallet";
+// Lazy-load WalletConnectModal — avoids pulling wagmi/rainbowkit into the Wallet chunk at startup
+const WalletConnectModal = lazy(() => import("@/components/WalletConnectModal"));
 import { useAuth } from "@/_core/hooks/useAuth";
 import LoginPromptCard from "@/components/LoginPromptCard";
 
@@ -699,24 +698,24 @@ export default function Wallet() {
   const { isAuthenticated } = useAuth();
 
   // ─── Real wallet from WalletContext ───
-  const { address: connectedAddress, isConnected: walletConnected } = useWallet();
+  const { address: connectedAddress, isConnected: walletConnected, chainId: rawChainId, balance: walletBalance } = useWallet();
   const walletAddress = connectedAddress || "";
-  const connectedChainId = useChainId();
+  // Chain IDs as numbers (from window.ethereum, hex string → number)
+  const connectedChainId = rawChainId ? parseInt(rawChainId, 16) : 0;
+  // Chain ID constants (no wagmi dependency)
+  const BSC_CHAIN_ID = 56;
+  const POLYGON_CHAIN_ID = 137;
+  const ARBITRUM_CHAIN_ID = 42161;
+  const MAINNET_CHAIN_ID = 1;
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
-
-  // ─── wagmi: native balance on currently connected chain ───
-  const typedAddress = connectedAddress as `0x${string}` | undefined;
-  const { data: nativeBalance, isLoading: nativeLoading } = useBalance({
-    address: typedAddress,
-    query: { enabled: !!typedAddress && walletConnected, staleTime: 15_000 },
-  });
-
-  // ─── ETH balance on Ethereum mainnet (always useful regardless of current chain) ───
-  const { data: ethMainnetBalance } = useBalance({
-    address: typedAddress,
-    chainId: mainnet.id,
-    query: { enabled: !!typedAddress && walletConnected && connectedChainId !== mainnet.id, staleTime: 30_000 },
-  });
+  // ─── Native balance from useWallet hook (window.ethereum) ───
+  const nativeBalance = walletBalance ? {
+    formatted: walletBalance,
+    symbol: connectedChainId === BSC_CHAIN_ID ? "BNB" : connectedChainId === POLYGON_CHAIN_ID ? "MATIC" : "ETH",
+  } : null;
+  const nativeLoading = false;
+  // ─── ETH mainnet balance — only fetch if not on mainnet ───
+  const ethMainnetBalance = null; // Simplified: ETH balance shown via BSC/token data);
 
   // ─── BscScan API queries (BSC token list) ───
   const isValidBscAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
@@ -752,9 +751,9 @@ export default function Wallet() {
 
     // Native balance on current chain (from wagmi — real-time)
     if (nativeBalance && parseFloat(nativeBalance.formatted) > 0) {
-      const chainName = connectedChainId === bsc.id ? "BSC"
-        : connectedChainId === polygon.id ? "Polygon"
-        : connectedChainId === arbitrum.id ? "Arbitrum"
+      const chainName = connectedChainId === BSC_CHAIN_ID ? "BSC"
+        : connectedChainId === POLYGON_CHAIN_ID ? "Polygon"
+        : connectedChainId === ARBITRUM_CHAIN_ID ? "Arbitrum"
         : "Ethereum";
       result.push({
         id: `native-${connectedChainId}`,
@@ -769,20 +768,7 @@ export default function Wallet() {
       });
     }
 
-    // ETH on mainnet when connected to a different chain
-    if (ethMainnetBalance && parseFloat(ethMainnetBalance.formatted) > 0) {
-      result.push({
-        id: "eth-mainnet",
-        symbol: "ETH",
-        name: "Ethereum",
-        icon: "⟠",
-        balance: parseFloat(ethMainnetBalance.formatted),
-        value: 0,
-        price: 0,
-        change24h: 0,
-        chain: "Ethereum",
-      });
-    }
+    // ETH on mainnet: shown via ethTokenData below
 
     // BEP-20 tokens from BscScan
     if (tokenData) {
@@ -807,7 +793,7 @@ export default function Wallet() {
     if (ethTokenData) {
       // Enrich ETH native balance with real USD price
       const ethNativeIdx = result.findIndex(
-        (t) => t.id === "eth-mainnet" || t.id === `native-${mainnet.id}`
+        (t) => t.id === "eth-mainnet" || t.id === `native-${MAINNET_CHAIN_ID}`
       );
       if (ethNativeIdx !== -1) {
         result[ethNativeIdx] = {
@@ -1485,11 +1471,15 @@ export default function Wallet() {
     </AnimatePresence>
     </div>
 
-    {/* Connect Wallet Modal — triggered from the connect prompt */}
-    <WalletConnectModal
-      open={showConnectPrompt}
-      onClose={() => setShowConnectPrompt(false)}
-    />
+    {/* Connect Wallet Modal — lazy-loaded, only pulls wagmi bundle when user opens modal */}
+    {showConnectPrompt && (
+      <Suspense fallback={null}>
+        <WalletConnectModal
+          open={showConnectPrompt}
+          onClose={() => setShowConnectPrompt(false)}
+        />
+      </Suspense>
+    )}
     </>
   );
 }
