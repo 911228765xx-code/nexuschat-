@@ -723,14 +723,14 @@ export default function Discover() {
         {debouncedQuery.length >= 2 && (
           <div className="pb-4">
             <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {isSearching
                   ? "Searching..."
                   : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for “${debouncedQuery}”`
                 }
               </span>
               {!isSearching && searchResults.length > 0 && (
-                <span className="text-xs text-neon-cyan/70">Backend search</span>
+                <span className="text-sm text-neon-cyan/70">Backend search</span>
               )}
             </div>
             {isSearching ? (
@@ -742,26 +742,26 @@ export default function Discover() {
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Search size={36} className="text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">No posts found for “{debouncedQuery}”</p>
-                <p className="text-xs text-muted-foreground/60">Try different keywords or hashtags</p>
+                <p className="text-sm text-muted-foreground/60">Try different keywords or hashtags</p>
               </div>
             ) : (
-              <div className="space-y-0">
+              <div className="space-y-0 divide-y divide-border/10">
                 {searchResults.map((post) => (
                   <article
                     key={post.id}
                     className="px-4 py-4 border-b border-border/10 cursor-pointer hover:bg-secondary/20 transition-colors active:bg-secondary/40"
                     onClick={() => setLocation(`/app/post/${post.id}`)}
                   >
-                    <div className="flex items-start gap-3">
-                      <Avatar className="w-10 h-10 shrink-0">
+                    <div className="flex items-start gap-3.5">
+                      <Avatar className="w-11 h-11 shrink-0">
                         {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
                         <AvatarFallback className="bg-secondary text-base">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 mb-2">
-                          <span className="text-sm font-semibold font-display truncate">{post.author.name}</span>
-                          <span className="text-xs text-muted-foreground font-mono truncate">{post.author.handle}</span>
-                          <span className="ml-auto text-xs text-muted-foreground/50 shrink-0">{post.timestamp}</span>
+                          <span className="text-base font-semibold font-display truncate">{post.author.name}</span>
+                          <span className="text-sm text-muted-foreground font-mono truncate">{post.author.handle}</span>
+                          <span className="ml-auto text-sm text-muted-foreground/50 shrink-0">{post.timestamp}</span>
                         </div>
                         <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line line-clamp-3">{post.content}</p>
                         {post.tags && post.tags.length > 0 && (
@@ -771,10 +771,10 @@ export default function Discover() {
                             ))}
                           </div>
                         )}
-                        <div className="flex items-center gap-4 mt-2 text-muted-foreground">
-                          <span className="flex items-center gap-2 text-xs"><Heart size={12} /> {post.likes}</span>
-                          <span className="flex items-center gap-2 text-xs"><MessageSquare size={12} /> {post.comments}</span>
-                          <span className="flex items-center gap-2 text-xs"><Repeat2 size={12} /> {post.reposts}</span>
+                        <div className="flex items-center gap-4 mt-3 text-muted-foreground">
+                          <span className="flex items-center gap-2 text-sm"><Heart size={14} /> {post.likes}</span>
+                          <span className="flex items-center gap-2 text-sm"><MessageSquare size={14} /> {post.comments}</span>
+                          <span className="flex items-center gap-2 text-sm"><Repeat2 size={14} /> {post.reposts}</span>
                         </div>
                       </div>
                     </div>
@@ -810,7 +810,7 @@ export default function Discover() {
                   transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                   className="w-5 h-5 border-2 border-neon-cyan/30 border-t-neon-cyan rounded-full"
                 />
-                <span className="text-xs text-muted-foreground">{t("discover.refreshing") || "Refreshing..."}</span>
+                <span className="text-sm text-muted-foreground">{t("discover.refreshing") || "Refreshing..."}</span>
               </div>
             )}
 
@@ -818,7 +818,7 @@ export default function Discover() {
             {postsLoading && moments.length === 0 && (
               <div className="space-y-0">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="px-4 py-4 border-b border-border/10">
+                  <div key={i} className="px-4 py-5">
                     <div className="flex gap-3">
                       <div className="w-10 h-10 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
                       <div className="flex-1 space-y-2">
@@ -842,32 +842,32 @@ export default function Discover() {
             )}
 
             {/* Moments Feed */}
-            <div className="space-y-0">
+            <div className="space-y-0 divide-y divide-border/10">
               {moments.map((post, index) => (
                 <motion.article
                   key={post.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(index * 0.05, 0.3) }}
-                  className="px-4 py-4 border-b border-border/10"
+                  className="px-4 py-5"
                 >
                   {/* Author row */}
-                  <div className="flex items-start gap-3">
-                    <Avatar className="w-10 h-10 shrink-0">
+                  <div className="flex items-start gap-3.5">
+                    <Avatar className="w-11 h-11 shrink-0">
                       {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
                       <AvatarFallback className="bg-secondary text-base">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-sm font-semibold font-display truncate">{post.author.name}</span>
+                          <span className="text-base font-semibold font-display truncate">{post.author.name}</span>
                           {post.author.isVerified && (
                             <Star size={12} className="text-neon-cyan fill-neon-cyan shrink-0" />
                           )}
-                          <span className="text-xs text-muted-foreground font-mono truncate">{post.author.handle}</span>
+                          <span className="text-sm text-muted-foreground font-mono truncate">{post.author.handle}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-muted-foreground/50">{post.timestamp}</span>
+                          <span className="text-sm text-muted-foreground/50">{post.timestamp}</span>
                           <div className="relative">
                             <button
                               onClick={(e) => { e.stopPropagation(); setOptionsMenuPostId(optionsMenuPostId === post.id ? null : post.id); }}
@@ -914,7 +914,7 @@ export default function Discover() {
 
                       {/* Content — clickable to open detail */}
                       <p
-                        className="text-sm text-foreground mt-2 leading-relaxed whitespace-pre-line cursor-pointer hover:opacity-90 transition-opacity"
+                        className="text-sm text-foreground mt-2.5 leading-relaxed whitespace-pre-line cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => setLocation(`/app/post/${post.id}`)}
                       >{post.content}</p>
 
@@ -928,16 +928,16 @@ export default function Discover() {
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
                               <BarChart3 size={12} className="text-white" />
                             </div>
-                            <span className="text-xs font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
+                            <span className="text-sm font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
                             <Sparkles size={10} className="text-[#a855f7]" />
-                            <span className="ml-auto text-xs text-[#00d4ff] flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="ml-auto text-sm text-[#00d4ff] flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                               查看完整报告 <ExternalLink size={9} />
                             </span>
                           </div>
                           {post.tags && post.tags.includes("投研报告") && (
                             <div className="flex items-center gap-2.5 flex-wrap">
                               {post.tags.filter(t => t !== "投研报告").map(tag => (
-                                <span key={tag} className="px-2.5 py-1 rounded text-xs font-medium bg-[#a855f7]/15 text-[#a855f7]">
+                                <span key={tag} className="px-3 py-1 rounded text-sm font-medium bg-[#a855f7]/15 text-[#a855f7]">
                                   {tag}
                                 </span>
                               ))}
@@ -985,20 +985,20 @@ export default function Discover() {
                       {post.tags && post.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2.5 mt-2">
                           {post.tags.map((tag) => (
-                            <span key={tag} className="text-[13px] text-neon-cyan/80 hover:text-neon-cyan cursor-pointer">{tag}</span>
+                            <span key={tag} className="text-sm text-neon-cyan/80 hover:text-neon-cyan cursor-pointer">{tag}</span>
                           ))}
                         </div>
                       )}
 
                       {/* Action buttons */}
-                      <div className="flex items-center gap-2 mt-3 -ml-2">
+                      <div className="flex items-center gap-1 mt-3 -ml-2">
                         {/* Comment button */}
                         <button
                           onClick={() => openCommentInput(post.id)}
                           className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all"
                         >
                           <MessageSquare size={15} />
-                          <span className="text-[13px]">{formatNum(post.comments)}</span>
+                          <span className="text-sm">{formatNum(post.comments)}</span>
                         </button>
                         {/* Repost button — opens repost/quote bottom sheet */}
                         <button
@@ -1006,7 +1006,7 @@ export default function Discover() {
                           className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
                         >
                           <Repeat2 size={15} />
-                          <span className="text-[13px]">{formatNum(post.reposts)}</span>
+                          <span className="text-sm">{formatNum(post.reposts)}</span>
                         </button>
                         {/* Like button with animation */}
                         <div className="relative">
@@ -1024,7 +1024,7 @@ export default function Discover() {
                             >
                               <Heart size={15} className={post.isLiked ? "fill-neon-red" : ""} />
                             </motion.div>
-                            <span className="text-[13px]">{formatNum(post.likes)}</span>
+                            <span className="text-sm">{formatNum(post.likes)}</span>
                           </button>
                           <LikeParticles show={likeAnimations[post.id] || false} />
                         </div>
@@ -1069,14 +1069,14 @@ export default function Discover() {
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-baseline gap-2.5">
-                                        <span className="text-xs font-semibold text-foreground">{comment.author.name}</span>
-                                        <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                                        <span className="text-sm font-semibold text-foreground">{comment.author.name}</span>
+                                        <span className="text-sm text-muted-foreground">{comment.timestamp}</span>
                                       </div>
-                                      <p className="text-xs text-foreground/90 mt-0.5 leading-relaxed">{comment.content}</p>
+                                      <p className="text-sm text-foreground/90 mt-1 leading-relaxed">{comment.content}</p>
                                       <div className="flex items-center gap-3 mt-2">
                                         <button
                                           onClick={() => toggleCommentLike(post.id, comment.id)}
-                                          className={`flex items-center gap-2 text-xs transition-colors ${
+                                          className={`flex items-center gap-2 text-sm transition-colors ${
                                             comment.isLiked ? "text-neon-red" : "text-muted-foreground hover:text-neon-red"
                                           }`}
                                         >
@@ -1085,7 +1085,7 @@ export default function Discover() {
                                         </button>
                                         <button
                                           onClick={() => { setCommentText(`@${comment.author.name} `); setCommentInputId(post.id); }}
-                                          className="text-xs text-muted-foreground hover:text-neon-cyan transition-colors"
+                                          className="text-sm text-muted-foreground hover:text-neon-cyan transition-colors"
                                         >
                                           {t("discover.reply") || "Reply"}
                                         </button>
@@ -1094,7 +1094,7 @@ export default function Discover() {
                                   </div>
                                 ))
                               ) : (
-                                <p className="text-xs text-muted-foreground text-center py-2">{t("discover.noComments") || "No comments yet. Be the first!"}</p>
+                                <p className="text-sm text-muted-foreground text-center py-3">{t("discover.noComments") || "No comments yet. Be the first!"}</p>
                               )}
 
                               {/* View more comments link */}
@@ -1130,7 +1130,7 @@ export default function Discover() {
                                   onChange={(e) => setCommentText(e.target.value)}
                                   onKeyDown={(e) => { if (e.key === "Enter") submitComment(post.id); }}
                                   placeholder={t("discover.writeComment") || "Write a comment..."}
-                                  className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
+                                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                                 />
                                 <button
                                   onClick={() => { setCommentText(commentText + "@"); }}
@@ -1177,16 +1177,16 @@ export default function Discover() {
                       />
                     ))}
                   </div>
-                  <span className="text-xs text-muted-foreground">{t("discover.loadingMore") || "Loading more posts..."}</span>
+                  <span className="text-sm text-muted-foreground">{t("discover.loadingMore") || "Loading more posts..."}</span>
                 </div>
               )}
               {!hasMore && moments.length > 5 && (
                 <div className="flex flex-col items-center gap-2 py-6">
                   <div className="w-12 h-px bg-border/40" />
-                  <span className="text-xs text-muted-foreground">{t("discover.noMorePosts") || "You've reached the end"}</span>
+                  <span className="text-sm text-muted-foreground">{t("discover.noMorePosts") || "You've reached the end"}</span>
                   <button
                     onClick={handleRefresh}
-                    className="text-xs text-neon-cyan hover:underline mt-2"
+                    className="text-sm text-neon-cyan hover:underline mt-2"
                   >
                     {t("discover.backToTop") || "Back to top"}
                   </button>
@@ -1204,7 +1204,7 @@ export default function Discover() {
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                     activeCategory === cat
                       ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                       : "bg-secondary/40 text-muted-foreground border border-border/20 hover:text-foreground"
@@ -1223,7 +1223,7 @@ export default function Discover() {
                   transition={{ delay: index * 0.04 }}
                   className="p-3.5 rounded-2xl bg-card/50 border border-border/20"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3.5">
                     <Avatar className={`w-12 h-12 shrink-0 ${community.isTokenGated ? "ring-2 ring-neon-purple/40" : ""}`}>
                       {community.avatar?.startsWith("http") && <AvatarImage src={community.avatar} alt={community.name} className="object-cover" />}
                       <AvatarFallback className="bg-secondary text-lg">{community.avatar?.startsWith("http") ? community.name?.slice(0,2).toUpperCase() : community.avatar}</AvatarFallback>
@@ -1232,10 +1232,10 @@ export default function Discover() {
                       <div className="flex items-center gap-2.5 mb-0.5">
                         <span className="text-sm font-semibold font-display truncate">{community.name}</span>
                         {community.isHot && (
-                          <span className="text-xs px-2 py-1 rounded bg-neon-red/15 text-neon-red font-medium">HOT</span>
+                          <span className="text-sm px-2 py-1 rounded bg-neon-red/15 text-neon-red font-medium">HOT</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-1">{community.description}</p>
+                      <p className="text-sm text-muted-foreground mb-2 line-clamp-1">{community.description}</p>
                       <div className="flex items-center gap-3">
                         <span className="text-[13px] text-muted-foreground flex items-center gap-2">
                           <Users size={10} />
@@ -1262,7 +1262,7 @@ export default function Discover() {
                         }
                       }}
                       disabled={joinGroupMutation.isPending}
-                      className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                         joinedCommunities.has(community.id)
                           ? "bg-secondary/60 text-muted-foreground border-border/30 hover:bg-secondary/80"
                           : "bg-neon-cyan/15 text-neon-cyan border-neon-cyan/20 hover:bg-neon-cyan/25"
@@ -1302,8 +1302,8 @@ export default function Discover() {
                       <Star size={12} className="text-neon-cyan fill-neon-cyan shrink-0" />
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{user.bio}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-sm text-muted-foreground truncate">{user.bio}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {formatNum(user.followers)} followers
                   </p>
                 </div>
@@ -1327,7 +1327,7 @@ export default function Discover() {
                       toast.success(followedUsers.has(user.id) ? (t("discover.unfollowed") || "Unfollowed") : (t("discover.followed") || "Followed!"));
                     }
                   }}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                     followedUsers.has(user.id)
                       ? "bg-secondary/60 text-muted-foreground border-border/30 hover:bg-secondary/80"
                       : "bg-neon-cyan/15 text-neon-cyan border-neon-cyan/20 hover:bg-neon-cyan/25"
@@ -1377,7 +1377,7 @@ export default function Discover() {
                   <Repeat2 size={20} className="text-neon-green" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Repost</p>
-                    <p className="text-xs text-muted-foreground">Share instantly to your timeline</p>
+                    <p className="text-sm text-muted-foreground">Share instantly to your timeline</p>
                   </div>
                 </button>
                 <button
@@ -1390,7 +1390,7 @@ export default function Discover() {
                   <Quote size={20} className="text-neon-cyan" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Quote Post</p>
-                    <p className="text-xs text-muted-foreground">Add your own commentary</p>
+                    <p className="text-sm text-muted-foreground">Add your own commentary</p>
                   </div>
                 </button>
                 <button
@@ -1439,7 +1439,7 @@ export default function Discover() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-foreground mb-2">登录后参与互动</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     使用 Manus 账号登录，发帖、点赞、评论，与社区共建 Web3 生态
                   </p>
                 </div>
@@ -1454,7 +1454,7 @@ export default function Discover() {
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/40 border border-border/20">
                     <span className="text-base">{item.icon}</span>
-                    <span className="text-xs text-foreground/80">{item.text}</span>
+                    <span className="text-sm text-foreground/80">{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -1466,7 +1466,7 @@ export default function Discover() {
               >
                 立即登录
               </button>
-              <p className="text-center text-xs text-muted-foreground pb-2">
+              <p className="text-center text-sm text-muted-foreground pb-2">
                 安全登录 · 无需密码 · 支持 Web3 钱包
               </p>
             </motion.div>
@@ -1501,7 +1501,7 @@ export default function Discover() {
                 <button
                   onClick={handlePublish}
                   disabled={!composeText.trim() || uploadingImages}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 ${
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
                     composeText.trim() && !uploadingImages
                       ? "bg-neon-cyan text-background hover:opacity-90"
                       : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
@@ -1566,7 +1566,7 @@ export default function Discover() {
                     </div>
                   )}
                 </div>
-                <span className={`text-xs font-mono ${composeText.length > 450 ? "text-neon-red" : "text-muted-foreground"}`}>
+                <span className={`text-sm font-mono ${composeText.length > 450 ? "text-neon-red" : "text-muted-foreground"}`}>
                   {composeText.length}/500
                 </span>
               </div>

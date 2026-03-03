@@ -78,7 +78,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
           <MessageCircle size={24} className="text-white" />
         </div>
         <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">正在验证登录状态...</p>
+        <p className="text-sm text-muted-foreground">正在验证登录状态...</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
         >
           立即登录 / 注册
         </a>
-        <p className="text-xs text-gray-600 text-center">登录后即可访问所有功能</p>
+        <p className="text-sm text-gray-600 text-center">登录后即可访问所有功能</p>
       </div>
     );
   }
@@ -128,7 +128,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Bottom Tab Navigation */}
       {!hideNav && (
         <nav className="glass border-t border-border/50 px-2 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+          <div className="flex items-center justify-around h-[62px] max-w-lg mx-auto">
             {tabs.map((tab) => {
               const isActive =
                 location === tab.path ||
@@ -139,7 +139,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
               return (
                 <Link key={tab.path} href={tab.path}>
                   <button
-                    className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors active:scale-90 transition-transform duration-100"
+                    className="relative flex flex-col items-center justify-center gap-1.5 w-16 h-[58px] rounded-xl transition-colors active:scale-90 transition-transform duration-100"
                     onMouseEnter={() => prefetchMap[tab.path]?.()}
                     onTouchStart={() => prefetchMap[tab.path]?.()}
                   >
@@ -154,7 +154,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
                     )}
                     <div className="relative">
                       <Icon
-                        size={22}
+                        size={23}
                         className={
                           isActive
                             ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
@@ -169,14 +169,14 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
                             boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
                           }}
                         >
-                          <span className="text-xs font-bold text-white leading-none">
+                          <span className="text-sm font-bold text-white leading-none">
                             {tab.badge > 99 ? "99+" : tab.badge}
                           </span>
                         </div>
                       )}
                     </div>
                     <span
-                      className={`text-xs font-medium ${
+                      className={`text-[11px] font-medium leading-none ${
                         isActive ? "text-neon-cyan" : "text-muted-foreground"
                       }`}
                     >

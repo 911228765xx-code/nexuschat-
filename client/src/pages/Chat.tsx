@@ -255,7 +255,7 @@ export default function Chat() {
           <div className="flex items-center gap-2">
             <Shield size={20} className="text-neon-cyan" />
             <h1 className="text-lg font-semibold font-display">{t("chat.title")}</h1>
-            <span className="text-xs font-mono text-neon-cyan bg-neon-cyan/10 px-2.5 py-1 rounded-full">
+            <span className="text-sm font-mono text-neon-cyan bg-neon-cyan/10 px-2.5 py-1 rounded-full">
               {t("chat.e2e")}
             </span>
           </div>
@@ -332,11 +332,11 @@ export default function Chat() {
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-muted-foreground">{t("chat.noConversations") || "No conversations yet"}</p>
-              <p className="text-xs text-muted-foreground/60 mt-2">{t("chat.startChat") || "Join a community below to get started"}</p>
+              <p className="text-sm text-muted-foreground/60 mt-2">{t("chat.startChat") || "Join a community below to get started"}</p>
             </div>
             {publicGroupsData && publicGroupsData.length > 0 && (
               <div className="w-full mt-2">
-                <p className="text-xs text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Active Communities</p>
+                <p className="text-sm text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Active Communities</p>
                 <div className="space-y-2">
                   {publicGroupsData.map((group) => (
                     <motion.div
@@ -359,7 +359,7 @@ export default function Chat() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{group.name}</p>
-                        <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
+                        <p className="text-sm text-muted-foreground">{group.memberCount} members</p>
                       </div>
                       <ChevronRight size={14} className="text-neon-purple/50 shrink-0" />
                     </motion.div>
@@ -372,7 +372,7 @@ export default function Chat() {
         {filtered.length > 0 && (
           <div className="px-4 py-2 flex items-center gap-2">
             <div className="h-px flex-1 bg-border/15" />
-            <span className="text-xs text-muted-foreground/40 font-mono">{filtered.length} {t("chat.conversations") || "conversations"}</span>
+            <span className="text-sm text-muted-foreground/40 font-mono">{filtered.length} {t("chat.conversations") || "conversations"}</span>
             <div className="h-px flex-1 bg-border/15" />
           </div>
         )}
@@ -385,7 +385,7 @@ export default function Chat() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className={`flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 active:bg-secondary/60 transition-colors cursor-pointer border-b border-border/10 ${isPinned ? "bg-neon-cyan/[0.03]" : ""}`}
+                className={`flex items-center gap-4 px-4 py-4 hover:bg-secondary/40 active:bg-secondary/60 transition-colors cursor-pointer border-b border-border/10 ${isPinned ? "bg-neon-cyan/[0.03]" : ""}`}
                 onMouseDown={(e) => handleTouchStart(conv.id, e)}
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
@@ -398,7 +398,7 @@ export default function Chat() {
               >
                 {/* Avatar */}
                 <div className="relative shrink-0">
-                  <Avatar className={`w-12 h-12 ${conv.isTokenGated ? "ring-2 ring-neon-purple/60" : ""}`}>
+                  <Avatar className={`w-13 h-13 ${conv.isTokenGated ? "ring-2 ring-neon-purple/60" : ""}`}>
                     {conv.avatar?.startsWith("http") && (
                       <AvatarImage src={conv.avatar} alt={conv.name} className="object-cover" />
                     )}
@@ -434,11 +434,11 @@ export default function Chat() {
                         <BellOff size={10} className="text-muted-foreground shrink-0" />
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                    <span className="text-sm text-muted-foreground shrink-0 ml-2">
                       {conv.time}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-sm text-muted-foreground truncate">
                     {conv.lastMessage}
                   </p>
                 </div>
@@ -446,7 +446,7 @@ export default function Chat() {
                 {/* Unread badge */}
                 {conv.unread > 0 && (
                   <div className={`shrink-0 min-w-5 h-5 px-2.5 rounded-full flex items-center justify-center ${conv.isMuted ? "bg-muted-foreground/30" : "bg-neon-cyan"}`}>
-                    <span className={`text-xs font-bold leading-none ${conv.isMuted ? "text-muted-foreground" : "text-background"}`}>
+                    <span className={`text-sm font-bold leading-none ${conv.isMuted ? "text-muted-foreground" : "text-background"}`}>
                       {conv.unread > 99 ? "99+" : conv.unread}
                     </span>
                   </div>
@@ -469,7 +469,7 @@ export default function Chat() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold font-display text-foreground">Create a Group</p>
-                  <p className="text-xs text-muted-foreground">Start a token-gated community</p>
+                  <p className="text-sm text-muted-foreground">Start a token-gated community</p>
                 </div>
                 <ChevronRight size={16} className="text-neon-cyan/60 shrink-0" />
               </motion.div>
@@ -477,7 +477,7 @@ export default function Chat() {
             {/* Discover Public Groups */}
             {publicGroupsData && publicGroupsData.length > 0 && (
               <div className="mt-2">
-                <p className="text-xs text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Discover Groups</p>
+                <p className="text-sm text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Discover Groups</p>
                 <div className="space-y-2">
                   {publicGroupsData.map((group) => (
                     <motion.div
@@ -504,7 +504,7 @@ export default function Chat() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{group.name}</p>
-                        <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
+                        <p className="text-sm text-muted-foreground">{group.memberCount} members</p>
                       </div>
                       <ChevronRight size={14} className="text-neon-purple/50 shrink-0" />
                     </motion.div>
@@ -515,7 +515,7 @@ export default function Chat() {
             {/* End marker */}
             <div className="flex items-center gap-3 py-2">
               <div className="h-px flex-1 bg-border/10" />
-              <span className="text-xs text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
+              <span className="text-sm text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
               <div className="h-px flex-1 bg-border/10" />
             </div>
           </div>
@@ -608,7 +608,7 @@ export default function Chat() {
                   <button
                     key={f}
                     onClick={() => setActiveFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                       activeFilter === f
                         ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30"
                         : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
@@ -622,7 +622,7 @@ export default function Chat() {
                   <button
                     key={f}
                     onClick={() => setActiveTimeFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
                       activeTimeFilter === f
                         ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/30"
                         : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
@@ -646,7 +646,7 @@ export default function Chat() {
 
               {!isSearching && searchResults.length > 0 && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-3 font-medium">
+                  <p className="text-sm text-muted-foreground mb-3 font-medium">
                     {searchResults.length} {t("chat.resultsFound")}
                   </p>
                   <div className="space-y-2">
@@ -675,14 +675,14 @@ export default function Chat() {
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium font-display">{result.chatName}</span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span className="text-sm font-medium font-display">{result.chatName}</span>
+                            <span className="text-sm text-muted-foreground flex items-center gap-2">
                               <Clock size={10} />
                               {result.time}
                             </span>
                           </div>
                           <p className="text-[13px] text-muted-foreground mb-0.5">{result.sender}:</p>
-                          <p className="text-xs leading-relaxed">
+                          <p className="text-sm leading-relaxed">
                             {highlightText(result.message, globalSearch)}
                           </p>
                         </div>
@@ -699,13 +699,13 @@ export default function Chat() {
                     <Search size={28} className="text-muted-foreground/50" />
                   </div>
                   <p className="text-sm text-muted-foreground">{t("chat.noResults")}</p>
-                  <p className="text-xs text-muted-foreground/60">{t("chat.tryDifferent")}</p>
+                  <p className="text-sm text-muted-foreground/60">{t("chat.tryDifferent")}</p>
                 </div>
               )}
 
               {!isSearching && globalSearch.trim().length < 2 && (
                 <div className="px-4 py-6">
-                  <p className="text-xs text-muted-foreground mb-4 font-medium">{t("chat.recentSearches")}</p>
+                  <p className="text-sm text-muted-foreground mb-4 font-medium">{t("chat.recentSearches")}</p>
                   <div className="space-y-2">
                     {["staking yield", "NFT roadmap", "SOL report", "whale accumulation"].map((term) => (
                       <button

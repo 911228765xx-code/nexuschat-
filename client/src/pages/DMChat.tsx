@@ -212,7 +212,7 @@ export default function DMChat() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate">{partnerName}</p>
-            <p className="text-xs text-neon-cyan font-mono flex items-center gap-2">
+            <p className="text-sm text-neon-cyan font-mono flex items-center gap-2">
               <Lock size={8} /> E2E 加密
             </p>
           </div>
@@ -227,7 +227,7 @@ export default function DMChat() {
             <button
               onClick={loadMoreMessages}
               disabled={isLoadingMore}
-              className="text-xs text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-2.5"
+              className="text-sm text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-2.5"
             >
               {isLoadingMore ? (
                 <>
@@ -247,7 +247,7 @@ export default function DMChat() {
               <Lock size={24} className="text-neon-cyan" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">开始加密对话</p>
-            <p className="text-xs text-muted-foreground/60">消息端对端加密，仅双方可见</p>
+            <p className="text-sm text-muted-foreground/60">消息端对端加密，仅双方可见</p>
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -276,7 +276,7 @@ export default function DMChat() {
                 >
                   {msg.content}
                 </div>
-                <span className="text-xs text-muted-foreground/50 px-2">
+                <span className="text-sm text-muted-foreground/50 px-2">
                   {new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                   {msg.id.startsWith("temp-") && " · 发送中..."}
                 </span>

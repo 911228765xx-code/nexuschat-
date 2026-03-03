@@ -183,7 +183,7 @@ export default function Notifications() {
             <h1 className="text-lg font-semibold font-display">{t("notifications.title")}</h1>
             {unreadCount > 0 && (
               <span className="min-w-5 h-5 px-2.5 rounded-full bg-neon-red flex items-center justify-center">
-                <span className="text-xs font-bold text-white">{unreadCount}</span>
+                <span className="text-sm font-bold text-white">{unreadCount}</span>
               </span>
             )}
           </div>
@@ -215,7 +215,7 @@ export default function Notifications() {
               <button
                 key={tab.key}
                 onClick={() => setActiveFilter(tab.key)}
-                className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   activeFilter === tab.key
                     ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                     : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
@@ -224,7 +224,7 @@ export default function Notifications() {
                 <Icon size={12} />
                 {t(tab.labelKey)}
                 {count > 0 && (
-                  <span className="min-w-4 h-4 px-2 rounded-full bg-neon-red/80 text-xs text-white font-bold flex items-center justify-center">
+                  <span className="min-w-4 h-4 px-2 rounded-full bg-neon-red/80 text-sm text-white font-bold flex items-center justify-center">
                     {count}
                   </span>
                 )}
@@ -280,20 +280,20 @@ export default function Notifications() {
                           <div className="w-2 h-2 rounded-full bg-neon-cyan shrink-0" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                      <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
                         {notification.message}
                       </p>
 
                       {/* Signal metadata */}
                       {notification.type === "signal" && (notification as any).data && (
                         <div className="flex items-center gap-2 mt-2.5">
-                          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-secondary/40">
+                          <span className="text-sm font-mono font-bold px-2.5 py-1 rounded bg-secondary/40">
                             {((notification as any).data.token) as string}
                           </span>
-                          <span className="text-xs font-mono text-neon-green">
+                          <span className="text-sm font-mono text-neon-green">
                             {((notification as any).data.change) as string}
                           </span>
-                          <span className="text-xs flex items-center gap-0.5 text-neon-purple">
+                          <span className="text-sm flex items-center gap-0.5 text-neon-purple">
                             <Sparkles size={8} />
                             {((notification as any).data.score) as string}
                           </span>
@@ -302,7 +302,7 @@ export default function Notifications() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-muted-foreground">{notification.time}</span>
+                      <span className="text-sm text-muted-foreground">{notification.time}</span>
                     </div>
                   </div>
 
@@ -347,7 +347,7 @@ export default function Notifications() {
               <div className="flex justify-center py-6">
                 <button
                   onClick={clearAll}
-                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs text-muted-foreground hover:text-neon-red hover:bg-neon-red/5 border border-border/20 transition-all"
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-neon-red hover:bg-neon-red/5 border border-border/20 transition-all"
                 >
                   <Trash2 size={13} />
                   {t("notifications.clearAll")}
@@ -383,7 +383,7 @@ export default function Notifications() {
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
               {/* Global controls */}
               <div className="space-y-3">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.globalSettings")}</h3>
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.globalSettings")}</h3>
 
                 {/* Quiet hours */}
                 <div className="flex items-center justify-between p-3.5 rounded-2xl bg-card/50 border border-border/20">
@@ -414,7 +414,7 @@ export default function Notifications() {
 
               {/* Category settings */}
               <div className="space-y-3">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.categorySettings")}</h3>
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.categorySettings")}</h3>
 
                 {pushSettingsUI.map((setting) => {
                   const Icon = setting.icon;
@@ -454,7 +454,7 @@ export default function Notifications() {
 
               {/* Sound & vibration */}
               <div className="space-y-3">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.soundVibration")}</h3>
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("notifications.soundVibration")}</h3>
 
                 <div className="flex items-center justify-between p-3.5 rounded-2xl bg-card/50 border border-border/20">
                   <div className="flex items-center gap-3">

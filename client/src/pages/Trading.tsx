@@ -603,7 +603,7 @@ export default function Trading() {
             { label: t("trading.active"), value: `${strategies.filter(s => s.status === "running").length}/${strategies.length}`, color: "text-foreground", bg: "from-secondary/40 to-transparent border-border/20" },
           ].map((card) => (
             <div key={card.label} className={`p-3 rounded-xl bg-gradient-to-br ${card.bg} border`}>
-              <p className="text-xs text-muted-foreground mb-0.5 truncate">{card.label}</p>
+              <p className="text-sm text-muted-foreground mb-0.5 truncate">{card.label}</p>
               <p className={`text-base font-bold font-mono ${card.color}`}>{card.value}</p>
             </div>
           ))}
@@ -635,7 +635,7 @@ export default function Trading() {
           <AnimatePresence mode="wait">
             {/* ═══ TAB: My Strategies ═══ */}
             {activeTab === "strategies" && (
-              <motion.div key="strategies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <motion.div key="strategies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 {strategies.map((strategy, index) => (
                   <motion.div
                     key={strategy.id}
@@ -645,15 +645,15 @@ export default function Trading() {
                     onClick={() => { setSelectedStrategy(strategy); setDetailTab("chart"); setModalType("strategy"); }}
                     className="p-4 rounded-2xl bg-card/50 border border-border/30 cursor-pointer hover:border-neon-green/30 active:scale-[0.99] transition-all"
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <span className="text-sm font-semibold font-display">{strategy.name}</span>
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-mono ${
+                        <span className={`text-sm px-2.5 py-1 rounded-full font-mono ${
                           strategy.status === "running" ? "bg-neon-green/10 text-neon-green" : "bg-muted text-muted-foreground"
                         }`}>
                           {strategy.status === "running" ? t("trading.running") : t("trading.paused")}
                         </span>
-                        <span className={`text-xs px-2.5 py-1 rounded-full border ${riskColor(strategy.riskLevel)}`}>
+                        <span className={`text-sm px-2.5 py-1 rounded-full border ${riskColor(strategy.riskLevel)}`}>
                           {strategy.riskLevel === "low" ? t("trading.lowRiskLabel") : strategy.riskLevel === "medium" ? t("trading.mediumRiskLabel") : t("trading.highRiskLabel")}
                         </span>
                       </div>
@@ -681,13 +681,13 @@ export default function Trading() {
                     </div>
 
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xs text-muted-foreground font-mono">{strategy.pair}</span>
-                      <span className="text-xs text-muted-foreground">via {strategy.signalSource}</span>
-                      <span className="text-xs text-muted-foreground">{strategy.amount}</span>
+                      <span className="text-sm text-muted-foreground font-mono">{strategy.pair}</span>
+                      <span className="text-sm text-muted-foreground">via {strategy.signalSource}</span>
+                      <span className="text-sm text-muted-foreground">{strategy.amount}</span>
                     </div>
 
                     {/* Mini profit chart */}
-                    <div className="h-[40px] mb-2">
+                    <div className="h-[48px] mb-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={strategy.profitHistory}>
                           <defs>
@@ -701,15 +701,15 @@ export default function Trading() {
                       </ResponsiveContainer>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: t("trading.profit"), value: `+$${strategy.totalProfit.toFixed(0)}`, color: "text-neon-green" },
                         { label: t("trading.winRate"), value: `${strategy.winRate}%`, color: "text-foreground" },
                         { label: t("trading.trades"), value: `${strategy.trades}`, color: "text-foreground" },
                         { label: t("trading.sortSharpe"), value: strategy.sharpeRatio.toFixed(2), color: strategy.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
                       ].map((m) => (
-                        <div key={m.label} className="p-3 rounded-lg bg-secondary/30 text-center">
-                          <p className="text-xs text-muted-foreground mb-0.5">{m.label}</p>
+                        <div key={m.label} className="px-3 py-3 rounded-lg bg-secondary/30 flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">{m.label}</p>
                           <p className={`text-sm font-mono font-semibold ${m.color}`}>{m.value}</p>
                         </div>
                       ))}
@@ -730,7 +730,7 @@ export default function Trading() {
 
             {/* ═══ TAB: Market ═══ */}
             {activeTab === "market" && (
-              <motion.div key="market" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <motion.div key="market" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 {/* Sort & Filter Bar */}
                 <div className="flex items-center justify-between">
                   <div className="flex gap-2.5 overflow-x-auto no-scrollbar">
@@ -738,7 +738,7 @@ export default function Trading() {
                       <button
                         key={sort}
                         onClick={() => setMarketSort(sort)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                        className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                           marketSort === sort ? "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20" : "bg-secondary/30 text-muted-foreground"
                         }`}
                       >
@@ -757,7 +757,7 @@ export default function Trading() {
                       <button
                         key={risk}
                         onClick={() => setRiskFilter(risk)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-colors ${
                           riskFilter === risk ? "bg-neon-purple/10 text-neon-purple border border-neon-purple/20" : "bg-secondary/30 text-muted-foreground"
                         }`}
                       >
@@ -768,7 +768,7 @@ export default function Trading() {
                 )}
 
                 {/* Compare hint */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground px-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground px-2">
                   <Scale size={12} />
                   <span>{t("trading.compareHint")}</span>
                 </div>
@@ -781,12 +781,12 @@ export default function Trading() {
                     return (
                       <div key={trader.id} className="flex flex-col items-center gap-2 flex-1">
                         <span className="text-lg">{trader.avatar}</span>
-                        <span className="text-xs font-medium truncate max-w-full">{trader.name}</span>
-                        <span className="text-xs font-mono text-neon-green">+{trader.totalReturn}%</span>
+                        <span className="text-sm font-medium truncate max-w-full">{trader.name}</span>
+                        <span className="text-sm font-mono text-neon-green">+{trader.totalReturn}%</span>
                         <div className={`w-full ${heights[i]} rounded-t-lg bg-gradient-to-t ${
                           i === 1 ? "from-neon-green/20 to-neon-green/5" : "from-secondary/40 to-secondary/10"
                         } flex items-end justify-center pb-1`}>
-                          <span className="text-xs font-bold text-muted-foreground">{positions[i]}</span>
+                          <span className="text-sm font-bold text-muted-foreground">{positions[i]}</span>
                         </div>
                       </div>
                     );
@@ -800,9 +800,9 @@ export default function Trading() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="p-3 rounded-2xl bg-card/50 border border-border/30 hover:border-neon-cyan/30 transition-all"
+                    className="p-4 rounded-2xl bg-card/50 border border-border/30 hover:border-neon-cyan/30 transition-all"
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2" onClick={() => { setSelectedTrader(trader); setModalType("trader"); }}>
                         {/* Compare checkbox */}
                         <button
@@ -813,24 +813,24 @@ export default function Trading() {
                         >
                           {compareList.includes(trader.id) && <Check size={12} className="text-white" />}
                         </button>
-                        <div className="w-9 h-9 rounded-full bg-secondary/60 flex items-center justify-center text-lg relative cursor-pointer">
+                        <div className="w-11 h-11 rounded-full bg-secondary/60 flex items-center justify-center text-xl relative cursor-pointer">
                           {trader.avatar}
-                          {trader.badge !== "none" && <span className="absolute -bottom-0.5 -right-0.5 text-xs">{badgeIcon(trader.badge)}</span>}
+                          {trader.badge !== "none" && <span className="absolute -bottom-0.5 -right-0.5 text-sm">{badgeIcon(trader.badge)}</span>}
                         </div>
                         <div className="cursor-pointer">
                           <div className="flex items-center gap-2.5">
-                            <span className="text-sm font-semibold">{trader.name}</span>
-                            <span className={`text-xs px-2.5 py-1 rounded-full border ${riskColor(trader.riskLevel)}`}>
+                            <span className="text-base font-semibold">{trader.name}</span>
+                            <span className={`text-sm px-2.5 py-1 rounded-full border ${riskColor(trader.riskLevel)}`}>
                               {trader.riskLevel}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate max-w-[180px]">{trader.description}</p>
+                          <p className="text-sm text-muted-foreground truncate max-w-[180px]">{trader.description}</p>
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
                         <button
                           onClick={() => toggleFollow(trader.id)}
-                          className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                             trader.isFollowing ? "bg-secondary text-muted-foreground" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20"
                           }`}
                         >
@@ -838,7 +838,7 @@ export default function Trading() {
                         </button>
                         <button
                           onClick={() => { setCopyTrader(trader); setModalType("copyConfig"); }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-neon-green/10 text-neon-green border border-neon-green/20"
+                          className="px-3 py-2 rounded-lg text-sm font-medium bg-neon-green/10 text-neon-green border border-neon-green/20"
                         >
                           {t("trading.copy")}
                         </button>
@@ -846,7 +846,7 @@ export default function Trading() {
                     </div>
 
                     {/* Mini chart */}
-                    <div className="h-[35px] mb-2">
+                    <div className="h-[48px] mb-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={trader.profitHistory}>
                           <defs>
@@ -860,15 +860,15 @@ export default function Trading() {
                       </ResponsiveContainer>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: t("trading.sortROI"), value: `+${trader.totalReturn}%`, color: "text-neon-green" },
                         { label: t("trading.sortWinRate"), value: `${trader.winRate}%`, color: "text-foreground" },
                         { label: t("trading.sortFollowers"), value: trader.followers > 1000 ? `${(trader.followers / 1000).toFixed(1)}K` : `${trader.followers}`, color: "text-foreground" },
                         { label: t("trading.sortSharpe"), value: trader.sharpeRatio.toFixed(2), color: trader.sharpeRatio >= 2 ? "text-neon-cyan" : "text-foreground" },
                       ].map((m) => (
-                        <div key={m.label} className="p-3 rounded-lg bg-secondary/30 text-center">
-                          <p className="text-xs text-muted-foreground mb-0.5">{m.label}</p>
+                        <div key={m.label} className="px-3 py-3 rounded-lg bg-secondary/30 flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">{m.label}</p>
                           <p className={`text-sm font-mono font-semibold ${m.color}`}>{m.value}</p>
                         </div>
                       ))}
@@ -880,22 +880,22 @@ export default function Trading() {
 
             {/* ═══ TAB: Open Positions ═══ */}
             {activeTab === "positions" && (
-              <motion.div key="positions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <motion.div key="positions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 {/* Position Summary */}
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium flex items-center gap-2.5"><Activity size={14} className="text-neon-cyan" /> {t("trading.livePositions")}</span>
-                    <span className="text-xs px-2 py-1 rounded-full bg-neon-green/10 text-neon-green font-mono">{displayPositions.length} {t("trading.openLabel")}</span>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium flex items-center gap-2.5"><Activity size={14} className="text-neon-cyan" /> {t("trading.livePositions")}</span>
+                    <span className="text-sm px-2.5 py-1 rounded-full bg-neon-green/10 text-neon-green font-mono">{displayPositions.length} {t("trading.openLabel")}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     {[
                       { label: t("trading.unrealizedPnl"), value: `${totalUnrealizedPnl >= 0 ? "+" : ""}$${totalUnrealizedPnl.toFixed(2)}`, color: totalUnrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red" },
                       { label: t("trading.long"), value: `${displayPositions.filter(p => p.side === "long").length}`, color: "text-neon-green" },
                       { label: t("trading.short"), value: `${displayPositions.filter(p => p.side === "short").length}`, color: "text-neon-red" },
                     ].map((item) => (
-                      <div key={item.label} className="text-center">
-                        <p className="text-xs text-muted-foreground">{item.label}</p>
-                        <p className={`text-sm font-mono font-bold ${item.color}`}>{item.value}</p>
+                      <div key={item.label} className="text-center py-2">
+                        <p className="text-sm text-muted-foreground mb-1">{item.label}</p>
+                        <p className={`text-base font-mono font-bold ${item.color}`}>{item.value}</p>
                       </div>
                     ))}
                   </div>
@@ -913,9 +913,9 @@ export default function Trading() {
                     transition={{ delay: index * 0.05 }}
                     className="p-3 rounded-2xl bg-card/50 border border-border/30"
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-1 rounded-full font-mono font-bold ${
+                        <span className={`text-sm px-2 py-1 rounded-full font-mono font-bold ${
                           pos.side === "long" ? "bg-neon-green/10 text-neon-green" : "bg-neon-red/10 text-neon-red"
                         }`}>
                           {pos.side.toUpperCase()} {pos.leverage}x
@@ -926,13 +926,13 @@ export default function Trading() {
                         <span className={`text-sm font-mono font-bold ${pos.unrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                           {pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}
                         </span>
-                        <span className={`text-xs font-mono ${pos.unrealizedPnlPercent >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                        <span className={`text-sm font-mono ${pos.unrealizedPnlPercent >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                           ({pos.unrealizedPnlPercent >= 0 ? "+" : ""}{pos.unrealizedPnlPercent.toFixed(2)}%)
                         </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mt-2">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">{t("trading.entry")}</span>
                         <span className="font-mono">${pos.entryPrice.toLocaleString()}</span>
@@ -952,26 +952,26 @@ export default function Trading() {
                     </div>
 
                     {/* SL/TP/Liq Info */}
-                    <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-border/20">
+                    <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-border/20">
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground">{t("trading.stopLossLabel")}</p>
-                        <p className="text-xs font-mono text-neon-red">{pos.stopLossPrice ? `$${pos.stopLossPrice.toLocaleString()}` : "—"}</p>
+                        <p className="text-sm text-muted-foreground">{t("trading.stopLossLabel")}</p>
+                        <p className="text-sm font-mono text-neon-red">{pos.stopLossPrice ? `$${pos.stopLossPrice.toLocaleString()}` : "—"}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground">{t("trading.takeProfitLabel")}</p>
-                        <p className="text-xs font-mono text-neon-green">{pos.takeProfitPrice ? `$${pos.takeProfitPrice.toLocaleString()}` : "—"}</p>
+                        <p className="text-sm text-muted-foreground">{t("trading.takeProfitLabel")}</p>
+                        <p className="text-sm font-mono text-neon-green">{pos.takeProfitPrice ? `$${pos.takeProfitPrice.toLocaleString()}` : "—"}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground">{t("trading.liquidation")}</p>
-                        <p className="text-xs font-mono text-yellow-400">{pos.liquidationPrice ? `$${pos.liquidationPrice.toLocaleString()}` : "—"}</p>
+                        <p className="text-sm text-muted-foreground">{t("trading.liquidation")}</p>
+                        <p className="text-sm font-mono text-yellow-400">{pos.liquidationPrice ? `$${pos.liquidationPrice.toLocaleString()}` : "—"}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/20">
-                      <span className="text-xs text-muted-foreground flex items-center gap-2"><Zap size={10} />{pos.strategy}</span>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/20">
+                      <span className="text-sm text-muted-foreground flex items-center gap-2"><Zap size={12} />{pos.strategy}</span>
                       <button
                         onClick={() => { setClosePosition(pos); setModalType("closePosition"); }}
-                        className="px-3 py-1 rounded-lg text-xs font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
                       >
                         {t("trading.closeBtn")}
                       </button>
@@ -980,15 +980,15 @@ export default function Trading() {
                 ))}
 
                 {/* ─── Open Position Form ─── */}
-                <div className="p-3 rounded-2xl bg-card/50 border border-neon-cyan/20">
-                  <h4 className="text-xs font-medium mb-3 flex items-center gap-2.5">
+                <div className="p-4 rounded-2xl bg-card/50 border border-neon-cyan/20">
+                  <h4 className="text-sm font-medium mb-4 flex items-center gap-2.5">
                     <Plus size={14} className="text-neon-cyan" /> {t("trading.openNewPosition")}
                   </h4>
                   {/* Side Toggle */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <button
                       onClick={() => setOpenForm(f => ({ ...f, side: "long" }))}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                      className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
                         openForm.side === "long"
                           ? "bg-neon-green/20 text-neon-green border border-neon-green/30"
                           : "bg-secondary/30 text-muted-foreground border border-border/20"
@@ -998,7 +998,7 @@ export default function Trading() {
                     </button>
                     <button
                       onClick={() => setOpenForm(f => ({ ...f, side: "short" }))}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                      className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
                         openForm.side === "short"
                           ? "bg-neon-red/20 text-neon-red border border-neon-red/30"
                           : "bg-secondary/30 text-muted-foreground border border-border/20"
@@ -1010,11 +1010,11 @@ export default function Trading() {
                   {/* Pair & Amount */}
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-2 block">{t("trading.pair")}</label>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t("trading.pair")}</label>
                       <select
                         value={openForm.pair}
                         onChange={(e) => setOpenForm(f => ({ ...f, pair: e.target.value }))}
-                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-sm px-2 font-mono"
                       >
                         {["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT", "LINK/USDT", "AVAX/USDT"].map(p => (
                           <option key={p} value={p}>{p}</option>
@@ -1022,19 +1022,19 @@ export default function Trading() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-2 block">{t("trading.amountUSDT")}</label>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t("trading.amountUSDT")}</label>
                       <input
                         type="number"
                         value={openForm.amount}
                         onChange={(e) => setOpenForm(f => ({ ...f, amount: e.target.value }))}
-                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-sm px-2 font-mono"
                         placeholder="100"
                       />
                     </div>
                   </div>
                   {/* Leverage */}
                   <div className="mb-2">
-                    <label className="text-xs text-muted-foreground mb-2 block">{t("trading.leverage")}: {openForm.leverage}x</label>
+                    <label className="text-sm text-muted-foreground mb-2 block">{t("trading.leverage")}: {openForm.leverage}x</label>
                     <input
                       type="range"
                       min={1}
@@ -1043,35 +1043,35 @@ export default function Trading() {
                       onChange={(e) => setOpenForm(f => ({ ...f, leverage: parseInt(e.target.value) }))}
                       className="w-full h-1.5 accent-neon-cyan"
                     />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
+                    <div className="flex justify-between text-sm text-muted-foreground mt-0.5">
                       <span>1x</span><span>10x</span><span>25x</span><span>50x</span>
                     </div>
                   </div>
                   {/* SL / TP */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-2 block">{t("trading.stopLossLabel")}</label>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t("trading.stopLossLabel")}</label>
                       <input
                         type="number"
                         value={openForm.stopLoss}
                         onChange={(e) => setOpenForm(f => ({ ...f, stopLoss: e.target.value }))}
-                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-sm px-2 font-mono"
                         placeholder="Optional"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-2 block">{t("trading.takeProfitLabel")}</label>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t("trading.takeProfitLabel")}</label>
                       <input
                         type="number"
                         value={openForm.takeProfit}
                         onChange={(e) => setOpenForm(f => ({ ...f, takeProfit: e.target.value }))}
-                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-xs px-2 font-mono"
+                        className="w-full h-8 rounded-lg bg-secondary/40 border border-border/30 text-sm px-2 font-mono"
                         placeholder="Optional"
                       />
                     </div>
                   </div>
                   {/* Current Price Info */}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground mb-3 px-2">
                     <span>{t("trading.entry")}</span>
                     <span className="font-mono font-semibold text-foreground">
                       ${(displayTicker.find(t => t.symbol === openForm.pair.split("/")[0])?.price ?? 0).toLocaleString()}
@@ -1096,8 +1096,8 @@ export default function Trading() {
                 </div>
 
                 {/* Margin Info */}
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2 flex items-center gap-2.5"><Wallet size={14} className="text-neon-purple" /> {t("trading.accountSummary")}</h4>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2.5"><Wallet size={14} className="text-neon-purple" /> {t("trading.accountSummary")}</h4>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
                     {[
                       { label: t("trading.balance"), value: "$2,450.00" },
@@ -1119,7 +1119,7 @@ export default function Trading() {
 
             {/* ═══ TAB: PnL Calendar ═══ */}
             {activeTab === "calendar" && (
-              <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <motion.div key="calendar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 {/* Month Navigation */}
                 <div className="flex items-center justify-between">
                   <button onClick={() => {
@@ -1153,8 +1153,8 @@ export default function Trading() {
                     ];
                   })().map((item) => (
                     <div key={item.label} className="p-2 rounded-xl bg-secondary/20 border border-border/20 text-center">
-                      <p className="text-xs text-muted-foreground">{item.label}</p>
-                      <p className={`text-xs font-mono font-bold ${item.color}`}>{item.value}</p>
+                      <p className="text-sm text-muted-foreground">{item.label}</p>
+                      <p className={`text-sm font-mono font-bold ${item.color}`}>{item.value}</p>
                     </div>
                   ))}
                 </div>
@@ -1164,7 +1164,7 @@ export default function Trading() {
                   {/* Day headers */}
                   <div className="grid grid-cols-7 gap-2 mb-2">
                     {[t("trading.sun"), t("trading.mon"), t("trading.tue"), t("trading.wed"), t("trading.thu"), t("trading.fri"), t("trading.sat")].map((d) => (
-                      <div key={d} className="text-center text-xs text-muted-foreground font-medium">{d}</div>
+                      <div key={d} className="text-center text-sm text-muted-foreground font-medium">{d}</div>
                     ))}
                   </div>
                   {/* Calendar cells - Feb 2026 starts on Sunday */}
@@ -1175,7 +1175,7 @@ export default function Trading() {
                         className={`aspect-square rounded-lg ${pnlColor(day.pnl)} flex flex-col items-center justify-center cursor-pointer hover:ring-1 hover:ring-neon-cyan/30 transition-all`}
                         title={`${day.date}: $${day.pnl.toFixed(1)} (${day.trades} trades)`}
                       >
-                        <span className="text-xs text-muted-foreground">{day.day}</span>
+                        <span className="text-sm text-muted-foreground">{day.day}</span>
                         {day.pnl !== 0 && (
                           <span className={`text-[13px] font-mono font-bold ${day.pnl > 0 ? "text-neon-green" : "text-neon-red"}`}>
                             {day.pnl > 0 ? "+" : ""}{day.pnl.toFixed(0)}
@@ -1187,7 +1187,7 @@ export default function Trading() {
                 </div>
 
                 {/* Legend */}
-                <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-neon-red/25" /> {t("trading.legendLoss")}</div>
                   <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-secondary/30" /> {t("trading.legendNoTrade")}</div>
                   <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-neon-green/12" /> {t("trading.legendSmallWin")}</div>
@@ -1195,8 +1195,8 @@ export default function Trading() {
                 </div>
 
                 {/* Daily PnL Bar Chart */}
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">{t("trading.dailyPnlDist")}</h4>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                  <h4 className="text-sm font-medium mb-2">{t("trading.dailyPnlDist")}</h4>
                   <div className="h-[120px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={pnlCalendar.filter(d => d.pnl !== 0)}>
@@ -1221,14 +1221,14 @@ export default function Trading() {
                 {/* Streak Info */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2.5 rounded-xl bg-neon-green/5 border border-neon-green/15">
-                    <p className="text-xs text-muted-foreground mb-0.5">{t("trading.bestWinStreak")}</p>
+                    <p className="text-sm text-muted-foreground mb-0.5">{t("trading.bestWinStreak")}</p>
                     <p className="text-sm font-mono font-bold text-neon-green">5 days</p>
-                    <p className="text-xs text-muted-foreground">Feb 14-20</p>
+                    <p className="text-sm text-muted-foreground">Feb 14-20</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-neon-red/5 border border-neon-red/15">
-                    <p className="text-xs text-muted-foreground mb-0.5">{t("trading.maxLossStreak")}</p>
+                    <p className="text-sm text-muted-foreground mb-0.5">{t("trading.maxLossStreak")}</p>
                     <p className="text-sm font-mono font-bold text-neon-red">2 days</p>
-                    <p className="text-xs text-muted-foreground">Feb 9-10</p>
+                    <p className="text-sm text-muted-foreground">Feb 9-10</p>
                   </div>
                 </div>
               </motion.div>
@@ -1239,7 +1239,7 @@ export default function Trading() {
               <motion.div key="logs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
                 {/* Daily Summary */}
                 <div className="p-3 rounded-2xl bg-secondary/20 border border-border/20 mb-3">
-                  <h4 className="text-xs font-medium mb-2">{t("trading.todaySummary")}</h4>
+                  <h4 className="text-sm font-medium mb-2">{t("trading.todaySummary")}</h4>
                   <div className="grid grid-cols-4 gap-2">
                     {[
                       { label: t("trading.trades"), value: "4", color: "text-foreground" },
@@ -1248,8 +1248,8 @@ export default function Trading() {
                       { label: t("trading.best"), value: "+$15.1", color: "text-neon-green" },
                     ].map((m) => (
                       <div key={m.label} className="text-center">
-                        <p className="text-xs text-muted-foreground">{m.label}</p>
-                        <p className={`text-xs font-mono font-semibold ${m.color}`}>{m.value}</p>
+                        <p className="text-sm text-muted-foreground">{m.label}</p>
+                        <p className={`text-sm font-mono font-semibold ${m.color}`}>{m.value}</p>
                       </div>
                     ))}
                   </div>
@@ -1261,14 +1261,14 @@ export default function Trading() {
                     <BarChart3 size={20} className="text-muted-foreground" />
                   </div>
                   <p className="text-sm text-muted-foreground">{t("trading.noTradeHistory")}</p>
-                  <p className="text-xs text-muted-foreground/60 mt-2">{t("trading.tradesWillAppear")}</p>
+                  <p className="text-sm text-muted-foreground/60 mt-2">{t("trading.tradesWillAppear")}</p>
                 </div>
               </motion.div>
             )}
 
             {/* ═══ TAB: Price Alerts ═══ */}
             {activeTab === "alerts" && (
-              <motion.div key="alerts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <motion.div key="alerts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 {/* Create Alert Form */}
                 <div className="p-4 rounded-2xl bg-card/50 border border-border/30">
                   <h4 className="text-sm font-semibold font-display mb-3 flex items-center gap-2">
@@ -1277,11 +1277,11 @@ export default function Trading() {
                   <div className="space-y-2.5">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs text-muted-foreground mb-2 block">{t("trading.token")}</label>
+                        <label className="text-sm text-muted-foreground mb-2 block">{t("trading.token")}</label>
                         <select
                           value={newAlert.symbol}
                           onChange={(e) => setNewAlert(prev => ({ ...prev, symbol: e.target.value }))}
-                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm font-mono focus:outline-none focus:border-neon-cyan/40"
                         >
                           {["BTC", "ETH", "BNB", "SOL", "ARB", "LINK", "AVAX", "CAKE"].map(s => (
                             <option key={s} value={s}>{s}</option>
@@ -1289,11 +1289,11 @@ export default function Trading() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs text-muted-foreground mb-2 block">{t("trading.direction")}</label>
+                        <label className="text-sm text-muted-foreground mb-2 block">{t("trading.direction")}</label>
                         <select
                           value={newAlert.direction}
                           onChange={(e) => setNewAlert(prev => ({ ...prev, direction: e.target.value as "above" | "below" }))}
-                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                          className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm font-mono focus:outline-none focus:border-neon-cyan/40"
                         >
                           <option value="above">{t("trading.priceAbove")}</option>
                           <option value="below">{t("trading.priceBelow")}</option>
@@ -1301,13 +1301,13 @@ export default function Trading() {
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-2 block">{t("trading.targetPriceUSD")}</label>
+                      <label className="text-sm text-muted-foreground mb-2 block">{t("trading.targetPriceUSD")}</label>
                       <input
                         type="number"
                         placeholder="e.g. 100000"
                         value={newAlert.targetPrice}
                         onChange={(e) => setNewAlert(prev => ({ ...prev, targetPrice: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/40"
+                        className="w-full h-9 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm font-mono focus:outline-none focus:border-neon-cyan/40"
                       />
                     </div>
                     <button
@@ -1327,7 +1327,7 @@ export default function Trading() {
                         });
                         setNewAlert(prev => ({ ...prev, targetPrice: "" }));
                       }}
-                      className="w-full h-9 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full h-9 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {createAlertMutation.isPending ? t("trading.creating") : `+ ${t("trading.createAlert")}`}
                     </button>
@@ -1337,13 +1337,13 @@ export default function Trading() {
                 {/* Alerts List */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-muted-foreground">{t("trading.activeAlerts")} ({realAlerts.length})</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground">{t("trading.activeAlerts")} ({realAlerts.length})</h4>
                   </div>
                   {realAlerts.length === 0 ? (
                     <div className="py-10 text-center">
                       <Bell size={32} className="mx-auto mb-3 text-muted-foreground/40" />
                       <p className="text-sm text-muted-foreground">{t("trading.noAlertsYet")}</p>
-                      <p className="text-xs text-muted-foreground/60 mt-2">{t("trading.setAlertHint")}</p>
+                      <p className="text-sm text-muted-foreground/60 mt-2">{t("trading.setAlertHint")}</p>
                     </div>
                   ) : (
                     realAlerts.map((alert) => (
@@ -1362,8 +1362,8 @@ export default function Trading() {
                               : <ArrowDownRight size={14} className="text-destructive" />}
                           </div>
                           <div>
-                            <p className="text-xs font-semibold font-mono">{alert.tokenSymbol}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm font-semibold font-mono">{alert.tokenSymbol}</p>
+                            <p className="text-sm text-muted-foreground">
                               {alert.condition === "above" ? t("trading.above") : t("trading.below")} ${parseFloat(alert.targetPrice).toLocaleString()}
                             </p>
                           </div>
@@ -1421,11 +1421,11 @@ export default function Trading() {
 
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
                 {detailTab === "chart" && (
-                  <div className="space-y-3">
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-medium">{t("trading.cumulativePnl")}</h4>
-                        <span className="text-xs font-mono text-neon-green">+${selectedStrategy.totalProfit.toFixed(1)}</span>
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium">{t("trading.cumulativePnl")}</h4>
+                        <span className="text-sm font-mono text-neon-green">+${selectedStrategy.totalProfit.toFixed(1)}</span>
                       </div>
                       <div className="h-[160px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -1445,8 +1445,8 @@ export default function Trading() {
                         </ResponsiveContainer>
                       </div>
                     </div>
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3">{t("trading.monthlyReturns")}</h4>
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-3">{t("trading.monthlyReturns")}</h4>
                       <div className="h-[120px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={selectedStrategy.profitHistory.map((d, i, arr) => ({ date: d.date, monthly: i === 0 ? d.profit : d.profit - arr[i - 1].profit }))}>
@@ -1463,9 +1463,9 @@ export default function Trading() {
                 )}
 
                 {detailTab === "stats" && (
-                  <div className="space-y-3">
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-2.5"><BarChart3 size={14} className="text-neon-cyan" /> {t("trading.performanceMetrics")}</h4>
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-4 flex items-center gap-2.5"><BarChart3 size={14} className="text-neon-cyan" /> {t("trading.performanceMetrics")}</h4>
                       <div className="space-y-2">
                         {[
                           { label: t("trading.sharpeRatio"), value: selectedStrategy.sharpeRatio.toFixed(2), color: selectedStrategy.sharpeRatio >= 2 ? "text-neon-green" : "text-yellow-400" },
@@ -1477,13 +1477,13 @@ export default function Trading() {
                         ].map((item) => (
                           <div key={item.label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
                             <span className="text-[13px] text-muted-foreground">{item.label}</span>
-                            <span className={`text-xs font-mono font-bold ${item.color}`}>{item.value}</span>
+                            <span className={`text-sm font-mono font-bold ${item.color}`}>{item.value}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-2">{t("trading.strategyRadar")}</h4>
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-2">{t("trading.strategyRadar")}</h4>
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={[
@@ -1505,9 +1505,9 @@ export default function Trading() {
                 )}
 
                 {detailTab === "risk" && (
-                  <div className="space-y-3">
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-2.5"><Shield size={14} className="text-neon-purple" /> {t("trading.riskProfile")}</h4>
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-4 flex items-center gap-2.5"><Shield size={14} className="text-neon-purple" /> {t("trading.riskProfile")}</h4>
                       <div className="flex items-center gap-3 mb-3">
                         <span className={`text-sm px-3 py-1 rounded-full border font-medium ${riskColor(selectedStrategy.riskLevel)}`}>
                           {selectedStrategy.riskLevel === "low" ? t("trading.lowRiskFull") : selectedStrategy.riskLevel === "medium" ? t("trading.mediumRiskFull") : t("trading.highRiskFull")}
@@ -1520,8 +1520,8 @@ export default function Trading() {
                         }`} />
                       </div>
                     </div>
-                    <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-3 flex items-center gap-2.5"><Settings size={14} /> {t("trading.riskControls")}</h4>
+                    <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-4 flex items-center gap-2.5"><Settings size={14} /> {t("trading.riskControls")}</h4>
                       <div className="space-y-2.5">
                         {[
                           { label: t("trading.stopLossLabel"), value: `${selectedStrategy.stopLoss}%`, icon: TrendingDown, color: "text-neon-red" },
@@ -1534,18 +1534,18 @@ export default function Trading() {
                             <div key={item.label} className="flex items-center justify-between p-2 rounded-xl bg-background/50 border border-border/10">
                               <div className="flex items-center gap-2">
                                 <Icon size={14} className={item.color} />
-                                <span className="text-xs">{item.label}</span>
+                                <span className="text-sm">{item.label}</span>
                               </div>
-                              <span className={`text-xs font-mono font-bold ${item.color}`}>{item.value}</span>
+                              <span className={`text-sm font-mono font-bold ${item.color}`}>{item.value}</span>
                             </div>
                           );
                         })}
                       </div>
                     </div>
                     <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/15">
-                      <div className="flex items-center gap-2 mb-2.5">
+                      <div className="flex items-center gap-2 mb-3">
                         <AlertTriangle size={14} className="text-destructive" />
-                        <span className="text-xs font-medium text-destructive">{t("trading.riskWarnings")}</span>
+                        <span className="text-sm font-medium text-destructive">{t("trading.riskWarnings")}</span>
                       </div>
                       <ul className="space-y-2 text-[13px] text-muted-foreground">
                         <li>• {t("trading.riskWarn1")}</li>
@@ -1565,14 +1565,14 @@ export default function Trading() {
                           {trade.side === "buy" ? <ArrowUpRight size={14} className="text-neon-green" /> : <ArrowDownRight size={14} className="text-destructive" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs font-mono font-medium">{trade.pair}</span>
-                          <p className="text-xs text-muted-foreground">{trade.amount} @ {trade.price} · {trade.date}</p>
+                          <span className="text-sm font-mono font-medium">{trade.pair}</span>
+                          <p className="text-sm text-muted-foreground">{trade.amount} @ {trade.price} · {trade.date}</p>
                         </div>
                         <div className="text-right">
-                          <p className={`text-xs font-mono font-semibold ${trade.profit >= 0 ? "text-neon-green" : "text-destructive"}`}>
+                          <p className={`text-sm font-mono font-semibold ${trade.profit >= 0 ? "text-neon-green" : "text-destructive"}`}>
                             {trade.profit >= 0 ? "+" : ""}${trade.profit.toFixed(1)}
                           </p>
-                          <p className="text-xs text-muted-foreground">{trade.time}</p>
+                          <p className="text-sm text-muted-foreground">{trade.time}</p>
                         </div>
                       </motion.div>
                     ))}
@@ -1606,15 +1606,15 @@ export default function Trading() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-t-3xl bg-card border-t border-border overflow-hidden max-h-[85vh] flex flex-col">
               <div className="px-4 py-3 border-b border-border/30 shrink-0">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center text-xl relative">
                       {selectedTrader.avatar}
-                      {selectedTrader.badge !== "none" && <span className="absolute -bottom-0.5 -right-0.5 text-xs">{badgeIcon(selectedTrader.badge)}</span>}
+                      {selectedTrader.badge !== "none" && <span className="absolute -bottom-0.5 -right-0.5 text-sm">{badgeIcon(selectedTrader.badge)}</span>}
                     </div>
                     <div>
                       <h3 className="font-bold font-display text-sm">{selectedTrader.name}</h3>
-                      <p className="text-xs text-muted-foreground">{selectedTrader.description}</p>
+                      <p className="text-sm text-muted-foreground">{selectedTrader.description}</p>
                     </div>
                   </div>
                   <button onClick={() => { setModalType("none"); setSelectedTrader(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
@@ -1627,15 +1627,15 @@ export default function Trading() {
                     { label: t("trading.sharpe") || "Sharpe", value: selectedTrader.sharpeRatio.toFixed(2), color: "text-neon-purple" },
                   ].map((m) => (
                     <div key={m.label} className="text-center p-2.5 rounded-xl bg-secondary/30">
-                      <p className="text-xs text-muted-foreground">{m.label}</p>
-                      <p className={`text-xs font-mono font-bold ${m.color}`}>{m.value}</p>
+                      <p className="text-sm text-muted-foreground">{m.label}</p>
+                      <p className={`text-sm font-mono font-bold ${m.color}`}>{m.value}</p>
                     </div>
                   ))}
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                      <h4 className="text-xs font-medium mb-2">{t("trading.eightWeekPerf")}</h4>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                      <h4 className="text-sm font-medium mb-2">{t("trading.eightWeekPerf")}</h4>
                   <div className="h-[140px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={selectedTrader.profitHistory}>
@@ -1655,8 +1655,8 @@ export default function Trading() {
                 </div>
 
                 {/* Weekly Returns */}
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">{t("trading.weeklyReturns")}</h4>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                  <h4 className="text-sm font-medium mb-2">{t("trading.weeklyReturns")}</h4>
                   <div className="flex gap-2 items-end h-[60px]">
                     {selectedTrader.weeklyReturns.map((ret, i) => (
                       <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
@@ -1773,28 +1773,28 @@ export default function Trading() {
                   </div>
                 </div>
                 {/* Risk Controls */}
-                <div className="p-3 rounded-xl bg-secondary/20 border border-border/20">
+                <div className="p-4 rounded-xl bg-secondary/20 border border-border/20">
                   <h4 className="text-[13px] font-medium mb-2 flex items-center gap-2.5"><Shield size={12} className="text-neon-purple" /> {t("trading.riskControls")}</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
                       <input type="number" value={newStrategy.stopLoss} onChange={(e) => setNewStrategy(p => ({ ...p, stopLoss: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
                       <input type="number" value={newStrategy.takeProfit} onChange={(e) => setNewStrategy(p => ({ ...p, takeProfit: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.maxPositionDollar")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.maxPositionDollar")}</label>
                       <input type="number" value={newStrategy.maxPosition} onChange={(e) => setNewStrategy(p => ({ ...p, maxPosition: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.dailyLossLimitDollar")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.dailyLossLimitDollar")}</label>
                       <input type="number" value={newStrategy.dailyLossLimit} onChange={(e) => setNewStrategy(p => ({ ...p, dailyLossLimit: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                   </div>
                 </div>
@@ -1824,7 +1824,7 @@ export default function Trading() {
                     <span className="text-xl">{copyTrader.avatar}</span>
                     <div>
                       <h3 className="font-bold font-display text-sm">{t("trading.copyTraderTitle").replace("{name}", copyTrader.name)}</h3>
-                      <p className="text-xs text-muted-foreground">{t("trading.copyTraderDesc")}</p>
+                      <p className="text-sm text-muted-foreground">{t("trading.copyTraderDesc")}</p>
                     </div>
                   </div>
                   <button onClick={() => { setModalType("none"); setCopyTrader(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
@@ -1840,16 +1840,16 @@ export default function Trading() {
                         copyConfig.mode === "fixed" ? "border-neon-green/30 bg-neon-green/5" : "border-border/20 bg-secondary/20"
                       }`}>
                       <CircleDollarSign size={16} className={copyConfig.mode === "fixed" ? "text-neon-green mb-2" : "text-muted-foreground mb-2"} />
-                      <p className="text-xs font-medium">{t("trading.fixedAmount")}</p>
-                      <p className="text-xs text-muted-foreground">{t("trading.fixedAmountDesc")}</p>
+                      <p className="text-sm font-medium">{t("trading.fixedAmount")}</p>
+                      <p className="text-sm text-muted-foreground">{t("trading.fixedAmountDesc")}</p>
                     </button>
                     <button onClick={() => setCopyConfig(p => ({ ...p, mode: "proportional" }))}
                       className={`p-3 rounded-xl border text-left transition-colors ${
                         copyConfig.mode === "proportional" ? "border-neon-cyan/30 bg-neon-cyan/5" : "border-border/20 bg-secondary/20"
                       }`}>
                       <Percent size={16} className={copyConfig.mode === "proportional" ? "text-neon-cyan mb-2" : "text-muted-foreground mb-2"} />
-                      <p className="text-xs font-medium">{t("trading.proportional")}</p>
-                      <p className="text-xs text-muted-foreground">{t("trading.proportionalDesc")}</p>
+                      <p className="text-sm font-medium">{t("trading.proportional")}</p>
+                      <p className="text-sm text-muted-foreground">{t("trading.proportionalDesc")}</p>
                     </button>
                   </div>
                 </div>
@@ -1868,28 +1868,28 @@ export default function Trading() {
                   </div>
                 )}
                 {/* Risk Settings */}
-                <div className="p-3 rounded-xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-[13px] font-medium mb-2 flex items-center gap-2.5"><Shield size={12} className="text-neon-purple" /> {t("trading.riskSettings")}</h4>
+                <div className="p-4 rounded-xl bg-secondary/20 border border-border/20">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2.5"><Shield size={14} className="text-neon-purple" /> {t("trading.riskSettings")}</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.stopLossPct")}</label>
                       <input type="number" value={copyConfig.stopLoss} onChange={(e) => setCopyConfig(p => ({ ...p, stopLoss: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.takeProfitPct")}</label>
                       <input type="number" value={copyConfig.takeProfit} onChange={(e) => setCopyConfig(p => ({ ...p, takeProfit: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.maxPerTrade")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.maxPerTrade")}</label>
                       <input type="number" value={copyConfig.maxPerTrade} onChange={(e) => setCopyConfig(p => ({ ...p, maxPerTrade: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground mb-0.5 block">{t("trading.maxSlippage")}</label>
+                      <label className="text-sm text-muted-foreground mb-0.5 block">{t("trading.maxSlippage")}</label>
                       <input type="number" value={copyConfig.slippage} onChange={(e) => setCopyConfig(p => ({ ...p, slippage: e.target.value }))}
-                        className="w-full h-9 px-3 rounded-lg bg-background/50 border border-border/20 text-xs focus:outline-none font-mono" />
+                        className="w-full h-10 px-3 rounded-lg bg-background/50 border border-border/20 text-sm focus:outline-none font-mono" />
                     </div>
                   </div>
                 </div>
@@ -1898,18 +1898,18 @@ export default function Trading() {
                   <label className="text-[13px] text-muted-foreground mb-2 block">{t("trading.dailyLossLimitDollar")}</label>
                   <input type="number" value={copyConfig.maxDailyLoss} onChange={(e) => setCopyConfig(p => ({ ...p, maxDailyLoss: e.target.value }))}
                     className="w-full h-10 px-3 rounded-xl bg-secondary/40 border border-border/30 text-sm focus:outline-none font-mono" />
-                  <p className="text-xs text-muted-foreground mt-2">{t("trading.autoPauseHint")}</p>
+                  <p className="text-sm text-muted-foreground mt-2">{t("trading.autoPauseHint")}</p>
                 </div>
                 {/* Trader Stats Summary */}
-                <div className="p-3 rounded-xl bg-neon-green/5 border border-neon-green/15">
-                  <div className="flex items-center gap-2 mb-2.5">
+                <div className="p-4 rounded-xl bg-neon-green/5 border border-neon-green/15">
+                  <div className="flex items-center gap-2 mb-3">
                     <Info size={12} className="text-neon-green" />
                     <span className="text-[13px] font-medium text-neon-green">{t("trading.traderPerformance")}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div><p className="text-xs text-muted-foreground">{t("trading.sortROI")}</p><p className="text-xs font-mono font-bold text-neon-green">+{copyTrader.totalReturn}%</p></div>
-                    <div><p className="text-xs text-muted-foreground">{t("trading.winRate")}</p><p className="text-xs font-mono font-bold">{copyTrader.winRate}%</p></div>
-                    <div><p className="text-xs text-muted-foreground">{t("trading.maxDrawdown")}</p><p className="text-xs font-mono font-bold text-neon-red">{copyTrader.maxDrawdown}%</p></div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div><p className="text-sm text-muted-foreground">{t("trading.sortROI")}</p><p className="text-sm font-mono font-bold text-neon-green">+{copyTrader.totalReturn}%</p></div>
+                    <div><p className="text-sm text-muted-foreground">{t("trading.winRate")}</p><p className="text-sm font-mono font-bold">{copyTrader.winRate}%</p></div>
+                    <div><p className="text-sm text-muted-foreground">{t("trading.maxDrawdown")}</p><p className="text-sm font-mono font-bold text-neon-red">{copyTrader.maxDrawdown}%</p></div>
                   </div>
                 </div>
               </div>
@@ -1938,22 +1938,22 @@ export default function Trading() {
               <p className="text-sm text-muted-foreground mb-4">
                 {t("trading.closePositionConfirm").replace("{pair}", closePosition.pair).replace("{side}", closePosition.side.toUpperCase())}
               </p>
-              <div className="p-3 rounded-xl bg-secondary/20 border border-border/20 mb-4 space-y-2.5">
-                <div className="flex justify-between text-xs">
+              <div className="p-4 rounded-xl bg-secondary/20 border border-border/20 mb-4 space-y-3">
+                <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{t("trading.entry")}</span>
                   <span className="font-mono">${closePosition.entryPrice.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{t("trading.current")}</span>
                   <span className="font-mono">${closePosition.currentPrice.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{t("trading.unrealizedPnl")}</span>
                   <span className={`font-mono font-bold ${closePosition.unrealizedPnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                     {closePosition.unrealizedPnl >= 0 ? "+" : ""}${closePosition.unrealizedPnl.toFixed(2)} ({closePosition.unrealizedPnlPercent >= 0 ? "+" : ""}{closePosition.unrealizedPnlPercent.toFixed(2)}%)
                   </span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{t("trading.leverage")}</span>
                   <span className="font-mono">{closePosition.leverage}x</span>
                 </div>
@@ -1991,8 +1991,8 @@ export default function Trading() {
                   {compareTraders.map(tr => (
                     <div key={tr.id} className="flex-1 text-center p-2 rounded-xl bg-secondary/20 border border-border/20">
                       <span className="text-xl block mb-2">{tr.avatar}</span>
-                      <span className="text-xs font-semibold block">{tr.name}</span>
-                      <span className={`text-xs px-2.5 py-1 rounded-full border ${riskColor(tr.riskLevel)}`}>{tr.riskLevel}</span>
+                      <span className="text-sm font-semibold block">{tr.name}</span>
+                      <span className={`text-sm px-2.5 py-1 rounded-full border ${riskColor(tr.riskLevel)}`}>{tr.riskLevel}</span>
                     </div>
                   ))}
                 </div>
@@ -2009,18 +2009,18 @@ export default function Trading() {
                     { label: t("trading.avgHoldTime"), values: compareTraders.map(tr => tr.avgHoldTime), colors: compareTraders.map(() => "text-foreground") },
                   ].map((row, i) => (
                     <div key={row.label} className={`flex items-center ${i % 2 === 0 ? "bg-secondary/10" : ""}`}>
-                      <div className="w-24 shrink-0 px-2 py-2 text-xs text-muted-foreground">{row.label}</div>
+                      <div className="w-24 shrink-0 px-2 py-2 text-sm text-muted-foreground">{row.label}</div>
                       {row.values.map((val, j) => (
                         <div key={j} className="flex-1 px-2 py-2 text-center">
-                          <span className={`text-xs font-mono font-semibold ${row.colors[j]}`}>{val}</span>
+                          <span className={`text-sm font-mono font-semibold ${row.colors[j]}`}>{val}</span>
                         </div>
                       ))}
                     </div>
                   ))}
                 </div>
                 {/* Radar Comparison */}
-                <div className="p-4 rounded-2xl bg-secondary/20 border border-border/20">
-                  <h4 className="text-xs font-medium mb-2">{t("trading.performanceRadar")}</h4>
+                <div className="p-5 rounded-2xl bg-secondary/20 border border-border/20">
+                  <h4 className="text-sm font-medium mb-3">{t("trading.performanceRadar")}</h4>
                   <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={[
@@ -2043,7 +2043,7 @@ export default function Trading() {
                   </div>
                   <div className="flex justify-center gap-4 mt-2">
                     {compareTraders.map((tr, i) => (
-                      <span key={tr.id} className="flex items-center gap-2 text-xs">
+                      <span key={tr.id} className="flex items-center gap-2 text-sm">
                         <span className="w-2 h-2 rounded-full" style={{ background: ["var(--neon-green)", "var(--neon-cyan)", "var(--neon-purple)"][i] }} />
                         {tr.name}
                       </span>
@@ -2073,7 +2073,7 @@ export default function Trading() {
                 <h3 className="font-bold font-display text-base flex items-center gap-2"><Bell size={18} className="text-neon-cyan" /> {t("trading.notifications")}</h3>
                 <button onClick={() => { setModalType("none"); setSelectedStrategy(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={16} className="text-muted-foreground" /></button>
               </div>
-              <p className="text-xs text-muted-foreground mb-3">{selectedStrategy.name}</p>
+              <p className="text-sm text-muted-foreground mb-3">{selectedStrategy.name}</p>
               <div className="space-y-2">
                 {[
                   { key: "onTrade" as const, label: t("trading.notifOnTrade"), desc: t("trading.notifOnTradeDesc") },
@@ -2081,10 +2081,10 @@ export default function Trading() {
                   { key: "onTakeProfit" as const, label: t("trading.notifOnTakeProfit"), desc: t("trading.notifOnTakeProfitDesc") },
                   { key: "dailySummary" as const, label: t("trading.notifDailySummary"), desc: t("trading.notifDailySummaryDesc") },
                 ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between p-3 rounded-xl bg-secondary/20 border border-border/20">
+                  <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-secondary/20 border border-border/20">
                     <div>
-                      <p className="text-xs font-medium">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-sm text-muted-foreground">{item.desc}</p>
                     </div>
                     <button
                       onClick={() => {

@@ -248,7 +248,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             <div className="p-2.5 rounded-xl bg-card border border-neon-cyan/20 [backdrop-filter:none]">
               <div className="flex items-center gap-2.5 mb-2.5">
                 <Eye size={10} className="text-neon-cyan" />
-                <span className="text-xs font-medium text-neon-cyan uppercase tracking-wider">{t("chat.markdownPreview") || "Preview"}</span>
+                <span className="text-sm font-medium text-neon-cyan uppercase tracking-wider">{t("chat.markdownPreview") || "Preview"}</span>
               </div>
               <div
                 className="text-sm text-foreground leading-relaxed break-words"
@@ -271,8 +271,8 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
           >
             <div className="flex items-center gap-2.5 px-3 py-2 border-b border-border/20">
               <DollarSign size={12} className="text-neon-cyan" />
-              <span className="text-xs text-muted-foreground font-medium">{t("chat.tokenInsert") || "Insert token price"}</span>
-              <span className="text-xs text-muted-foreground/60 ml-auto">Tab ↹</span>
+              <span className="text-sm text-muted-foreground font-medium">{t("chat.tokenInsert") || "Insert token price"}</span>
+              <span className="text-sm text-muted-foreground/60 ml-auto">Tab ↹</span>
             </div>
             {filteredTokens.map(([symbol, data]) => {
               const TrendIcon = data.trend === "up" ? TrendingUp : data.trend === "down" ? TrendingDown : Minus;
@@ -283,13 +283,13 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                   onClick={() => insertTokenPrice(symbol)}
                   className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 transition-colors"
                 >
-                  <span className="w-7 h-7 rounded-lg bg-secondary/50 flex items-center justify-center text-xs font-bold font-mono">
+                  <span className="w-7 h-7 rounded-lg bg-secondary/50 flex items-center justify-center text-sm font-bold font-mono">
                     {symbol.slice(0, 2)}
                   </span>
                   <div className="flex-1 text-left">
                     <span className="text-sm font-medium font-mono">${symbol}</span>
                   </div>
-                  <span className="text-xs font-mono text-foreground">{data.price}</span>
+                  <span className="text-sm font-mono text-foreground">{data.price}</span>
                   <span className={`flex items-center gap-0.5 text-[13px] font-mono ${trendColor}`}>
                     <TrendIcon size={10} />
                     {data.change}
@@ -314,7 +314,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             <div className="flex items-center border-b border-border/20">
               <button
                 onClick={() => setActiveStickerTab("sticker")}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-sm font-medium transition-colors ${
                   activeStickerTab === "sticker" ? "text-neon-cyan border-b-2 border-neon-cyan" : "text-muted-foreground"
                 }`}
               >
@@ -323,7 +323,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
               </button>
               <button
                 onClick={() => setActiveStickerTab("gif")}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-sm font-medium transition-colors ${
                   activeStickerTab === "gif" ? "text-neon-purple border-b-2 border-neon-purple" : "text-muted-foreground"
                 }`}
               >
@@ -346,7 +346,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                     <button
                       key={pack.name}
                       onClick={() => setActiveStickerPack(i)}
-                      className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                      className={`px-2 py-1 rounded-md text-sm font-medium transition-colors ${
                         activeStickerPack === i
                           ? "bg-neon-cyan/15 text-neon-cyan"
                           : "text-muted-foreground hover:bg-secondary/40"
@@ -380,7 +380,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                     <input
                       type="text"
                       placeholder={t("chat.searchGif") || "Search GIFs..."}
-                      className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground/60"
+                      className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
                     />
                   </div>
                 </div>
@@ -388,7 +388,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
                   {GIF_CATEGORIES.map((cat) => (
                     <div key={cat.name}>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">{cat.name}</p>
+                      <p className="text-sm font-medium text-muted-foreground mb-2 px-2">{cat.name}</p>
                       <div className="grid grid-cols-2 gap-2.5">
                         {cat.gifs.map((gif, i) => (
                           <button
@@ -400,7 +400,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                             }}
                             className="aspect-video rounded-lg bg-secondary/40 border border-border/20 overflow-hidden hover:border-neon-purple/40 transition-colors flex items-center justify-center"
                           >
-                            <span className="text-xs text-muted-foreground">GIF</span>
+                            <span className="text-sm text-muted-foreground">GIF</span>
                           </button>
                         ))}
                       </div>
@@ -451,7 +451,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
           {/* $TOKEN hint */}
           {value.endsWith("$") && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <span className="text-xs text-muted-foreground/50 font-mono animate-pulse">{t("chat.typeToken") || "Type token..."}</span>
+              <span className="text-sm text-muted-foreground/50 font-mono animate-pulse">{t("chat.typeToken") || "Type token..."}</span>
             </div>
           )}
         </div>

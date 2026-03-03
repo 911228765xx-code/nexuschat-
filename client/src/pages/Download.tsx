@@ -62,7 +62,7 @@ export default function DownloadPage() {
           <Button
             onClick={() => setLocation("/app/chat")}
             size="sm"
-            className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-xs h-8 px-3"
+            className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-8 px-3"
             variant="outline"
           >
             进入 Web 版
@@ -73,7 +73,7 @@ export default function DownloadPage() {
       {/* Hero */}
       <section className="pt-28 pb-12 px-4 text-center">
         <motion.div {...fadeUp}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
             <QrCode size={12} />
             扫码或点击下载
           </div>
@@ -131,7 +131,7 @@ export default function DownloadPage() {
           >
             {/* QR Code Card */}
             <div className="rounded-2xl border border-[#00d4ff]/20 bg-gradient-to-br from-[#00d4ff]/10 to-transparent p-6 flex flex-col items-center gap-4">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">扫码下载 Android APK</p>
+              <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">扫码下载 Android APK</p>
               <div className="rounded-xl overflow-hidden border border-[#00d4ff]/20 p-2 bg-[#0d1117]">
                 <img
                   src={QR_ANDROID}
@@ -140,7 +140,7 @@ export default function DownloadPage() {
                   loading="lazy"
                 />
               </div>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 使用手机扫描二维码<br />直接下载 APK 安装包
               </p>
               <Button
@@ -158,7 +158,7 @@ export default function DownloadPage() {
                 <Download size={15} className="mr-2" />
                 下载 Android APK（2.4 MB）
               </Button>
-              <p className="text-xs text-muted-foreground/60 text-center">
+              <p className="text-sm text-muted-foreground/60 text-center">
                 版本 v1.0.0 · 需要 Android 5.0+
               </p>
             </div>
@@ -170,7 +170,7 @@ export default function DownloadPage() {
                 {androidSteps.map((step, i) => (
                   <div key={i} className="flex gap-3 items-start">
                     <div className="w-6 h-6 rounded-full bg-[#00d4ff]/15 border border-[#00d4ff]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[#00d4ff] text-xs font-bold">{i + 1}</span>
+                      <span className="text-[#00d4ff] text-sm font-bold">{i + 1}</span>
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">{step}</p>
                   </div>
@@ -179,7 +179,7 @@ export default function DownloadPage() {
 
               {/* Note */}
               <div className="mt-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400/80 leading-relaxed">
+                <p className="text-sm text-amber-400/80 leading-relaxed">
                   <strong className="text-amber-400">安全提示：</strong>
                   安装完成后建议在设置中关闭「允许安装未知来源应用」以保护设备安全。NexusChat APK 为官方发布版本，不含任何恶意代码。
                 </p>
@@ -187,12 +187,12 @@ export default function DownloadPage() {
 
               {/* Web fallback */}
               <div className="pt-2">
-                <p className="text-xs text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
+                <p className="text-sm text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
                 <Button
                   onClick={() => setLocation("/app/chat")}
                   variant="outline"
                   size="sm"
-                  className="border-border/30 text-muted-foreground hover:text-foreground text-xs h-8 bg-transparent"
+                  className="border-border/30 text-muted-foreground hover:text-foreground text-sm h-8 bg-transparent"
                 >
                   <ExternalLink size={12} className="mr-1.5" />
                   打开 Web 版
@@ -213,7 +213,7 @@ export default function DownloadPage() {
           >
             {/* QR Code Card */}
             <div className="rounded-2xl border border-[#a855f7]/20 bg-gradient-to-br from-[#a855f7]/10 to-transparent p-6 flex flex-col items-center gap-4">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Safari 扫码打开</p>
+              <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Safari 扫码打开</p>
               <div className="rounded-xl overflow-hidden border border-[#a855f7]/20 p-2 bg-[#0d1117]">
                 <img
                   src={QR_IOS}
@@ -222,7 +222,7 @@ export default function DownloadPage() {
                   loading="lazy"
                 />
               </div>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 使用 iPhone Safari 扫描二维码<br />然后按步骤添加到主屏幕
               </p>
               <Button
@@ -233,7 +233,7 @@ export default function DownloadPage() {
                 <ExternalLink size={15} className="mr-2" />
                 在 Safari 中打开
               </Button>
-              <p className="text-xs text-muted-foreground/60 text-center">
+              <p className="text-sm text-muted-foreground/60 text-center">
                 需要 iOS 14.0+ · 使用 Safari 浏览器
               </p>
             </div>
@@ -245,7 +245,7 @@ export default function DownloadPage() {
                 {iosSteps.map((step, i) => (
                   <div key={i} className="flex gap-3 items-start">
                     <div className="w-6 h-6 rounded-full bg-[#a855f7]/15 border border-[#a855f7]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[#a855f7] text-xs font-bold">{i + 1}</span>
+                      <span className="text-[#a855f7] text-sm font-bold">{i + 1}</span>
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">{step}</p>
                   </div>
@@ -261,14 +261,14 @@ export default function DownloadPage() {
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2">
                     <CheckCircle size={14} className="text-[#a855f7] flex-shrink-0" />
-                    <p className="text-xs text-muted-foreground">{item}</p>
+                    <p className="text-sm text-muted-foreground">{item}</p>
                   </div>
                 ))}
               </div>
 
               {/* Note */}
               <div className="mt-4 p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                <p className="text-xs text-blue-400/80 leading-relaxed">
+                <p className="text-sm text-blue-400/80 leading-relaxed">
                   <strong className="text-blue-400">注意：</strong>
                   iOS 的「添加到主屏幕」功能仅在 <strong>Safari</strong> 浏览器中可用，Chrome 或其他浏览器不支持此操作。
                 </p>

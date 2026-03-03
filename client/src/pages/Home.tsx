@@ -161,7 +161,7 @@ export default function Home() {
           <div className="flex sm:hidden items-center gap-2">
             <Button
               onClick={() => setLocation("/app/chat")}
-              className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-xs h-8 px-3"
+              className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-8 px-3"
               variant="outline"
             >
               {t("nav.enterApp")}
@@ -214,7 +214,7 @@ export default function Home() {
         </div>
         <div className="relative z-10 max-w-3xl mx-auto text-center">
           <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-6">
+            <span className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
               <Sparkles size={12} />
               {t("home.badge")}
             </span>
@@ -276,7 +276,7 @@ export default function Home() {
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="text-2xl font-bold font-display text-gradient">{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-2">{stat.label}</p>
+                <p className="text-sm text-muted-foreground mt-2">{stat.label}</p>
               </div>
             ))}
           </motion.div>
@@ -433,7 +433,7 @@ export default function Home() {
             </div>
             <span className="text-sm font-display font-semibold">NexusChat</span>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("footer.text")}
           </p>
         </div>
@@ -462,7 +462,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="font-bold text-white">{t('pwa.installTitle')}</p>
-                <p className="text-xs text-muted-foreground">{t('pwa.installSubtitle')}</p>
+                <p className="text-sm text-muted-foreground">{t('pwa.installSubtitle')}</p>
               </div>
             </div>
 
@@ -470,15 +470,15 @@ export default function Home() {
               /* iOS Safari steps */
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</span>
+                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-sm">⬆ {t('pwa.iosStep1b')}</span></p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</span>
                   <p className="text-gray-300">{t('pwa.iosStep2')} <span className="text-white font-medium">{t('pwa.iosStep2b')}</span></p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</span>
                   <p className="text-gray-300">{t('pwa.iosStep3')}</p>
                 </div>
               </div>
@@ -486,15 +486,15 @@ export default function Home() {
               /* Android / Desktop: show browser menu tip */
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</span>
                   <p className="text-gray-300">Open <span className="text-white font-medium">nexuschat.best</span> in Chrome browser</p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-xs">⋮ menu</span> in the top-right corner</p>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</span>
+                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-sm">⋮ menu</span> in the top-right corner</p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</span>
                   <p className="text-gray-300">Tap <span className="text-white font-medium">“Add to Home screen”</span> or <span className="text-white font-medium">“Install app”</span></p>
                 </div>
               </div>

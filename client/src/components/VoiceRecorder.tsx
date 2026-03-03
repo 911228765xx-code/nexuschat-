@@ -225,7 +225,7 @@ export default function VoiceRecorder({ onVoiceMessage, disabled }: VoiceRecorde
 
   if (state === "uploading") {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 text-[#00d4ff] text-xs">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 text-[#00d4ff] text-sm">
         <Loader2 size={13} className="animate-spin" />
         <span>发送中...</span>
       </div>
@@ -245,7 +245,7 @@ export default function VoiceRecorder({ onVoiceMessage, disabled }: VoiceRecorde
             />
           ))}
         </div>
-        <span className={`text-xs font-mono flex-shrink-0 w-10 text-right ${isCancelling ? "text-red-400" : isWarning ? "text-amber-400" : "text-[#00d4ff]"}`}>
+        <span className={`text-sm font-mono flex-shrink-0 w-10 text-right ${isCancelling ? "text-red-400" : isWarning ? "text-amber-400" : "text-[#00d4ff]"}`}>
           {isCancelling ? "取消" : formatDuration(duration)}
         </span>
 

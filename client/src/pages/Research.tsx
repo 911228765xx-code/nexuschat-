@@ -144,7 +144,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   const formatted = val < 0.01 ? `$${val.toFixed(8)}` : val < 1 ? `$${val.toFixed(4)}` : `$${val.toLocaleString()}`;
   return (
     <div className="px-2.5 py-1.5 rounded-lg bg-card border border-border/40 shadow-lg">
-      <p className="text-xs font-mono text-neon-cyan font-semibold">{formatted}</p>
+      <p className="text-sm font-mono text-neon-cyan font-semibold">{formatted}</p>
     </div>
   );
 }
@@ -153,7 +153,7 @@ function VolumeTooltip({ active, payload }: { active?: boolean; payload?: Array<
   if (!active || !payload?.length) return null;
   return (
     <div className="px-2.5 py-1.5 rounded-lg bg-card border border-border/40 shadow-lg">
-      <p className="text-xs font-mono text-neon-purple font-semibold">${payload[0].value}B</p>
+      <p className="text-sm font-mono text-neon-purple font-semibold">${payload[0].value}B</p>
     </div>
   );
 }
@@ -161,8 +161,8 @@ function VolumeTooltip({ active, payload }: { active?: boolean; payload?: Array<
 function SentimentBar({ score, label }: { score: number; label: string }) {
   const color = score >= 70 ? "bg-neon-green" : score >= 40 ? "bg-yellow-500" : "bg-neon-red";
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-xs">
+    <div className="space-y-3">
+      <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-mono font-semibold">{score}</span>
       </div>
@@ -187,7 +187,7 @@ function RiskBadge({ level, t }: { level: "low" | "medium" | "high"; t: (k: stri
   const c = config[level];
   const Icon = c.icon;
   return (
-    <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium ${c.bg} ${c.text} border ${c.border}`}>
+    <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-md text-sm font-medium ${c.bg} ${c.text} border ${c.border}`}>
       <Icon size={10} />
       {c.label}
     </span>
@@ -198,7 +198,7 @@ function ChangeIndicator({ value, size = "sm" }: { value: number; size?: "sm" | 
   const isPositive = value > 0;
   const isZero = value === 0;
   const textSize = size === "sm" ? "text-xs" : "text-xs";
-  if (isZero) return <span className={`${textSize} font-mono text-muted-foreground flex items-center gap-0.5`}><Minus size={10} />0%</span>;
+  if (isZero) return <span className={`${textSize} font-mono text-muted-foreground flex items-center gap-0.5`}><Minus size={12} />0%</span>;
   return (
     <span className={`${textSize} font-mono flex items-center gap-0.5 ${isPositive ? "text-neon-green" : "text-neon-red"}`}>
       {isPositive ? <ArrowUpRight size={size === "sm" ? 12 : 10} /> : <ArrowDownRight size={size === "sm" ? 12 : 10} />}
@@ -509,7 +509,7 @@ export default function Research() {
           <button
             onClick={() => handleSearch()}
             disabled={isSearching}
-            className="absolute right-1.5 top-[20px] -translate-y-1/2 px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-xs font-medium hover:bg-neon-purple/30 transition-colors disabled:opacity-50"
+            className="absolute right-1.5 top-[20px] -translate-y-1/2 px-3 py-1.5 rounded-lg bg-neon-purple/20 text-neon-purple text-sm font-medium hover:bg-neon-purple/30 transition-colors disabled:opacity-50"
           >
             {isSearching ? <RefreshCw size={14} className="animate-spin" /> : t("research.analyze")}
           </button>
@@ -520,7 +520,7 @@ export default function Research() {
           <div className="pb-3">
             <button
               onClick={() => setShowHistory(prev => !prev)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#a855f7]/10 border border-[#a855f7]/20 text-xs text-[#a855f7] hover:bg-[#a855f7]/15 transition-all"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#a855f7]/10 border border-[#a855f7]/20 text-sm text-[#a855f7] hover:bg-[#a855f7]/15 transition-all"
             >
               <span className="flex items-center gap-2.5">
                 <Sparkles size={13} />
@@ -542,16 +542,16 @@ export default function Research() {
                     className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/30 border border-border/15 hover:border-[#a855f7]/30 transition-all text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-[#a855f7]">{report.tokenSymbol}</span>
+                      <span className="text-sm font-mono font-bold text-[#a855f7]">{report.tokenSymbol}</span>
                       {report.sentiment && (
-                        <span className={`text-xs px-2.5 py-1 rounded-full ${
+                        <span className={`text-sm px-2.5 py-1 rounded-full ${
                           report.sentiment === 'bullish' ? 'bg-neon-green/15 text-neon-green' :
                           report.sentiment === 'bearish' ? 'bg-neon-red/15 text-neon-red' :
                           'bg-muted/30 text-muted-foreground'
                         }`}>{report.sentiment}</span>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {new Date(report.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                     </span>
                   </button>
@@ -568,7 +568,7 @@ export default function Research() {
               <button
                 key={token}
                 onClick={() => { setSearchQuery(token); handleSearch(token); }}
-                className="shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-secondary/40 text-xs font-mono border border-border/20 hover:border-neon-cyan/30 transition-all group"
+                className="shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-secondary/40 text-sm font-mono border border-border/20 hover:border-neon-cyan/30 transition-all group"
               >
                 <span className="text-muted-foreground group-hover:text-neon-cyan transition-colors">{token}</span>
               </button>
@@ -589,7 +589,7 @@ export default function Research() {
             <div className="px-4 py-4 space-y-4">
               {/* Category Filter */}
               <div>
-                <p className="text-xs text-muted-foreground mb-2.5 font-mono">{t("research.filterCategory")}</p>
+                <p className="text-sm text-muted-foreground mb-2.5 font-mono">{t("research.filterCategory")}</p>
                 <div className="flex gap-2.5 flex-wrap">
                   {CATEGORIES.map((cat) => (
                     <button
@@ -609,7 +609,7 @@ export default function Research() {
 
               {/* Sort */}
               <div>
-                <p className="text-xs text-muted-foreground mb-2.5 font-mono">{t("research.sortBy")}</p>
+                <p className="text-sm text-muted-foreground mb-2.5 font-mono">{t("research.sortBy")}</p>
                 <div className="flex gap-2.5 flex-wrap">
                   {([
                     { key: "aiScore" as SortBy, label: t("research.aiScore") },
@@ -661,11 +661,11 @@ export default function Research() {
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
         {/* Bullish */}
-        <div className="shrink-0 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
+        <div className="shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
           <TrendingUp size={11} className="text-neon-green" />
           <div className="flex flex-col leading-none">
             <span className="text-[13px] text-muted-foreground uppercase tracking-wider font-medium">{t("research.bullish")}</span>
-            <span className="text-[12px] font-mono font-bold text-neon-green leading-tight">{marketStats.bullish}<span className="text-xs text-muted-foreground">/{marketStats.total}</span></span>
+            <span className="text-[12px] font-mono font-bold text-neon-green leading-tight">{marketStats.bullish}<span className="text-sm text-muted-foreground">/{marketStats.total}</span></span>
           </div>
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
@@ -682,32 +682,32 @@ export default function Research() {
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
         {/* BTC Dominance */}
-        <div className="shrink-0 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 hover:border-amber-500/40 transition-colors">
+        <div className="shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/25 hover:border-amber-500/40 transition-colors">
           <CircleDot size={11} className="text-amber-400" />
           <div className="flex flex-col leading-none">
-            <span className="text-[13px] text-muted-foreground uppercase tracking-wider font-medium">BTC Dom</span>
-            <span className="text-[12px] font-mono font-bold text-amber-400 leading-tight">{marketStats.btcDominance || "—"}<span className="text-[13px] text-amber-400/60">%</span></span>
+            <span className="text-sm text-muted-foreground uppercase tracking-wider font-medium">BTC Dom</span>
+            <span className="text-sm font-mono font-bold text-amber-400 leading-tight">{marketStats.btcDominance || "—"}<span className="text-sm text-amber-400/60">%</span></span>
           </div>
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
         {/* Total Market Cap */}
-        <div className="shrink-0 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-secondary/40 border border-border/20 hover:border-border/40 transition-colors">
+        <div className="shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-secondary/40 border border-border/20 hover:border-border/40 transition-colors">
           <Globe size={11} className="text-muted-foreground" />
           <div className="flex flex-col leading-none">
-            <span className="text-[13px] text-muted-foreground uppercase tracking-wider font-medium">Mkt Cap</span>
-            <span className="text-[12px] font-mono font-bold text-foreground leading-tight">${marketStats.totalMarketCap > 0 ? (marketStats.totalMarketCap / 1e12).toFixed(2) : "—"}<span className="text-[13px] text-muted-foreground">T</span></span>
+            <span className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Mkt Cap</span>
+            <span className="text-sm font-mono font-bold text-foreground leading-tight">${marketStats.totalMarketCap > 0 ? (marketStats.totalMarketCap / 1e12).toFixed(2) : "—"}<span className="text-sm text-muted-foreground">T</span></span>
           </div>
         </div>
         <div className="w-px h-5 bg-border/20 shrink-0" />
         {/* 24h Change */}
-        <div className="shrink-0 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
+        <div className="shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-neon-green/10 border border-neon-green/25 hover:border-neon-green/40 transition-colors">
           <ArrowUpRight size={11} className="text-neon-green" />
           <div className="flex flex-col leading-none">
-            <span className="text-[13px] text-muted-foreground uppercase tracking-wider font-medium">24h Avg</span>
-            <span className={`text-[12px] font-mono font-bold leading-tight ${marketStats.avg24hChange >= 0 ? "text-neon-green" : "text-neon-red"}`}>{marketStats.avg24hChange >= 0 ? "+" : ""}{marketStats.avg24hChange || "—"}<span className={`text-[13px] ${marketStats.avg24hChange >= 0 ? "text-neon-green/60" : "text-neon-red/60"}`}>%</span></span>
+            <span className="text-sm text-muted-foreground uppercase tracking-wider font-medium">24h Avg</span>
+            <span className={`text-sm font-mono font-bold leading-tight ${marketStats.avg24hChange >= 0 ? "text-neon-green" : "text-neon-red"}`}>{marketStats.avg24hChange >= 0 ? "+" : ""}{marketStats.avg24hChange || "—"}<span className={`text-sm ${marketStats.avg24hChange >= 0 ? "text-neon-green/60" : "text-neon-red/60"}`}>%</span></span>
           </div>
         </div>
-        <div className="ml-auto shrink-0 flex items-center gap-2 text-xs text-muted-foreground/60 font-mono">
+        <div className="ml-auto shrink-0 flex items-center gap-2 text-sm text-muted-foreground/60 font-mono">
           <motion.div animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }}>
             <RefreshCw size={9} />
           </motion.div>
@@ -737,7 +737,7 @@ export default function Research() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-black text-white font-['Space_Grotesk'] tracking-wide">{aiReportToken}</span>
-                        <span className="text-xs text-[#a855f7]/70 font-mono bg-[#a855f7]/10 px-2 py-1 rounded-full border border-[#a855f7]/20">AI REPORT</span>
+                        <span className="text-sm text-[#a855f7]/70 font-mono bg-[#a855f7]/10 px-2 py-1 rounded-full border border-[#a855f7]/20">AI REPORT</span>
                       </div>
                       <p className="text-[13px] text-gray-500 mt-0.5">深度投研分析 · 仅供参考</p>
                     </div>
@@ -746,18 +746,18 @@ export default function Research() {
                   {/* Status badges row */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Sentiment badge */}
-                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-sm font-semibold border ${
                       aiReportSentiment === "bullish"
                         ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : aiReportSentiment === "bearish"
                         ? "bg-red-500/15 text-red-300 border-red-500/30"
                         : "bg-yellow-500/15 text-yellow-300 border-yellow-500/30"
                     }`}>
-                      <span className="text-xs">{aiReportSentiment === "bullish" ? "▲" : aiReportSentiment === "bearish" ? "▼" : "◆"}</span>
+                      <span className="text-sm">{aiReportSentiment === "bullish" ? "▲" : aiReportSentiment === "bearish" ? "▼" : "◆"}</span>
                       {aiReportSentiment === "bullish" ? "看多" : aiReportSentiment === "bearish" ? "看空" : "中性"}
                     </div>
                     {/* Risk badge */}
-                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-sm font-medium border ${
                       aiReportRisk === "low"
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                         : aiReportRisk === "high"
@@ -768,7 +768,7 @@ export default function Research() {
                     </div>
                     {/* AI Score badge */}
                     {aiScore !== null && (
-                      <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                      <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-sm font-bold border ${
                         aiScore >= 8 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : aiScore >= 6 ? "bg-[#00d4ff]/10 text-[#00d4ff] border-[#00d4ff]/25"
                         : "bg-red-500/10 text-red-400 border-red-500/20"
@@ -807,8 +807,8 @@ export default function Research() {
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                       {aiKeyMetrics.slice(0, 5).map((m, i) => (
                         <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] hover:border-[#a855f7]/20 transition-colors">
-                          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
-                          <p className={`text-xs font-bold font-mono truncate ${
+                          <p className="text-sm text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
+                          <p className={`text-sm font-bold font-mono truncate ${
                             m.isChange
                               ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
                               : "text-white"
@@ -828,8 +828,8 @@ export default function Research() {
                       <div className="grid grid-cols-4 gap-2 mt-2">
                         {aiKeyMetrics.slice(5).map((m, i) => (
                           <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06]">
-                            <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
-                            <p className={`text-xs font-bold font-mono truncate ${
+                            <p className="text-sm text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
+                            <p className={`text-sm font-bold font-mono truncate ${
                               m.isChange
                                 ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
                                 : "text-white"
@@ -867,12 +867,12 @@ export default function Research() {
 
             {/* Footer Actions Bar */}
             <div className="px-4 py-3 border-t border-white/[0.06] bg-[#060b18] flex items-center justify-between gap-3 shrink-0">
-              <p className="text-xs text-gray-600 hidden sm:block">本报告由 AI 生成，仅供参考，不构成投资建议</p>
+              <p className="text-sm text-gray-600 hidden sm:block">本报告由 AI 生成，仅供参考，不构成投资建议</p>
               <div className="flex items-center gap-2 ml-auto">
                 {/* Copy button */}
                 <button
                   onClick={() => { if (aiReportContent) { navigator.clipboard.writeText(aiReportContent); toast.success("已复制报告内容"); } }}
-                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all"
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-all"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   复制
@@ -880,7 +880,7 @@ export default function Research() {
                 {/* Share to Feed button - always visible */}
                 <button
                   onClick={() => { setShowShareDialog(true); setShareComment(""); }}
-                  className="flex items-center gap-2.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-xs text-white font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-[#a855f7]/20"
+                  className="flex items-center gap-2.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-sm text-white font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-[#a855f7]/20"
                 >
                   <Share2 size={12} />
                   发布动态
@@ -911,7 +911,7 @@ export default function Research() {
                     <BarChart3 size={12} className="text-white" />
                   </div>
                   <span className="text-sm font-bold text-white font-['Space_Grotesk']">{aiReportToken}</span>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                  <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${
                     aiReportSentiment === "bullish" ? "bg-emerald-500/20 text-emerald-400" :
                     aiReportSentiment === "bearish" ? "bg-red-500/20 text-red-400" :
                     "bg-yellow-500/20 text-yellow-400"
@@ -935,7 +935,7 @@ export default function Research() {
                 rows={3}
                 className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#a855f7]/40 resize-none"
               />
-              <p className="text-right text-xs text-gray-500 mt-2">{shareComment.length}/500</p>
+              <p className="text-right text-sm text-gray-500 mt-2">{shareComment.length}/500</p>
             </div>
 
             {/* Actions */}
@@ -947,7 +947,7 @@ export default function Research() {
               {!authUser ? (
                 // Not logged in - show login prompt
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">登录后可发布</span>
+                  <span className="text-sm text-gray-400">登录后可发布</span>
                   <a
                     href={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
                     className="flex items-center gap-2.5 px-5 py-2 rounded-lg bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-sm text-white font-medium hover:opacity-90 transition-opacity"
@@ -1016,7 +1016,7 @@ export default function Research() {
             <p className="text-sm text-muted-foreground">
               {t("research.analyzing")} <span className="text-neon-purple font-mono">{searchQuery.toUpperCase() || "Market"}</span>...
             </p>
-            <div className="flex gap-2 text-xs text-muted-foreground font-mono">
+            <div className="flex gap-2 text-sm text-muted-foreground font-mono">
               <span className="text-neon-green">✓ CoinGecko</span>
               <span className="text-neon-green">✓ DefiLlama</span>
               <span className="text-neon-green">✓ Etherscan</span>
@@ -1049,12 +1049,12 @@ export default function Research() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="rounded-2xl border border-border/30 bg-card/50 overflow-hidden"
+              className="rounded-2xl border border-border/30 bg-card/50 overflow-hidden shadow-sm"
             >
               {/* Report Header */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : report.id)}
-                className="w-full px-4 py-3.5 text-left"
+                className="w-full px-5 py-4 text-left"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
@@ -1064,21 +1064,21 @@ export default function Research() {
                     <div>
                       <div className="flex items-center gap-2.5">
                         <span className="text-base font-bold font-display">{report.token}</span>
-                        <span className="text-xs font-mono text-muted-foreground bg-secondary/60 px-2.5 py-1 rounded">
+                        <span className="text-sm font-mono text-muted-foreground bg-secondary/60 px-2.5 py-1 rounded">
                           #{report.rank}
                         </span>
-                        <span className="text-xs font-mono text-neon-purple/70 bg-neon-purple/8 px-2.5 py-1 rounded">
+                        <span className="text-sm font-mono text-neon-purple/70 bg-neon-purple/8 px-2.5 py-1 rounded">
                           {report.category}
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">{report.chain}</span>
+                      <span className="text-sm text-muted-foreground">{report.chain}</span>
                     </div>
                   </div>
                   <RealtimePrice symbol={report.token} fallback={report.price} fallbackNum={report.priceNum} />
                 </div>
 
                 {/* Mini K-line chart */}
-                <div className="h-14 mb-2 -mx-1">
+                <div className="h-16 mb-3 -mx-1">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={report.priceHistory}>
                       <defs>
@@ -1100,16 +1100,16 @@ export default function Research() {
                 </div>
 
                 {/* Key metrics grid */}
-                <div className="grid grid-cols-4 gap-2.5 mb-2">
+                <div className="grid grid-cols-2 gap-3 mb-3">
                   {[
                     { label: t("research.marketCap"), value: report.marketCap },
                     { label: "24h Vol", value: report.volume24h },
                     { label: t("research.tvl"), value: report.tvl },
                     { label: t("research.aiScore"), value: `${report.aiScore}/10`, highlight: true },
                   ].map((m) => (
-                    <div key={m.label} className="text-center p-2.5 rounded-lg bg-secondary/30">
-                      <p className="text-xs text-muted-foreground truncate">{m.label}</p>
-                      <p className={`text-[13px] font-mono font-semibold mt-0.5 ${m.highlight ? (report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red") : ""}`}>
+                    <div key={m.label} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-secondary/30">
+                      <p className="text-sm text-muted-foreground">{m.label}</p>
+                      <p className={`text-sm font-mono font-semibold ${m.highlight ? (report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red") : "text-foreground"}`}>
                         {m.value}
                       </p>
                     </div>
@@ -1120,7 +1120,7 @@ export default function Research() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles size={13} className="text-neon-purple" />
-                    <span className={`text-xs font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : report.aiScore >= 4 ? "text-yellow-500" : "text-neon-red"}`}>
+                    <span className={`text-sm font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : report.aiScore >= 4 ? "text-yellow-500" : "text-neon-red"}`}>
                       {t(report.aiVerdictKey)}
                     </span>
                     <RiskBadge level={report.riskLevel} t={t} />
@@ -1137,9 +1137,9 @@ export default function Research() {
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
+                    className="overflow-hidden border-t border-border/20"
                   >
-                    <div className="px-4 pb-4 space-y-3 border-t border-border/20 pt-3">
+                    <div className="px-4 pb-5 space-y-4 border-t border-border/20 pt-4">
 
                       {/* Tab Switcher */}
                       <div className="flex gap-2 p-0.5 rounded-xl bg-secondary/30 border border-border/15">
@@ -1153,13 +1153,13 @@ export default function Research() {
                           <button
                             key={tab.key}
                             onClick={() => setActiveTab(tab.key)}
-                            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
                               activeTab === tab.key
                                 ? "bg-neon-purple/15 text-neon-purple border border-neon-purple/20"
                                 : "text-muted-foreground hover:text-foreground"
                             }`}
                           >
-                            <tab.icon size={11} />
+                            <tab.icon size={12} />
                             {tab.label}
                           </button>
                         ))}
@@ -1175,7 +1175,7 @@ export default function Research() {
                                 <button
                                   key={range}
                                   onClick={() => setTimeRange(range)}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all ${
+                                  className={`px-3 py-1.5 rounded-lg text-sm font-mono font-medium transition-all ${
                                     timeRange === range
                                       ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25"
                                       : "text-muted-foreground hover:text-foreground bg-secondary/20"
@@ -1201,13 +1201,13 @@ export default function Research() {
                                   </defs>
                                   <XAxis
                                     dataKey="time"
-                                    tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }}
+                                    tick={{ fontSize: 11, fill: "oklch(0.55 0.02 260)" }}
                                     axisLine={false}
                                     tickLine={false}
                                     interval={timeRange === "30d" ? 4 : "preserveStartEnd"}
                                   />
                                   <YAxis
-                                    tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }}
+                                    tick={{ fontSize: 11, fill: "oklch(0.55 0.02 260)" }}
                                     axisLine={false}
                                     tickLine={false}
                                     domain={["dataMin * 0.95", "dataMax * 1.05"]}
@@ -1236,8 +1236,8 @@ export default function Research() {
                               { label: "7d", value: report.change7d },
                               { label: "30d", value: report.change30d },
                             ].map((p) => (
-                              <div key={p.label} className="text-center p-2 rounded-xl bg-secondary/20 border border-border/15">
-                                <p className="text-xs text-muted-foreground mb-0.5">{p.label}</p>
+                              <div key={p.label} className="text-center p-3 rounded-xl bg-secondary/20 border border-border/15">
+                                <p className="text-sm text-muted-foreground mb-1">{p.label}</p>
                                 <ChangeIndicator value={p.value} />
                               </div>
                             ))}
@@ -1248,7 +1248,7 @@ export default function Research() {
                       {/* Radar Tab */}
                       {activeTab === "radar" && (
                         <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                          <p className="text-xs text-muted-foreground mb-2 font-mono">{t("research.multiDimAnalysis")}</p>
+                          <p className="text-sm text-muted-foreground mb-2 font-mono">{t("research.multiDimAnalysis")}</p>
                           <div className="h-52">
                             <ResponsiveContainer width="100%" height="100%">
                               <RadarChart data={report.radarData} cx="50%" cy="50%" outerRadius="70%">
@@ -1270,8 +1270,8 @@ export default function Research() {
                           <div className="grid grid-cols-3 gap-2.5 mt-2">
                             {report.radarData.map((d) => (
                               <div key={d.metric} className="flex items-center justify-between px-2 py-1 rounded-lg bg-background/30">
-                                <span className="text-xs text-muted-foreground">{d.metric}</span>
-                                <span className={`text-xs font-mono font-bold ${d.score >= 80 ? "text-neon-green" : d.score >= 60 ? "text-neon-cyan" : "text-neon-red"}`}>
+                                <span className="text-sm text-muted-foreground">{d.metric}</span>
+                                <span className={`text-sm font-mono font-bold ${d.score >= 80 ? "text-neon-green" : d.score >= 60 ? "text-neon-cyan" : "text-neon-red"}`}>
                                   {d.score}
                                 </span>
                               </div>
@@ -1283,71 +1283,71 @@ export default function Research() {
                       {/* Volume Tab */}
                       {activeTab === "volume" && (
                         <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                          <p className="text-xs text-muted-foreground mb-2 font-mono">{t("research.volumeHistory")}</p>
+                          <p className="text-sm text-muted-foreground mb-2 font-mono">{t("research.volumeHistory")}</p>
                           <div className="h-36">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart data={report.volumeHistory}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.01 260)" />
-                                <XAxis dataKey="time" tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 9, fill: "oklch(0.55 0.02 260)" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}B`} width={40} />
+                                <XAxis dataKey="time" tick={{ fontSize: 11, fill: "oklch(0.55 0.02 260)" }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 11, fill: "oklch(0.55 0.02 260)" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}B`} width={40} />
                                 <RechartsTooltip content={<VolumeTooltip />} />
                                 <Bar dataKey="volume" fill="oklch(0.65 0.25 295)" radius={[3, 3, 0, 0]} opacity={0.7} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
                           <div className="flex items-center justify-between mt-2 px-2">
-                            <span className="text-xs text-muted-foreground">24h Vol: <span className="font-mono font-semibold text-foreground">{report.volume24h}</span></span>
-                            <span className="text-xs text-muted-foreground">{t("research.holders")}: <span className="font-mono font-semibold text-foreground">{report.holders}</span></span>
+                            <span className="text-sm text-muted-foreground">24h Vol: <span className="font-mono font-semibold text-foreground">{report.volume24h}</span></span>
+                            <span className="text-sm text-muted-foreground">{t("research.holders")}: <span className="font-mono font-semibold text-foreground">{report.holders}</span></span>
                           </div>
                         </div>
                       )}
 
                       {/* On-Chain Tab */}
                       {activeTab === "onchain" && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {/* On-chain metrics */}
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <div className="flex items-center gap-2.5 mb-2.5">
-                                <Eye size={12} className="text-neon-cyan" />
-                                <span className="text-xs text-muted-foreground">{t("research.whaleActivity")}</span>
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Eye size={13} className="text-neon-cyan" />
+                                <span className="text-sm text-muted-foreground">{t("research.whaleActivity")}</span>
                               </div>
-                              <p className="text-xs font-medium">{t(report.onChainData.whaleActivity)}</p>
+                              <p className="text-sm font-medium">{t(report.onChainData.whaleActivity)}</p>
                             </div>
-                            <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <div className="flex items-center gap-2.5 mb-2.5">
-                                <Activity size={12} className={report.onChainData.netFlowDir === "out" ? "text-neon-green" : "text-neon-red"} />
-                                <span className="text-xs text-muted-foreground">{t("research.netFlow")}</span>
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Activity size={13} className={report.onChainData.netFlowDir === "out" ? "text-neon-green" : "text-neon-red"} />
+                                <span className="text-sm text-muted-foreground">{t("research.netFlow")}</span>
                               </div>
-                              <p className={`text-xs font-mono font-medium ${report.onChainData.netFlowDir === "out" ? "text-neon-green" : "text-neon-red"}`}>
+                              <p className={`text-sm font-mono font-medium ${report.onChainData.netFlowDir === "out" ? "text-neon-green" : "text-neon-red"}`}>
                                 {report.onChainData.netFlow}
                               </p>
                             </div>
-                            <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <div className="flex items-center gap-2.5 mb-2.5">
-                                <Flame size={12} className="text-orange-400" />
-                                <span className="text-xs text-muted-foreground">{t("research.burnRate")}</span>
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Flame size={13} className="text-orange-400" />
+                                <span className="text-sm text-muted-foreground">{t("research.burnRate")}</span>
                               </div>
-                              <p className="text-xs font-mono font-medium">{report.onChainData.burnRate}</p>
+                              <p className="text-sm font-mono font-medium">{report.onChainData.burnRate}</p>
                             </div>
-                            <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <div className="flex items-center gap-2.5 mb-2.5">
-                                <Lock size={12} className="text-neon-purple" />
-                                <span className="text-xs text-muted-foreground">{t("research.stakingRate")}</span>
+                            <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Lock size={13} className="text-neon-purple" />
+                                <span className="text-sm text-muted-foreground">{t("research.stakingRate")}</span>
                               </div>
-                              <p className="text-xs font-mono font-medium">{report.onChainData.stakingRate}</p>
+                              <p className="text-sm font-mono font-medium">{report.onChainData.stakingRate}</p>
                             </div>
                           </div>
 
                           {/* Additional on-chain info */}
                           <div className="grid grid-cols-2 gap-2">
                             <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <span className="text-xs text-muted-foreground">{t("research.activeAddr")}</span>
-                              <p className="text-xs font-mono font-semibold mt-0.5">{report.activeAddresses}</p>
+                              <span className="text-sm text-muted-foreground">{t("research.activeAddr")}</span>
+                              <p className="text-sm font-mono font-semibold mt-0.5">{report.activeAddresses}</p>
                             </div>
                             <div className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                              <span className="text-xs text-muted-foreground">DEX Vol</span>
-                              <p className="text-xs font-mono font-semibold mt-0.5">{report.onChainData.dexVolume}</p>
+                              <span className="text-sm text-muted-foreground">DEX Vol</span>
+                              <p className="text-sm font-mono font-semibold mt-0.5">{report.onChainData.dexVolume}</p>
                             </div>
                           </div>
                         </div>
@@ -1388,11 +1388,11 @@ export default function Research() {
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <div>
-                                      <p className="text-xs text-muted-foreground">{t("research.confidence")}</p>
+                                      <p className="text-sm text-muted-foreground">{t("research.confidence")}</p>
                                       <p className="text-sm font-mono font-bold">{sig.confidence}%</p>
                                     </div>
                                     <div>
-                                      <p className="text-xs text-muted-foreground">{t("research.updated")}</p>
+                                      <p className="text-sm text-muted-foreground">{t("research.updated")}</p>
                                       <p className="text-[13px] font-mono text-neon-cyan">{sig.updatedAgo}</p>
                                     </div>
                                   </div>
@@ -1402,19 +1402,19 @@ export default function Research() {
 
                             {/* ── Multi-Timeframe Analysis ── */}
                             <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                              <p className="text-xs text-muted-foreground mb-2 font-mono flex items-center gap-2">
+                              <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                                 <Timer size={10} />
                                 {t("research.timeframeAnalysis")}
                               </p>
                               <div className="grid grid-cols-4 gap-2.5">
                                 {sig.timeframes.map((tf) => (
                                   <div key={tf.period} className={`text-center p-2 rounded-xl border ${signalBg(tf.signal)}`}>
-                                    <p className="text-xs font-mono font-bold text-foreground mb-2">{tf.period}</p>
+                                    <p className="text-sm font-mono font-bold text-foreground mb-2">{tf.period}</p>
                                     <div className="w-full h-1.5 rounded-full bg-secondary/40 overflow-hidden mb-2">
                                       <div className="h-full rounded-full transition-all" style={{ width: `${tf.score}%`, backgroundColor: scoreRing(tf.score) }} />
                                     </div>
-                                    <p className={`text-xs font-medium ${signalColor(tf.signal)}`}>{signalLabel(tf.signal)}</p>
-                                    <p className={`text-xs font-mono font-bold ${scoreColor(tf.score)}`}>{tf.score}</p>
+                                    <p className={`text-sm font-medium ${signalColor(tf.signal)}`}>{signalLabel(tf.signal)}</p>
+                                    <p className={`text-sm font-mono font-bold ${scoreColor(tf.score)}`}>{tf.score}</p>
                                   </div>
                                 ))}
                               </div>
@@ -1422,19 +1422,19 @@ export default function Research() {
 
                             {/* ── Technical Indicators Matrix ── */}
                             <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                              <p className="text-xs text-muted-foreground mb-2 font-mono flex items-center gap-2">
+                              <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                                 <Gauge size={10} />
                                 {t("research.technicalIndicators")}
                               </p>
                               <div className="space-y-3">
                                 {sig.technicalIndicators.map((ind) => (
                                   <div key={ind.name} className="flex items-center gap-2 p-2.5 rounded-lg bg-background/30">
-                                    <span className="text-xs text-muted-foreground w-20 shrink-0">{ind.name}</span>
-                                    <span className="text-xs font-mono font-semibold flex-1">{ind.value}</span>
+                                    <span className="text-sm text-muted-foreground w-20 shrink-0">{ind.name}</span>
+                                    <span className="text-sm font-mono font-semibold flex-1">{ind.value}</span>
                                     <div className="w-16 h-1.5 rounded-full bg-secondary/40 overflow-hidden">
                                       <div className="h-full rounded-full transition-all" style={{ width: `${ind.score}%`, backgroundColor: scoreRing(ind.score) }} />
                                     </div>
-                                    <span className={`text-xs font-medium px-2.5 py-1 rounded ${indSignalBg(ind.signal)} ${indSignalColor(ind.signal)}`}>
+                                    <span className={`text-sm font-medium px-2.5 py-1 rounded ${indSignalBg(ind.signal)} ${indSignalColor(ind.signal)}`}>
                                       {ind.signal === "buy" ? t("research.indBuy") : ind.signal === "sell" ? t("research.indSell") : t("research.indNeutral")}
                                     </span>
                                   </div>
@@ -1443,16 +1443,16 @@ export default function Research() {
                               {/* Summary bar */}
                               <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/10">
                                 <div className="flex gap-3">
-                                  <span className="text-xs text-neon-green flex items-center gap-0.5">
-                                    <ArrowUp size={10} />
+                                  <span className="text-sm text-neon-green flex items-center gap-1">
+                                    <ArrowUp size={12} />
                                     {sig.technicalIndicators.filter(i => i.signal === "buy").length} {t("research.indBuy")}
                                   </span>
-                                  <span className="text-xs text-yellow-500 flex items-center gap-0.5">
-                                    <Minus size={10} />
+                                  <span className="text-sm text-yellow-500 flex items-center gap-1">
+                                    <Minus size={12} />
                                     {sig.technicalIndicators.filter(i => i.signal === "neutral").length} {t("research.indNeutral")}
                                   </span>
-                                  <span className="text-xs text-neon-red flex items-center gap-0.5">
-                                    <ArrowDown size={10} />
+                                  <span className="text-sm text-neon-red flex items-center gap-1">
+                                    <ArrowDown size={12} />
                                     {sig.technicalIndicators.filter(i => i.signal === "sell").length} {t("research.indSell")}
                                   </span>
                                 </div>
@@ -1460,38 +1460,38 @@ export default function Research() {
                             </div>
 
                             {/* ── AI Trading Strategy ── */}
-                            <div className="p-3 rounded-2xl bg-gradient-to-br from-neon-purple/8 to-neon-cyan/5 border border-neon-purple/15">
-                              <p className="text-xs text-muted-foreground mb-2.5 font-mono flex items-center gap-2">
-                                <Crosshair size={10} className="text-neon-purple" />
+                            <div className="p-4 rounded-2xl bg-gradient-to-br from-neon-purple/8 to-neon-cyan/5 border border-neon-purple/15">
+                              <p className="text-sm text-muted-foreground mb-3 font-mono flex items-center gap-2">
+                                <Crosshair size={13} className="text-neon-purple" />
                                 {t("research.aiStrategy")}
                               </p>
                               {/* Action badge */}
                               <div className="flex items-center gap-2 mb-3">
-                                <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                                <span className={`px-3 py-1 rounded-lg text-sm font-bold border ${
                                   sig.strategy.action === "Long" ? "bg-neon-green/15 text-neon-green border-neon-green/25" :
                                   sig.strategy.action === "Wait" ? "bg-yellow-500/15 text-yellow-500 border-yellow-500/25" :
                                   "bg-neon-red/15 text-neon-red border-neon-red/25"
                                 }`}>
                                   {sig.strategy.action}
                                 </span>
-                                <span className="text-xs text-muted-foreground">{sig.strategy.timeHorizon}</span>
+                                <span className="text-sm text-muted-foreground">{sig.strategy.timeHorizon}</span>
                               </div>
                               {/* Strategy grid */}
-                              <div className="grid grid-cols-2 gap-2 mb-2.5">
-                                <div className="p-2 rounded-lg bg-background/30">
-                                  <p className="text-xs text-muted-foreground">{t("research.entry")}</p>
+                              <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div className="p-3 rounded-lg bg-background/30">
+                                  <p className="text-sm text-muted-foreground">{t("research.entry")}</p>
                                   <p className="text-[13px] font-mono font-semibold text-neon-cyan">{sig.strategy.entry}</p>
                                 </div>
-                                <div className="p-2 rounded-lg bg-background/30">
-                                  <p className="text-xs text-muted-foreground">{t("research.stopLoss")}</p>
+                                <div className="p-3 rounded-lg bg-background/30">
+                                  <p className="text-sm text-muted-foreground">{t("research.stopLoss")}</p>
                                   <p className="text-[13px] font-mono font-semibold text-neon-red">{sig.strategy.stopLoss}</p>
                                 </div>
-                                <div className="p-2 rounded-lg bg-background/30">
-                                  <p className="text-xs text-muted-foreground">{t("research.tp1")}</p>
+                                <div className="p-3 rounded-lg bg-background/30">
+                                  <p className="text-sm text-muted-foreground">{t("research.tp1")}</p>
                                   <p className="text-[13px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit1}</p>
                                 </div>
-                                <div className="p-2 rounded-lg bg-background/30">
-                                  <p className="text-xs text-muted-foreground">{t("research.tp2")}</p>
+                                <div className="p-3 rounded-lg bg-background/30">
+                                  <p className="text-sm text-muted-foreground">{t("research.tp2")}</p>
                                   <p className="text-[13px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit2}</p>
                                 </div>
                               </div>
@@ -1503,16 +1503,16 @@ export default function Research() {
                                 </div>
                                 <div className="flex-1 p-2.5 rounded-lg bg-background/20 text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.posSize")}</p>
-                                  <p className="text-xs font-mono font-semibold">{sig.strategy.positionSize}</p>
+                                  <p className="text-sm font-mono font-semibold">{sig.strategy.positionSize}</p>
                                 </div>
                                 <div className="flex-1 p-2.5 rounded-lg bg-background/20 text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.leverage")}</p>
-                                  <p className="text-xs font-mono font-semibold">{sig.strategy.leverage}</p>
+                                  <p className="text-sm font-mono font-semibold">{sig.strategy.leverage}</p>
                                 </div>
                               </div>
                               {/* AI Reasoning */}
                               <div className="p-2 rounded-lg bg-neon-purple/5 border border-neon-purple/10">
-                                <p className="text-xs text-neon-purple mb-0.5 flex items-center gap-2">
+                                <p className="text-sm text-neon-purple mb-0.5 flex items-center gap-2">
                                   <Sparkles size={9} />
                                   {t("research.aiReasoning")}
                                 </p>
@@ -1523,32 +1523,32 @@ export default function Research() {
                             {/* ── Signal History & Accuracy ── */}
                             <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
                               <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs text-muted-foreground font-mono flex items-center gap-2">
+                                <p className="text-sm text-muted-foreground font-mono flex items-center gap-2">
                                   <CircleDot size={10} />
                                   {t("research.signalHistory")}
                                 </p>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-neon-green font-mono">{t("research.winRate")}: {sig.accuracy.winRate}%</span>
-                                  <span className="text-xs text-neon-cyan font-mono">{t("research.avgReturn")}: +{sig.accuracy.avgReturn}%</span>
+                                  <span className="text-sm text-neon-green font-mono">{t("research.winRate")}: {sig.accuracy.winRate}%</span>
+                                  <span className="text-sm text-neon-cyan font-mono">{t("research.avgReturn")}: +{sig.accuracy.avgReturn}%</span>
                                 </div>
                               </div>
                               {/* History table */}
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {sig.signalHistory.map((h, i) => (
                                   <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-background/20">
-                                    <span className="text-xs text-muted-foreground font-mono w-14 shrink-0">{h.date}</span>
-                                    <span className={`text-xs font-medium px-2.5 py-1 rounded w-10 text-center ${
+                                    <span className="text-sm text-muted-foreground font-mono w-14 shrink-0">{h.date}</span>
+                                    <span className={`text-sm font-medium px-2.5 py-1 rounded w-10 text-center ${
                                       h.signal === "Buy" ? "bg-neon-green/10 text-neon-green" :
                                       h.signal === "Sell" ? "bg-neon-red/10 text-neon-red" :
                                       "bg-yellow-500/10 text-yellow-500"
                                     }`}>{h.signal}</span>
-                                    <span className="text-xs font-mono flex-1">{h.price}</span>
+                                    <span className="text-sm font-mono flex-1">{h.price}</span>
                                     <span className="flex items-center gap-0.5">
                                       {h.result === "win" ? <CheckCircle size={10} className="text-neon-green" /> :
                                        h.result === "loss" ? <XCircle size={10} className="text-neon-red" /> :
                                        <Clock size={10} className="text-yellow-500" />}
                                     </span>
-                                    <span className={`text-xs font-mono font-semibold w-14 text-right ${
+                                    <span className={`text-sm font-mono font-semibold w-14 text-right ${
                                       h.result === "win" ? "text-neon-green" : h.result === "loss" ? "text-neon-red" : "text-yellow-500"
                                     }`}>{h.pnl}</span>
                                   </div>
@@ -1558,19 +1558,19 @@ export default function Research() {
                               <div className="grid grid-cols-4 gap-2.5 mt-2 pt-2 border-t border-border/10">
                                 <div className="text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.totalSignals")}</p>
-                                  <p className="text-xs font-mono font-bold">{sig.accuracy.total}</p>
+                                  <p className="text-sm font-mono font-bold">{sig.accuracy.total}</p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.wins")}</p>
-                                  <p className="text-xs font-mono font-bold text-neon-green">{sig.accuracy.wins}</p>
+                                  <p className="text-sm font-mono font-bold text-neon-green">{sig.accuracy.wins}</p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.losses")}</p>
-                                  <p className="text-xs font-mono font-bold text-neon-red">{sig.accuracy.losses}</p>
+                                  <p className="text-sm font-mono font-bold text-neon-red">{sig.accuracy.losses}</p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-[13px] text-muted-foreground">{t("research.winRate")}</p>
-                                  <p className={`text-xs font-mono font-bold ${sig.accuracy.winRate >= 65 ? "text-neon-green" : sig.accuracy.winRate >= 50 ? "text-yellow-500" : "text-neon-red"}`}>{sig.accuracy.winRate}%</p>
+                                  <p className={`text-sm font-mono font-bold ${sig.accuracy.winRate >= 65 ? "text-neon-green" : sig.accuracy.winRate >= 50 ? "text-yellow-500" : "text-neon-red"}`}>{sig.accuracy.winRate}%</p>
                                 </div>
                               </div>
                             </div>
@@ -1580,19 +1580,19 @@ export default function Research() {
 
                       {/* Social Sentiment */}
                       <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                        <p className="text-xs text-muted-foreground mb-2 font-mono flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                           <Users size={10} />
                           {t("research.socialSentiment")}
                         </p>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <SentimentBar score={report.socialSentiment.score} label={t("research.sentimentScore")} />
                           <SentimentBar score={report.socialSentiment.fearGreedIndex} label={t("research.fearGreedIndex")} />
                         </div>
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/10">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {t("research.mentions")}: <span className="font-mono font-semibold text-foreground">{report.socialSentiment.mentions24h.toLocaleString()}</span>
                           </span>
-                          <span className={`text-xs font-medium px-2 py-1 rounded-md ${
+                          <span className={`text-sm font-medium px-2 py-1 rounded-md ${
                             report.socialSentiment.trend === "bullish" ? "bg-neon-green/10 text-neon-green" :
                             report.socialSentiment.trend === "bearish" ? "bg-neon-red/10 text-neon-red" :
                             "bg-yellow-500/10 text-yellow-500"
@@ -1604,7 +1604,7 @@ export default function Research() {
 
                       {/* AI Summary */}
                       <div className="p-3 rounded-xl bg-neon-purple/5 border border-neon-purple/15">
-                        <p className="text-xs text-muted-foreground mb-2.5 flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground mb-2.5 flex items-center gap-2">
                           <Sparkles size={12} className="text-neon-purple" />
                           {t("research.aiAnalysis")}
                         </p>
@@ -1614,13 +1614,13 @@ export default function Research() {
                       {/* Risk Factors */}
                       {report.riskFactors.length > 0 && (
                         <div className="p-4 rounded-xl bg-secondary/20 border border-border/15">
-                          <p className="text-xs text-muted-foreground mb-2 font-mono flex items-center gap-2">
+                          <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                             <AlertTriangle size={10} />
                             {t("research.riskFactors")}
                           </p>
                           <div className="flex flex-wrap gap-2.5">
                             {report.riskFactors.map((rf, i) => (
-                              <span key={i} className={`text-xs px-2 py-1 rounded-md border ${
+                              <span key={i} className={`text-sm px-2 py-1 rounded-md border ${
                                 report.riskLevel === "high" ? "bg-neon-red/8 text-neon-red border-neon-red/20" :
                                 report.riskLevel === "medium" ? "bg-yellow-500/8 text-yellow-500 border-yellow-500/20" :
                                 "bg-neon-green/8 text-muted-foreground border-border/20"
@@ -1637,21 +1637,21 @@ export default function Research() {
                         <div className="p-2.5 rounded-xl bg-secondary/30 space-y-2.5">
                           <div className="flex items-center gap-2.5">
                             <Shield size={13} className="text-neon-green" />
-                            <span className="text-xs text-muted-foreground">{t("research.security")}</span>
+                            <span className="text-sm text-muted-foreground">{t("research.security")}</span>
                           </div>
-                          <p className="text-xs font-mono font-semibold text-neon-green">{report.securityScore}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <p className="text-sm font-mono font-semibold text-neon-green">{report.securityScore}</p>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             {report.contractVerified && <span className="text-neon-green">✓ {t("research.verified")}</span>}
                           </div>
-                          <p className="text-xs text-muted-foreground">{report.auditStatus}</p>
+                          <p className="text-sm text-muted-foreground">{report.auditStatus}</p>
                         </div>
                         <div className="p-2.5 rounded-xl bg-secondary/30 space-y-2.5">
                           <div className="flex items-center gap-2.5">
                             <Code size={13} className="text-neon-cyan" />
-                            <span className="text-xs text-muted-foreground">{t("research.devActivity")}</span>
+                            <span className="text-sm text-muted-foreground">{t("research.devActivity")}</span>
                           </div>
-                          <p className="text-xs font-mono font-semibold">{report.devCommits.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">commits/mo</p>
+                          <p className="text-sm font-mono font-semibold">{report.devCommits.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">commits/mo</p>
                         </div>
                       </div>
 
@@ -1660,14 +1660,14 @@ export default function Research() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setLocation(`/app/research/${report.token.toLowerCase()}`)}
-                            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-xs font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all"
+                            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-sm font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all"
                           >
                             <ExternalLink size={13} />
                             {t("research.viewDetail")}
                           </button>
                           <button
                             onClick={() => toggleWatchlist(report.id)}
-                            className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                            className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
                               isWatched
                                 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
                                 : "bg-secondary/30 text-muted-foreground border-border/20 hover:text-foreground"
@@ -1678,7 +1678,7 @@ export default function Research() {
                           </button>
                           <button
                             onClick={() => { setShowShareModal(report.id); setShareCaption(""); setShareSuccess(false); }}
-                            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-cyan/10 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/20 border border-neon-cyan/20 transition-all"
+                            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-cyan/10 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/20 border border-neon-cyan/20 transition-all"
                           >
                             <Share2 size={13} />
                             {t("research.shareToMoments")}
@@ -1698,14 +1698,14 @@ export default function Research() {
                                 });
                               }}
                               disabled={createResearchAlert.isPending}
-                              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-xs font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all disabled:opacity-50"
+                              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-neon-purple/10 text-neon-purple text-sm font-medium hover:bg-neon-purple/20 border border-neon-purple/20 transition-all disabled:opacity-50"
                             >
                               <Crosshair size={13} />
                               设置预警
                             </button>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground font-mono flex items-center gap-2">
                           <Clock size={10} />
                           {report.timestamp}
                         </p>
@@ -1761,7 +1761,7 @@ export default function Research() {
                       }, 1000);
                     }}
                     disabled={isSharing || shareSuccess}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                       shareSuccess
                         ? "bg-neon-green/20 text-neon-green"
                         : isSharing
@@ -1800,7 +1800,7 @@ export default function Research() {
                           {report.icon}
                         </div>
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground">AI Research Report</p>
+                          <p className="text-sm font-medium text-muted-foreground">AI Research Report</p>
                           <p className="text-sm font-bold font-display">{report.token}</p>
                         </div>
                       </div>
@@ -1813,25 +1813,25 @@ export default function Research() {
                     {/* Mini metrics */}
                     <div className="grid grid-cols-3 gap-2 mb-2">
                       <div className="text-center p-2.5 rounded-lg bg-background/40">
-                        <p className="text-xs text-muted-foreground">{t("research.aiScore")}</p>
-                        <p className="text-xs font-mono font-bold text-neon-cyan">{report.aiScore}/10</p>
+                        <p className="text-sm text-muted-foreground">{t("research.aiScore")}</p>
+                        <p className="text-sm font-mono font-bold text-neon-cyan">{report.aiScore}/10</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-background/40">
-                        <p className="text-xs text-muted-foreground">{t("research.aiVerdict")}</p>
-                        <p className={`text-xs font-mono font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red"}`}>
+                        <p className="text-sm text-muted-foreground">{t("research.aiVerdict")}</p>
+                        <p className={`text-sm font-mono font-bold ${report.aiScore >= 8 ? "text-neon-green" : report.aiScore >= 6 ? "text-neon-cyan" : "text-neon-red"}`}>
                           {t(report.aiVerdictKey)}
                         </p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-background/40">
-                        <p className="text-xs text-muted-foreground">{t("research.security")}</p>
-                        <p className="text-xs font-mono font-bold text-neon-green">{report.securityScore}</p>
+                        <p className="text-sm text-muted-foreground">{t("research.security")}</p>
+                        <p className="text-sm font-mono font-bold text-neon-green">{report.securityScore}</p>
                       </div>
                     </div>
 
                     {/* Summary preview */}
                     <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{t(report.aiSummary)}</p>
 
-                    <div className="flex items-center gap-2 mt-2 text-xs text-neon-cyan">
+                    <div className="flex items-center gap-2 mt-2 text-sm text-neon-cyan">
                       <ExternalLink size={10} />
                       <span>{t("research.viewFullReport")}</span>
                     </div>
@@ -1840,7 +1840,7 @@ export default function Research() {
 
                 {/* Character count */}
                 <div className="flex justify-end">
-                  <span className={`text-xs font-mono ${shareCaption.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
+                  <span className={`text-sm font-mono ${shareCaption.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
                     {shareCaption.length}/280
                   </span>
                 </div>
@@ -1881,12 +1881,12 @@ export default function Research() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-foreground mb-2">登录后解锁投研功能</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     登录 Manus 账号，收藏代币、设置价格预警、分享投研报告
                   </p>
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {[
                   { icon: "⭐", text: "收藏代币到自定义自选股" },
                   { icon: "🔔", text: "设置价格预警，行情到位第一时间知道" },
@@ -1894,7 +1894,7 @@ export default function Research() {
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/40 border border-border/20">
                     <span className="text-base">{item.icon}</span>
-                    <span className="text-xs text-foreground/80">{item.text}</span>
+                    <span className="text-sm text-foreground/80">{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -1904,7 +1904,7 @@ export default function Research() {
               >
                 立即登录
               </a>
-              <p className="text-center text-xs text-muted-foreground pb-2">
+              <p className="text-center text-sm text-muted-foreground pb-2">
                 安全登录 · 无需密码 · 支持 Web3 钱包
               </p>
             </motion.div>

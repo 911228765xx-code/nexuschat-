@@ -336,7 +336,7 @@ export default function Contacts() {
           >
             <Inbox size={20} />
             {pendingIncoming.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-neon-red text-xs text-white flex items-center justify-center font-bold min-w-[18px] px-2">
+              <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-neon-red text-sm text-white flex items-center justify-center font-bold min-w-[18px] px-2">
                 {pendingIncoming.length}
               </span>
             )}
@@ -385,9 +385,9 @@ export default function Contacts() {
                   : "bg-secondary/30 text-muted-foreground border border-border/20"
               }`}
             >
-              <span className="text-xs">{g.icon}</span>
+              <span className="text-sm">{g.icon}</span>
               {g.name}
-              <span className="text-xs opacity-60">
+              <span className="text-sm opacity-60">
                 {displayContacts.filter((c) => c.tags.includes(g.id)).length}
               </span>
             </button>
@@ -423,7 +423,7 @@ export default function Contacts() {
                       <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-neon-green border-2 border-background" />
                     )}
                   </div>
-                  <span className="text-xs text-foreground truncate w-full text-center">{c.name.split(".")[0]}</span>
+                  <span className="text-sm text-foreground truncate w-full text-center">{c.name.split(".")[0]}</span>
                 </button>
               ))}
             </div>
@@ -459,9 +459,9 @@ export default function Contacts() {
                       {contact.isFavorite && <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0" />}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground font-mono">{contact.address}</span>
+                      <span className="text-sm text-muted-foreground font-mono">{contact.address}</span>
                       {contact.note && (
-                        <span className="text-xs text-neon-purple/70">· {contact.note}</span>
+                        <span className="text-sm text-neon-purple/70">· {contact.note}</span>
                       )}
                     </div>
                     {/* Tag pills */}
@@ -478,7 +478,7 @@ export default function Contacts() {
                       </div>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{contact.lastActive}</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{contact.lastActive}</span>
                 </motion.button>
               ))}
             </div>
@@ -549,7 +549,7 @@ export default function Contacts() {
                       {selectedContact.isVerified && <Star size={14} className="text-neon-cyan fill-neon-cyan" />}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-muted-foreground font-mono">{selectedContact.address}</span>
+                      <span className="text-sm text-muted-foreground font-mono">{selectedContact.address}</span>
                       <button
                         onClick={() => { navigator.clipboard.writeText(selectedContact.address); toast("Address copied"); }}
                         className="text-muted-foreground hover:text-neon-cyan"
@@ -611,7 +611,7 @@ export default function Contacts() {
                         <button
                           key={g.id}
                           onClick={() => toggleContactTag(selectedContact.id, g.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+                          className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                             isActive
                               ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                               : "bg-secondary/30 text-muted-foreground border border-border/20 hover:border-neon-cyan/20"
@@ -633,7 +633,7 @@ export default function Contacts() {
                     className="flex flex-col items-center gap-2.5 p-3 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/15 transition-colors"
                   >
                     <span className="text-neon-cyan text-lg">💬</span>
-                    <span className="text-xs text-neon-cyan font-medium">{t("contacts.sendMsg") || "Message"}</span>
+                    <span className="text-sm text-neon-cyan font-medium">{t("contacts.sendMsg") || "Message"}</span>
                   </button>
                   <button
                     onClick={() => toggleFavorite(selectedContact.id)}
@@ -644,7 +644,7 @@ export default function Contacts() {
                     }`}
                   >
                     <Star size={18} className={selectedContact.isFavorite ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground"} />
-                    <span className="text-xs font-medium text-muted-foreground">{selectedContact.isFavorite ? (t("contacts.unfav") || "Unfavorite") : (t("contacts.fav") || "Favorite")}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{selectedContact.isFavorite ? (t("contacts.unfav") || "Unfavorite") : (t("contacts.fav") || "Favorite")}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -654,7 +654,7 @@ export default function Contacts() {
                     className="flex flex-col items-center gap-2.5 p-3 rounded-xl bg-neon-purple/10 border border-neon-purple/20 hover:bg-neon-purple/15 transition-colors"
                   >
                     <span className="text-neon-purple text-lg">💸</span>
-                    <span className="text-xs text-neon-purple font-medium">{t("contacts.transfer") || "Transfer"}</span>
+                    <span className="text-sm text-neon-purple font-medium">{t("contacts.transfer") || "Transfer"}</span>
                   </button>
                 </div>
               </div>
@@ -711,7 +711,7 @@ export default function Contacts() {
                     <Inbox size={14} />
                     {t("contacts.received") || "Received"}
                     {pendingIncoming.length > 0 && (
-                      <span className="px-2.5 py-1 rounded-full bg-neon-red/15 text-neon-red text-xs font-bold">{pendingIncoming.length}</span>
+                      <span className="px-2.5 py-1 rounded-full bg-neon-red/15 text-neon-red text-sm font-bold">{pendingIncoming.length}</span>
                     )}
                   </button>
                   <button
@@ -725,7 +725,7 @@ export default function Contacts() {
                     <Clock size={14} />
                     {t("contacts.sent") || "Sent"}
                     {pendingOutgoing.length > 0 && (
-                      <span className="px-2.5 py-1 rounded-full bg-secondary/60 text-muted-foreground text-xs font-bold">{pendingOutgoing.length}</span>
+                      <span className="px-2.5 py-1 rounded-full bg-secondary/60 text-muted-foreground text-sm font-bold">{pendingOutgoing.length}</span>
                     )}
                   </button>
                 </div>
@@ -755,10 +755,10 @@ export default function Contacts() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2.5">
                             <span className="text-sm font-semibold truncate">{req.from.name}</span>
-                            <span className="text-xs text-muted-foreground font-mono">{req.from.address}</span>
+                            <span className="text-sm text-muted-foreground font-mono">{req.from.address}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">"{req.message}"</p>
-                          <span className="text-xs text-muted-foreground mt-2 block">{req.timestamp}</span>
+                          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">"{req.message}"</p>
+                          <span className="text-sm text-muted-foreground mt-2 block">{req.timestamp}</span>
                         </div>
 
                         {/* Status / Actions */}
@@ -779,19 +779,19 @@ export default function Contacts() {
                           </div>
                         )}
                         {req.status === "pending" && req.direction === "outgoing" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/30 text-xs text-muted-foreground flex items-center gap-2">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/30 text-sm text-muted-foreground flex items-center gap-2">
                             <Clock size={10} />
                             {t("contacts.waiting") || "Waiting"}
                           </span>
                         )}
                         {req.status === "accepted" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-neon-green/10 text-xs text-neon-green flex items-center gap-2">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-neon-green/10 text-sm text-neon-green flex items-center gap-2">
                             <Check size={10} />
                             {t("contacts.accepted") || "Accepted"}
                           </span>
                         )}
                         {req.status === "rejected" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/20 text-xs text-muted-foreground flex items-center gap-2">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/20 text-sm text-muted-foreground flex items-center gap-2">
                             <X size={10} />
                             {t("contacts.declined") || "Declined"}
                           </span>
@@ -807,7 +807,7 @@ export default function Contacts() {
                   ).length === 0 && (
                     <div className="text-center py-8">
                       <Inbox size={28} className="text-muted-foreground/30 mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">{t("contacts.noRequests") || "No requests"}</p>
+                      <p className="text-sm text-muted-foreground">{t("contacts.noRequests") || "No requests"}</p>
                     </div>
                   )}
                 </div>
@@ -852,7 +852,7 @@ export default function Contacts() {
                       placeholder="输入用户名或昵称..."
                       className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
                     />
-                    {isSearching && <span className="absolute right-3 top-7 text-xs text-muted-foreground">搜索中...</span>}
+                    {isSearching && <span className="absolute right-3 top-7 text-sm text-muted-foreground">搜索中...</span>}
                   </div>
                   {/* Search results */}
                   {searchResults && searchResults.length > 0 && !selectedUserId && (
@@ -863,24 +863,24 @@ export default function Contacts() {
                           onClick={() => { setSelectedUserId(u.id); setSelectedUserName(u.name); setUserSearchQuery(u.name); }}
                           className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition-colors text-left border-b border-border/10 last:border-0"
                         >
-                          <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-sm font-bold shrink-0">
                             {u.name.slice(0, 1).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{u.name}</p>
-                            {u.username && <p className="text-xs text-muted-foreground">@{u.username}</p>}
+                            {u.username && <p className="text-sm text-muted-foreground">@{u.username}</p>}
                           </div>
                         </button>
                       ))}
                     </div>
                   )}
                   {searchResults && searchResults.length === 0 && userSearchQuery.length >= 1 && !isSearching && (
-                    <p className="text-xs text-muted-foreground text-center py-2">未找到用户</p>
+                    <p className="text-sm text-muted-foreground text-center py-2">未找到用户</p>
                   )}
                   {/* Selected user confirmation */}
                   {selectedUserId && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20">
-                      <div className="w-7 h-7 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold">
+                      <div className="w-7 h-7 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-sm font-bold">
                         {selectedUserName.slice(0, 1).toUpperCase()}
                       </div>
                       <p className="text-sm font-medium flex-1">{selectedUserName}</p>

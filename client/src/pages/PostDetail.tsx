@@ -97,7 +97,7 @@ function RepostModal({
               <Repeat2 size={20} className="text-neon-green" />
               <div className="text-left">
                 <p className="text-sm font-medium">Repost</p>
-                <p className="text-xs text-muted-foreground">Share to your timeline instantly</p>
+                <p className="text-sm text-muted-foreground">Share to your timeline instantly</p>
               </div>
             </button>
             <button
@@ -107,7 +107,7 @@ function RepostModal({
               <Quote size={20} className="text-neon-cyan" />
               <div className="text-left">
                 <p className="text-sm font-medium">Quote Post</p>
-                <p className="text-xs text-muted-foreground">Add your own commentary</p>
+                <p className="text-sm text-muted-foreground">Add your own commentary</p>
               </div>
             </button>
           </div>
@@ -121,7 +121,7 @@ function RepostModal({
               <button
                 onClick={() => { if (quoteText.trim()) { onQuote(quoteText); onClose(); } }}
                 disabled={!quoteText.trim()}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
                   quoteText.trim() ? "bg-neon-cyan text-background" : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                 }`}
               >
@@ -149,14 +149,14 @@ function RepostModal({
                   {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
                   <AvatarFallback className="bg-secondary text-xs">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                 </Avatar>
-                <span className="text-xs font-medium">{post.author.name}</span>
+                <span className="text-sm font-medium">{post.author.name}</span>
                 {post.author.isVerified && <Star size={10} className="text-neon-cyan fill-neon-cyan" />}
-                <span className="text-xs text-muted-foreground">{post.author.handle}</span>
+                <span className="text-sm text-muted-foreground">{post.author.handle}</span>
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-3">{post.content}</p>
+              <p className="text-sm text-muted-foreground line-clamp-3">{post.content}</p>
             </div>
             <div className="flex justify-end">
-              <span className={`text-xs font-mono ${quoteText.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
+              <span className={`text-sm font-mono ${quoteText.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
                 {quoteText.length}/280
               </span>
             </div>
@@ -414,19 +414,19 @@ export default function PostDetail() {
                   <CheckCircle2 size={16} className="text-neon-cyan fill-neon-cyan/20 shrink-0" />
                 )}
               </div>
-              <p className="text-xs text-muted-foreground font-mono">{post.author.handle}</p>
+              <p className="text-sm text-muted-foreground font-mono">{post.author.handle}</p>
               {post.author.bio && (
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{post.author.bio}</p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{post.author.bio}</p>
               )}
               {post.author.followers && (
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5">
                   {formatNum(post.author.followers)} followers
                 </p>
               )}
             </div>
             <button
               onClick={() => toast.success("Following!")}
-              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
+              className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
             >
               Follow
             </button>
@@ -450,7 +450,7 @@ export default function PostDetail() {
                         {reportData?.tokenSymbol?.toUpperCase() || 'AI'} Research Report
                       </span>
                       {reportData?.sentiment && (
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                        <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${
                           reportData.sentiment === 'bullish' ? 'bg-green-500/15 text-green-400' :
                           reportData.sentiment === 'bearish' ? 'bg-red-500/15 text-red-400' :
                           'bg-yellow-500/15 text-yellow-400'
@@ -459,7 +459,7 @@ export default function PostDetail() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       AI Research Report
                       {reportData?.priceAtReport ? ` · Price: $${reportData.priceAtReport}` : ''}
                     </p>
@@ -479,22 +479,22 @@ export default function PostDetail() {
                 {reportLoading ? (
                   <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
                     <FileText size={16} className="animate-pulse" />
-                    <span className="text-xs">Loading report...</span>
+                    <span className="text-sm">Loading report...</span>
                   </div>
                 ) : reportData?.reportContent ? (
-                  <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-2.5 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mb-2 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ol]:text-xs [&_li]:mb-0.5 [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-xs [&_strong]:text-neon-cyan">
+                  <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-sm [&_ol]:text-sm [&_li]:mb-0.5 [&_table]:text-sm [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-sm [&_strong]:text-neon-cyan">
                     <LightMarkdown>{reportData.reportContent}</LightMarkdown>
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground text-center py-4">Report content unavailable</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">Report content unavailable</p>
                 )}
               </div>
 
               {/* Report Footer */}
               {reportData?.riskLevel && (
                 <div className="px-4 py-2 border-t border-border/10 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Risk Level</span>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                  <span className="text-sm text-muted-foreground">Risk Level</span>
+                  <span className={`text-sm font-medium px-2 py-1 rounded-full ${
                     reportData.riskLevel === 'high' ? 'bg-red-500/15 text-red-400' :
                     reportData.riskLevel === 'medium' ? 'bg-yellow-500/15 text-yellow-400' :
                     'bg-green-500/15 text-green-400'
@@ -522,15 +522,15 @@ export default function PostDetail() {
           <div className="flex items-center gap-4 py-3 border-y border-border/10 text-sm">
             <span>
               <span className="font-bold">{formatNum(post.reposts)}</span>
-              <span className="text-muted-foreground ml-1 text-xs">Reposts</span>
+              <span className="text-muted-foreground ml-1 text-sm">Reposts</span>
             </span>
             <span>
               <span className="font-bold">{formatNum(post.likes)}</span>
-              <span className="text-muted-foreground ml-1 text-xs">Likes</span>
+              <span className="text-muted-foreground ml-1 text-sm">Likes</span>
             </span>
             <span>
               <span className="font-bold">{formatNum(post.comments)}</span>
-              <span className="text-muted-foreground ml-1 text-xs">Comments</span>
+              <span className="text-muted-foreground ml-1 text-sm">Comments</span>
             </span>
           </div>
 
@@ -588,9 +588,9 @@ export default function PostDetail() {
         {/* Comments */}
         <div className="pb-24">
           <div className="px-4 py-2 flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">{comments.length} comments</span>
+            <span className="text-sm font-medium text-muted-foreground">{comments.length} comments</span>
             <div className="h-px flex-1 bg-border/10" />
-            <button className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
               <ChevronDown size={12} />
               Latest
             </button>
@@ -616,13 +616,13 @@ export default function PostDetail() {
                       {comment.author.isVerified && (
                         <CheckCircle2 size={12} className="text-neon-cyan fill-neon-cyan/20 shrink-0" />
                       )}
-                      <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                      <span className="text-sm text-muted-foreground">{comment.timestamp}</span>
                     </div>
 
                     {/* Quoted post in comment */}
                     {comment.quotedPost && (
                       <div className="mb-2 p-2 rounded-lg border border-border/20 bg-secondary/20">
-                        <p className="text-xs text-neon-cyan font-medium mb-0.5">@{comment.quotedPost.author}</p>
+                        <p className="text-sm text-neon-cyan font-medium mb-0.5">@{comment.quotedPost.author}</p>
                         <p className="text-[13px] text-muted-foreground line-clamp-2">{comment.quotedPost.content}</p>
                       </div>
                     )}
@@ -632,7 +632,7 @@ export default function PostDetail() {
                     <div className="flex items-center gap-4 mt-2">
                       <button
                         onClick={() => toggleCommentLike(comment.id)}
-                        className={`flex items-center gap-2 text-xs transition-colors ${
+                        className={`flex items-center gap-2 text-sm transition-colors ${
                           comment.isLiked ? "text-neon-red" : "text-muted-foreground hover:text-neon-red"
                         }`}
                       >
@@ -645,7 +645,7 @@ export default function PostDetail() {
                           setCommentText(`@${comment.author.name} `);
                           commentInputRef.current?.focus();
                         }}
-                        className="text-xs text-muted-foreground hover:text-neon-cyan transition-colors"
+                        className="text-sm text-muted-foreground hover:text-neon-cyan transition-colors"
                       >
                         Reply
                       </button>

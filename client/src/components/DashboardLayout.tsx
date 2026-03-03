@@ -188,7 +188,7 @@ function DashboardLayoutContent({
                     <p className="text-sm font-medium truncate leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-2.5">
+                    <p className="text-sm text-muted-foreground truncate mt-2.5">
                       {user?.email || "-"}
                     </p>
                   </div>

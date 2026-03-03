@@ -266,7 +266,7 @@ export default function Watchlist() {
                 <Star size={16} className="text-yellow-500" fill="currentColor" />
                 {t("research.watchlist")}
               </h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {watchlist.length} {t("research.tokens")} · {alertCount} {t("research.alerts")}
                 <span className="ml-1 text-neon-cyan/60">· Synced</span>
               </p>
@@ -274,7 +274,7 @@ export default function Watchlist() {
           </div>
           <div className="flex items-center gap-2.5">
             <button onClick={() => { setIsEditing(!isEditing); setSelectedItems(new Set()); }}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 isEditing ? "bg-neon-red/15 text-neon-red" : "text-muted-foreground hover:bg-secondary/40"
               }`}>
               {isEditing ? t("research.done") : <Edit3 size={14} />}
@@ -292,7 +292,7 @@ export default function Watchlist() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t("research.searchTokens")}
-              className="w-full h-8 pl-8 pr-3 rounded-lg bg-secondary/50 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+              className="w-full h-8 pl-8 pr-3 rounded-lg bg-secondary/50 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
           </div>
           <div className="flex gap-2">
             {([
@@ -301,7 +301,7 @@ export default function Watchlist() {
               { key: "change7d" as SortKey, label: "7d" },
             ]).map((s) => (
               <button key={s.key} onClick={() => handleSort(s.key)}
-                className={`px-2 py-1 rounded text-xs font-mono font-medium transition-all flex items-center gap-0.5 ${
+                className={`px-2 py-1 rounded text-sm font-mono font-medium transition-all flex items-center gap-0.5 ${
                   sortKey === s.key ? "bg-neon-cyan/20 text-neon-cyan" : "text-muted-foreground hover:text-foreground"
                 }`}>
                 {s.label}
@@ -318,9 +318,9 @@ export default function Watchlist() {
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden border-b border-border/20">
             <div className="flex items-center justify-between px-4 py-2 bg-neon-red/5">
-              <span className="text-xs text-muted-foreground">{selectedItems.size} {t("research.selected")}</span>
+              <span className="text-sm text-muted-foreground">{selectedItems.size} {t("research.selected")}</span>
               <button onClick={handleBulkRemove}
-                className="flex items-center gap-2 px-3 py-1 rounded-lg bg-neon-red/15 text-neon-red text-xs font-medium hover:bg-neon-red/25 transition-colors">
+                className="flex items-center gap-2 px-3 py-1 rounded-lg bg-neon-red/15 text-neon-red text-sm font-medium hover:bg-neon-red/25 transition-colors">
                 <Trash2 size={12} /> {t("research.removeSelected")}
               </button>
             </div>
@@ -335,7 +335,7 @@ export default function Watchlist() {
             <Star size={40} className="text-muted-foreground/30 mx-auto" />
             <p className="text-sm text-muted-foreground">{t("research.emptyWatchlist")}</p>
             <button onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 rounded-xl bg-neon-purple/15 text-neon-purple text-xs font-medium hover:bg-neon-purple/25 transition-colors">
+              className="px-4 py-2 rounded-xl bg-neon-purple/15 text-neon-purple text-sm font-medium hover:bg-neon-purple/25 transition-colors">
               <Plus size={12} className="inline mr-1" /> {t("research.addTokens")}
             </button>
           </div>
@@ -370,14 +370,14 @@ export default function Watchlist() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2.5">
                     <span className="text-sm font-bold font-mono">{item.token}</span>
-                    <span className={`px-2.5 py-1 rounded text-xs font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
+                    <span className={`px-2.5 py-1 rounded text-sm font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
                       {signalLabel(item.signal)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground">{item.category}</span>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground">{item.marketCap}</span>
+                    <span className="text-sm text-muted-foreground">{item.category}</span>
+                    <span className="text-sm text-muted-foreground">·</span>
+                    <span className="text-sm text-muted-foreground">{item.marketCap}</span>
                   </div>
                 </div>
 
@@ -385,7 +385,7 @@ export default function Watchlist() {
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold font-mono">{item.price}</p>
                   <div className="flex items-center justify-end gap-2 mt-0.5">
-                    <span className={`text-xs font-mono font-medium flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                    <span className={`text-sm font-mono font-medium flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                       {item.change24h >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
                       {Math.abs(item.change24h).toFixed(1)}%
                     </span>
@@ -418,7 +418,7 @@ export default function Watchlist() {
                   <div className="h-full rounded-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all"
                     style={{ width: `${(item.aiScore / 10) * 100}%` }} />
                 </div>
-                <span className="text-xs font-mono text-neon-purple shrink-0">{item.aiScore.toFixed(1)}</span>
+                <span className="text-sm font-mono text-neon-purple shrink-0">{item.aiScore.toFixed(1)}</span>
               </div>
 
               {/* Alert Input */}
@@ -433,7 +433,7 @@ export default function Watchlist() {
                         className="flex-1 h-7 px-2 rounded-lg bg-background/40 border border-border/20 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50"
                         autoFocus />
                       <button onClick={() => handleSetAlert(item.id)}
-                        className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors">
+                        className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">
                         <Check size={12} />
                       </button>
                       <button onClick={() => { setEditingAlert(null); setAlertInput(""); }}
@@ -455,8 +455,8 @@ export default function Watchlist() {
               {item.alertEnabled && editingAlert !== item.id && (
                 <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-border/10">
                   <Bell size={10} className="text-neon-cyan" />
-                  <span className="text-xs text-muted-foreground">{t("research.alertAt")}</span>
-                  <span className="text-xs font-mono font-semibold text-neon-cyan">${item.alertPrice}</span>
+                  <span className="text-sm text-muted-foreground">{t("research.alertAt")}</span>
+                  <span className="text-sm font-mono font-semibold text-neon-cyan">${item.alertPrice}</span>
                 </div>
               )}
             </motion.div>
@@ -487,21 +487,21 @@ export default function Watchlist() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input type="text" value={addSearch} onChange={(e) => setAddSearch(e.target.value)}
                   placeholder={t("research.searchTokens")}
-                  className="w-full h-9 pl-8 pr-3 rounded-xl bg-secondary/50 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                  className="w-full h-9 pl-8 pr-3 rounded-xl bg-secondary/50 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
               </div>
               <div className="space-y-2.5 overflow-y-auto max-h-[40vh]">
                 {filteredAvailable.length === 0 ? (
-                  <p className="text-center text-xs text-muted-foreground py-8">{t("research.noTokensFound")}</p>
+                  <p className="text-center text-sm text-muted-foreground py-8">{t("research.noTokensFound")}</p>
                 ) : (
                   filteredAvailable.map((token) => (
                     <div key={token.token} className="flex items-center gap-3 p-2.5 rounded-xl bg-secondary/20 border border-border/15">
                       <span className="text-lg">{token.icon}</span>
                       <div className="flex-1">
-                        <p className="text-xs font-bold">{token.token}</p>
-                        <p className="text-xs text-muted-foreground">{token.price} · {token.category}</p>
+                        <p className="text-sm font-bold">{token.token}</p>
+                        <p className="text-sm text-muted-foreground">{token.price} · {token.category}</p>
                       </div>
                       <button onClick={() => handleAdd(token)}
-                        className="px-3 py-1.5 rounded-lg bg-neon-purple/15 text-neon-purple text-xs font-medium hover:bg-neon-purple/25 transition-colors">
+                        className="px-3 py-1.5 rounded-lg bg-neon-purple/15 text-neon-purple text-sm font-medium hover:bg-neon-purple/25 transition-colors">
                         <Plus size={10} className="inline mr-0.5" /> {t("research.add")}
                       </button>
                     </div>
