@@ -149,6 +149,22 @@ const AppContext = createContext<AppState | null>(null);
 // ==================== Storage Helpers ====================
 
 const STORAGE_PREFIX = "nexuschat_";
+const STORAGE_VERSION = "v4"; // Bump this to clear stale mock data
+
+// Auto-migrate: clear stale mock data when version changes
+(function migrateStorage() {
+  try {
+    const currentVersion = localStorage.getItem(STORAGE_PREFIX + "_version");
+    if (currentVersion !== STORAGE_VERSION) {
+      // Clear conversations and contacts (they now come from DB via tRPC)
+      localStorage.removeItem(STORAGE_PREFIX + "conversations");
+      localStorage.removeItem(STORAGE_PREFIX + "contacts");
+      localStorage.setItem(STORAGE_PREFIX + "_version", STORAGE_VERSION);
+    }
+  } catch {
+    // ignore
+  }
+})();
 
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
@@ -176,17 +192,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadFromStorage("profile", defaultProfile)
   );
 
-  // Conversations
+  // Conversations — start empty; real groups come from tRPC (myGroups) in Chat.tsx
   const [conversations, setConversations] = useState<Conversation[]>(() =>
-    loadFromStorage("conversations", [
-      { id: "dm-demo-1", name: "vitalik.eth", avatar: "V", lastMessage: "ETH 2.0 staking yield looks great 🚀", time: "now", unread: 3, isGroup: false, isTokenGated: false, isOnline: true, dmUserId: "demo-1" },
-      { id: "2", name: "BAYC Holders 🐵", avatar: "🐵", lastMessage: "Alice: New roadmap is out!", time: "5m", unread: 12, isGroup: true, isTokenGated: true },
-      { id: "dm-demo-3", name: "0xDeFi...3a9b", avatar: "D", lastMessage: "/research SOL report generated", time: "15m", unread: 0, isGroup: false, isTokenGated: false, isOnline: true, dmUserId: "demo-3" },
-      { id: "4", name: "NexusChat Official", avatar: "N", lastMessage: "Admin: v0.2.0 released!", time: "1h", unread: 5, isGroup: true, isTokenGated: false },
-      { id: "dm-demo-5", name: "satoshi.btc", avatar: "S", lastMessage: "BTC on-chain data shows whale accumulation", time: "2h", unread: 0, isGroup: false, isTokenGated: false, isOnline: false, dmUserId: "demo-5" },
-      { id: "6", name: "DeFi Alpha 🔒", avatar: "🔑", lastMessage: "Bob: This new LP has 200%+ APY", time: "3h", unread: 0, isGroup: true, isTokenGated: true },
-      { id: "dm-demo-7", name: "punk6529.eth", avatar: "P", lastMessage: "NFT market is recovering, watch Blur data", time: "1d", unread: 0, isGroup: false, isTokenGated: false, isOnline: false, dmUserId: "demo-7" },
-    ])
+    loadFromStorage("conversations", [])
   );
 
   // Contacts

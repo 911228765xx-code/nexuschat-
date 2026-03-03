@@ -61,6 +61,12 @@ export default function Chat() {
   );
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
 
+  // tRPC: my joined groups (protectedProcedure)
+  const { data: myGroupsData } = trpc.chat.myGroups.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 30_000, refetchInterval: isAuthenticated ? 60_000 : false }
+  );
+
   // tRPC: real unread notification count (protectedProcedure — skip when not logged in)
   const { data: notifCountData } = trpc.notifications.unreadCount.useQuery(
     undefined,
@@ -80,9 +86,24 @@ export default function Chat() {
   // Use real count if available, fallback to local
   const unreadNotificationCount = notifCountData?.count ?? localUnreadCount;
 
-  // Merge real DM conversations into the list
+  // Merge real DM conversations + my groups into the list
   const mergedConversations = [
-    ...conversations,
+    // My joined groups from DB
+    ...(myGroupsData ?? []).map(g => ({
+      id: String(g.id),
+      name: g.name,
+      avatar: g.avatar ? g.avatar : g.name.slice(0, 2),
+      lastMessage: g.lastSender ? `${g.lastSender}: ${g.lastMessage}` : (g.lastMessage || g.description || ''),
+      time: g.lastMessageAt ? new Date(g.lastMessageAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
+      unread: 0,
+      isGroup: true,
+      isOnline: false,
+      isPinned: false,
+      isMuted: false,
+      isTokenGated: g.isTokenGated,
+    } as import("@/contexts/AppContext").Conversation)),
+    // Local pinned/muted state from AppContext (non-group entries only)
+    ...conversations.filter(c => !c.isGroup),
     ...(dmConversations ?? []).map(dm => ({
       id: `dm-${dm.userId}`,
       name: dm.name,
@@ -282,20 +303,47 @@ export default function Chat() {
           </div>
         )}
         {!dmLoading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div className="flex flex-col items-center py-8 gap-4 px-4">
             <div className="w-16 h-16 rounded-2xl bg-secondary/40 flex items-center justify-center">
               <MessageSquare size={28} className="text-muted-foreground/40" />
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-muted-foreground">{t("chat.noConversations") || "No conversations yet"}</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">{t("chat.startChat") || "Start a new chat or join a group"}</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{t("chat.startChat") || "Join a community below to get started"}</p>
             </div>
-            <Link href="/app/create-group">
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25 text-sm font-medium hover:bg-neon-cyan/25 transition-all">
-                <Plus size={15} />
-                {t("chat.newChat") || "New Chat"}
-              </button>
-            </Link>
+            {publicGroupsData && publicGroupsData.length > 0 && (
+              <div className="w-full mt-2">
+                <p className="text-[10px] text-muted-foreground/50 font-mono uppercase tracking-widest px-1 mb-2">Active Communities</p>
+                <div className="space-y-2">
+                  {publicGroupsData.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20 border border-border/10 hover:border-neon-purple/20 transition-all cursor-pointer"
+                      onClick={() => {
+                        joinGroupMutation.mutate(
+                          { groupId: group.id },
+                          { onSuccess: () => { window.location.href = `/app/group/${group.id}`; } }
+                        );
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-neon-purple/15 flex items-center justify-center">
+                        {group.avatar ? (
+                          <img src={group.avatar} alt={group.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Users size={18} className="text-neon-purple" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{group.name}</p>
+                        <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
+                      </div>
+                      <ChevronRight size={14} className="text-neon-purple/50 shrink-0" />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         {filtered.length > 0 && (

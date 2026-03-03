@@ -265,11 +265,11 @@ export const chatRouter = router({
     }));
   }),
 
-  // Get user's joined groups
+  // Get user's joined groups with latest message preview
   myGroups: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db
+    const groups = await db
       .select({
         id: chatGroups.id,
         name: chatGroups.name,
@@ -278,11 +278,36 @@ export const chatRouter = router({
         memberCount: chatGroups.memberCount,
         isTokenGated: chatGroups.isTokenGated,
         role: groupMembers.role,
+        updatedAt: chatGroups.updatedAt,
       })
       .from(groupMembers)
       .innerJoin(chatGroups, eq(groupMembers.groupId, chatGroups.id))
       .where(eq(groupMembers.userId, ctx.user.id))
       .orderBy(desc(chatGroups.updatedAt));
+
+    // Fetch latest message for each group
+    const result = await Promise.all(groups.map(async (g) => {
+      const [latestMsg] = await db
+        .select({
+          content: messages.content,
+          createdAt: messages.createdAt,
+          senderName: users.name,
+          senderUsername: users.username,
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.senderId, users.id))
+        .where(and(eq(messages.groupId, g.id), eq(messages.isDeleted, false)))
+        .orderBy(desc(messages.createdAt))
+        .limit(1);
+      return {
+        ...g,
+        lastMessage: latestMsg?.content ?? g.description ?? '',
+        lastMessageAt: latestMsg?.createdAt ?? g.updatedAt,
+        lastSender: latestMsg?.senderName ?? latestMsg?.senderUsername ?? null,
+      };
+    }));
+    // Sort by last message time
+    return result.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }),
 
   // Get members of a group
