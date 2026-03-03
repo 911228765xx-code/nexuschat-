@@ -127,6 +127,13 @@
       "when": 1772529158950,
       "tag": "0017_curved_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1772530231684,
+      "tag": "0018_nostalgic_celestials",
+      "breakpoints": true
     }
   ]
 }

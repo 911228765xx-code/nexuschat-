@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chatGroups, groupMembers, messages, users, groupUnreadCounts } from "../../drizzle/schema";
+import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
@@ -482,7 +482,6 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // Verify ownership
       const rows = await db
         .select({ senderId: messages.senderId })
         .from(messages)
@@ -496,6 +495,231 @@ export const chatRouter = router({
         .set({ isDeleted: true })
         .where(eq(messages.id, input.messageId));
       return { ok: true };
+    }),
+
+  // ─── Reactions ────────────────────────────────────────────────────────────
+  toggleReaction: protectedProcedure
+    .input(z.object({ messageId: z.number(), emoji: z.string().max(10) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const existing = await db
+        .select({ id: messageReactions.id })
+        .from(messageReactions)
+        .where(and(eq(messageReactions.messageId, input.messageId), eq(messageReactions.userId, ctx.user.id), eq(messageReactions.emoji, input.emoji)))
+        .limit(1);
+      if (existing.length > 0) {
+        await db.delete(messageReactions).where(eq(messageReactions.id, existing[0].id));
+        return { action: "removed" };
+      } else {
+        await db.insert(messageReactions).values({ messageId: input.messageId, userId: ctx.user.id, emoji: input.emoji });
+        return { action: "added" };
+      }
+    }),
+
+  getReactions: protectedProcedure
+    .input(z.object({ messageIds: z.array(z.number()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.messageIds.length === 0) return {};
+      const db = await getDb();
+      if (!db) return {};
+      const rows = await db
+        .select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId })
+        .from(messageReactions)
+        .where(sql`${messageReactions.messageId} IN (${sql.join(input.messageIds.map(id => sql`${id}`), sql`, `)})`);
+      // Group by messageId: { [msgId]: { [emoji]: { count, myReaction } } }
+      const result: Record<number, Record<string, { count: number; mine: boolean }>> = {};
+      for (const row of rows) {
+        const mid = row.messageId;
+        if (!result[mid]) result[mid] = {};
+        if (!result[mid][row.emoji]) result[mid][row.emoji] = { count: 0, mine: false };
+        result[mid][row.emoji].count++;
+        if (row.userId === ctx.user.id) result[mid][row.emoji].mine = true;
+      }
+      return result;
+    }),
+
+  // ─── Invite Links ─────────────────────────────────────────────────────────
+  createInviteLink: protectedProcedure
+    .input(z.object({ groupId: z.number(), maxUses: z.number().default(0), expiresInHours: z.number().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Verify membership
+      const member = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!member[0]) throw new Error("Not a member");
+      const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+      const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 3600_000) : undefined;
+      await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
+      return { token, url: `${input.groupId}/invite/${token}` };
+    }),
+
+  useInviteLink: protectedProcedure
+    .input(z.object({ token: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const link = await db.select().from(groupInviteLinks).where(and(eq(groupInviteLinks.token, input.token), eq(groupInviteLinks.isActive, true))).limit(1);
+      if (!link[0]) throw new Error("Invalid or expired invite link");
+      const l = link[0];
+      if (l.expiresAt && l.expiresAt < new Date()) throw new Error("Invite link has expired");
+      if (l.maxUses > 0 && l.useCount >= l.maxUses) throw new Error("Invite link has reached max uses");
+      // Check already member
+      const existing = await db.select({ id: groupMembers.id }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, l.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
+      await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
+      await db.update(chatGroups).set({ memberCount: sql`memberCount + 1` }).where(eq(chatGroups.id, l.groupId));
+      await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
+      return { groupId: l.groupId, alreadyMember: false };
+    }),
+
+  getGroupInviteLinks: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const member = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!member[0]) return [];
+      return db.select().from(groupInviteLinks)
+        .where(and(eq(groupInviteLinks.groupId, input.groupId), eq(groupInviteLinks.isActive, true)))
+        .orderBy(desc(groupInviteLinks.createdAt)).limit(5);
+    }),
+
+  // ─── File Upload ──────────────────────────────────────────────────────────
+  saveGroupFile: protectedProcedure
+    .input(z.object({ groupId: z.number(), messageId: z.number().optional(), fileName: z.string(), fileSize: z.number(), mimeType: z.string(), fileKey: z.string(), url: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [result] = await db.insert(groupFiles).values({ groupId: input.groupId, uploaderId: ctx.user.id, messageId: input.messageId, fileName: input.fileName, fileSize: input.fileSize, mimeType: input.mimeType, fileKey: input.fileKey, url: input.url });
+      return { id: (result as { insertId: number }).insertId, url: input.url };
+    }),
+
+  getGroupFiles: protectedProcedure
+    .input(z.object({ groupId: z.number(), limit: z.number().default(20) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name })
+        .from(groupFiles)
+        .leftJoin(users, eq(groupFiles.uploaderId, users.id))
+        .where(eq(groupFiles.groupId, input.groupId))
+        .orderBy(desc(groupFiles.createdAt)).limit(input.limit);
+    }),
+
+  // ─── Read Receipts ────────────────────────────────────────────────────────
+  markMessagesRead: protectedProcedure
+    .input(z.object({ groupId: z.number(), messageIds: z.array(z.number()) }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.messageIds.length === 0) return { ok: true };
+      const db = await getDb();
+      if (!db) return { ok: true };
+      // Upsert: only insert if not already read
+      const existing = await db.select({ messageId: messageReadReceipts.messageId })
+        .from(messageReadReceipts)
+        .where(and(eq(messageReadReceipts.userId, ctx.user.id), eq(messageReadReceipts.groupId, input.groupId),
+          sql`${messageReadReceipts.messageId} IN (${sql.join(input.messageIds.map(id => sql`${id}`), sql`, `)})`));
+      const existingIds = new Set(existing.map(r => r.messageId));
+      const toInsert = input.messageIds.filter(id => !existingIds.has(id));
+      if (toInsert.length > 0) {
+        await db.insert(messageReadReceipts).values(toInsert.map(msgId => ({ messageId: msgId, groupId: input.groupId, userId: ctx.user.id })));
+      }
+      return { ok: true };
+    }),
+
+  getReadCounts: protectedProcedure
+    .input(z.object({ messageIds: z.array(z.number()) }))
+    .query(async ({ input }) => {
+      if (input.messageIds.length === 0) return {};
+      const db = await getDb();
+      if (!db) return {};
+      const rows = await db
+        .select({ messageId: messageReadReceipts.messageId, count: sql<number>`COUNT(*)` })
+        .from(messageReadReceipts)
+        .where(sql`${messageReadReceipts.messageId} IN (${sql.join(input.messageIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(messageReadReceipts.messageId);
+      return Object.fromEntries(rows.map(r => [r.messageId, r.count]));
+    }),
+
+  // ─── Group Management ─────────────────────────────────────────────────────
+  kickMember: protectedProcedure
+    .input(z.object({ groupId: z.number(), targetUserId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      const target = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId))).limit(1);
+      if (!target[0]) throw new Error("User not in group");
+      if (target[0].role === "owner") throw new Error("Cannot kick the owner");
+      await db.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId)));
+      await db.update(chatGroups).set({ memberCount: sql`GREATEST(memberCount - 1, 0)` }).where(eq(chatGroups.id, input.groupId));
+      return { ok: true };
+    }),
+
+  muteMember: protectedProcedure
+    .input(z.object({ groupId: z.number(), targetUserId: z.number(), durationHours: z.number().default(24) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      const expiresAt = new Date(Date.now() + input.durationHours * 3600_000);
+      // Upsert mute
+      const existing = await db.select({ id: groupMutes.id }).from(groupMutes)
+        .where(and(eq(groupMutes.groupId, input.groupId), eq(groupMutes.userId, input.targetUserId))).limit(1);
+      if (existing[0]) {
+        await db.update(groupMutes).set({ expiresAt, mutedBy: ctx.user.id }).where(eq(groupMutes.id, existing[0].id));
+      } else {
+        await db.insert(groupMutes).values({ groupId: input.groupId, userId: input.targetUserId, mutedBy: ctx.user.id, expiresAt });
+      }
+      return { ok: true, expiresAt };
+    }),
+
+  unmuteMember: protectedProcedure
+    .input(z.object({ groupId: z.number(), targetUserId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      await db.delete(groupMutes).where(and(eq(groupMutes.groupId, input.groupId), eq(groupMutes.userId, input.targetUserId)));
+      return { ok: true };
+    }),
+
+  transferOwnership: protectedProcedure
+    .input(z.object({ groupId: z.number(), newOwnerId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
+      await db.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      await db.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
+      return { ok: true };
+    }),
+
+  getMutedMembers: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) return [];
+      const now = new Date();
+      return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name })
+        .from(groupMutes)
+        .leftJoin(users, eq(groupMutes.userId, users.id))
+        .where(and(eq(groupMutes.groupId, input.groupId), gt(groupMutes.expiresAt, now)));
     }),
 });
 

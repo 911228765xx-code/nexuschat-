@@ -548,3 +548,83 @@ export const groupUnreadCounts = mysqlTable(
   (t) => [index("idx_unread_user_group").on(t.userId, t.groupId)]
 );
 export type GroupUnreadCount = typeof groupUnreadCounts.$inferSelect;
+
+// ─── Group Invite Links ───────────────────────────────────────────────────────
+export const groupInviteLinks = mysqlTable(
+  "group_invite_links",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    creatorId: int("creatorId").notNull(),
+    token: varchar("token", { length: 64 }).notNull().unique(),
+    maxUses: int("maxUses").default(0).notNull(), // 0 = unlimited
+    useCount: int("useCount").default(0).notNull(),
+    expiresAt: timestamp("expiresAt"),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_invite_token").on(t.token),
+    index("idx_invite_group").on(t.groupId),
+  ]
+);
+export type GroupInviteLink = typeof groupInviteLinks.$inferSelect;
+export type InsertGroupInviteLink = typeof groupInviteLinks.$inferInsert;
+
+// ─── Group Files ──────────────────────────────────────────────────────────────
+export const groupFiles = mysqlTable(
+  "group_files",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    uploaderId: int("uploaderId").notNull(),
+    messageId: bigint("messageId", { mode: "number" }),
+    fileName: varchar("fileName", { length: 255 }).notNull(),
+    fileSize: bigint("fileSize", { mode: "number" }).notNull(),
+    mimeType: varchar("mimeType", { length: 100 }).notNull(),
+    fileKey: text("fileKey").notNull(),
+    url: text("url").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_files_group").on(t.groupId),
+    index("idx_files_uploader").on(t.uploaderId),
+  ]
+);
+export type GroupFile = typeof groupFiles.$inferSelect;
+export type InsertGroupFile = typeof groupFiles.$inferInsert;
+
+// ─── Message Read Receipts ────────────────────────────────────────────────────
+// Tracks which users have read which messages (sampled — only last N messages per group)
+export const messageReadReceipts = mysqlTable(
+  "message_read_receipts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    messageId: bigint("messageId", { mode: "number" }).notNull(),
+    groupId: int("groupId").notNull(),
+    userId: int("userId").notNull(),
+    readAt: timestamp("readAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_receipts_message").on(t.messageId),
+    index("idx_receipts_user_group").on(t.userId, t.groupId),
+  ]
+);
+export type MessageReadReceipt = typeof messageReadReceipts.$inferSelect;
+export type InsertMessageReadReceipt = typeof messageReadReceipts.$inferInsert;
+
+// ─── Group Mutes ──────────────────────────────────────────────────────────────
+// Tracks muted members per group (for group admin mute feature)
+export const groupMutes = mysqlTable(
+  "group_mutes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    userId: int("userId").notNull(),
+    mutedBy: int("mutedBy").notNull(),
+    expiresAt: timestamp("expiresAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_mutes_group_user").on(t.groupId, t.userId)]
+);
+export type GroupMute = typeof groupMutes.$inferSelect;
