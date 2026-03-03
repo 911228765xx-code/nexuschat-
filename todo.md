@@ -357,3 +357,8 @@
 - [x] 添加Express compression中间件（动态gzip压缩API响应）
 - [x] 添加vite-plugin-compression2（构建时生成.gz/.br预压缩文件）
 - [ ] 测试验证加载速度（需要生产构建后测试）
+
+## v57 后续优化（骨架屏+懒加载）
+- [x] 优化splash screen：DashboardLayout在auth加载期间显示骨架屏，减少视觉等待
+- [x] 为群聊页面用户头像添加loading=lazy懒加载（消息头像+成员列表+已读头像）
+- [x] 真机模拟测试（移动端393px + 桌面端1280px）验证所有功能通过

@@ -51,6 +51,11 @@ export default function DashboardLayout({
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
+  // Show skeleton while auth state is loading to prevent blank flash
+  if (loading) {
+    return <DashboardLayoutSkeleton />;
+  }
+
   return (
     <SidebarProvider
       style={
