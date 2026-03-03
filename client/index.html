@@ -261,18 +261,22 @@
         // Show skeleton after JS starts executing (vendor.js downloaded)
         // This replaces the splash as soon as JS is available
         document.addEventListener('DOMContentLoaded', function() {
-          // Show skeleton after a short delay to let splash show first
-          // Then transition to skeleton when JS is loaded
+          // Re-query root here to ensure DOM is fully parsed
+          var rootEl = document.getElementById('root');
+          root = rootEl;
+
           var observer = new MutationObserver(function() {
-            if (root && root.children.length > 0) {
+            if (rootEl && rootEl.children.length > 0) {
               observer.disconnect();
               hideSkeleton();
             }
           });
-          observer.observe(root, { childList: true, subtree: true });
 
-          // Show skeleton when main.tsx starts executing (JS loaded)
-          // We detect this by watching for React to start rendering
+          // Guard: only observe if rootEl is a valid DOM Node
+          if (rootEl) {
+            observer.observe(rootEl, { childList: true, subtree: true });
+          }
+
           // Fallback: show skeleton after 1.5s if splash is still showing
           setTimeout(showSkeleton, 1500);
 

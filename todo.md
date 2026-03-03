@@ -371,3 +371,7 @@
 - [x] AppLayout路由切换动画（key=location，每次路由变化重新触发）
 - [x] PageLoader改为骨架屏效果，减少布局跳动
 - [x] 真机模拟测试通过（移动端393px + 桌面端1280px）
+
+## v59 Bug 修复
+- [x] 修复 App.tsx 中 JSDoc 注释块导致 Vite Babel 解析器报 "Unexpected token" 错误
+- [x] 修复 index.html 中 MutationObserver 因 root 元素为 null 导致的 TypeError（添加 if (rootEl) 防御检查）
