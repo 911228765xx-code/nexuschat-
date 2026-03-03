@@ -3,7 +3,7 @@
  * Cyberpunk Noir: 深色背景 + 霓虹强调色
  * v1.9: AppContext全局状态接入 + 全局消息搜索 + 对话置顶 + 长按上下文菜单
  */
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { formatMessageTime } from "@/lib/timeFormat";
@@ -106,8 +106,8 @@ export default function Chat() {
   // Use real count if available, fallback to local
   const unreadNotificationCount = notifCountData?.count ?? localUnreadCount;
 
-  // Merge real DM conversations + my groups into the list
-  const mergedConversations = [
+  // Merge real DM conversations + my groups into the list (memoized)
+  const mergedConversations = useMemo(() => [
     // My joined groups from DB
     ...(myGroupsData ?? []).map(g => ({
       id: String(g.id),
@@ -139,18 +139,20 @@ export default function Chat() {
       dmUserId: String(dm.userId),
     } as import("@/contexts/AppContext").Conversation)),
 
-  ].filter((conv, idx, arr) => arr.findIndex(c => c.id === conv.id) === idx);
+  ].filter((conv, idx, arr) => arr.findIndex(c => c.id === conv.id) === idx),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [myGroupsData, conversations, dmConversations, unreadCountsData]);
 
-  // Sort: pinned first, then by time
-  const sortedConversations = [...mergedConversations].sort((a, b) => {
+  // Sort: pinned first, then by time (memoized)
+  const sortedConversations = useMemo(() => [...mergedConversations].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
     return 0;
-  });
+  }), [mergedConversations]);
 
-  const filtered = sortedConversations.filter((c) =>
+  const filtered = useMemo(() => sortedConversations.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ), [sortedConversations, searchQuery]);
 
   // ─── Real user search via backend ────────────────────────────────────
   const [debouncedGlobalSearch, setDebouncedGlobalSearch] = useState("");

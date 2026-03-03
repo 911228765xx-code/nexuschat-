@@ -221,7 +221,7 @@ export default function Trading() {
   const [compareList, setCompareList] = useState<string[]>([]);
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth()); // 0-indexed
-  const [tickerOffset, setTickerOffset] = useState(0);
+  // tickerOffset removed — replaced with pure CSS animation (no JS re-renders)
   const { t } = useI18n();
 
   // Create strategy form state
@@ -304,13 +304,7 @@ export default function Trading() {
   // New alert form state
   const [newAlert, setNewAlert] = useState({ symbol: "BNB", targetPrice: "", direction: "above" as "above" | "below" });
 
-  // Ticker animation
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTickerOffset(prev => (prev + 1) % (displayTicker.length * 120));
-    }, 50);
-    return () => clearInterval(timer);
-  }, []);
+  // Ticker animation is now handled by pure CSS @keyframes ticker-scroll
 
   const { data: pnlCalendar = [] } = trpc.trading.getPnlCalendar.useQuery(
     { year: calendarYear, month: calendarMonth },
@@ -497,7 +491,13 @@ export default function Trading() {
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
       {/* Price Ticker */}
       <div className="bg-background border-b border-border/20 overflow-hidden h-7 flex items-center">
-        <div className="flex items-center gap-6 animate-ticker whitespace-nowrap" style={{ transform: `translateX(-${tickerOffset}px)` }}>
+        <div
+          className="flex items-center gap-6 whitespace-nowrap"
+          style={{
+            animation: `ticker-scroll ${displayTicker.length * 4}s linear infinite`,
+            willChange: 'transform',
+          }}
+        >
           {[...displayTicker, ...displayTicker].map((coin, i) => (
             <span key={`${coin.symbol}-${i}`} className="flex items-center gap-1.5 text-[11px]">
               <span className="font-mono font-medium text-foreground">{coin.symbol}</span>

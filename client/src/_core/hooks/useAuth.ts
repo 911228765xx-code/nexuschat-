@@ -22,6 +22,9 @@ export function useAuth(_options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    // Cache auth state for 5 minutes — prevents redundant session checks on every page navigation
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({

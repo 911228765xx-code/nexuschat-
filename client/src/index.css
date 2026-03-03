@@ -136,10 +136,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+    overscroll-behavior: none;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
@@ -249,3 +252,8 @@
 .light-markdown strong { font-weight: 600; }
 .light-markdown em { font-style: italic; }
 .light-markdown del { text-decoration: line-through; color: var(--muted-foreground); }
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

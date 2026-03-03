@@ -11,7 +11,22 @@ import { initSentry } from "@/lib/sentry";
 initSentry();
 
 // No-login mode: API errors are logged but never redirect to login page
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Data is considered fresh for 2 minutes — prevents redundant refetches on page switch
+      staleTime: 2 * 60_000,
+      // Keep unused data in cache for 5 minutes
+      gcTime: 5 * 60_000,
+      // Don't refetch when user switches browser tabs
+      refetchOnWindowFocus: false,
+      // Don't refetch when network reconnects (we handle this manually)
+      refetchOnReconnect: false,
+      // Retry failed requests only once
+      retry: 1,
+    },
+  },
+});
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     console.error("[API Query Error]", event.query.state.error);

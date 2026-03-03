@@ -91,7 +91,10 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
-          {children}
+          {/* Fade-in on mount for smooth page transitions */}
+          <div className="animate-in fade-in duration-200">
+            {children}
+          </div>
         </ErrorBoundary>
       </main>
 
