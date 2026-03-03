@@ -395,3 +395,9 @@
 - [x] 修复未登录时骨架屏消失后黑屏问题（AppLayout未登录状态改为显示登录引导页）
 - [x] 修复骨架屏隐藏时机（添加400ms延迟，App.tsx主动调用__nexusHideSkeleton）
 - [x] 修复微信内置浏览器重定向（window.location.href → window.location.replace）
+
+## v63 搜索框padding修复
+- [x] 修复 Chat.tsx 搜索框 pl-9 被 Tailwind v4 preflight reset 覆盖（改用内联 style）
+- [x] 修复 Contacts.tsx 搜索框同上
+- [x] 修复 Discover.tsx 搜索框同上
+- [x] 修复 Research.tsx 搜索框同上
