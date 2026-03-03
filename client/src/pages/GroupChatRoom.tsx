@@ -652,11 +652,11 @@ export default function GroupChatRoom() {
                       </div>
                     )}
 
-                    <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                    <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed transition-opacity duration-300 ${
                       msg.isMine ? "bg-neon-cyan/15 text-foreground rounded-br-md border border-neon-cyan/20"
                       : msg.isAI ? "bg-neon-purple/10 text-foreground rounded-bl-md border border-neon-purple/20"
                       : "bg-secondary/60 text-foreground rounded-bl-md border border-border/20"
-                    }`}>
+                    } ${msg.pending ? "opacity-60" : "opacity-100"}`}>
                       {msg.isAI && (
                         <div className="flex items-center gap-1 mb-1.5 text-[10px] text-neon-purple font-mono">
                           <Bot size={12} />NexusBot AI
@@ -712,7 +712,17 @@ export default function GroupChatRoom() {
                           {readCount}
                         </span>
                       )}
-                      {msg.pending && <span className="text-[10px] text-muted-foreground/50">sending...</span>}
+                      {msg.pending && (
+                        <span className="flex items-center gap-0.5">
+                          {[0,1,2].map(i => (
+                            <span
+                              key={i}
+                              className="w-1 h-1 rounded-full bg-neon-cyan/40 animate-bounce"
+                              style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.8s' }}
+                            />
+                          ))}
+                        </span>
+                      )}
                       {/* Persisted reactions */}
                       {Object.entries(msgReactions).map(([emoji, data]) => (
                         <button
@@ -789,11 +799,11 @@ export default function GroupChatRoom() {
               onChange={handleInputChange}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !showMentionMenu) handleSend(); }}
               placeholder={t("group.inputPlaceholder")}
-              className="w-full h-10 px-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+              className="w-full h-10 px-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-2 focus:ring-neon-cyan/20 transition-all duration-150"
             />
           </div>
           {input.trim() ? (
-            <button onClick={handleSend} className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-all shrink-0">
+            <button onClick={handleSend} className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 active:scale-90 active:bg-neon-cyan/40 transition-all duration-100 shrink-0">
               <Send size={18} />
             </button>
           ) : (

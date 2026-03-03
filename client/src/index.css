@@ -257,3 +257,37 @@
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+/* ─── Global interaction feedback ──────────────────────────────────────────── */
+/* Instant press feedback on all interactive elements — feels native on mobile */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  transition: transform 100ms ease, opacity 100ms ease;
+}
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.94);
+  opacity: 0.85;
+}
+
+/* Smooth scroll for all scrollable containers */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Hardware-accelerated scrolling on iOS */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-y-scroll,
+.overflow-x-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Page enter animation — used by AppLayout for route transitions */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-enter 180ms ease-out both;
+}

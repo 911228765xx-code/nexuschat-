@@ -486,6 +486,51 @@ export default function Trading() {
 
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
 
+  // Show skeleton while initial data loads
+  const isInitialLoading = !backendTraders && !strategies.length;
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* Skeleton ticker */}
+        <div className="bg-background border-b border-border/20 h-7 flex items-center px-4 gap-4">
+          {[80, 100, 90, 110, 85].map((w, i) => (
+            <div key={i} className="h-3 rounded-full bg-secondary/60 animate-pulse" style={{ width: w }} />
+          ))}
+        </div>
+        {/* Skeleton header */}
+        <div className="glass border-b border-border/30 px-4 h-12 flex items-center justify-between">
+          <div className="h-4 w-24 rounded-full bg-secondary/60 animate-pulse" />
+          <div className="flex gap-2">
+            <div className="h-8 w-8 rounded-lg bg-secondary/60 animate-pulse" />
+            <div className="h-8 w-8 rounded-lg bg-secondary/60 animate-pulse" />
+          </div>
+        </div>
+        {/* Skeleton overview cards */}
+        <div className="mx-4 mt-3 grid grid-cols-4 gap-2">
+          {[0,1,2,3].map(i => (
+            <div key={i} className="p-2 rounded-xl bg-secondary/20 border border-border/20 animate-pulse">
+              <div className="h-2 w-12 rounded-full bg-secondary/60 mb-1.5" />
+              <div className="h-4 w-10 rounded-full bg-secondary/60" />
+            </div>
+          ))}
+        </div>
+        {/* Skeleton tabs */}
+        <div className="flex gap-1 px-4 mt-3">
+          {[60, 50, 70, 55, 80, 45].map((w, i) => (
+            <div key={i} className="h-7 rounded-full bg-secondary/40 animate-pulse" style={{ width: w }} />
+          ))}
+        </div>
+        {/* Skeleton cards */}
+        <div className="px-4 mt-4 space-y-3">
+          {[0,1,2].map(i => (
+            <div key={i} className="h-20 rounded-xl bg-secondary/20 border border-border/20 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}

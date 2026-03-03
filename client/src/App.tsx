@@ -42,6 +42,33 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 
+// ─── Route prefetch helpers (called on nav hover/touch to preload JS chunks) ──
+// Each function triggers the dynamic import so the chunk is fetched before navigation.
+const prefetchChat = () => import("./pages/Chat");
+const prefetchDiscover = () => import("./pages/Discover");
+const prefetchResearch = () => import("./pages/Research");
+const prefetchTrading = () => import("./pages/Trading");
+const prefetchProfile = () => import("./pages/Profile");
+const prefetchGroupChatRoom = () => import("./pages/GroupChatRoom");
+
+// Prefetch the 5 main tabs after the initial render is complete (idle-time preloading)
+if (typeof window !== 'undefined') {
+  const prefetchAll = () => {
+    prefetchChat();
+    prefetchDiscover();
+    prefetchResearch();
+    prefetchTrading();
+    prefetchProfile();
+    prefetchGroupChatRoom();
+  };
+  if ('requestIdleCallback' in window) {
+    (window as Window & typeof globalThis & { requestIdleCallback: (cb: () => void, opts?: object) => void })
+      .requestIdleCallback(prefetchAll, { timeout: 3000 });
+  } else {
+    setTimeout(prefetchAll, 1500);
+  }
+}
+
 // ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
 function PageLoader() {
   return (

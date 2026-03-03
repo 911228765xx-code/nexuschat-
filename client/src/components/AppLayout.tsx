@@ -12,6 +12,15 @@ import { useLocation, Link } from "wouter";
 import { MessageCircle, Compass, Brain, TrendingUp, User, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+
+// Prefetch helpers — trigger dynamic import on hover/touch so the chunk loads before navigation
+const prefetchMap: Record<string, () => Promise<unknown>> = {
+  "/app/chat":     () => import("@/pages/Chat"),
+  "/app/discover": () => import("@/pages/Discover"),
+  "/app/research": () => import("@/pages/Research"),
+  "/app/trading":  () => import("@/pages/Trading"),
+  "/app/profile":  () => import("@/pages/Profile"),
+};
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
@@ -91,8 +100,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
-          {/* Fade-in on mount for smooth page transitions */}
-          <div className="animate-in fade-in duration-200">
+          {/* Slide-up + fade-in on mount for smooth page transitions */}
+          <div className="page-enter">
             {children}
           </div>
         </ErrorBoundary>
@@ -111,7 +120,11 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
 
               return (
                 <Link key={tab.path} href={tab.path}>
-                  <button className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors">
+                  <button
+                    className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors active:scale-90 transition-transform duration-100"
+                    onMouseEnter={() => prefetchMap[tab.path]?.()}
+                    onTouchStart={() => prefetchMap[tab.path]?.()}
+                  >
                     {/* CSS-based tab indicator (replaces framer-motion layoutId) */}
                     {isActive && (
                       <div
