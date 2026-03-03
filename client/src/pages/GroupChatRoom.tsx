@@ -423,8 +423,10 @@ export default function GroupChatRoom() {
   // ─── Invite link ──────────────────────────────────────────────────────────
   const createInviteLinkMutation = trpc.chat.createInviteLink.useMutation({
     onSuccess: (data) => {
-      // Use configured app URL (production domain) if available, fallback to current origin
-      const appBaseUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "") || window.location.origin;
+      // Use configured app URL (production domain) if available
+      // Fallback to nexuschat.best (production domain) to avoid dev server URLs in invite links
+      const configuredUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "");
+      const appBaseUrl = configuredUrl || "https://nexuschat.best";
       const url = `${appBaseUrl}/invite/${data.token}`;
       setInviteUrl(url);
       setShowInviteModal(true);
