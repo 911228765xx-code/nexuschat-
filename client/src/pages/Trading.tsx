@@ -496,7 +496,7 @@ export default function Trading() {
     <div className="flex flex-col h-full">
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
       {/* Price Ticker */}
-      <div className="bg-background/80 border-b border-border/20 overflow-hidden h-7 flex items-center">
+      <div className="bg-background border-b border-border/20 overflow-hidden h-7 flex items-center">
         <div className="flex items-center gap-6 animate-ticker whitespace-nowrap" style={{ transform: `translateX(-${tickerOffset}px)` }}>
           {[...displayTicker, ...displayTicker].map((coin, i) => (
             <span key={`${coin.symbol}-${i}`} className="flex items-center gap-1.5 text-[11px]">
@@ -1339,7 +1339,7 @@ export default function Trading() {
         {/* Strategy Detail Modal */}
         {modalType === "strategy" && selectedStrategy && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => { setModalType("none"); setSelectedStrategy(null); }}
           >
             <motion.div
@@ -1548,7 +1548,7 @@ export default function Trading() {
         {/* Trader Detail Modal */}
         {modalType === "trader" && selectedTrader && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => { setModalType("none"); setSelectedTrader(null); }}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -1657,7 +1657,7 @@ export default function Trading() {
         {/* ═══ Create Strategy Modal ═══ */}
         {modalType === "createStrategy" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => setModalType("none")}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -1761,7 +1761,7 @@ export default function Trading() {
         {/* ═══ Copy Trade Config Modal ═══ */}
         {modalType === "copyConfig" && copyTrader && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => { setModalType("none"); setCopyTrader(null); }}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -1875,7 +1875,7 @@ export default function Trading() {
         {/* ═══ Close Position Confirm Modal ═══ */}
         {modalType === "closePosition" && closePosition && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => { setModalType("none"); setClosePosition(null); }}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
@@ -1924,7 +1924,7 @@ export default function Trading() {
         {/* ═══ Compare Traders Modal ═══ */}
         {modalType === "compare" && compareTraders.length >= 2 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => setModalType("none")}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -2013,7 +2013,7 @@ export default function Trading() {
         {/* ═══ Notifications Config Modal ═══ */}
         {modalType === "notifications" && selectedStrategy && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 [backdrop-filter:none]"
             onClick={() => { setModalType("none"); setSelectedStrategy(null); }}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}

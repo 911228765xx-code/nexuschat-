@@ -178,7 +178,7 @@ export default function Home() {
 
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
-          <div className="sm:hidden border-t border-border/20 bg-background/95 backdrop-blur-xl px-4 py-3 flex flex-col gap-2">
+          <div className="sm:hidden border-t border-border/20 bg-background [backdrop-filter:none] px-4 py-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">{t("nav.language") || "语言"}</span>
               <LanguageSwitcher />
@@ -449,7 +449,7 @@ export default function Home() {
       {/* PWA Install Guide Modal */}
       {showIOSGuide && (
         <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 [backdrop-filter:none]"
           onClick={() => setShowIOSGuide(false)}
         >
           <div

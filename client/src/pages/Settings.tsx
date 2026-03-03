@@ -482,7 +482,7 @@ export default function Settings() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="rounded-2xl bg-card/80 border border-neon-green/20 overflow-hidden">
+              <div className="rounded-2xl bg-card border border-neon-green/20 overflow-hidden">
                 {LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}

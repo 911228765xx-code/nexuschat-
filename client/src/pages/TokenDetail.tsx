@@ -378,7 +378,7 @@ function ScoreRing({ score, size = 80 }: { score: number; size?: number }) {
 function ChartTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-card/95 backdrop-blur-md border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
+    <div className="bg-card/95 [backdrop-filter:none] border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
       <p className="text-[10px] font-mono font-bold text-neon-cyan">${payload[0].value.toLocaleString()}</p>
     </div>
   );
@@ -387,7 +387,7 @@ function ChartTooltip({ active, payload }: any) {
 function FlowTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-card/95 backdrop-blur-md border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
+    <div className="bg-card/95 [backdrop-filter:none] border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
       <p className="text-[9px] text-muted-foreground mb-0.5">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} className={`text-[10px] font-mono ${p.dataKey === "inflow" ? "text-neon-green" : "text-neon-red"}`}>

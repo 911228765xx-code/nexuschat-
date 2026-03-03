@@ -271,7 +271,7 @@ export default function EditProfile() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden mx-4 mb-4"
             >
-              <div className="rounded-2xl bg-card/80 border border-border/30 overflow-hidden">
+              <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
                 {/* Tabs */}
                 <div className="flex border-b border-border/20">
                   <button
@@ -493,7 +493,7 @@ export default function EditProfile() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden mt-2"
                 >
-                  <div className="p-3.5 rounded-xl bg-card/80 border border-neon-cyan/20 space-y-3">
+                  <div className="p-3.5 rounded-xl bg-card border border-neon-cyan/20 space-y-3">
                     {/* Platform selector */}
                     <div>
                       <label className="text-[10px] text-muted-foreground mb-1.5 block">Platform</label>

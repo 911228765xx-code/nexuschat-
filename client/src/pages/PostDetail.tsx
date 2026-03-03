@@ -76,7 +76,7 @@ function RepostModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end"
+      className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-end"
       onClick={onClose}
     >
       <motion.div

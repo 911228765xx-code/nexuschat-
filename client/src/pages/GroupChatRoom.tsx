@@ -472,7 +472,7 @@ export default function GroupChatRoom() {
                   {emojiPickerMsgId === msg.id && (
                     <div
                       ref={emojiRef}
-                      className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-popover/95 backdrop-blur-xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
+                      className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
                     >
                       {EMOJI_LIST.map((emoji) => (
                         <button
@@ -533,7 +533,7 @@ export default function GroupChatRoom() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="mb-2 rounded-xl bg-popover/95 backdrop-blur-xl border border-border shadow-2xl overflow-hidden max-h-48 overflow-y-auto"
+              className="mb-2 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl overflow-hidden max-h-48 overflow-y-auto"
             >
               <div className="px-3 py-1.5 border-b border-border/30">
                 <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
@@ -621,7 +621,7 @@ export default function GroupChatRoom() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/50 [backdrop-filter:none]"
               onClick={() => setShowSidebar(false)}
             />
             <motion.div
@@ -809,7 +809,7 @@ export default function GroupChatRoom() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end"
+                    className="fixed inset-0 z-[60] bg-black/60 [backdrop-filter:none] flex items-end"
                     onClick={() => setMemberActionTarget(null)}
                   >
                     <motion.div

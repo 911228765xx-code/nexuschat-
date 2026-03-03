@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
-import { AnimatePresence, motion } from "framer-motion";
+// framer-motion AnimatePresence removed — caused black screen flash on Android during route transitions
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
@@ -56,11 +56,7 @@ function PageLoader() {
   );
 }
 
-// ─── Page transition wrapper ──────────────────────────────────────────────────
-// No animation: instant route switch prevents black-screen flash on mobile
-function PageTransition({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
-}
+// PageTransition removed — AnimatePresence + motion caused Android black screen
 
 /**
  * PriceAlertSocket — rendered after initial paint, loads socket.io lazily
@@ -102,9 +98,7 @@ function RouteContent() {
 
   return (
     <Suspense fallback={<PageLoader />}>
-      <AnimatePresence mode="sync" initial={false}>
-        <PageTransition key={undefined}>
-          <Switch location={location}>
+      <Switch location={location}>
             <Route path="/">
               <Home />
             </Route>
@@ -225,9 +219,7 @@ function RouteContent() {
             <Route>
               <NotFound />
             </Route>
-          </Switch>
-        </PageTransition>
-      </AnimatePresence>
+      </Switch>
     </Suspense>
   );
 }

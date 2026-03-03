@@ -245,7 +245,7 @@ export default function PosterGenerator({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col bg-black/85 [backdrop-filter:none]"
           onClick={onClose}
         >
           <motion.div

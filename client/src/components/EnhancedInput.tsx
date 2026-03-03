@@ -207,7 +207,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden mb-1.5"
           >
-            <div className="flex items-center gap-0.5 p-1 rounded-xl bg-card/80 border border-border/20 backdrop-blur-sm">
+            <div className="flex items-center gap-0.5 p-1 rounded-xl bg-card border border-border/20 [backdrop-filter:none]">
               <button onClick={() => insertFormat("**")} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors" title="Bold">
                 <Bold size={14} className="text-muted-foreground" />
               </button>
@@ -245,7 +245,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden mb-1.5"
           >
-            <div className="p-2.5 rounded-xl bg-card/60 border border-neon-cyan/20 backdrop-blur-sm">
+            <div className="p-2.5 rounded-xl bg-card border border-neon-cyan/20 [backdrop-filter:none]">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Eye size={10} className="text-neon-cyan" />
                 <span className="text-[9px] font-medium text-neon-cyan uppercase tracking-wider">{t("chat.markdownPreview") || "Preview"}</span>
@@ -267,7 +267,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ y: 8, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
-            className="absolute bottom-full left-0 right-0 mb-1.5 rounded-xl bg-popover/95 backdrop-blur-xl border border-border/40 shadow-2xl overflow-hidden z-30"
+            className="absolute bottom-full left-0 right-0 mb-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border/40 shadow-2xl overflow-hidden z-30"
           >
             <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/20">
               <DollarSign size={12} className="text-neon-cyan" />
@@ -308,7 +308,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 240, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-1.5 rounded-xl bg-card/80 border border-border/20 backdrop-blur-sm"
+            className="overflow-hidden mb-1.5 rounded-xl bg-card border border-border/20 [backdrop-filter:none]"
           >
             {/* Tabs */}
             <div className="flex items-center border-b border-border/20">

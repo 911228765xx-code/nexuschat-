@@ -60,7 +60,7 @@ export default function PullToRefresh({ children, onRefresh, className }: PullTo
       >
         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
           pullReady ? "bg-neon-cyan/20" : "bg-secondary/60"
-        } backdrop-blur-sm border border-border/20`}>
+        } [backdrop-filter:none] border border-border/20`}>
           <motion.div style={{ rotate: refreshing ? undefined : indicatorRotate }}>
             <RefreshCw
               size={16}

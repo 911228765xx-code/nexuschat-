@@ -65,7 +65,7 @@ export default function SwipeBack({ children, backPath, enabled = true }: SwipeB
         className="absolute left-0 top-0 bottom-0 w-10 flex items-center justify-center z-50 pointer-events-none"
         style={{ opacity: indicatorOpacity, x: indicatorX }}
       >
-        <div className="w-8 h-16 rounded-r-xl bg-neon-cyan/20 backdrop-blur-sm border border-neon-cyan/30 border-l-0 flex items-center justify-center">
+        <div className="w-8 h-16 rounded-r-xl bg-neon-cyan/20 [backdrop-filter:none] border border-neon-cyan/30 border-l-0 flex items-center justify-center">
           <ChevronLeft size={18} className="text-neon-cyan" />
         </div>
       </motion.div>

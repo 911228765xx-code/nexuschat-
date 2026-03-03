@@ -219,10 +219,10 @@ export default function WalletConnectModal({ open, onClose }: Props) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 [backdrop-filter:none]" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full sm:max-w-md bg-[#0f1629]/95 backdrop-blur-xl border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl shadow-black/50 overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full sm:max-w-md bg-[#0f1629] [backdrop-filter:none] border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl shadow-black/50 overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <div>

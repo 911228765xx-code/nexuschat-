@@ -44,7 +44,7 @@ export default function DownloadPage() {
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/20 bg-background/80 backdrop-blur-md">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/20 bg-background [backdrop-filter:none]">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
             onClick={() => setLocation("/")}

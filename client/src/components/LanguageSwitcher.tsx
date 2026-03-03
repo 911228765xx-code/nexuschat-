@@ -28,7 +28,7 @@ export default function LanguageSwitcher({ className = "" }: { className?: strin
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-[#111827]/95 backdrop-blur-xl border border-white/10 shadow-2xl shadow-black/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-[#111827] [backdrop-filter:none] border border-white/10 shadow-2xl shadow-black/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
           {LOCALES.map((l) => (
             <button
               key={l.code}

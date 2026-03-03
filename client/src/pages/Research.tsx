@@ -717,7 +717,7 @@ export default function Research() {
       {/* AI Report Modal - Beautiful Visualized Design */}
       {showAiReport && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowAiReport(false)} />
+          <div className="absolute inset-0 bg-black/80 [backdrop-filter:none]" onClick={() => setShowAiReport(false)} />
           <div className="relative w-full sm:max-w-3xl max-h-[95vh] sm:max-h-[90vh] sm:mx-4 sm:rounded-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col">
 
             {/* Gradient Header Banner */}
@@ -909,8 +909,8 @@ export default function Research() {
       {/* Share to Feed Dialog */}
       {showShareDialog && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowShareDialog(false)} />
-          <div className="relative w-full max-w-md rounded-2xl bg-[#0f1629]/95 border border-[#a855f7]/30 shadow-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-black/60 [backdrop-filter:none]" onClick={() => setShowShareDialog(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-[#0f1629] border border-[#a855f7]/30 shadow-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/10">
               <h3 className="text-base font-bold text-white font-['Space_Grotesk'] flex items-center gap-2">
                 <Share2 size={16} className="text-[#a855f7]" />
@@ -1745,7 +1745,7 @@ export default function Research() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+              className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-end justify-center"
               onClick={() => setShowShareModal(null)}
             >
               <motion.div
@@ -1872,7 +1872,7 @@ export default function Research() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+            className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-end justify-center"
             onClick={() => setShowResearchLoginPrompt(false)}
           >
             <motion.div

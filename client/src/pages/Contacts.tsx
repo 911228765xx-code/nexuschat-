@@ -433,7 +433,7 @@ export default function Contacts() {
         <div className="relative">
           {sortedLetters.map((letter) => (
             <div key={letter}>
-              <div className="sticky top-0 z-[5] px-4 py-1.5 bg-background/80 backdrop-blur-sm">
+              <div className="sticky top-0 z-[5] px-4 py-1.5 bg-background [backdrop-filter:none]">
                 <span className="text-[11px] font-bold text-neon-cyan font-mono">{letter}</span>
               </div>
               {grouped[letter].map((contact) => (
@@ -520,7 +520,7 @@ export default function Contacts() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+            className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-end justify-center"
             onClick={() => { setSelectedContact(null); setEditingNote(null); setAssigningGroupTo(null); }}
           >
             <motion.div
@@ -669,7 +669,7 @@ export default function Contacts() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+            className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-end justify-center"
             onClick={() => setShowRequests(false)}
           >
             <motion.div
@@ -823,7 +823,7 @@ export default function Contacts() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-6"
+            className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-center justify-center px-6"
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
@@ -914,7 +914,7 @@ export default function Contacts() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-6"
+            className="fixed inset-0 z-50 bg-black/60 [backdrop-filter:none] flex items-center justify-center px-6"
             onClick={() => setShowNewGroupModal(false)}
           >
             <motion.div
