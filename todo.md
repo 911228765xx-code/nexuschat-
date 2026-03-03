@@ -313,3 +313,12 @@
 - [x] 修复 GroupChatRoom 重复消息（同上）
 - [x] DMChat 不受影响（使用 tRPC invalidate 机制，无 Socket 广播）
 - [x] 运行测试，158/158 通过，TypeScript 0 错误
+
+## v53 消息历史分页加载
+- [x] 检查后端 getMessages/getDMHistory 的 before cursor 分页参数（已支持）
+- [x] GroupChatRoom：消息列表顶部添加"加载更多"按鈕，接入 before cursor 分页
+- [x] ChatRoom：同上
+- [x] DMChat：同上（getDMHistory 接口）
+- [x] 加载时保持滚动位置不跳动（scrollHeight 差居锁定）
+- [x] 无更多消息时自动隐藏按鈕
+- [x] 运行测试，158/158 通过，TypeScript 0 错误

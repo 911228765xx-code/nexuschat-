@@ -135,18 +135,63 @@ export default function ChatRoom() {
   const groupId = id ? parseInt(id, 10) : NaN;
   const isValidRoom = !isNaN(groupId) && groupId > 0;
 
+  // Pagination state
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const PAGE_SIZE = 30;
+  const utils = trpc.useUtils();
+
   // tRPC: load initial messages once (WebSocket handles real-time updates)
   const { data: serverMessages } = trpc.chat.getMessages.useQuery(
-    { groupId, limit: 50 },
+    { groupId, limit: PAGE_SIZE },
     {
       enabled: isValidRoom,
       staleTime: Infinity,
     }
   );
 
+  // Load older messages on demand
+  const loadMoreMessages = useCallback(async () => {
+    if (!isValidRoom || isLoadingMore || !hasMore) return;
+    const numericIds = messages
+      .map(m => Number(m.id))
+      .filter(n => !isNaN(n) && n < 1_700_000_000_000);
+    if (numericIds.length === 0) return;
+    const oldestId = Math.min(...numericIds);
+    setIsLoadingMore(true);
+    const container = scrollRef.current;
+    const prevScrollHeight = container?.scrollHeight ?? 0;
+    try {
+      const older = await utils.chat.getMessages.fetch({ groupId, limit: PAGE_SIZE, before: oldestId });
+      if (!older || older.length === 0) { setHasMore(false); return; }
+      if (older.length < PAGE_SIZE) setHasMore(false);
+      const mapped = older.map((m) => ({
+        id: String(m.id),
+        sender: m.senderName ?? "Unknown",
+        senderAvatar: m.senderAvatar ?? "👤",
+        content: m.content,
+        time: new Date(m.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        isMine: m.senderId === user?.id,
+        readStatus: "read" as const,
+        ...(m.mediaUrl ? { imageUrl: m.mediaUrl } : {}),
+      }));
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const newOnes = mapped.filter(m => !existingIds.has(m.id));
+        return [...newOnes, ...prev];
+      });
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = container.scrollHeight - prevScrollHeight;
+      });
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isValidRoom, isLoadingMore, hasMore, messages, groupId, user?.id, utils]);
+
   // Load initial messages from server
   useEffect(() => {
     if (!serverMessages || serverMessages.length === 0) return;
+    if (serverMessages.length < PAGE_SIZE) setHasMore(false);
     setMessages(() => {
       return serverMessages.map((m) => ({
         id: String(m.id),
@@ -646,6 +691,26 @@ export default function ChatRoom() {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
+        {/* Load more older messages */}
+        {hasMore && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={loadMoreMessages}
+              disabled={isLoadingMore}
+              className="text-xs text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {isLoadingMore ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  加载中...
+                </>
+              ) : "加载更多消息"}
+            </button>
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
             <SwipeMessage
