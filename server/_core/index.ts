@@ -12,6 +12,7 @@ import { startPriceAlertChecker } from "../priceAlertChecker";
 import { startBotScheduler } from "../botScheduler";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
+import compressionMiddleware from "compression";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,6 +36,18 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Enable gzip/deflate compression for all responses (production performance)
+  // Skips already-compressed assets (JS/CSS with content hash) — they are served
+  // as pre-compressed .gz/.br files by the static middleware
+  app.use(compressionMiddleware({
+    // Only compress responses larger than 1KB
+    threshold: 1024,
+    // Skip compression for Server-Sent Events (SSE) streams
+    filter: (req, res) => {
+      if (req.headers['accept'] === 'text/event-stream') return false;
+      return compressionMiddleware.filter(req, res);
+    },
+  }));
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

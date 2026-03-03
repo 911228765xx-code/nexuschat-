@@ -348,3 +348,12 @@
 - [ ] 修复群组侧边栏布局：邀请链接按钮移至顶部操作区，减少页面滚动
 - [ ] 修复跟单页首次加载黑屏：骨架屏/加载状态未正确显示
 - [ ] 语音功能改为按住说话实时录音（替代文件下载方式）
+
+## v56 首次加载速度优化
+- [x] 分析当前包体积和加载瓶颈（bundle-analyzer）
+- [x] 路由级代码分割已存在（React.lazy + Suspense + requestIdleCallback预取）
+- [x] Google Fonts改为非阻塞异步加载（rel=preload + onload，消除渲染阻塞）
+- [x] Express静态资源添加长期缓存头（/assets/ immutable 1年，其他1小时）
+- [x] 添加Express compression中间件（动态gzip压缩API响应）
+- [x] 添加vite-plugin-compression2（构建时生成.gz/.br预压缩文件）
+- [ ] 测试验证加载速度（需要生产构建后测试）

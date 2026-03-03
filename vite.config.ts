@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { compression } from "vite-plugin-compression2";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -360,7 +361,12 @@ function vitePluginInlinePreloadHelper(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginDisableReownAnalytics(), vitePluginInlinePreloadHelper()];
+// Compression plugin: only active during production build (apply: "build" is set internally)
+// Generates .gz and .br files alongside assets for servers that support pre-compressed serving
+// Default algorithms: ["gzip", "brotliCompress"]
+const compressionPlugin = compression();
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginDisableReownAnalytics(), vitePluginInlinePreloadHelper(), compressionPlugin];
 
 export default defineConfig({
   plugins,
