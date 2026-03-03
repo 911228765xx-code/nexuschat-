@@ -99,6 +99,8 @@ function LikeParticles({ show }: { show: boolean }) {
 
 /* ─── Component ─── */
 export default function Discover() {
+  // ─── i18n MUST be declared first — used inside useMemo/useMutation below ───
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState<"moments" | "communities" | "users">("moments");
@@ -260,7 +262,6 @@ export default function Discover() {
   const commentInputRef = useRef<HTMLInputElement>(null);
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const [composeImages, setComposeImages] = useState<string[]>([]);
-  const { t } = useI18n();
   const [, setLocation] = useLocation();
   const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
   const utils = trpc.useUtils();
