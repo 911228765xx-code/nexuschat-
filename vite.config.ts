@@ -509,9 +509,10 @@ export default defineConfig({
             id.includes("get-nonce") ||
             id.includes("cross-fetch") ||
             id.includes("html2canvas") ||
-            id.includes("react-remove-scroll") ||
-            id.includes("react-style-singleton") ||
-            id.includes("use-sidecar") ||
+            // NOTE: react-remove-scroll, react-style-singleton, use-sidecar are intentionally NOT here.
+            // They depend on use-callback-ref which is in the main vendor chunk.
+            // Putting them in vendor-web3 creates: vendor -> vendor-web3 -> vendor (circular!)
+            // causing 'A is not a function' on mobile browsers.
             // NOTE: use-callback-ref is intentionally NOT here.
             // It is shared by both @radix-ui (in vendor) and RainbowKit (vendor-web3).
             // Putting it in vendor-web3 would create: vendor -> vendor-web3 -> vendor (circular!)
