@@ -418,8 +418,13 @@ export default defineConfig({
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,
+    // Merge chunks smaller than 20KB into their importers to reduce file count
+    // This reduces 8 tiny chunks (1-15KB) into larger ones, cutting upload count
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
+        // Merge small chunks (< 20KB) into their importers automatically
+        experimentalMinChunkSize: 20_000,
         // Prevent Rollup from hoisting transitive imports of dynamic chunks
         // to the entry chunk's synchronous dependencies.
         // This keeps vendor-web3, vendor-misc etc. as truly async chunks.
@@ -533,9 +538,8 @@ export default defineConfig({
           if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
             return "vendor-charts";
           }
-          if (id.includes("framer-motion")) {
-            return "vendor-motion";
-          }
+          // framer-motion is used across all pages, keep in main vendor
+          // (no separate chunk needed — avoids extra file upload)
 
           // All remaining node_modules → single "vendor" chunk
           // This prevents circular dependencies between vendor sub-chunks
