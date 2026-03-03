@@ -228,7 +228,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
             <h2 className="text-xl font-bold text-white font-['Space_Grotesk']">
               {isConnected ? "已连接钱包" : t("wallet.title")}
             </h2>
-            <p className="text-sm text-gray-400 mt-2">
+            <p className="text-sm text-gray-400 mt-1">
               {isConnected
                 ? `${currentChain ? currentChain.icon + " " + currentChain.name : "未知网络"} · ${address?.slice(0, 6)}...${address?.slice(-4)}`
                 : mobile
@@ -255,7 +255,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-mono text-sm truncate">{address}</p>
-                  <p className="text-gray-400 text-sm mt-0.5">
+                  <p className="text-gray-400 text-xs mt-0.5">
                     {currentChain ? `${currentChain.icon} ${currentChain.name}` : "未知网络"}
                   </p>
                 </div>
@@ -301,7 +301,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
               </button>
             )}
 
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-xs text-gray-500 mb-3">
               {window.ethereum
                 ? "或选择其他钱包 App 打开本站："
                 : "选择钱包 App，将在 App 内置浏览器中打开本站："}
@@ -318,7 +318,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                   <span className="text-2xl leading-none">{wallet.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-tight">{wallet.name}</p>
-                    <p className="text-gray-500 text-sm mt-0.5">
+                    <p className="text-gray-500 text-[10px] mt-0.5">
                       {deepLinkAttempted === wallet.id ? "跳转中..." : "点击打开"}
                     </p>
                   </div>
@@ -333,11 +333,11 @@ export default function WalletConnectModal({ open, onClose }: Props) {
             {connectError && (
               <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
                 <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
-                <p className="text-red-400 text-sm">{connectError}</p>
+                <p className="text-red-400 text-xs">{connectError}</p>
               </div>
             )}
 
-            <p className="text-sm text-gray-600 text-center mt-4 leading-relaxed">
+            <p className="text-[10px] text-gray-600 text-center mt-4 leading-relaxed">
               点击后将跳转到钱包 App 内置浏览器。<br/>
               若未安装，将自动跳转到应用商店下载。
             </p>
@@ -360,7 +360,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                     <p className="text-white font-medium text-sm">
                       {window.ethereum.isMetaMask ? "MetaMask" : window.ethereum.isOKExWallet ? "OKX Wallet" : window.ethereum.isCoinbaseWallet ? "Coinbase Wallet" : "浏览器钱包"}
                     </p>
-                    <p className="text-gray-400 text-sm mt-0.5">已检测到钱包扩展，点击连接</p>
+                    <p className="text-gray-400 text-xs mt-0.5">已检测到钱包扩展，点击连接</p>
                   </div>
                   {connecting
                     ? <Loader2 size={16} className="text-[#00d4ff] animate-spin" />
@@ -370,7 +370,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                 {connectError && (
                   <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
                     <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
-                    <p className="text-red-400 text-sm">{connectError}</p>
+                    <p className="text-red-400 text-xs">{connectError}</p>
                   </div>
                 )}
               </>
@@ -396,7 +396,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                     </a>
                   ))}
                 </div>
-                <p className="text-sm text-gray-600 mt-4">
+                <p className="text-xs text-gray-600 mt-4">
                   安装后刷新页面即可连接
                 </p>
               </div>

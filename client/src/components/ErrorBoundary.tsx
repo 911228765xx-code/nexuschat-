@@ -146,21 +146,21 @@ class ErrorBoundary extends Component<Props, State> {
         )}>
           <Icon size={24} className={errorType === "network" ? "text-amber-500" : "text-destructive"} />
         </div>
-        <h3 className="text-base font-semibold font-display mb-2.5">
+        <h3 className="text-base font-semibold font-display mb-1.5">
           {this.props.pageName ? `${this.props.pageName}加载失败` : info.title}
         </h3>
         <p className="text-sm text-muted-foreground mb-6 max-w-xs leading-relaxed">{info.desc}</p>
         <div className="flex gap-2.5">
           <button
             onClick={this.handleRetry}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-secondary/60 border border-border/30 text-sm font-medium hover:bg-secondary/80 active:scale-[0.98] transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-secondary/60 border border-border/30 text-sm font-medium hover:bg-secondary/80 active:scale-[0.98] transition-all"
           >
             <RefreshCw size={13} />
             {info.action}
           </button>
           <button
             onClick={this.handleGoHome}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium hover:bg-[#00d4ff]/15 active:scale-[0.98] transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium hover:bg-[#00d4ff]/15 active:scale-[0.98] transition-all"
           >
             <Home size={13} />
             返回首页

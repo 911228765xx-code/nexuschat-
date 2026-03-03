@@ -65,12 +65,12 @@ export default function PWAInstallBanner() {
               <img src="/icon-192.png" alt="NexusChat" className="w-9 h-9 rounded-xl" />
               <div>
                 <p className="text-sm font-semibold text-white">{t("pwa.installTitle")}</p>
-                <p className="text-sm text-[#00d4ff]">{t("pwa.installSubtitle")}</p>
+                <p className="text-xs text-[#00d4ff]">{t("pwa.installSubtitle")}</p>
               </div>
             </div>
             <button
               onClick={handleDismiss}
-              className="text-gray-500 hover:text-gray-300 p-2 -mt-2 -mr-1"
+              className="text-gray-500 hover:text-gray-300 p-1 -mt-1 -mr-1"
               aria-label="Close"
             >
               <X size={16} />
@@ -78,9 +78,9 @@ export default function PWAInstallBanner() {
           </div>
           {/* Step-by-step iOS guide */}
           <div className="space-y-2">
-            <div className="flex items-center gap-3 text-sm text-gray-300">
+            <div className="flex items-center gap-3 text-xs text-gray-300">
               <div className="w-6 h-6 rounded-full bg-[#00d4ff]/15 flex items-center justify-center flex-shrink-0">
-                <span className="text-[#00d4ff] font-bold text-sm">1</span>
+                <span className="text-[#00d4ff] font-bold text-[10px]">1</span>
               </div>
               <span>
                 {t("pwa.iosStep1")}{" "}
@@ -88,9 +88,9 @@ export default function PWAInstallBanner() {
                 {" "}{t("pwa.iosStep1b")}
               </span>
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-300">
+            <div className="flex items-center gap-3 text-xs text-gray-300">
               <div className="w-6 h-6 rounded-full bg-[#00d4ff]/15 flex items-center justify-center flex-shrink-0">
-                <span className="text-[#00d4ff] font-bold text-sm">2</span>
+                <span className="text-[#00d4ff] font-bold text-[10px]">2</span>
               </div>
               <span>
                 {t("pwa.iosStep2")}{" "}
@@ -98,9 +98,9 @@ export default function PWAInstallBanner() {
                 {" "}{t("pwa.iosStep2b")}
               </span>
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-300">
+            <div className="flex items-center gap-3 text-xs text-gray-300">
               <div className="w-6 h-6 rounded-full bg-[#00d4ff]/15 flex items-center justify-center flex-shrink-0">
-                <span className="text-[#00d4ff] font-bold text-sm">3</span>
+                <span className="text-[#00d4ff] font-bold text-[10px]">3</span>
               </div>
               <span>{t("pwa.iosStep3")}</span>
             </div>
@@ -117,19 +117,19 @@ export default function PWAInstallBanner() {
             <img src="/icon-192.png" alt="NexusChat" className="w-12 h-12 rounded-xl flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{t("pwa.installTitle")}</p>
-              <p className="text-sm text-gray-400 truncate">{t("pwa.androidDesc")}</p>
+              <p className="text-xs text-gray-400 truncate">{t("pwa.androidDesc")}</p>
             </div>
             <button
               onClick={handleInstall}
               disabled={isInstalling}
-              className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-sm font-semibold flex-shrink-0 disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-sm font-semibold flex-shrink-0 disabled:opacity-60"
             >
               <Download size={14} />
               {isInstalling ? t("pwa.installing") : t("pwa.install")}
             </button>
             <button
               onClick={handleDismiss}
-              className="text-gray-500 hover:text-gray-300 p-2 flex-shrink-0"
+              className="text-gray-500 hover:text-gray-300 p-1 flex-shrink-0"
               aria-label="Close"
             >
               <X size={16} />

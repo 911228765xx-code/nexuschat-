@@ -181,12 +181,12 @@ export default function CreateGroup() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-semibold font-display">{t("group.createTitle") || "New Group"}</h1>
-            <p className="text-sm text-muted-foreground">{stepTitles[step]}</p>
+            <p className="text-[10px] text-muted-foreground">{stepTitles[step]}</p>
           </div>
           {step === "select" && selected.length >= 2 && (
             <button
               onClick={() => setStep("configure")}
-              className="px-4 py-1.5 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
+              className="px-4 py-1.5 rounded-xl bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors"
             >
               {t("group.next") || "Next"} ({selected.length})
             </button>
@@ -194,7 +194,7 @@ export default function CreateGroup() {
           {step === "configure" && (
             <button
               onClick={() => setStep("permissions")}
-              className="px-4 py-1.5 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
+              className="px-4 py-1.5 rounded-xl bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors"
             >
               {t("group.next") || "Next"}
             </button>
@@ -203,7 +203,7 @@ export default function CreateGroup() {
             <button
               onClick={handleCreate}
               disabled={createGroupMutation.isPending}
-              className="px-4 py-1.5 rounded-xl bg-neon-cyan text-background text-sm font-bold hover:bg-neon-cyan/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 rounded-xl bg-neon-cyan text-background text-xs font-bold hover:bg-neon-cyan/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {createGroupMutation.isPending ? "Creating..." : (t("group.create") || "Create")}
             </button>
@@ -211,7 +211,7 @@ export default function CreateGroup() {
         </div>
 
         {/* Step Indicator */}
-        <div className="flex gap-2.5 pb-3">
+        <div className="flex gap-1.5 pb-3">
           {(["select", "configure", "permissions"] as Step[]).map((s, i) => (
             <div
               key={s}
@@ -260,13 +260,13 @@ export default function CreateGroup() {
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.8, opacity: 0 }}
                       onClick={() => toggleContact(c.id)}
-                      className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/20 transition-colors"
+                      className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/20 transition-colors"
                     >
                       <Avatar className="w-5 h-5">
                         {c.avatar?.startsWith("http") && <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />}
-                        <AvatarFallback className="text-xs bg-secondary">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
+                        <AvatarFallback className="text-[9px] bg-secondary">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
                       </Avatar>
-                      <span className="text-[13px] text-neon-cyan font-medium">{c.name.split(".")[0]}</span>
+                      <span className="text-[11px] text-neon-cyan font-medium">{c.name.split(".")[0]}</span>
                       <X size={10} className="text-neon-cyan/60" />
                     </motion.button>
                   ))}
@@ -278,7 +278,7 @@ export default function CreateGroup() {
             {Object.entries(groupedContacts).map(([group, contacts]) => (
               <div key={group}>
                 <div className="px-4 py-1.5">
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{group}</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{group}</span>
                 </div>
                 {contacts.map((contact) => {
                   const isSelected = selected.includes(contact.id);
@@ -301,7 +301,7 @@ export default function CreateGroup() {
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-medium truncate">{contact.name}</p>
-                        <p className="text-sm text-muted-foreground font-mono">{contact.address}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{contact.address}</p>
                       </div>
                       <div
                         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
@@ -352,7 +352,7 @@ export default function CreateGroup() {
                   className="w-full h-12 px-4 rounded-xl bg-secondary/40 border border-border/30 text-base font-display placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all"
                   maxLength={30}
                 />
-                <p className="text-sm text-muted-foreground mt-2 px-2">{groupName.length}/30</p>
+                <p className="text-[10px] text-muted-foreground mt-1 px-1">{groupName.length}/30</p>
               </div>
             </div>
 
@@ -387,7 +387,7 @@ export default function CreateGroup() {
 
             {/* Description */}
             <div>
-              <label className="text-sm text-muted-foreground mb-2.5 block px-2">
+              <label className="text-xs text-muted-foreground mb-1.5 block px-1">
                 {t("group.description") || "Description"} ({t("group.optional") || "optional"})
               </label>
               <textarea
@@ -398,18 +398,18 @@ export default function CreateGroup() {
                 className="w-full px-4 py-3 rounded-xl bg-secondary/40 border border-border/30 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all resize-none"
                 maxLength={200}
               />
-              <p className="text-sm text-muted-foreground mt-2 px-2">{groupDesc.length}/200</p>
+              <p className="text-[10px] text-muted-foreground mt-1 px-1">{groupDesc.length}/200</p>
             </div>
 
             {/* Members Preview */}
             <div>
-              <div className="flex items-center justify-between mb-2 px-2">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="text-xs text-muted-foreground">
                   {t("group.members") || "Members"} ({selected.length})
                 </span>
                 <button
                   onClick={() => setStep("select")}
-                  className="text-sm text-neon-cyan hover:underline"
+                  className="text-[10px] text-neon-cyan hover:underline"
                 >
                   {t("group.edit") || "Edit"}
                 </button>
@@ -418,12 +418,12 @@ export default function CreateGroup() {
                 {selectedContacts.slice(0, 8).map((c) => (
                   <Avatar key={c.id} className="w-9 h-9 border-2 border-background">
                     {c.avatar?.startsWith("http") && <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />}
-                    <AvatarFallback className="bg-secondary text-xs font-display">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
+                    <AvatarFallback className="bg-secondary text-[10px] font-display">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
                   </Avatar>
                 ))}
                 {selected.length > 8 && (
                   <div className="w-9 h-9 rounded-full bg-secondary/60 border-2 border-background flex items-center justify-center">
-                    <span className="text-sm text-muted-foreground">+{selected.length - 8}</span>
+                    <span className="text-[10px] text-muted-foreground">+{selected.length - 8}</span>
                   </div>
                 )}
               </div>
@@ -440,7 +440,7 @@ export default function CreateGroup() {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium">{t("group.tokenGate") || "Token Gate"}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     {t("group.tokenGateDesc") || "Require token ownership to join"}
                   </p>
                 </div>
@@ -474,13 +474,13 @@ export default function CreateGroup() {
                     <div className="px-4 pb-4 space-y-3 border-t border-border/10 pt-3">
                       {/* Token Type */}
                       <div>
-                        <label className="text-sm text-muted-foreground mb-2.5 block">Token Standard</label>
+                        <label className="text-[10px] text-muted-foreground mb-1.5 block">Token Standard</label>
                         <div className="flex gap-2">
                           {(["ERC20", "ERC721", "ERC1155"] as const).map((type) => (
                             <button
                               key={type}
                               onClick={() => setTokenGate((prev) => ({ ...prev, tokenType: type }))}
-                              className={`flex-1 py-2 rounded-lg text-[13px] font-mono font-medium transition-all ${
+                              className={`flex-1 py-2 rounded-lg text-[11px] font-mono font-medium transition-all ${
                                 tokenGate.tokenType === type
                                   ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/30"
                                   : "bg-secondary/30 text-muted-foreground border border-border/20 hover:bg-secondary/50"
@@ -494,31 +494,31 @@ export default function CreateGroup() {
 
                       {/* Contract Address */}
                       <div>
-                        <label className="text-sm text-muted-foreground mb-2.5 block">Contract Address</label>
+                        <label className="text-[10px] text-muted-foreground mb-1.5 block">Contract Address</label>
                         <input
                           type="text"
                           value={tokenGate.contractAddress}
                           onChange={(e) => setTokenGate((prev) => ({ ...prev, contractAddress: e.target.value }))}
                           placeholder="0x..."
-                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
+                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
                         />
                       </div>
 
                       {/* Token Name */}
                       <div>
-                        <label className="text-sm text-muted-foreground mb-2.5 block">Token Name</label>
+                        <label className="text-[10px] text-muted-foreground mb-1.5 block">Token Name</label>
                         <input
                           type="text"
                           value={tokenGate.tokenName}
                           onChange={(e) => setTokenGate((prev) => ({ ...prev, tokenName: e.target.value }))}
                           placeholder="e.g. BAYC, APE, UNI"
-                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
+                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
                         />
                       </div>
 
                       {/* Min Amount */}
                       <div>
-                        <label className="text-sm text-muted-foreground mb-2.5 block">
+                        <label className="text-[10px] text-muted-foreground mb-1.5 block">
                           {tokenGate.tokenType === "ERC20" ? "Minimum Balance" : "Minimum Holdings"}
                         </label>
                         <input
@@ -526,7 +526,7 @@ export default function CreateGroup() {
                           value={tokenGate.minAmount}
                           onChange={(e) => setTokenGate((prev) => ({ ...prev, minAmount: e.target.value }))}
                           placeholder={tokenGate.tokenType === "ERC20" ? "100" : "1"}
-                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
+                          className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-purple/50 transition-all"
                         />
                       </div>
                     </div>
@@ -555,21 +555,21 @@ export default function CreateGroup() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base font-bold font-display truncate">{groupName || "Unnamed Group"}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     {selected.length} {t("group.members") || "members"} · {tokenGate.enabled ? "🔒 Token Gated" : "🌐 Open"}
                   </p>
                 </div>
               </div>
               {groupDesc && (
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{groupDesc}</p>
+                <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{groupDesc}</p>
               )}
             </div>
 
             {/* Admin Selection */}
             <div>
-              <div className="flex items-center gap-2 mb-3 px-2">
+              <div className="flex items-center gap-2 mb-3 px-1">
                 <Crown size={14} className="text-amber-400" />
-                <span className="text-sm font-medium">{t("group.selectAdmins") || "Select Admins"}</span>
+                <span className="text-xs font-medium">{t("group.selectAdmins") || "Select Admins"}</span>
               </div>
               <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
                 {/* Creator (always admin) */}
@@ -579,7 +579,7 @@ export default function CreateGroup() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">cryptowhale.eth</p>
-                    <p className="text-sm text-amber-400">{t("group.creator") || "Creator"}</p>
+                    <p className="text-[10px] text-amber-400">{t("group.creator") || "Creator"}</p>
                   </div>
                   <Crown size={14} className="text-amber-400" />
                 </div>
@@ -595,7 +595,7 @@ export default function CreateGroup() {
                     </Avatar>
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-sm text-muted-foreground font-mono">{c.address}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">{c.address}</p>
                     </div>
                     <div
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
@@ -613,9 +613,9 @@ export default function CreateGroup() {
 
             {/* Group Rules */}
             <div>
-              <div className="flex items-center gap-2 mb-3 px-2">
+              <div className="flex items-center gap-2 mb-3 px-1">
                 <Shield size={14} className="text-neon-cyan" />
-                <span className="text-sm font-medium">{t("group.rules") || "Group Rules"}</span>
+                <span className="text-xs font-medium">{t("group.rules") || "Group Rules"}</span>
               </div>
               <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
                 {/* Allow member invite */}
@@ -628,7 +628,7 @@ export default function CreateGroup() {
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm">{t("group.allowInvite") || "Members Can Invite"}</p>
-                    <p className="text-sm text-muted-foreground">{t("group.allowInviteDesc") || "Allow members to add new people"}</p>
+                    <p className="text-[10px] text-muted-foreground">{t("group.allowInviteDesc") || "Allow members to add new people"}</p>
                   </div>
                   <div
                     className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
@@ -658,7 +658,7 @@ export default function CreateGroup() {
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm">{t("group.muteNew") || "Mute New Members"}</p>
-                    <p className="text-sm text-muted-foreground">{t("group.muteNewDesc") || "New members can't send messages for 24h"}</p>
+                    <p className="text-[10px] text-muted-foreground">{t("group.muteNewDesc") || "New members can't send messages for 24h"}</p>
                   </div>
                   <div
                     className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
@@ -685,19 +685,19 @@ export default function CreateGroup() {
               <div className="p-3.5 rounded-2xl bg-neon-purple/5 border border-neon-purple/20">
                 <div className="flex items-center gap-2 mb-2">
                   <Coins size={14} className="text-neon-purple" />
-                  <span className="text-sm font-medium text-neon-purple">Token Gate Active</span>
+                  <span className="text-xs font-medium text-neon-purple">Token Gate Active</span>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-[13px] text-muted-foreground">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">
                     Standard: <span className="text-foreground font-mono">{tokenGate.tokenType}</span>
                   </p>
                   {tokenGate.tokenName && (
-                    <p className="text-[13px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       Token: <span className="text-foreground">{tokenGate.tokenName}</span>
                     </p>
                   )}
                   {tokenGate.minAmount && (
-                    <p className="text-[13px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       Min: <span className="text-foreground font-mono">{tokenGate.minAmount}</span>
                     </p>
                   )}

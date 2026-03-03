@@ -83,7 +83,7 @@ export default function InviteFriends() {
         >
           <div className="flex items-center gap-2 mb-4">
             <Sparkles size={16} className="text-neon-green" />
-            <span className="text-sm font-medium text-neon-green">{t("invite.earnTogether")}</span>
+            <span className="text-xs font-medium text-neon-green">{t("invite.earnTogether")}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-5">
@@ -93,7 +93,7 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-green">{totalInvited}</p>
               )}
-              <p className="text-sm text-muted-foreground mt-0.5">{t("invite.totalInvited")}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.totalInvited")}</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-background/40">
               {statsLoading ? (
@@ -101,7 +101,7 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-cyan">{activeInvited}</p>
               )}
-              <p className="text-sm text-muted-foreground mt-0.5">{t("invite.activeUsers")}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.activeUsers")}</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-background/40">
               {statsLoading ? (
@@ -109,13 +109,13 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-purple">{totalRewards.toLocaleString()}</p>
               )}
-              <p className="text-sm text-muted-foreground mt-0.5">{t("invite.npEarned")}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.npEarned")}</p>
             </div>
           </div>
 
           {/* Invite Code */}
           <div className="p-3.5 rounded-xl bg-background/60 border border-border/30">
-            <p className="text-sm text-muted-foreground mb-2.5">{t("invite.yourCode")}</p>
+            <p className="text-[10px] text-muted-foreground mb-1.5">{t("invite.yourCode")}</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-lg font-bold font-mono text-neon-green tracking-wider">
                 {statsLoading ? "..." : inviteCode}
@@ -167,8 +167,8 @@ export default function InviteFriends() {
                 <UserPlus size={14} className="text-neon-green" />
               </div>
               <div>
-                <p className="text-sm font-medium">{t("invite.inviterReward")}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{t("invite.inviterRewardDesc")}</p>
+                <p className="text-xs font-medium">{t("invite.inviterReward")}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.inviterRewardDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-green shrink-0">+500 NP</span>
             </div>
@@ -177,8 +177,8 @@ export default function InviteFriends() {
                 <Gift size={14} className="text-neon-cyan" />
               </div>
               <div>
-                <p className="text-sm font-medium">{t("invite.inviteeReward")}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{t("invite.inviteeRewardDesc")}</p>
+                <p className="text-xs font-medium">{t("invite.inviteeReward")}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.inviteeRewardDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-cyan shrink-0">+200 NP</span>
             </div>
@@ -187,8 +187,8 @@ export default function InviteFriends() {
                 <TrendingUp size={14} className="text-neon-purple" />
               </div>
               <div>
-                <p className="text-sm font-medium">{t("invite.tradingBonus")}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{t("invite.tradingBonusDesc")}</p>
+                <p className="text-xs font-medium">{t("invite.tradingBonus")}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.tradingBonusDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-purple shrink-0">10%</span>
             </div>
@@ -201,7 +201,7 @@ export default function InviteFriends() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === tab
                   ? "bg-neon-green/15 text-neon-green border border-neon-green/30"
                   : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
@@ -222,7 +222,7 @@ export default function InviteFriends() {
             >
               {/* Milestone Progress */}
               <div className="p-4 rounded-2xl bg-card/50 border border-border/20">
-                <h4 className="text-sm font-medium text-muted-foreground mb-3">{t("invite.milestones")}</h4>
+                <h4 className="text-xs font-medium text-muted-foreground mb-3">{t("invite.milestones")}</h4>
                 {tiers.length === 0 && statsLoading ? (
                   <div className="flex justify-center py-6">
                     <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -233,14 +233,14 @@ export default function InviteFriends() {
                       <span className="text-lg">{tier.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{t("invite.invite")} {tier.count} {t("invite.friends")}</span>
+                          <span className="text-xs font-medium">{t("invite.invite")} {tier.count} {t("invite.friends")}</span>
                           {tier.unlocked && <CheckCircle2 size={12} className="text-neon-green" />}
                         </div>
-                        <p className="text-sm text-muted-foreground">{tier.reward}</p>
+                        <p className="text-[10px] text-muted-foreground">{tier.reward}</p>
                       </div>
                       {!tier.unlocked && (
-                        <div className="px-2 py-1 rounded-full bg-secondary/40 border border-border/20">
-                          <span className="text-sm text-muted-foreground">{totalInvited}/{tier.count}</span>
+                        <div className="px-2 py-0.5 rounded-full bg-secondary/40 border border-border/20">
+                          <span className="text-[9px] text-muted-foreground">{totalInvited}/{tier.count}</span>
                         </div>
                       )}
                     </div>
@@ -250,7 +250,7 @@ export default function InviteFriends() {
 
               {/* How it works */}
               <div className="p-4 rounded-2xl bg-card/50 border border-border/20">
-                <h4 className="text-sm font-medium text-muted-foreground mb-3">
+                <h4 className="text-xs font-medium text-muted-foreground mb-3">
                   {t("invite.howItWorks")}
                 </h4>
                 <div className="space-y-3">
@@ -261,11 +261,11 @@ export default function InviteFriends() {
                   ].map((item) => (
                     <div key={item.step} className="flex items-start gap-3">
                       <div className={`w-7 h-7 rounded-full bg-${item.color}/15 border border-${item.color}/30 flex items-center justify-center shrink-0`}>
-                        <span className={`text-sm font-bold text-${item.color}`}>{item.step}</span>
+                        <span className={`text-xs font-bold text-${item.color}`}>{item.step}</span>
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{item.title}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">{item.desc}</p>
+                        <p className="text-xs font-medium">{item.title}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{item.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -308,7 +308,7 @@ export default function InviteFriends() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{friend.name}</span>
-                        <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
                           friend.status === "active"
                             ? "bg-neon-green/10 text-neon-green border border-neon-green/20"
                             : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
@@ -317,11 +317,11 @@ export default function InviteFriends() {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-sm text-muted-foreground">{formatDate(friend.joinedAt)}</span>
+                        <span className="text-[10px] text-muted-foreground">{formatDate(friend.joinedAt)}</span>
                       </div>
                     </div>
                     {friend.reward > 0 && (
-                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} NP</span>
+                      <span className="text-xs font-bold font-mono text-neon-green">+{friend.reward} NP</span>
                     )}
                   </motion.div>
                 ))
@@ -338,7 +338,7 @@ export default function InviteFriends() {
               {/* Reward Summary */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-neon-green/10 to-neon-cyan/10 border border-neon-green/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-muted-foreground">{t("invite.totalEarned")}</span>
+                  <span className="text-xs text-muted-foreground">{t("invite.totalEarned")}</span>
                   <span className="text-xl font-bold font-mono text-neon-green">{totalRewards.toLocaleString()} NP</span>
                 </div>
                 <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
@@ -349,7 +349,7 @@ export default function InviteFriends() {
                     className="h-full rounded-full bg-gradient-to-r from-neon-green to-neon-cyan"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground mt-2.5">
+                <p className="text-[10px] text-muted-foreground mt-1.5">
                   {t("invite.nextMilestone")}: {t("invite.invite")} {25 - totalInvited > 0 ? 25 - totalInvited : 0} {t("invite.moreToUnlock")}
                 </p>
               </div>
@@ -357,7 +357,7 @@ export default function InviteFriends() {
               {/* Reward History */}
               <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-border/10">
-                  <h4 className="text-sm font-medium text-muted-foreground">{t("invite.rewardHistory")}</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground">{t("invite.rewardHistory")}</h4>
                 </div>
                 {listLoading ? (
                   <div className="flex justify-center py-8">
@@ -366,7 +366,7 @@ export default function InviteFriends() {
                 ) : !referralList || referralList.filter(f => f.reward > 0).length === 0 ? (
                   <div className="flex flex-col items-center py-8 gap-2">
                     <Gift size={24} className="text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">{t("invite.noRewards") || "No rewards yet"}</p>
+                    <p className="text-xs text-muted-foreground">{t("invite.noRewards") || "No rewards yet"}</p>
                   </div>
                 ) : (
                   referralList.filter(f => f.reward > 0).map((friend) => (
@@ -375,10 +375,10 @@ export default function InviteFriends() {
                         <Gift size={14} className="text-neon-green" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{t("invite.referralReward")}: {friend.name}</p>
-                        <p className="text-sm text-muted-foreground">{formatDate(friend.joinedAt)}</p>
+                        <p className="text-xs font-medium">{t("invite.referralReward")}: {friend.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{formatDate(friend.joinedAt)}</p>
                       </div>
-                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} NP</span>
+                      <span className="text-xs font-bold font-mono text-neon-green">+{friend.reward} NP</span>
                     </div>
                   ))
                 )}

@@ -109,16 +109,16 @@ export default function Profile() {
               <h2 className="text-lg font-bold font-display">{profile.displayName}</h2>
               <button
                 onClick={handleCopyAddress}
-                className="flex items-center gap-2 text-sm text-muted-foreground font-mono hover:text-neon-cyan transition-colors"
+                className="flex items-center gap-1 text-xs text-muted-foreground font-mono hover:text-neon-cyan transition-colors"
               >
                 {shortAddress}
                 <Copy size={10} />
               </button>
-              <div className="flex gap-3 mt-3">
-                <span className="text-sm px-3 py-1 rounded-full bg-neon-purple/15 text-neon-purple border border-neon-purple/20 font-medium">
+              <div className="flex gap-1.5 mt-1.5">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-purple/15 text-neon-purple border border-neon-purple/20 font-medium">
                   {t("profile.genesis")}
                 </span>
-                <span className="text-sm px-3 py-1 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 font-medium">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 font-medium">
                   SBT Holder
                 </span>
               </div>
@@ -127,7 +127,7 @@ export default function Profile() {
 
           {/* Bio */}
           {profile.bio && (
-            <p className="text-sm text-muted-foreground mb-4 leading-relaxed line-clamp-2">{profile.bio}</p>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed line-clamp-2">{profile.bio}</p>
           )}
 
           {/* Core Stats */}
@@ -137,12 +137,12 @@ export default function Profile() {
               { label: "Followers", value: followCounts ? followCounts.followers.toLocaleString() : (statsLoading ? "..." : "0"), sub: "followers", color: "text-neon-green" },
               { label: "Following", value: followCounts ? followCounts.following.toLocaleString() : (statsLoading ? "..." : "0"), sub: "following", color: "text-neon-purple" },
             ].map((stat) => (
-              <div key={stat.label} className="text-center p-3 rounded-xl bg-background/40">
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
+              <div key={stat.label} className="text-center p-2.5 rounded-xl bg-background/40">
+                <p className="text-[10px] text-muted-foreground">{stat.label}</p>
                 <p className={`text-base font-bold font-mono mt-0.5 ${stat.color}`}>
                   {stat.value}
                 </p>
-                {stat.sub && <p className="text-sm text-muted-foreground">{stat.sub}</p>}
+                {stat.sub && <p className="text-[9px] text-muted-foreground">{stat.sub}</p>}
               </div>
             ))}
           </div>
@@ -150,9 +150,9 @@ export default function Profile() {
 
         {/* Level Progress */}
         <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-sm font-medium">{t("profile.level")}</span>
-            <span className="text-sm text-muted-foreground font-mono">{(stats?.npPoints ?? 0).toLocaleString()} / {Math.ceil(((stats?.npPoints ?? 0) + 1) / 10000) * 10000} NP</span>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium">{t("profile.level")}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{(stats?.npPoints ?? 0).toLocaleString()} / {Math.ceil(((stats?.npPoints ?? 0) + 1) / 10000) * 10000} NP</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
             <motion.div
@@ -162,7 +162,7 @@ export default function Profile() {
               className="h-full rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple"
             />
           </div>
-          <p className="text-sm text-muted-foreground mt-2">{t("profile.nextLevel")}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("profile.nextLevel")}</p>
         </div>
 
         {/* Menu Sections */}
@@ -174,7 +174,7 @@ export default function Profile() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + sIndex * 0.05 }}
             >
-              <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{section.title}</h3>
+              <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{section.title}</h3>
               <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
                 {section.items.map((item) => {
                   const Icon = item.icon;
@@ -198,7 +198,7 @@ export default function Profile() {
                       </div>
                       <span className="flex-1 text-sm text-left">{item.label}</span>
                       {item.value && (
-                        <span className="text-sm text-muted-foreground font-mono">{item.value}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{item.value}</span>
                       )}
                       <ChevronRight size={14} className="text-muted-foreground" />
                     </button>
@@ -214,7 +214,7 @@ export default function Profile() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("profile.settings")}</h3>
+            <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("profile.settings")}</h3>
             <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
               {/* Theme Toggle */}
               <button
@@ -269,8 +269,8 @@ export default function Profile() {
                   </div>
                   <span className="flex-1 text-sm text-left">{t("profile.notifications")}</span>
                   {unreadNotificationCount > 0 && (
-                    <span className="min-w-5 h-5 px-2.5 rounded-full bg-neon-red flex items-center justify-center">
-                      <span className="text-sm font-bold text-white">{unreadNotificationCount}</span>
+                    <span className="min-w-5 h-5 px-1.5 rounded-full bg-neon-red flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-white">{unreadNotificationCount}</span>
                     </span>
                   )}
                   <ChevronRight size={14} className="text-muted-foreground" />
@@ -285,7 +285,7 @@ export default function Profile() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
           >
-            <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("profile.language") || "Language"}</h3>
+            <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("profile.language") || "Language"}</h3>
             <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
               <button
                 onClick={() => setShowLangPicker(!showLangPicker)}
@@ -346,8 +346,8 @@ export default function Profile() {
 
           {/* Version info */}
           <div className="text-center pb-4">
-            <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v2.1.0</p>
-            <p className="text-sm text-muted-foreground/30 mt-1">Built for Web3 • Powered by NexusAI</p>
+            <p className="text-[10px] text-muted-foreground/40 font-mono">NexusChat v2.1.0</p>
+            <p className="text-[9px] text-muted-foreground/30 mt-0.5">Built for Web3 • Powered by NexusAI</p>
           </div>
         </div>
       </div>

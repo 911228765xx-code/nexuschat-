@@ -157,7 +157,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
     let html = text
       .replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-semibold">$1</strong>')
       .replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
-      .replace(/`(.+?)`/g, '<code class="px-2 py-1 rounded bg-secondary/60 text-neon-cyan text-xs font-mono">$1</code>')
+      .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 rounded bg-secondary/60 text-neon-cyan text-xs font-mono">$1</code>')
       .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-neon-cyan underline">$1</a>')
       .replace(/\n/g, "<br/>");
 
@@ -166,7 +166,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
       const price = TOKEN_PRICES[symbol];
       if (!price) return match;
       const trendColor = price.trend === "up" ? "text-neon-green" : price.trend === "down" ? "text-neon-red" : "text-muted-foreground";
-      return `<span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-secondary/50 border border-border/30 text-xs font-mono"><span class="font-bold">${symbol}</span><span class="${trendColor}">${price.price}</span><span class="${trendColor} text-xs">${price.change}</span></span>`;
+      return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-secondary/50 border border-border/30 text-xs font-mono"><span class="font-bold">${symbol}</span><span class="${trendColor}">${price.price}</span><span class="${trendColor} text-[10px]">${price.change}</span></span>`;
     });
 
     return html;
@@ -205,9 +205,9 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-2.5"
+            className="overflow-hidden mb-1.5"
           >
-            <div className="flex items-center gap-0.5 p-2 rounded-xl bg-card border border-border/20 [backdrop-filter:none]">
+            <div className="flex items-center gap-0.5 p-1 rounded-xl bg-card border border-border/20 [backdrop-filter:none]">
               <button onClick={() => insertFormat("**")} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors" title="Bold">
                 <Bold size={14} className="text-muted-foreground" />
               </button>
@@ -243,12 +243,12 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-2.5"
+            className="overflow-hidden mb-1.5"
           >
             <div className="p-2.5 rounded-xl bg-card border border-neon-cyan/20 [backdrop-filter:none]">
-              <div className="flex items-center gap-2.5 mb-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
                 <Eye size={10} className="text-neon-cyan" />
-                <span className="text-sm font-medium text-neon-cyan uppercase tracking-wider">{t("chat.markdownPreview") || "Preview"}</span>
+                <span className="text-[9px] font-medium text-neon-cyan uppercase tracking-wider">{t("chat.markdownPreview") || "Preview"}</span>
               </div>
               <div
                 className="text-sm text-foreground leading-relaxed break-words"
@@ -267,12 +267,12 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ y: 8, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
-            className="absolute bottom-full left-0 right-0 mb-2.5 rounded-xl bg-popover [backdrop-filter:none] border border-border/40 shadow-2xl overflow-hidden z-30"
+            className="absolute bottom-full left-0 right-0 mb-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border/40 shadow-2xl overflow-hidden z-30"
           >
-            <div className="flex items-center gap-2.5 px-3 py-2 border-b border-border/20">
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/20">
               <DollarSign size={12} className="text-neon-cyan" />
-              <span className="text-sm text-muted-foreground font-medium">{t("chat.tokenInsert") || "Insert token price"}</span>
-              <span className="text-sm text-muted-foreground/60 ml-auto">Tab ↹</span>
+              <span className="text-[10px] text-muted-foreground font-medium">{t("chat.tokenInsert") || "Insert token price"}</span>
+              <span className="text-[9px] text-muted-foreground/60 ml-auto">Tab ↹</span>
             </div>
             {filteredTokens.map(([symbol, data]) => {
               const TrendIcon = data.trend === "up" ? TrendingUp : data.trend === "down" ? TrendingDown : Minus;
@@ -283,14 +283,14 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                   onClick={() => insertTokenPrice(symbol)}
                   className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 transition-colors"
                 >
-                  <span className="w-7 h-7 rounded-lg bg-secondary/50 flex items-center justify-center text-sm font-bold font-mono">
+                  <span className="w-7 h-7 rounded-lg bg-secondary/50 flex items-center justify-center text-xs font-bold font-mono">
                     {symbol.slice(0, 2)}
                   </span>
                   <div className="flex-1 text-left">
                     <span className="text-sm font-medium font-mono">${symbol}</span>
                   </div>
-                  <span className="text-sm font-mono text-foreground">{data.price}</span>
-                  <span className={`flex items-center gap-0.5 text-[13px] font-mono ${trendColor}`}>
+                  <span className="text-xs font-mono text-foreground">{data.price}</span>
+                  <span className={`flex items-center gap-0.5 text-[11px] font-mono ${trendColor}`}>
                     <TrendIcon size={10} />
                     {data.change}
                   </span>
@@ -308,13 +308,13 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 240, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-2.5 rounded-xl bg-card border border-border/20 [backdrop-filter:none]"
+            className="overflow-hidden mb-1.5 rounded-xl bg-card border border-border/20 [backdrop-filter:none]"
           >
             {/* Tabs */}
             <div className="flex items-center border-b border-border/20">
               <button
                 onClick={() => setActiveStickerTab("sticker")}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-sm font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
                   activeStickerTab === "sticker" ? "text-neon-cyan border-b-2 border-neon-cyan" : "text-muted-foreground"
                 }`}
               >
@@ -323,7 +323,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
               </button>
               <button
                 onClick={() => setActiveStickerTab("gif")}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-2 text-sm font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
                   activeStickerTab === "gif" ? "text-neon-purple border-b-2 border-neon-purple" : "text-muted-foreground"
                 }`}
               >
@@ -341,12 +341,12 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
             {activeStickerTab === "sticker" ? (
               <div className="flex flex-col h-[196px]">
                 {/* Pack selector */}
-                <div className="flex gap-2 px-2 py-1.5 border-b border-border/10">
+                <div className="flex gap-1 px-2 py-1.5 border-b border-border/10">
                   {STICKER_PACKS.map((pack, i) => (
                     <button
                       key={pack.name}
                       onClick={() => setActiveStickerPack(i)}
-                      className={`px-2 py-1 rounded-md text-sm font-medium transition-colors ${
+                      className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
                         activeStickerPack === i
                           ? "bg-neon-cyan/15 text-neon-cyan"
                           : "text-muted-foreground hover:bg-secondary/40"
@@ -358,7 +358,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                 </div>
                 {/* Sticker grid */}
                 <div className="flex-1 overflow-y-auto p-2">
-                  <div className="grid grid-cols-6 gap-2">
+                  <div className="grid grid-cols-6 gap-1">
                     {STICKER_PACKS[activeStickerPack]?.stickers.map((sticker, i) => (
                       <button
                         key={i}
@@ -375,12 +375,12 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
               <div className="flex flex-col h-[196px]">
                 {/* GIF search */}
                 <div className="px-2 py-1.5 border-b border-border/10">
-                  <div className="flex items-center gap-2.5 px-2 py-1 rounded-lg bg-secondary/40">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-secondary/40">
                     <Search size={12} className="text-muted-foreground" />
                     <input
                       type="text"
                       placeholder={t("chat.searchGif") || "Search GIFs..."}
-                      className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+                      className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground/60"
                     />
                   </div>
                 </div>
@@ -388,8 +388,8 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
                   {GIF_CATEGORIES.map((cat) => (
                     <div key={cat.name}>
-                      <p className="text-sm font-medium text-muted-foreground mb-2 px-2">{cat.name}</p>
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <p className="text-[10px] font-medium text-muted-foreground mb-1 px-1">{cat.name}</p>
+                      <div className="grid grid-cols-2 gap-1.5">
                         {cat.gifs.map((gif, i) => (
                           <button
                             key={i}
@@ -400,7 +400,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
                             }}
                             className="aspect-video rounded-lg bg-secondary/40 border border-border/20 overflow-hidden hover:border-neon-purple/40 transition-colors flex items-center justify-center"
                           >
-                            <span className="text-sm text-muted-foreground">GIF</span>
+                            <span className="text-xs text-muted-foreground">GIF</span>
                           </button>
                         ))}
                       </div>
@@ -414,7 +414,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
       </AnimatePresence>
 
       {/* ── Input Row ── */}
-      <div className="flex items-end gap-2.5">
+      <div className="flex items-end gap-1.5">
         {/* Format toggle */}
         <button
           onClick={() => { setShowFormatBar(!showFormatBar); setShowStickerPanel(false); }}
@@ -451,7 +451,7 @@ export default function EnhancedInput({ value, onChange, onSend, placeholder, cl
           {/* $TOKEN hint */}
           {value.endsWith("$") && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <span className="text-sm text-muted-foreground/50 font-mono animate-pulse">{t("chat.typeToken") || "Type token..."}</span>
+              <span className="text-[9px] text-muted-foreground/50 font-mono animate-pulse">{t("chat.typeToken") || "Type token..."}</span>
             </div>
           )}
         </div>

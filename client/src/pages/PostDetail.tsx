@@ -97,7 +97,7 @@ function RepostModal({
               <Repeat2 size={20} className="text-neon-green" />
               <div className="text-left">
                 <p className="text-sm font-medium">Repost</p>
-                <p className="text-sm text-muted-foreground">Share to your timeline instantly</p>
+                <p className="text-xs text-muted-foreground">Share to your timeline instantly</p>
               </div>
             </button>
             <button
@@ -107,21 +107,21 @@ function RepostModal({
               <Quote size={20} className="text-neon-cyan" />
               <div className="text-left">
                 <p className="text-sm font-medium">Quote Post</p>
-                <p className="text-sm text-muted-foreground">Add your own commentary</p>
+                <p className="text-xs text-muted-foreground">Add your own commentary</p>
               </div>
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <button onClick={() => setMode("choose")} className="p-2 text-muted-foreground hover:text-foreground">
+              <button onClick={() => setMode("choose")} className="p-1 text-muted-foreground hover:text-foreground">
                 <ArrowLeft size={18} />
               </button>
               <h3 className="text-sm font-semibold font-display flex-1 text-center">Quote Post</h3>
               <button
                 onClick={() => { if (quoteText.trim()) { onQuote(quoteText); onClose(); } }}
                 disabled={!quoteText.trim()}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                   quoteText.trim() ? "bg-neon-cyan text-background" : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                 }`}
               >
@@ -144,19 +144,19 @@ function RepostModal({
             </div>
             {/* Quoted post preview */}
             <div className="rounded-xl border border-border/30 p-3 bg-secondary/20">
-              <div className="flex items-center gap-2.5 mb-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
                 <Avatar className="w-5 h-5">
                   {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
-                  <AvatarFallback className="bg-secondary text-xs">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
+                  <AvatarFallback className="bg-secondary text-[9px]">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium">{post.author.name}</span>
+                <span className="text-xs font-medium">{post.author.name}</span>
                 {post.author.isVerified && <Star size={10} className="text-neon-cyan fill-neon-cyan" />}
-                <span className="text-sm text-muted-foreground">{post.author.handle}</span>
+                <span className="text-[10px] text-muted-foreground">{post.author.handle}</span>
               </div>
-              <p className="text-sm text-muted-foreground line-clamp-3">{post.content}</p>
+              <p className="text-xs text-muted-foreground line-clamp-3">{post.content}</p>
             </div>
             <div className="flex justify-end">
-              <span className={`text-sm font-mono ${quoteText.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
+              <span className={`text-[10px] font-mono ${quoteText.length > 250 ? "text-neon-red" : "text-muted-foreground"}`}>
                 {quoteText.length}/280
               </span>
             </div>
@@ -408,25 +408,25 @@ export default function PostDetail() {
               <AvatarFallback className="bg-secondary text-xl">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1.5">
                 <span className="text-base font-bold font-display">{post.author.name}</span>
                 {post.author.isVerified && (
                   <CheckCircle2 size={16} className="text-neon-cyan fill-neon-cyan/20 shrink-0" />
                 )}
               </div>
-              <p className="text-sm text-muted-foreground font-mono">{post.author.handle}</p>
+              <p className="text-xs text-muted-foreground font-mono">{post.author.handle}</p>
               {post.author.bio && (
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{post.author.bio}</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{post.author.bio}</p>
               )}
               {post.author.followers && (
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-[10px] text-muted-foreground mt-0.5">
                   {formatNum(post.author.followers)} followers
                 </p>
               )}
             </div>
             <button
               onClick={() => toast.success("Following!")}
-              className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
+              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors"
             >
               Follow
             </button>
@@ -450,7 +450,7 @@ export default function PostDetail() {
                         {reportData?.tokenSymbol?.toUpperCase() || 'AI'} Research Report
                       </span>
                       {reportData?.sentiment && (
-                        <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                           reportData.sentiment === 'bullish' ? 'bg-green-500/15 text-green-400' :
                           reportData.sentiment === 'bearish' ? 'bg-red-500/15 text-red-400' :
                           'bg-yellow-500/15 text-yellow-400'
@@ -459,14 +459,14 @@ export default function PostDetail() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-[10px] text-muted-foreground">
                       AI Research Report
                       {reportData?.priceAtReport ? ` · Price: $${reportData.priceAtReport}` : ''}
                     </p>
                   </div>
                 </div>
                 {reportData?.sentiment && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     {reportData.sentiment === 'bullish' ? <TrendingUp size={16} className="text-green-400" /> :
                      reportData.sentiment === 'bearish' ? <TrendingDown size={16} className="text-red-400" /> :
                      <Minus size={16} className="text-yellow-400" />}
@@ -479,22 +479,22 @@ export default function PostDetail() {
                 {reportLoading ? (
                   <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
                     <FileText size={16} className="animate-pulse" />
-                    <span className="text-sm">Loading report...</span>
+                    <span className="text-xs">Loading report...</span>
                   </div>
                 ) : reportData?.reportContent ? (
-                  <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-sm [&_ol]:text-sm [&_li]:mb-0.5 [&_table]:text-sm [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-sm [&_strong]:text-neon-cyan">
+                  <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-1.5 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mb-1 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ol]:text-xs [&_li]:mb-0.5 [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-neon-cyan/30 [&_blockquote]:text-xs [&_strong]:text-neon-cyan">
                     <LightMarkdown>{reportData.reportContent}</LightMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">Report content unavailable</p>
+                  <p className="text-xs text-muted-foreground text-center py-4">Report content unavailable</p>
                 )}
               </div>
 
               {/* Report Footer */}
               {reportData?.riskLevel && (
                 <div className="px-4 py-2 border-t border-border/10 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Risk Level</span>
-                  <span className={`text-sm font-medium px-2 py-1 rounded-full ${
+                  <span className="text-[10px] text-muted-foreground">Risk Level</span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                     reportData.riskLevel === 'high' ? 'bg-red-500/15 text-red-400' :
                     reportData.riskLevel === 'medium' ? 'bg-yellow-500/15 text-yellow-400' :
                     'bg-green-500/15 text-green-400'
@@ -508,29 +508,29 @@ export default function PostDetail() {
 
           {/* Tags */}
           {post.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2.5 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-3">
               {post.tags.map((tag) => (
-                <span key={tag} className="text-[13px] text-neon-cyan/80 hover:text-neon-cyan cursor-pointer transition-colors">{tag}</span>
+                <span key={tag} className="text-[11px] text-neon-cyan/80 hover:text-neon-cyan cursor-pointer transition-colors">{tag}</span>
               ))}
             </div>
           )}
 
           {/* Timestamp */}
-          <p className="text-[13px] text-muted-foreground mb-4">{post.timestamp}</p>
+          <p className="text-[11px] text-muted-foreground mb-4">{post.timestamp}</p>
 
           {/* Stats row */}
           <div className="flex items-center gap-4 py-3 border-y border-border/10 text-sm">
             <span>
               <span className="font-bold">{formatNum(post.reposts)}</span>
-              <span className="text-muted-foreground ml-1 text-sm">Reposts</span>
+              <span className="text-muted-foreground ml-1 text-xs">Reposts</span>
             </span>
             <span>
               <span className="font-bold">{formatNum(post.likes)}</span>
-              <span className="text-muted-foreground ml-1 text-sm">Likes</span>
+              <span className="text-muted-foreground ml-1 text-xs">Likes</span>
             </span>
             <span>
               <span className="font-bold">{formatNum(post.comments)}</span>
-              <span className="text-muted-foreground ml-1 text-sm">Comments</span>
+              <span className="text-muted-foreground ml-1 text-xs">Comments</span>
             </span>
           </div>
 
@@ -538,19 +538,19 @@ export default function PostDetail() {
           <div className="flex items-center justify-around py-2">
             <button
               onClick={() => commentInputRef.current?.focus()}
-              className="flex items-center gap-2.5 p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all"
+              className="flex items-center gap-1.5 p-2 rounded-lg text-muted-foreground hover:text-neon-cyan hover:bg-neon-cyan/5 transition-all"
             >
               <MessageSquare size={20} />
             </button>
             <button
               onClick={() => setShowRepostModal(true)}
-              className="flex items-center gap-2.5 p-2 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
+              className="flex items-center gap-1.5 p-2 rounded-lg text-muted-foreground hover:text-neon-green hover:bg-neon-green/5 transition-all"
             >
               <Repeat2 size={20} />
             </button>
             <button
               onClick={toggleLike}
-              className={`flex items-center gap-2.5 p-2 rounded-lg transition-all ${
+              className={`flex items-center gap-1.5 p-2 rounded-lg transition-all ${
                 post.isLiked ? "text-neon-red" : "text-muted-foreground hover:text-neon-red hover:bg-neon-red/5"
               }`}
             >
@@ -563,7 +563,7 @@ export default function PostDetail() {
             </button>
             <button
               onClick={toggleBookmark}
-              className={`flex items-center gap-2.5 p-2 rounded-lg transition-all ${
+              className={`flex items-center gap-1.5 p-2 rounded-lg transition-all ${
                 post.isBookmarked ? "text-neon-purple" : "text-muted-foreground hover:text-neon-purple hover:bg-neon-purple/5"
               }`}
             >
@@ -578,7 +578,7 @@ export default function PostDetail() {
                   toast.success("Link copied!");
                 }
               }}
-              className="flex items-center gap-2.5 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all"
+              className="flex items-center gap-1.5 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all"
             >
               <Share2 size={20} />
             </button>
@@ -588,9 +588,9 @@ export default function PostDetail() {
         {/* Comments */}
         <div className="pb-24">
           <div className="px-4 py-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">{comments.length} comments</span>
+            <span className="text-xs font-medium text-muted-foreground">{comments.length} comments</span>
             <div className="h-px flex-1 bg-border/10" />
-            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
               <ChevronDown size={12} />
               Latest
             </button>
@@ -611,19 +611,19 @@ export default function PostDetail() {
                     <AvatarFallback className="bg-secondary text-sm">{comment.author.avatar?.startsWith("http") ? comment.author.name?.slice(0,2).toUpperCase() : comment.author.avatar}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5 mb-2">
+                    <div className="flex items-center gap-1.5 mb-1">
                       <span className="text-sm font-semibold font-display">{comment.author.name}</span>
                       {comment.author.isVerified && (
                         <CheckCircle2 size={12} className="text-neon-cyan fill-neon-cyan/20 shrink-0" />
                       )}
-                      <span className="text-sm text-muted-foreground">{comment.timestamp}</span>
+                      <span className="text-[10px] text-muted-foreground">{comment.timestamp}</span>
                     </div>
 
                     {/* Quoted post in comment */}
                     {comment.quotedPost && (
                       <div className="mb-2 p-2 rounded-lg border border-border/20 bg-secondary/20">
-                        <p className="text-sm text-neon-cyan font-medium mb-0.5">@{comment.quotedPost.author}</p>
-                        <p className="text-[13px] text-muted-foreground line-clamp-2">{comment.quotedPost.content}</p>
+                        <p className="text-[10px] text-neon-cyan font-medium mb-0.5">@{comment.quotedPost.author}</p>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2">{comment.quotedPost.content}</p>
                       </div>
                     )}
 
@@ -632,7 +632,7 @@ export default function PostDetail() {
                     <div className="flex items-center gap-4 mt-2">
                       <button
                         onClick={() => toggleCommentLike(comment.id)}
-                        className={`flex items-center gap-2 text-sm transition-colors ${
+                        className={`flex items-center gap-1 text-xs transition-colors ${
                           comment.isLiked ? "text-neon-red" : "text-muted-foreground hover:text-neon-red"
                         }`}
                       >
@@ -645,7 +645,7 @@ export default function PostDetail() {
                           setCommentText(`@${comment.author.name} `);
                           commentInputRef.current?.focus();
                         }}
-                        className="text-sm text-muted-foreground hover:text-neon-cyan transition-colors"
+                        className="text-xs text-muted-foreground hover:text-neon-cyan transition-colors"
                       >
                         Reply
                       </button>
@@ -662,7 +662,7 @@ export default function PostDetail() {
       <div className="fixed bottom-0 left-0 right-0 glass border-t border-border/30 px-4 py-3 pb-[env(safe-area-inset-bottom)]">
         {replyTo && (
           <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40">
-            <span className="text-[13px] text-neon-cyan flex-1">Replying to @{replyTo.author.name}</span>
+            <span className="text-[11px] text-neon-cyan flex-1">Replying to @{replyTo.author.name}</span>
             <button onClick={() => { setReplyTo(null); setCommentText(""); }} className="text-muted-foreground hover:text-foreground">
               <X size={14} />
             </button>
@@ -672,7 +672,7 @@ export default function PostDetail() {
           <Avatar className="w-8 h-8 shrink-0">
             <AvatarFallback className="bg-neon-cyan/15 text-neon-cyan text-xs">🦊</AvatarFallback>
           </Avatar>
-          <div className="flex-1 flex items-center gap-2.5 bg-secondary/40 rounded-full px-3 py-2 border border-border/20 focus-within:border-neon-cyan/30 transition-colors">
+          <div className="flex-1 flex items-center gap-1.5 bg-secondary/40 rounded-full px-3 py-2 border border-border/20 focus-within:border-neon-cyan/30 transition-colors">
             <input
               ref={commentInputRef}
               type="text"

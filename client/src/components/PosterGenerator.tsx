@@ -287,7 +287,7 @@ export default function PosterGenerator({
                   <div className="px-4 py-3 space-y-3">
                     {/* Custom Slogan */}
                     <div>
-                      <label className="flex items-center gap-2.5 text-sm text-white/50 mb-2.5">
+                      <label className="flex items-center gap-1.5 text-[10px] text-white/50 mb-1.5">
                         <Type size={10} />
                         {t("poster.customSlogan")}
                       </label>
@@ -297,7 +297,7 @@ export default function PosterGenerator({
                         onChange={(e) => setCustomSlogan(e.target.value)}
                         placeholder={t("poster.defaultSlogan")}
                         maxLength={40}
-                        className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors"
+                        className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors"
                       />
                     </div>
                   </div>
@@ -331,7 +331,7 @@ export default function PosterGenerator({
                   <div className="relative z-10 flex flex-col h-full p-6 justify-between">
                     {/* Top: Brand */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <div
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
                           style={{ background: template.tagBg, border: `1px solid ${template.cardBorder}` }}
@@ -346,7 +346,7 @@ export default function PosterGenerator({
                         </span>
                       </div>
                       <div
-                        className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm font-medium mt-2"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium mt-2"
                         style={{ background: template.tagBg, color: template.tagText, border: `1px solid ${template.cardBorder}` }}
                       >
                         <Sparkles size={8} />
@@ -369,13 +369,13 @@ export default function PosterGenerator({
 
                       {/* Name */}
                       <h3
-                        className="text-xl font-bold mb-2"
+                        className="text-xl font-bold mb-1"
                         style={{ color: template.textColor, fontFamily: "'Space Grotesk', sans-serif" }}
                       >
                         {userName}
                       </h3>
                       <p
-                        className="text-sm mb-5"
+                        className="text-xs mb-5"
                         style={{ color: template.subtitleColor }}
                       >
                         {t("poster.invitesYou")}
@@ -401,7 +401,7 @@ export default function PosterGenerator({
                           >
                             {totalInvited}
                           </p>
-                          <p className="text-sm" style={{ color: template.subtitleColor }}>
+                          <p className="text-[9px]" style={{ color: template.subtitleColor }}>
                             {t("poster.invited")}
                           </p>
                         </div>
@@ -413,7 +413,7 @@ export default function PosterGenerator({
                           >
                             {totalRewards.toLocaleString()}
                           </p>
-                          <p className="text-sm" style={{ color: template.subtitleColor }}>
+                          <p className="text-[9px]" style={{ color: template.subtitleColor }}>
                             NP {t("poster.earned")}
                           </p>
                         </div>
@@ -425,7 +425,7 @@ export default function PosterGenerator({
                           >
                             +500
                           </p>
-                          <p className="text-sm" style={{ color: template.subtitleColor }}>
+                          <p className="text-[9px]" style={{ color: template.subtitleColor }}>
                             NP {t("poster.bonus")}
                           </p>
                         </div>
@@ -439,7 +439,7 @@ export default function PosterGenerator({
                         className="p-3 rounded-xl mb-3 text-center"
                         style={{ background: template.cardBg, border: `1px solid ${template.cardBorder}` }}
                       >
-                        <p className="text-sm mb-2" style={{ color: template.subtitleColor }}>
+                        <p className="text-[9px] mb-1" style={{ color: template.subtitleColor }}>
                           {t("poster.inviteCode")}
                         </p>
                         <p
@@ -453,10 +453,10 @@ export default function PosterGenerator({
                       {/* QR Code + CTA */}
                       <div className="flex items-end gap-3">
                         <div className="flex-1">
-                          <p className="text-sm mb-2" style={{ color: template.subtitleColor }}>
+                          <p className="text-[10px] mb-1" style={{ color: template.subtitleColor }}>
                             {t("poster.scanToJoin")}
                           </p>
-                          <p className="text-sm leading-relaxed" style={{ color: template.subtitleColor }}>
+                          <p className="text-[9px] leading-relaxed" style={{ color: template.subtitleColor }}>
                             {t("poster.joinDesc")}
                           </p>
                         </div>

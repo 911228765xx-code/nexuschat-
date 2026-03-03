@@ -155,9 +155,9 @@ export default function TaskCenter() {
           </button>
           <Zap size={20} className="text-neon-purple" />
           <h1 className="flex-1 text-base font-semibold font-display">{t("tasks.title")}</h1>
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
             <Sparkles size={12} className="text-neon-purple" />
-            <span className="text-sm font-bold font-mono text-neon-purple">{(myRank?.npPoints ?? 0).toLocaleString()} NP</span>
+            <span className="text-xs font-bold font-mono text-neon-purple">{(myRank?.npPoints ?? 0).toLocaleString()} NP</span>
           </div>
         </div>
       </header>
@@ -173,15 +173,15 @@ export default function TaskCenter() {
             <div className="flex items-center gap-2">
               <Flame size={16} className="text-neon-red" />
               <span className="text-sm font-semibold">{t("tasks.dailyCheckin")}</span>
-              <span className="text-sm px-2.5 py-1 rounded-full bg-neon-red/10 text-neon-red border border-neon-red/20 font-mono">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neon-red/10 text-neon-red border border-neon-red/20 font-mono">
                 {checkinDay}{t("tasks.dayStreak")}
               </span>
             </div>
-            <span className="text-sm text-muted-foreground">{t("tasks.todayEarned")}: +{totalNPToday} NP</span>
+            <span className="text-[10px] text-muted-foreground">{t("tasks.todayEarned")}: +{totalNPToday} NP</span>
           </div>
 
           {/* 7-day checkin grid */}
-          <div className="grid grid-cols-7 gap-2.5 mb-3">
+          <div className="grid grid-cols-7 gap-1.5 mb-3">
             {CHECKIN_REWARDS.map((reward, i) => {
               const isChecked = i < checkinDay || (i === checkinDay && todayChecked);
               const isToday = i === checkinDay && !todayChecked;
@@ -196,17 +196,17 @@ export default function TaskCenter() {
                         : "bg-secondary/30 border border-border/20 opacity-70"
                   }`}
                 >
-                  <span className={`text-sm ${isChecked ? "text-neon-green/70" : isToday ? "text-neon-cyan/70" : "text-muted-foreground"}`}>{t("tasks.day")}{i + 1}</span>
+                  <span className={`text-[9px] ${isChecked ? "text-neon-green/70" : isToday ? "text-neon-cyan/70" : "text-muted-foreground"}`}>{t("tasks.day")}{i + 1}</span>
                   {isChecked ? (
                     <>
-                      <span className="text-[13px] font-bold font-mono my-0.5 text-neon-green">+{reward}</span>
-                      <span className="text-[13px] font-mono text-neon-green/60">NP</span>
+                      <span className="text-[11px] font-bold font-mono my-0.5 text-neon-green">+{reward}</span>
+                      <span className="text-[8px] font-mono text-neon-green/60">NP</span>
                       <CheckCircle2 size={9} className="text-neon-green/70 mt-0.5" />
                     </>
                   ) : (
                     <>
-                      <span className={`text-[13px] font-bold font-mono my-0.5 ${isToday ? "text-neon-cyan" : "text-muted-foreground"}`}>+{reward}</span>
-                      <span className={`text-[13px] font-mono ${isToday ? "text-neon-cyan/60" : "text-muted-foreground/50"}`}>{i === 6 ? "×2" : "NP"}</span>
+                      <span className={`text-[11px] font-bold font-mono my-0.5 ${isToday ? "text-neon-cyan" : "text-muted-foreground"}`}>+{reward}</span>
+                      <span className={`text-[8px] font-mono ${isToday ? "text-neon-cyan/60" : "text-muted-foreground/50"}`}>{i === 6 ? "×2" : "NP"}</span>
                     </>
                   )}
                 </div>
@@ -224,12 +224,12 @@ export default function TaskCenter() {
             }`}
           >
             {todayChecked ? (
-              <span className="flex items-center justify-center gap-2.5">
+              <span className="flex items-center justify-center gap-1.5">
                 <CheckCircle2 size={15} />
                 {t("tasks.checkedIn")}
               </span>
             ) : (
-              <span className="flex items-center justify-center gap-2.5">
+              <span className="flex items-center justify-center gap-1.5">
                 <Calendar size={15} />
                 {t("tasks.checkinNow")} (+{CHECKIN_REWARDS[checkinDay] || 10} NP)
               </span>
@@ -239,9 +239,9 @@ export default function TaskCenter() {
 
         {/* Daily Progress */}
         <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-sm font-medium">{t("tasks.dailyProgress")}</span>
-            <span className="text-sm text-muted-foreground font-mono">{dailyCompleted}/{dailyTotal}</span>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium">{t("tasks.dailyProgress")}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{dailyCompleted}/{dailyTotal}</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
             <motion.div
@@ -252,7 +252,7 @@ export default function TaskCenter() {
             />
           </div>
           {dailyCompleted === dailyTotal && (
-            <p className="text-sm text-neon-green mt-2 flex items-center gap-2">
+            <p className="text-[10px] text-neon-green mt-1 flex items-center gap-1">
               <Sparkles size={10} />
               {t("tasks.allDailyDone")}
             </p>
@@ -265,7 +265,7 @@ export default function TaskCenter() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === tab
                   ? "bg-neon-purple/15 text-neon-purple border border-neon-purple/30"
                   : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
@@ -291,7 +291,7 @@ export default function TaskCenter() {
               {/* Point History */}
               <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-border/10">
-                  <h4 className="text-sm font-medium text-muted-foreground">{t("tasks.pointHistory")}</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground">{t("tasks.pointHistory")}</h4>
                 </div>
                 {[
                   { action: t("tasks.historyCheckin"), amount: "+30", time: t("tasks.today"), color: "text-neon-green" },
@@ -306,10 +306,10 @@ export default function TaskCenter() {
                       <Sparkles size={14} className={item.color} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{item.action}</p>
-                      <p className="text-sm text-muted-foreground">{item.time}</p>
+                      <p className="text-xs font-medium">{item.action}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.time}</p>
                     </div>
-                    <span className={`text-sm font-bold font-mono ${item.color}`}>{item.amount} NP</span>
+                    <span className={`text-xs font-bold font-mono ${item.color}`}>{item.amount} NP</span>
                   </div>
                 ))}
               </div>
@@ -352,36 +352,36 @@ function TaskCard({ task, index, onClaim, t }: {
             {task.title}
           </span>
         </div>
-        <p className="text-sm text-muted-foreground mt-0.5">{task.desc}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">{task.desc}</p>
         {!task.completed && task.total > 1 && (
-          <div className="flex items-center gap-2 mt-2.5">
+          <div className="flex items-center gap-2 mt-1.5">
             <div className="flex-1 h-1 rounded-full bg-secondary/60 overflow-hidden">
               <div
                 className="h-full rounded-full bg-neon-cyan transition-all"
                 style={{ width: `${(task.progress / task.total) * 100}%` }}
               />
             </div>
-            <span className="text-sm text-muted-foreground font-mono">{task.progress}/{task.total}</span>
+            <span className="text-[9px] text-muted-foreground font-mono">{task.progress}/{task.total}</span>
           </div>
         )}
       </div>
 
-      <div className="shrink-0 flex flex-col items-end gap-2">
-        <span className="text-sm font-bold font-mono text-neon-purple">+{task.reward} NP</span>
+      <div className="shrink-0 flex flex-col items-end gap-1">
+        <span className="text-[10px] font-bold font-mono text-neon-purple">+{task.reward} NP</span>
         {task.claimed ? (
-          <span className="text-sm text-muted-foreground flex items-center gap-0.5">
+          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
             <CheckCircle2 size={10} />
             {t("tasks.claimed")}
           </span>
         ) : task.completed ? (
           <button
             onClick={() => onClaim(task.id)}
-            className="px-2.5 py-1 rounded-lg bg-neon-green/15 text-neon-green text-sm font-medium border border-neon-green/20 hover:bg-neon-green/25 transition-all active:scale-95"
+            className="px-2.5 py-1 rounded-lg bg-neon-green/15 text-neon-green text-[10px] font-medium border border-neon-green/20 hover:bg-neon-green/25 transition-all active:scale-95"
           >
             {t("tasks.claim")}
           </button>
         ) : (
-          <span className="text-sm text-muted-foreground flex items-center gap-0.5">
+          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
             <Clock size={10} />
             {t("tasks.inProgress")}
           </span>

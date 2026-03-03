@@ -170,7 +170,7 @@ export default function Settings() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{t("settings.twoFA")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.twoFADesc")}</p>
+                  <p className="text-[10px] text-muted-foreground">{t("settings.twoFADesc")}</p>
                 </div>
               </div>
               {renderToggle(twoFAEnabled, () => toggleSetting("twoFAEnabled", twoFAEnabled, setTwoFAEnabled))}
@@ -188,7 +188,7 @@ export default function Settings() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{t("settings.biometric")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.biometricDesc")}</p>
+                  <p className="text-[10px] text-muted-foreground">{t("settings.biometricDesc")}</p>
                 </div>
               </div>
               {renderToggle(biometricEnabled, () => toggleSetting("biometricEnabled", biometricEnabled, setBiometricEnabled))}
@@ -205,11 +205,11 @@ export default function Settings() {
               </div>
               <div>
                 <p className="text-sm font-medium">{t("settings.apiKey")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.apiKeyDesc")}</p>
+                <p className="text-[10px] text-muted-foreground">{t("settings.apiKeyDesc")}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 border border-border/20">
-              <code className="flex-1 text-sm font-mono text-muted-foreground truncate">
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary/30 border border-border/20">
+              <code className="flex-1 text-xs font-mono text-muted-foreground truncate">
                 {apiKeyVisible ? currentApiKey : "nx_sk_••••••••••••••••••••••••••••"}
               </code>
               <button
@@ -227,7 +227,7 @@ export default function Settings() {
             </div>
             <button
               onClick={() => generateKeyMut.mutate()}
-              className="mt-2 text-sm text-neon-red hover:underline"
+              className="mt-2 text-[10px] text-neon-red hover:underline"
             >
               {t("settings.regenerateKey")}
             </button>
@@ -239,7 +239,7 @@ export default function Settings() {
           <div className="px-4 py-3 border-b border-border/10">
             <div className="flex items-center gap-2">
               <Monitor size={14} className="text-muted-foreground" />
-              <h4 className="text-sm font-medium text-muted-foreground">{t("settings.loginDevices")}</h4>
+              <h4 className="text-xs font-medium text-muted-foreground">{t("settings.loginDevices")}</h4>
             </div>
           </div>
           <div className="flex items-center gap-3 px-4 py-3">
@@ -248,10 +248,10 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{t("settings.currentDevice") || "Current Device"}</p>
-                  <span className="text-sm px-2.5 py-1 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">{t("settings.current")}</span>
+                  <p className="text-xs font-medium">{t("settings.currentDevice") || "Current Device"}</p>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">{t("settings.current")}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">{t("settings.activeSession") || "Active session"}</p>
+                <p className="text-[10px] text-muted-foreground">{t("settings.activeSession") || "Active session"}</p>
               </div>
             </div>
         </div>
@@ -271,7 +271,7 @@ export default function Settings() {
           <h1 className="text-base font-semibold font-display">{t("settings.privacy")}</h1>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {[
           { label: t("settings.showWallet"), desc: t("settings.showWalletDesc"), on: showWallet, toggle: () => toggleSetting("showWallet", showWallet, setShowWallet), icon: <Eye size={16} className="text-neon-cyan" /> },
           { label: t("settings.showActivity"), desc: t("settings.showActivityDesc"), on: showActivity, toggle: () => toggleSetting("showActivity", showActivity, setShowActivity), icon: <Clock size={16} className="text-neon-green" /> },
@@ -284,7 +284,7 @@ export default function Settings() {
               <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">{item.icon}</div>
               <div>
                 <p className="text-sm font-medium">{item.label}</p>
-                <p className="text-sm text-muted-foreground">{item.desc}</p>
+                <p className="text-[10px] text-muted-foreground">{item.desc}</p>
               </div>
             </div>
             {renderToggle(item.on, item.toggle)}
@@ -302,7 +302,7 @@ export default function Settings() {
             </div>
             <div className="flex-1 text-left">
               <p className="text-sm font-medium">{t("settings.blockedUsers")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.blockedUsersDesc")}</p>
+              <p className="text-[10px] text-muted-foreground">{t("settings.blockedUsersDesc")}</p>
             </div>
             <ChevronRight size={14} className="text-muted-foreground" />
           </button>
@@ -318,7 +318,7 @@ export default function Settings() {
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-medium text-destructive">{t("settings.clearCache")}</p>
-            <p className="text-sm text-muted-foreground">{t("settings.clearCacheDesc")}</p>
+            <p className="text-[10px] text-muted-foreground">{t("settings.clearCacheDesc")}</p>
           </div>
         </button>
       </div>
@@ -344,8 +344,8 @@ export default function Settings() {
             <span className="text-4xl">🔗</span>
           </div>
           <h2 className="text-xl font-bold font-display">NexusChat</h2>
-          <p className="text-sm text-muted-foreground mt-2">{t("settings.version")} 2.1.0</p>
-          <p className="text-sm text-muted-foreground mt-1">{t("settings.buildDate")}: 2026-02-27</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("settings.version")} 2.1.0</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{t("settings.buildDate")}: 2026-02-27</p>
         </div>
 
         <div className="space-y-2">
@@ -364,7 +364,7 @@ export default function Settings() {
             >
               <div className="w-9 h-9 rounded-xl bg-secondary/40 flex items-center justify-center">{item.icon}</div>
               <span className="flex-1 text-sm text-left">{item.label}</span>
-              {item.value && <span className="text-sm text-muted-foreground font-mono">{item.value}</span>}
+              {item.value && <span className="text-[10px] text-muted-foreground font-mono">{item.value}</span>}
               <ExternalLink size={12} className="text-muted-foreground" />
             </button>
           ))}
@@ -372,8 +372,8 @@ export default function Settings() {
 
         {/* Footer */}
         <div className="text-center mt-8 pb-4">
-          <p className="text-sm text-muted-foreground">© 2026 NexusChat. All rights reserved.</p>
-          <p className="text-sm text-muted-foreground mt-2">{t("settings.builtWith")}</p>
+          <p className="text-[10px] text-muted-foreground">© 2026 NexusChat. All rights reserved.</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("settings.builtWith")}</p>
         </div>
       </div>
     </motion.div>
@@ -394,7 +394,7 @@ export default function Settings() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {/* Account Section */}
         <div>
-          <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("settings.account")}</h3>
+          <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("settings.account")}</h3>
           <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
             <button
               onClick={() => setSection("security")}
@@ -405,7 +405,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 text-left">
                 <p className="text-sm">{t("settings.security")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.securityDesc")}</p>
+                <p className="text-[10px] text-muted-foreground">{t("settings.securityDesc")}</p>
               </div>
               <ChevronRight size={14} className="text-muted-foreground" />
             </button>
@@ -419,7 +419,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 text-left">
                 <p className="text-sm">{t("settings.privacy")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.privacyDesc")}</p>
+                <p className="text-[10px] text-muted-foreground">{t("settings.privacyDesc")}</p>
               </div>
               <ChevronRight size={14} className="text-muted-foreground" />
             </button>
@@ -428,7 +428,7 @@ export default function Settings() {
 
         {/* Preferences Section */}
         <div>
-          <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("settings.preferences")}</h3>
+          <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("settings.preferences")}</h3>
           <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
             {/* Theme */}
             <button
@@ -451,7 +451,7 @@ export default function Settings() {
                 <Globe size={16} className="text-neon-green" />
               </div>
               <span className="flex-1 text-sm text-left">{t("settings.language")}</span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {LANGUAGES.find(l => l.code === locale)?.flag} {LANGUAGES.find(l => l.code === locale)?.name}
               </span>
               <ChevronRight size={14} className="text-muted-foreground" />
@@ -507,7 +507,7 @@ export default function Settings() {
 
         {/* About & Support */}
         <div>
-          <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("settings.support")}</h3>
+          <h3 className="text-xs text-muted-foreground font-medium mb-2 px-1">{t("settings.support")}</h3>
           <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
             <button
               onClick={() => toast.info("Opening Help Center")}
@@ -537,7 +537,7 @@ export default function Settings() {
                 <Info size={16} className="text-muted-foreground" />
               </div>
               <span className="flex-1 text-sm text-left">{t("settings.about")}</span>
-              <span className="text-sm text-muted-foreground font-mono">v2.1.0</span>
+              <span className="text-[10px] text-muted-foreground font-mono">v2.1.0</span>
               <ChevronRight size={14} className="text-muted-foreground" />
             </button>
           </div>
@@ -554,8 +554,8 @@ export default function Settings() {
 
         {/* Version info */}
         <div className="text-center py-2">
-          <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v2.1.0 (Build 2026.02)</p>
-          <p className="text-sm text-muted-foreground/30 mt-1">{t("settings.builtWith")}</p>
+          <p className="text-[10px] text-muted-foreground/40 font-mono">NexusChat v2.1.0 (Build 2026.02)</p>
+          <p className="text-[9px] text-muted-foreground/30 mt-0.5">{t("settings.builtWith")}</p>
         </div>
 
         <div className="h-4" />
@@ -583,7 +583,7 @@ export default function Settings() {
                   <LogOut size={24} className="text-destructive" />
                 </div>
                 <h3 className="text-lg font-semibold font-display">{t("settings.logoutConfirm")}</h3>
-                <p className="text-sm text-muted-foreground mt-2">{t("settings.logoutConfirmDesc")}</p>
+                <p className="text-xs text-muted-foreground mt-2">{t("settings.logoutConfirmDesc")}</p>
               </div>
               <div className="flex border-t border-border/20">
                 <button
@@ -652,7 +652,7 @@ function PushNotificationToggle() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm">{label}</p>
-        <p className="text-sm text-muted-foreground truncate">{desc}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{desc}</p>
       </div>
       {permission !== "denied" && (
         <button
