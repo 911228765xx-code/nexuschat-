@@ -540,6 +540,12 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
     ],
+    // HMR: use the proxied domain so the browser can reach the WebSocket
+    // without this, Vite tries ws://localhost:5173 which is blocked by the proxy
+    hmr: {
+      clientPort: 443,
+      protocol: "wss",
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
