@@ -837,7 +837,7 @@ export default function GroupChatRoom() {
                 {[
                   { icon: Search, label: t("group.search"), action: () => { const q = prompt("Search messages..."); if (q) { const found = messages.filter(m => m.content.toLowerCase().includes(q.toLowerCase())); toast.info(`${found.length} messages found`); } } },
                   { icon: isMuted ? BellOff : Bell, label: isMuted ? t("group.unmute") : t("group.mute"), action: () => { setIsMuted(!isMuted); toast.success(isMuted ? "Notifications enabled" : "Group muted"); } },
-                  { icon: Link2, label: t("group.invite") ?? "Invite", action: () => createInviteLinkMutation.mutate({ groupId }) },
+                  { icon: Link2, label: t("group.invite") ?? "Invite", action: () => { setShowSidebar(false); createInviteLinkMutation.mutate({ groupId }); } },
                   { icon: Settings, label: t("group.settings"), action: () => toast.info("Group settings coming soon") },
                 ].map((item) => {
                   const Icon = item.icon;
