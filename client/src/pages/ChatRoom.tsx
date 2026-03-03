@@ -467,18 +467,18 @@ export default function ChatRoom() {
             <p className="text-white text-sm font-bold font-mono">
               {msg.cryptoAmount} {msg.cryptoToken}
             </p>
-            <p className="text-white/70 text-[10px]">Crypto Red Packet</p>
+            <p className="text-white/70 text-sm">Crypto Red Packet</p>
           </div>
         </div>
         {msg.content && (
-          <p className="text-white/90 text-xs mt-1 italic">"{msg.content}"</p>
+          <p className="text-white/90 text-sm mt-2 italic">"{msg.content}"</p>
         )}
       </div>
       <div className="bg-gradient-to-br from-red-600/20 to-orange-600/20 border border-red-500/20 px-3 py-1.5 flex items-center justify-between">
-        <span className="text-[10px] text-red-400/80">🧧 NexusChat Red Packet</span>
+        <span className="text-sm text-red-400/80">🧧 NexusChat Red Packet</span>
         <button
           onClick={() => toast.success("Red packet opened! 🎉")}
-          className="text-[10px] text-red-400 font-medium hover:text-red-300 transition-colors"
+          className="text-sm text-red-400 font-medium hover:text-red-300 transition-colors"
         >
           {msg.isMine ? "Sent" : "Open →"}
         </button>
@@ -493,7 +493,7 @@ export default function ChatRoom() {
       style={{ minWidth: 200 }}
     >
       <div className="bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/30 p-3.5">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center">
             <ArrowUpDown size={14} className="text-neon-cyan" />
           </div>
@@ -501,20 +501,20 @@ export default function ChatRoom() {
             <p className="text-foreground text-sm font-bold font-mono">
               {msg.cryptoAmount} {msg.cryptoToken}
             </p>
-            <p className="text-muted-foreground text-[10px]">
+            <p className="text-muted-foreground text-sm">
               {msg.isMine ? "Transfer to vitalik.eth" : "Transfer from vitalik.eth"}
             </p>
           </div>
         </div>
         {msg.content && (
-          <p className="text-muted-foreground text-xs mt-1">Note: {msg.content}</p>
+          <p className="text-muted-foreground text-sm mt-2">Note: {msg.content}</p>
         )}
       </div>
       <div className="bg-card/50 border-x border-b border-neon-cyan/20 px-3 py-1.5 flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+        <span className="text-sm text-muted-foreground flex items-center gap-2">
           <Wallet size={10} /> On-chain Transfer
         </span>
-        <span className="text-[10px] text-neon-green font-mono">Confirmed ✓</span>
+        <span className="text-sm text-neon-green font-mono">Confirmed ✓</span>
       </div>
     </div>
   );
@@ -555,7 +555,7 @@ export default function ChatRoom() {
               />
             ))}
           </div>
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+          <span className="text-sm text-muted-foreground font-mono shrink-0">
             {msg.voiceDuration ? `${Math.floor(msg.voiceDuration / 60)}:${String(msg.voiceDuration % 60).padStart(2, "0")}` : "0:00"}
           </span>
         </div>
@@ -621,7 +621,7 @@ export default function ChatRoom() {
       </div>
       <div className={`px-3 py-2.5 ${msg.isMine ? "bg-neon-cyan/5" : "bg-card/50"}`}>
         <p className="text-sm font-medium truncate">{msg.locationName}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{msg.locationAddress}</p>
+        <p className="text-sm text-muted-foreground truncate">{msg.locationAddress}</p>
       </div>
     </div>
   );
@@ -644,11 +644,11 @@ export default function ChatRoom() {
       >
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl ${fi.bg} flex items-center justify-center shrink-0`}>
-            <span className={`text-[10px] font-bold font-mono ${fi.text}`}>{fi.label}</span>
+            <span className={`text-sm font-bold font-mono ${fi.text}`}>{fi.label}</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{msg.fileName}</p>
-            <p className="text-[10px] text-muted-foreground">{msg.fileSize}</p>
+            <p className="text-sm text-muted-foreground">{msg.fileSize}</p>
           </div>
           <button
             onClick={() => toast.info("Download started")}
@@ -678,7 +678,7 @@ export default function ChatRoom() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold font-display truncate">vitalik.eth</h2>
-            <p className="text-[10px] text-neon-green flex items-center gap-1">
+            <p className="text-sm text-neon-green flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-neon-green inline-block" />
               Online
             </p>
@@ -690,14 +690,14 @@ export default function ChatRoom() {
       </header>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
         {/* Load more older messages */}
         {hasMore && (
           <div className="flex justify-center py-2">
             <button
               onClick={loadMoreMessages}
               disabled={isLoadingMore}
-              className="text-xs text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-2.5"
             >
               {isLoadingMore ? (
                 <>
@@ -733,7 +733,7 @@ export default function ChatRoom() {
             >
               <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                 {!msg.isMine && (
-                  <Avatar className={`w-7 h-7 shrink-0 mt-1 ${msg.isAI ? "ring-1 ring-neon-purple/50" : ""}`}>
+                  <Avatar className={`w-7 h-7 shrink-0 mt-2 ${msg.isAI ? "ring-1 ring-neon-purple/50" : ""}`}>
                     <AvatarFallback className="bg-secondary text-xs">
                       {msg.senderAvatar}
                     </AvatarFallback>
@@ -742,7 +742,7 @@ export default function ChatRoom() {
                 <div className="relative">
                   {/* Reply reference */}
                   {msg.replyTo && (
-                    <div className={`flex items-center gap-1.5 mb-1 px-3 py-1.5 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40 text-[11px] text-muted-foreground ${msg.isMine ? "ml-auto" : ""}`}>
+                    <div className={`flex items-center gap-2.5 mb-2 px-3 py-1.5 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40 text-[13px] text-muted-foreground ${msg.isMine ? "ml-auto" : ""}`}>
                       <Reply size={10} className="shrink-0 text-neon-cyan" />
                       <span className="text-neon-cyan font-medium">{msg.replyTo.sender}</span>
                       <span className="truncate">{msg.replyTo.content}</span>
@@ -773,7 +773,7 @@ export default function ChatRoom() {
                       }`}
                     >
                       {msg.isAI && (
-                        <div className="flex items-center gap-1 mb-1.5 text-[10px] text-neon-purple font-mono">
+                        <div className="flex items-center gap-2 mb-2.5 text-sm text-neon-purple font-mono">
                           <Bot size={12} />
                           NexusBot AI
                         </div>
@@ -807,7 +807,7 @@ export default function ChatRoom() {
                   {emojiPickerMsgId === msg.id && (
                     <div
                       ref={emojiRef}
-                      className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
+                      className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-2 px-2 py-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
                     >
                       {EMOJI_LIST.map((emoji) => (
                         <button
@@ -822,11 +822,11 @@ export default function ChatRoom() {
                   )}
 
                   {/* Reactions display */}
-                  <div className={`flex items-center gap-1 mt-1 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
-                    <span className="text-[10px] text-muted-foreground">{msg.time}</span>
+                  <div className={`flex items-center gap-2 mt-2 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
+                    <span className="text-sm text-muted-foreground">{msg.time}</span>
                     {/* Read receipt indicator */}
                     {msg.isMine && msg.readStatus && (
-                      <span className={`text-[10px] flex items-center gap-0.5 ${
+                      <span className={`text-sm flex items-center gap-0.5 ${
                         msg.readStatus === "read" ? "text-neon-cyan" :
                         msg.readStatus === "delivered" ? "text-muted-foreground" :
                         "text-muted-foreground/50"
@@ -836,17 +836,17 @@ export default function ChatRoom() {
                         ) : (
                           <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><path d="M1 5l3 3L12 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 5l3 3L16 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         )}
-                        {msg.readStatus === "read" && <span className="text-[9px] font-medium">Read</span>}
+                        {msg.readStatus === "read" && <span className="text-sm font-medium">Read</span>}
                       </span>
                     )}
                     {msg.reactions && Object.entries(msg.reactions).map(([emoji, count]) => (
                       <button
                         key={emoji}
                         onClick={() => handleReaction(msg.id, emoji)}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-secondary/50 hover:bg-secondary/80 transition-colors text-xs"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/50 hover:bg-secondary/80 transition-colors text-sm"
                       >
                         <span>{emoji}</span>
-                        <span className="text-[10px] text-muted-foreground">{count}</span>
+                        <span className="text-sm text-muted-foreground">{count}</span>
                       </button>
                     ))}
                   </div>
@@ -868,12 +868,12 @@ export default function ChatRoom() {
             <Avatar className="w-7 h-7 shrink-0">
               <AvatarFallback className="bg-secondary text-xs">{id?.[0]?.toUpperCase() || "V"}</AvatarFallback>
             </Avatar>
-            <div className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-secondary/60 border border-border/20 rounded-bl-md">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-secondary/60 border border-border/20 rounded-bl-md">
               <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0 }} />
               <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }} />
               <motion.span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }} />
             </div>
-            <span className="text-[10px] text-muted-foreground">{t("chat.typing")}</span>
+            <span className="text-sm text-muted-foreground">{t("chat.typing")}</span>
           </motion.div>
         )}
       </div>
@@ -955,13 +955,13 @@ export default function ChatRoom() {
                     <X size={20} />
                   </button>
                 </div>
-                <p className="text-white/70 text-xs mt-1">Send crypto red packets to friends</p>
+                <p className="text-white/70 text-sm mt-2">Send crypto red packets to friends</p>
               </div>
 
               <div className="p-5 space-y-4">
                 {/* Token selector */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Token</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Token</label>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {TOKENS.map((token) => (
                       <button
@@ -975,8 +975,8 @@ export default function ChatRoom() {
                       >
                         <span className="text-lg">{token.icon}</span>
                         <div className="text-left">
-                          <p className="text-xs font-mono font-semibold">{token.symbol}</p>
-                          <p className="text-[10px] text-muted-foreground">{token.balance}</p>
+                          <p className="text-sm font-mono font-semibold">{token.symbol}</p>
+                          <p className="text-sm text-muted-foreground">{token.balance}</p>
                         </div>
                       </button>
                     ))}
@@ -985,7 +985,7 @@ export default function ChatRoom() {
 
                 {/* Amount input */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Amount</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Amount</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -998,14 +998,14 @@ export default function ChatRoom() {
                       {rpToken}
                     </span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Balance: {selectedRpToken?.balance} {rpToken}
                   </p>
                 </div>
 
                 {/* Red packet count */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Number of packets</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Number of packets</label>
                   <input
                     type="number"
                     value={rpCount}
@@ -1018,7 +1018,7 @@ export default function ChatRoom() {
 
                 {/* Message */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Message (optional)</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Message (optional)</label>
                   <input
                     type="text"
                     value={rpMessage}
@@ -1070,7 +1070,7 @@ export default function ChatRoom() {
                     <X size={20} />
                   </button>
                 </div>
-                <p className="text-muted-foreground text-xs mt-1">Send crypto to vitalik.eth</p>
+                <p className="text-muted-foreground text-sm mt-2">Send crypto to vitalik.eth</p>
               </div>
 
               <div className="p-5 space-y-4">
@@ -1081,13 +1081,13 @@ export default function ChatRoom() {
                   </Avatar>
                   <div>
                     <p className="text-sm font-semibold font-display">vitalik.eth</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">0x71C7...3a9b</p>
+                    <p className="text-sm text-muted-foreground font-mono">0x71C7...3a9b</p>
                   </div>
                 </div>
 
                 {/* Token selector */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Token</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Token</label>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {TOKENS.map((token) => (
                       <button
@@ -1101,8 +1101,8 @@ export default function ChatRoom() {
                       >
                         <span className="text-lg">{token.icon}</span>
                         <div className="text-left">
-                          <p className="text-xs font-mono font-semibold">{token.symbol}</p>
-                          <p className="text-[10px] text-muted-foreground">{token.balance}</p>
+                          <p className="text-sm font-mono font-semibold">{token.symbol}</p>
+                          <p className="text-sm text-muted-foreground">{token.balance}</p>
                         </div>
                       </button>
                     ))}
@@ -1111,7 +1111,7 @@ export default function ChatRoom() {
 
                 {/* Amount */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Amount</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Amount</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -1124,14 +1124,14 @@ export default function ChatRoom() {
                       {tfToken}
                     </span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Balance: {selectedTfToken?.balance} {tfToken}
                   </p>
                 </div>
 
                 {/* Note */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Note (optional)</label>
+                  <label className="text-sm text-muted-foreground mb-2.5 block">Note (optional)</label>
                   <input
                     type="text"
                     value={tfNote}
@@ -1143,8 +1143,8 @@ export default function ChatRoom() {
 
                 {/* Gas estimate */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/20 border border-border/10">
-                  <span className="text-xs text-muted-foreground">Estimated Gas</span>
-                  <span className="text-xs font-mono text-foreground">~0.002 ETH ($3.84)</span>
+                  <span className="text-sm text-muted-foreground">Estimated Gas</span>
+                  <span className="text-sm font-mono text-foreground">~0.002 ETH ($3.84)</span>
                 </div>
 
                 {/* Send button */}
@@ -1167,8 +1167,8 @@ export default function ChatRoom() {
           <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40">
             <Reply size={14} className="text-neon-cyan shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-neon-cyan font-medium">{replyTo.sender}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{replyTo.content}</p>
+              <p className="text-[13px] text-neon-cyan font-medium">{replyTo.sender}</p>
+              <p className="text-[13px] text-muted-foreground truncate">{replyTo.content}</p>
             </div>
             <button
               onClick={() => setReplyTo(null)}
@@ -1185,7 +1185,7 @@ export default function ChatRoom() {
             <img src={imagePreview} alt="preview" className="max-h-32 rounded-xl border border-border/30" />
             <button
               onClick={() => setImagePreview(null)}
-              className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-destructive text-white text-xs shadow-lg"
+              className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-destructive text-white text-sm shadow-lg"
             >
               <X size={12} />
             </button>
@@ -1199,7 +1199,7 @@ export default function ChatRoom() {
               <button
                 key={cmd}
                 onClick={() => setInput(cmd)}
-                className="shrink-0 text-[11px] font-mono px-2.5 py-1 rounded-lg bg-neon-purple/10 text-neon-purple border border-neon-purple/20 hover:bg-neon-purple/20 transition-colors"
+                className="shrink-0 text-[13px] font-mono px-2.5 py-1 rounded-lg bg-neon-purple/10 text-neon-purple border border-neon-purple/20 hover:bg-neon-purple/20 transition-colors"
               >
                 {cmd}
               </button>
@@ -1294,12 +1294,12 @@ export default function ChatRoom() {
                     <button
                       key={item.label}
                       onClick={item.action}
-                      className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl hover:bg-secondary/40 transition-colors"
+                      className="flex flex-col items-center gap-2.5 py-2.5 rounded-xl hover:bg-secondary/40 transition-colors"
                     >
                       <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center`}>
                         <Icon size={18} className={item.color} />
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{item.label}</span>
+                      <span className="text-sm text-muted-foreground">{item.label}</span>
                     </button>
                   );
                 })}
@@ -1337,7 +1337,7 @@ export default function ChatRoom() {
           className="hidden"
         />
 
-        <div className="flex items-end gap-1.5">
+        <div className="flex items-end gap-2.5">
           {/* Plus / Attach button */}
           <button
             onClick={() => setShowAttachMenu(!showAttachMenu)}
@@ -1441,7 +1441,7 @@ export default function ChatRoom() {
               <button onClick={() => { setShowForward(false); setForwardMsgId(null); setForwardTarget(null); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={18} className="text-muted-foreground" /></button>
             </div>
             <div className="p-4 border-b border-border/20 bg-secondary/20">
-              <p className="text-xs text-muted-foreground mb-1">{t("chat.forwardingMsg")}</p>
+              <p className="text-sm text-muted-foreground mb-2">{t("chat.forwardingMsg")}</p>
               <p className="text-sm truncate">{messages.find(m => m.id === forwardMsgId)?.content || `[${messages.find(m => m.id === forwardMsgId)?.type || "message"}]`}</p>
             </div>
             <div className="flex-1 overflow-y-auto p-2">

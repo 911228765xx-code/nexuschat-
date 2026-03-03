@@ -38,11 +38,11 @@ export default function LoginPromptCard({
           <p className="text-sm font-semibold text-foreground">
             登录后查看{pageName ? `${pageName}完整数据` : "完整功能"}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">连接 Manus 账号，数据实时同步</p>
+          <p className="text-sm text-muted-foreground mt-0.5">连接 Manus 账号，数据实时同步</p>
         </div>
         <button
           onClick={handleLogin}
-          className="flex-shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-xs font-semibold hover:opacity-90 active:scale-[0.97] transition-all"
+          className="flex-shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-sm font-semibold hover:opacity-90 active:scale-[0.97] transition-all"
         >
           立即登录
         </button>
@@ -62,10 +62,10 @@ export default function LoginPromptCard({
 
         {/* Title */}
         <div>
-          <h3 className="text-base font-bold text-foreground mb-1">
+          <h3 className="text-base font-bold text-foreground mb-2">
             登录后解锁{pageName ? `${pageName}` : "完整功能"}
           </h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             使用 Manus 账号登录，数据实时同步，多设备无缝访问
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function LoginPromptCard({
                 <div className="w-7 h-7 rounded-lg bg-[#00d4ff]/10 border border-[#00d4ff]/20 flex items-center justify-center flex-shrink-0">
                   <Icon size={13} className="text-[#00d4ff]" />
                 </div>
-                <span className="text-xs text-foreground/80">{feat}</span>
+                <span className="text-sm text-foreground/80">{feat}</span>
               </div>
             );
           })}
@@ -96,7 +96,7 @@ export default function LoginPromptCard({
           立即登录
         </button>
 
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           安全登录 · 无需密码 · 支持 Web3 钱包
         </p>
       </div>

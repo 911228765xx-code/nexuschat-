@@ -69,28 +69,34 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
+// ─── Page skeleton loader — matches dark bg, no white flash ──────────────────────────────────
 function PageLoader() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="flex gap-1.5">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="w-2 h-2 rounded-full bg-[#00d4ff]/40 animate-bounce"
-            style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }}
-          />
-        ))}
+    <div className="min-h-screen bg-background px-4 pt-6 pb-20">
+      {/* Header skeleton */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-full bg-white/5 animate-pulse" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-white/5 rounded-full w-32 animate-pulse" />
+          <div className="h-3 bg-white/5 rounded-full w-20 animate-pulse" />
+        </div>
       </div>
+      {/* Content skeleton rows */}
+      {[1, 0.9, 0.8, 0.7, 0.6].map((opacity, i) => (
+        <div key={i} className="flex items-center gap-3 mb-4" style={{ opacity }}>
+          <div className="w-12 h-12 rounded-xl bg-white/5 animate-pulse flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 bg-white/5 rounded-full animate-pulse" style={{ width: `${60 + i * 8}%` }} />
+            <div className="h-3 bg-white/5 rounded-full animate-pulse" style={{ width: `${40 + i * 5}%` }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
-
 // PageTransition removed — AnimatePresence + motion caused Android black screen
 
-/**
- * PriceAlertSocket — rendered after initial paint, loads socket.io lazily
- */
+// PriceAlertSocket — rendered after initial paint, loads socket.io lazily
 const PriceAlertSocket = lazy(() =>
   import("./hooks/usePriceAlertSocket").then((mod) => ({
     default: function PriceAlertSocketComponent() {
@@ -100,9 +106,7 @@ const PriceAlertSocket = lazy(() =>
   }))
 );
 
-/**
- * WalletSyncEffect - uses standalone useWallet (window.ethereum only, no wagmi dependency)
- */
+// WalletSyncEffect - uses standalone useWallet (window.ethereum only, no wagmi dependency)
 function WalletSyncEffect() {
   const { address, isConnected } = useStandaloneWallet();
   const { updateProfile } = useApp();
@@ -114,11 +118,9 @@ function WalletSyncEffect() {
   return null;
 }
 
-/**
- * RouteContent — single persistent Suspense boundary (no key=location).
- * Already-loaded chunks never re-trigger loading spinner on navigation.
- * Only truly unloaded chunks show the skeleton on first visit.
- */
+// RouteContent — single persistent Suspense boundary (no key=location).
+// Already-loaded chunks never re-trigger loading spinner on navigation.
+// Only truly unloaded chunks show the skeleton on first visit.
 function RouteContent() {
   const [location] = useLocation();
 
@@ -261,6 +263,15 @@ function AppContent() {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
   });
+
+  // Tell the HTML skeleton screen that React has fully mounted and rendered.
+  // This is more reliable than MutationObserver on slow/WeChat mobile browsers.
+  useEffect(() => {
+    const w = window as Window & typeof globalThis & { __nexusHideSkeleton?: () => void };
+    if (typeof w.__nexusHideSkeleton === 'function') {
+      w.__nexusHideSkeleton();
+    }
+  }, []);
 
   return (
     <>

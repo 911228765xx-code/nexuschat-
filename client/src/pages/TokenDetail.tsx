@@ -379,7 +379,7 @@ function ChartTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card/95 [backdrop-filter:none] border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
-      <p className="text-[10px] font-mono font-bold text-neon-cyan">${payload[0].value.toLocaleString()}</p>
+      <p className="text-sm font-mono font-bold text-neon-cyan">${payload[0].value.toLocaleString()}</p>
     </div>
   );
 }
@@ -388,9 +388,9 @@ function FlowTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card/95 [backdrop-filter:none] border border-border/30 rounded-lg px-2.5 py-1.5 shadow-xl">
-      <p className="text-[9px] text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-sm text-muted-foreground mb-0.5">{label}</p>
       {payload.map((p: any, i: number) => (
-        <p key={i} className={`text-[10px] font-mono ${p.dataKey === "inflow" ? "text-neon-green" : "text-neon-red"}`}>
+        <p key={i} className={`text-sm font-mono ${p.dataKey === "inflow" ? "text-neon-green" : "text-neon-red"}`}>
           {p.dataKey === "inflow" ? "In" : "Out"}: ${p.value}B
         </p>
       ))}
@@ -585,7 +585,7 @@ export default function TokenDetail() {
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <button onClick={() => setLocation("/app/research")}
-              className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
+              className="p-2.5 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
               <ArrowLeft size={18} />
             </button>
             <div className="w-9 h-9 rounded-xl bg-neon-purple/15 flex items-center justify-center text-xl border border-neon-purple/20">
@@ -594,13 +594,13 @@ export default function TokenDetail() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-bold font-display">{data.token}</h1>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground font-mono">#{data.rank}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-purple/10 text-neon-purple font-mono">{data.category}</span>
+                <span className="text-sm px-2.5 py-1 rounded bg-secondary/50 text-muted-foreground font-mono">#{data.rank}</span>
+                <span className="text-sm px-2.5 py-1 rounded bg-neon-purple/10 text-neon-purple font-mono">{data.category}</span>
               </div>
-              <p className="text-[11px] text-muted-foreground">{data.chain}</p>
+              <p className="text-[13px] text-muted-foreground">{data.chain}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
             <button onClick={() => { setIsWatched(!isWatched); toast.info(isWatched ? t("research.removedFromWatchlist") : t("research.addedToWatchlist")); }}
               className={`p-2 rounded-lg transition-colors ${isWatched ? "text-yellow-500 bg-yellow-500/10" : "text-muted-foreground hover:bg-secondary/40"}`}>
               {isWatched ? <Star size={16} fill="currentColor" /> : <StarOff size={16} />}
@@ -632,9 +632,9 @@ export default function TokenDetail() {
               <div className="flex items-center gap-2">
                 <input type="number" value={alertPrice} onChange={(e) => setAlertPrice(e.target.value)}
                   placeholder={`${t("research.alertPrice")} (USD)`}
-                  className="flex-1 h-8 px-3 rounded-lg bg-secondary/50 border border-border/30 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                  className="flex-1 h-8 px-3 rounded-lg bg-secondary/50 border border-border/30 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
                 <button onClick={handleSetAlert}
-                  className="px-3 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors">
+                  className="px-3 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">
                   {t("research.setAlert")}
                 </button>
               </div>
@@ -653,7 +653,7 @@ export default function TokenDetail() {
                 { label: "7d", value: data.change7d },
                 { label: "30d", value: data.change30d },
               ].map((c) => (
-                <span key={c.label} className={`text-[10px] font-mono flex items-center gap-0.5 ${c.value >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                <span key={c.label} className={`text-sm font-mono flex items-center gap-0.5 ${c.value >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                   <span className="text-muted-foreground">{c.label}:</span>
                   {c.value >= 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
                   {c.value >= 0 ? "+" : ""}{c.value}%
@@ -662,7 +662,7 @@ export default function TokenDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border text-xs font-bold ${signalBg(sig.signal)} ${signalColor(sig.signal)}`}>
+            <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-xl border text-sm font-bold ${signalBg(sig.signal)} ${signalColor(sig.signal)}`}>
               <Target size={12} />
               {signalLabel(sig.signal)}
             </div>
@@ -671,12 +671,12 @@ export default function TokenDetail() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 pb-2 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                   activeTab === tab.key
                     ? "bg-neon-purple/15 text-neon-purple border border-neon-purple/25"
                     : "text-muted-foreground hover:bg-secondary/30 border border-transparent"
@@ -698,11 +698,11 @@ export default function TokenDetail() {
               {/* Chart with Timeframe Selector */}
               <div className="p-3 rounded-2xl bg-secondary/20 border border-border/15">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-muted-foreground font-mono">{t("research.priceChart")}</p>
-                  <div className="flex gap-1">
+                  <p className="text-sm text-muted-foreground font-mono">{t("research.priceChart")}</p>
+                  <div className="flex gap-2">
                     {(["1h", "4h", "1d", "1w", "1m"] as ChartTimeframe[]).map((tf) => (
                       <button key={tf} onClick={() => setChartTimeframe(tf)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-mono font-medium transition-all ${
+                        className={`px-2 py-1 rounded text-sm font-mono font-medium transition-all ${
                           chartTimeframe === tf ? "bg-neon-cyan/20 text-neon-cyan" : "text-muted-foreground hover:text-foreground"
                         }`}>
                         {tf.toUpperCase()}
@@ -744,11 +744,11 @@ export default function TokenDetail() {
                   const Icon = m.icon;
                   return (
                     <div key={m.label} className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                      <div className="flex items-center gap-1 mb-1">
+                      <div className="flex items-center gap-2 mb-2">
                         <Icon size={10} className="text-neon-cyan" />
-                        <span className="text-[9px] text-muted-foreground">{m.label}</span>
+                        <span className="text-sm text-muted-foreground">{m.label}</span>
                       </div>
-                      <p className="text-xs font-mono font-semibold">{m.value}</p>
+                      <p className="text-sm font-mono font-semibold">{m.value}</p>
                     </div>
                   );
                 })}
@@ -756,59 +756,59 @@ export default function TokenDetail() {
 
               {/* Supply Info */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono">{t("research.supplyInfo")}</p>
+                <p className="text-sm text-muted-foreground mb-2 font-mono">{t("research.supplyInfo")}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[9px] text-muted-foreground">{t("research.circSupply")}</p>
-                    <p className="text-xs font-mono font-semibold">{data.circulatingSupply}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.circSupply")}</p>
+                    <p className="text-sm font-mono font-semibold">{data.circulatingSupply}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-muted-foreground">{t("research.maxSupply")}</p>
-                    <p className="text-xs font-mono font-semibold">{data.maxSupply}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.maxSupply")}</p>
+                    <p className="text-sm font-mono font-semibold">{data.maxSupply}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-muted-foreground">{t("research.ath")}</p>
-                    <p className="text-xs font-mono font-semibold text-neon-green">{data.ath}</p>
-                    <p className="text-[8px] text-muted-foreground">{data.athDate}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.ath")}</p>
+                    <p className="text-sm font-mono font-semibold text-neon-green">{data.ath}</p>
+                    <p className="text-[13px] text-muted-foreground">{data.athDate}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-muted-foreground">{t("research.atl")}</p>
-                    <p className="text-xs font-mono font-semibold text-neon-red">{data.atl}</p>
-                    <p className="text-[8px] text-muted-foreground">{data.atlDate}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.atl")}</p>
+                    <p className="text-sm font-mono font-semibold text-neon-red">{data.atl}</p>
+                    <p className="text-[13px] text-muted-foreground">{data.atlDate}</p>
                   </div>
                 </div>
               </div>
 
               {/* AI Signal Summary */}
               <div className="p-3 rounded-2xl bg-gradient-to-br from-neon-purple/8 to-neon-cyan/5 border border-neon-purple/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <Sparkles size={10} className="text-neon-purple" />
                   {t("research.aiStrategy")}
                 </p>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                  <span className={`px-3 py-1 rounded-lg text-sm font-bold border ${
                     sig.strategy.action === "Long" ? "bg-neon-green/15 text-neon-green border-neon-green/25" :
                     sig.strategy.action === "Wait" ? "bg-yellow-500/15 text-yellow-500 border-yellow-500/25" :
                     "bg-neon-red/15 text-neon-red border-neon-red/25"
                   }`}>{sig.strategy.action}</span>
-                  <span className="text-[10px] text-muted-foreground">{sig.strategy.timeHorizon}</span>
+                  <span className="text-sm text-muted-foreground">{sig.strategy.timeHorizon}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <div className="p-2 rounded-lg bg-background/30">
-                    <p className="text-[9px] text-muted-foreground">{t("research.entry")}</p>
-                    <p className="text-[11px] font-mono font-semibold text-neon-cyan">{sig.strategy.entry}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.entry")}</p>
+                    <p className="text-[13px] font-mono font-semibold text-neon-cyan">{sig.strategy.entry}</p>
                   </div>
                   <div className="p-2 rounded-lg bg-background/30">
-                    <p className="text-[9px] text-muted-foreground">{t("research.stopLoss")}</p>
-                    <p className="text-[11px] font-mono font-semibold text-neon-red">{sig.strategy.stopLoss}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.stopLoss")}</p>
+                    <p className="text-[13px] font-mono font-semibold text-neon-red">{sig.strategy.stopLoss}</p>
                   </div>
                   <div className="p-2 rounded-lg bg-background/30">
-                    <p className="text-[9px] text-muted-foreground">{t("research.tp1")}</p>
-                    <p className="text-[11px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit1}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.tp1")}</p>
+                    <p className="text-[13px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit1}</p>
                   </div>
                   <div className="p-2 rounded-lg bg-background/30">
-                    <p className="text-[9px] text-muted-foreground">{t("research.tp2")}</p>
-                    <p className="text-[11px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit2}</p>
+                    <p className="text-sm text-muted-foreground">{t("research.tp2")}</p>
+                    <p className="text-[13px] font-mono font-semibold text-neon-green">{sig.strategy.takeProfit2}</p>
                   </div>
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -817,32 +817,32 @@ export default function TokenDetail() {
                     { label: t("research.posSize"), value: sig.strategy.positionSize },
                     { label: t("research.leverage"), value: sig.strategy.leverage },
                   ].map((p) => (
-                    <div key={p.label} className="flex-1 p-1.5 rounded-lg bg-background/20 text-center">
-                      <p className="text-[8px] text-muted-foreground">{p.label}</p>
-                      <p className="text-[10px] font-mono font-semibold">{p.value}</p>
+                    <div key={p.label} className="flex-1 p-2.5 rounded-lg bg-background/20 text-center">
+                      <p className="text-[13px] text-muted-foreground">{p.label}</p>
+                      <p className="text-sm font-mono font-semibold">{p.value}</p>
                     </div>
                   ))}
                 </div>
                 <div className="p-2 rounded-lg bg-neon-purple/5 border border-neon-purple/10">
-                  <p className="text-[9px] text-neon-purple mb-0.5 flex items-center gap-1"><Sparkles size={9} />{t("research.aiReasoning")}</p>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">{t(sig.strategy.reasoning)}</p>
+                  <p className="text-sm text-neon-purple mb-0.5 flex items-center gap-2"><Sparkles size={9} />{t("research.aiReasoning")}</p>
+                  <p className="text-[13px] leading-relaxed text-muted-foreground">{t(sig.strategy.reasoning)}</p>
                 </div>
               </div>
 
               {/* Related Tokens */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <GitCompare size={10} />
                   {t("research.relatedTokens")}
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   {data.relatedTokens.map((rt) => (
                     <button key={rt.token} onClick={() => setLocation(`/app/research/${rt.token.toLowerCase()}`)}
                       className="w-full flex items-center gap-3 p-2 rounded-lg bg-background/20 hover:bg-background/40 transition-colors">
                       <span className="text-lg">{rt.icon}</span>
-                      <span className="text-xs font-bold flex-1 text-left">{rt.token}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">r={rt.correlation.toFixed(2)}</span>
-                      <span className={`text-[10px] font-mono ${rt.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                      <span className="text-sm font-bold flex-1 text-left">{rt.token}</span>
+                      <span className="text-sm text-muted-foreground font-mono">r={rt.correlation.toFixed(2)}</span>
+                      <span className={`text-sm font-mono ${rt.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                         {rt.change24h >= 0 ? "+" : ""}{rt.change24h}%
                       </span>
                       <ChevronRight size={12} className="text-muted-foreground" />
@@ -858,18 +858,18 @@ export default function TokenDetail() {
             <motion.div key="technical" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
               {/* Multi-Timeframe Analysis */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <Timer size={10} /> {t("research.timeframeAnalysis")}
                 </p>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-2.5">
                   {sig.timeframes.map((tf) => (
                     <div key={tf.period} className={`text-center p-2.5 rounded-xl border ${signalBg(tf.signal)}`}>
-                      <p className="text-[11px] font-mono font-bold text-foreground mb-1">{tf.period}</p>
-                      <div className="w-full h-1.5 rounded-full bg-secondary/40 overflow-hidden mb-1">
+                      <p className="text-[13px] font-mono font-bold text-foreground mb-2">{tf.period}</p>
+                      <div className="w-full h-1.5 rounded-full bg-secondary/40 overflow-hidden mb-2">
                         <div className="h-full rounded-full transition-all" style={{ width: `${tf.score}%`, backgroundColor: scoreRing(tf.score) }} />
                       </div>
-                      <p className={`text-[9px] font-medium ${signalColor(tf.signal)}`}>{signalLabel(tf.signal)}</p>
-                      <p className={`text-[11px] font-mono font-bold ${tf.score >= 70 ? "text-neon-green" : tf.score >= 50 ? "text-yellow-500" : "text-neon-red"}`}>{tf.score}</p>
+                      <p className={`text-sm font-medium ${signalColor(tf.signal)}`}>{signalLabel(tf.signal)}</p>
+                      <p className={`text-[13px] font-mono font-bold ${tf.score >= 70 ? "text-neon-green" : tf.score >= 50 ? "text-yellow-500" : "text-neon-red"}`}>{tf.score}</p>
                     </div>
                   ))}
                 </div>
@@ -877,18 +877,18 @@ export default function TokenDetail() {
 
               {/* Technical Indicators Matrix */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <Gauge size={10} /> {t("research.technicalIndicators")}
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   {sig.technicalIndicators.map((ind) => (
                     <div key={ind.name} className="flex items-center gap-2 p-2 rounded-lg bg-background/30">
-                      <span className="text-[10px] text-muted-foreground w-20 shrink-0">{ind.name}</span>
-                      <span className="text-[10px] font-mono font-semibold flex-1">{ind.value}</span>
+                      <span className="text-sm text-muted-foreground w-20 shrink-0">{ind.name}</span>
+                      <span className="text-sm font-mono font-semibold flex-1">{ind.value}</span>
                       <div className="w-20 h-1.5 rounded-full bg-secondary/40 overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${ind.score}%`, backgroundColor: scoreRing(ind.score) }} />
                       </div>
-                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${indSignalBg(ind.signal)} ${indSignalColor(ind.signal)}`}>
+                      <span className={`text-sm font-medium px-2.5 py-1 rounded ${indSignalBg(ind.signal)} ${indSignalColor(ind.signal)}`}>
                         {ind.signal === "buy" ? t("research.indBuy") : ind.signal === "sell" ? t("research.indSell") : t("research.indNeutral")}
                       </span>
                     </div>
@@ -896,13 +896,13 @@ export default function TokenDetail() {
                 </div>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/10">
                   <div className="flex gap-3">
-                    <span className="text-[10px] text-neon-green flex items-center gap-0.5">
+                    <span className="text-sm text-neon-green flex items-center gap-0.5">
                       <ArrowUp size={10} /> {sig.technicalIndicators.filter(i => i.signal === "buy").length} {t("research.indBuy")}
                     </span>
-                    <span className="text-[10px] text-yellow-500 flex items-center gap-0.5">
+                    <span className="text-sm text-yellow-500 flex items-center gap-0.5">
                       <Minus size={10} /> {sig.technicalIndicators.filter(i => i.signal === "neutral").length} {t("research.indNeutral")}
                     </span>
-                    <span className="text-[10px] text-neon-red flex items-center gap-0.5">
+                    <span className="text-sm text-neon-red flex items-center gap-0.5">
                       <ArrowDown size={10} /> {sig.technicalIndicators.filter(i => i.signal === "sell").length} {t("research.indSell")}
                     </span>
                   </div>
@@ -911,7 +911,7 @@ export default function TokenDetail() {
 
               {/* Radar Chart */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-1 font-mono">{t("research.multiDimAnalysis")}</p>
+                <p className="text-sm text-muted-foreground mb-2 font-mono">{t("research.multiDimAnalysis")}</p>
                 <div className="h-52">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={data.radarData} cx="50%" cy="50%" outerRadius="70%">
@@ -922,11 +922,11 @@ export default function TokenDetail() {
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 mt-2">
+                <div className="grid grid-cols-3 gap-2.5 mt-2">
                   {data.radarData.map((d) => (
                     <div key={d.metric} className="flex items-center justify-between px-2 py-1 rounded-lg bg-background/30">
-                      <span className="text-[9px] text-muted-foreground">{d.metric}</span>
-                      <span className={`text-[10px] font-mono font-bold ${d.score >= 80 ? "text-neon-green" : d.score >= 60 ? "text-neon-cyan" : "text-neon-red"}`}>{d.score}</span>
+                      <span className="text-sm text-muted-foreground">{d.metric}</span>
+                      <span className={`text-sm font-mono font-bold ${d.score >= 80 ? "text-neon-green" : d.score >= 60 ? "text-neon-cyan" : "text-neon-red"}`}>{d.score}</span>
                     </div>
                   ))}
                 </div>
@@ -935,33 +935,33 @@ export default function TokenDetail() {
               {/* Signal History */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
+                  <p className="text-sm text-muted-foreground font-mono flex items-center gap-2">
                     <CircleDot size={10} /> {t("research.signalHistory")}
                   </p>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-neon-green font-mono">{t("research.winRate")}: {sig.accuracy.winRate}%</span>
-                    <span className="text-[10px] text-neon-cyan font-mono">{t("research.avgReturn")}: +{sig.accuracy.avgReturn}%</span>
+                    <span className="text-sm text-neon-green font-mono">{t("research.winRate")}: {sig.accuracy.winRate}%</span>
+                    <span className="text-sm text-neon-cyan font-mono">{t("research.avgReturn")}: +{sig.accuracy.avgReturn}%</span>
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {sig.signalHistory.map((h, i) => (
-                    <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg bg-background/20">
-                      <span className="text-[9px] text-muted-foreground font-mono w-14 shrink-0">{h.date}</span>
-                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded w-10 text-center ${
+                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-background/20">
+                      <span className="text-sm text-muted-foreground font-mono w-14 shrink-0">{h.date}</span>
+                      <span className={`text-sm font-medium px-2.5 py-1 rounded w-10 text-center ${
                         h.signal === "Buy" ? "bg-neon-green/10 text-neon-green" :
                         h.signal === "Sell" ? "bg-neon-red/10 text-neon-red" : "bg-yellow-500/10 text-yellow-500"
                       }`}>{h.signal}</span>
-                      <span className="text-[10px] font-mono flex-1">{h.price}</span>
+                      <span className="text-sm font-mono flex-1">{h.price}</span>
                       {h.result === "win" ? <CheckCircle size={10} className="text-neon-green" /> :
                        h.result === "loss" ? <XCircle size={10} className="text-neon-red" /> :
                        <Clock size={10} className="text-yellow-500" />}
-                      <span className={`text-[10px] font-mono font-semibold w-14 text-right ${
+                      <span className={`text-sm font-mono font-semibold w-14 text-right ${
                         h.result === "win" ? "text-neon-green" : h.result === "loss" ? "text-neon-red" : "text-yellow-500"
                       }`}>{h.pnl}</span>
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-4 gap-1.5 mt-2 pt-2 border-t border-border/10">
+                <div className="grid grid-cols-4 gap-2.5 mt-2 pt-2 border-t border-border/10">
                   {[
                     { label: t("research.totalSignals"), value: sig.accuracy.total.toString(), color: "" },
                     { label: t("research.wins"), value: sig.accuracy.wins.toString(), color: "text-neon-green" },
@@ -969,8 +969,8 @@ export default function TokenDetail() {
                     { label: t("research.winRate"), value: `${sig.accuracy.winRate}%`, color: sig.accuracy.winRate >= 65 ? "text-neon-green" : "text-yellow-500" },
                   ].map((s) => (
                     <div key={s.label} className="text-center">
-                      <p className="text-[8px] text-muted-foreground">{s.label}</p>
-                      <p className={`text-xs font-mono font-bold ${s.color}`}>{s.value}</p>
+                      <p className="text-[13px] text-muted-foreground">{s.label}</p>
+                      <p className={`text-sm font-mono font-bold ${s.color}`}>{s.value}</p>
                     </div>
                   ))}
                 </div>
@@ -978,22 +978,22 @@ export default function TokenDetail() {
 
               {/* Risk & Security */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-xl bg-secondary/30 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
+                <div className="p-2.5 rounded-xl bg-secondary/30 space-y-2.5">
+                  <div className="flex items-center gap-2.5">
                     <Shield size={13} className="text-neon-green" />
-                    <span className="text-[10px] text-muted-foreground">{t("research.security")}</span>
+                    <span className="text-sm text-muted-foreground">{t("research.security")}</span>
                   </div>
-                  <p className="text-xs font-mono font-semibold text-neon-green">{data.securityScore}</p>
-                  {data.contractVerified && <span className="text-[9px] text-neon-green">✓ {t("research.verified")}</span>}
-                  <p className="text-[9px] text-muted-foreground">{data.auditStatus}</p>
+                  <p className="text-sm font-mono font-semibold text-neon-green">{data.securityScore}</p>
+                  {data.contractVerified && <span className="text-sm text-neon-green">✓ {t("research.verified")}</span>}
+                  <p className="text-sm text-muted-foreground">{data.auditStatus}</p>
                 </div>
-                <div className="p-2.5 rounded-xl bg-secondary/30 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
+                <div className="p-2.5 rounded-xl bg-secondary/30 space-y-2.5">
+                  <div className="flex items-center gap-2.5">
                     <Code size={13} className="text-neon-cyan" />
-                    <span className="text-[10px] text-muted-foreground">{t("research.devActivity")}</span>
+                    <span className="text-sm text-muted-foreground">{t("research.devActivity")}</span>
                   </div>
-                  <p className="text-xs font-mono font-semibold">{data.devCommits.toLocaleString()}</p>
-                  <p className="text-[9px] text-muted-foreground">commits/mo</p>
+                  <p className="text-sm font-mono font-semibold">{data.devCommits.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">commits/mo</p>
                 </div>
               </div>
             </motion.div>
@@ -1015,11 +1015,11 @@ export default function TokenDetail() {
                   const Icon = m.icon;
                   return (
                     <div key={m.label} className="p-2.5 rounded-xl bg-secondary/20 border border-border/15">
-                      <div className="flex items-center gap-1.5 mb-1.5">
+                      <div className="flex items-center gap-2.5 mb-2.5">
                         <Icon size={12} className={m.color} />
-                        <span className="text-[10px] text-muted-foreground">{m.label}</span>
+                        <span className="text-sm text-muted-foreground">{m.label}</span>
                       </div>
-                      <p className="text-xs font-mono font-medium">{m.value}</p>
+                      <p className="text-sm font-mono font-medium">{m.value}</p>
                     </div>
                   );
                 })}
@@ -1027,7 +1027,7 @@ export default function TokenDetail() {
 
               {/* Fund Flow Chart */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <Activity size={10} /> {t("research.fundFlow")}
                 </p>
                 <div className="h-40">
@@ -1042,15 +1042,15 @@ export default function TokenDetail() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex items-center justify-center gap-4 mt-1">
-                  <span className="text-[9px] flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-neon-green inline-block" /> {t("research.inflow")}</span>
-                  <span className="text-[9px] flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-neon-red inline-block" /> {t("research.outflow")}</span>
+                <div className="flex items-center justify-center gap-4 mt-2">
+                  <span className="text-sm flex items-center gap-2"><span className="w-2 h-2 rounded-sm bg-neon-green inline-block" /> {t("research.inflow")}</span>
+                  <span className="text-sm flex items-center gap-2"><span className="w-2 h-2 rounded-sm bg-neon-red inline-block" /> {t("research.outflow")}</span>
                 </div>
               </div>
 
               {/* Holders Distribution */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <PieChart size={10} /> {t("research.holdersDistribution")}
                 </p>
                 <div className="flex items-center gap-4">
@@ -1066,12 +1066,12 @@ export default function TokenDetail() {
                       </RechartsPieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="flex-1 space-y-1.5">
+                  <div className="flex-1 space-y-2.5">
                     {data.holdersDistribution.map((h) => (
                       <div key={h.name} className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: h.color }} />
-                        <span className="text-[10px] text-muted-foreground flex-1">{h.name}</span>
-                        <span className="text-[10px] font-mono font-bold">{h.value}%</span>
+                        <span className="text-sm text-muted-foreground flex-1">{h.name}</span>
+                        <span className="text-sm font-mono font-bold">{h.value}%</span>
                       </div>
                     ))}
                   </div>
@@ -1080,7 +1080,7 @@ export default function TokenDetail() {
 
               {/* Volume Buy/Sell */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <BarChart3 size={10} /> {t("research.buySellVolume")}
                 </p>
                 <div className="h-36">
@@ -1094,15 +1094,15 @@ export default function TokenDetail() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex items-center justify-center gap-4 mt-1">
-                  <span className="text-[9px] flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-neon-green inline-block" /> {t("research.buyVol")}</span>
-                  <span className="text-[9px] flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-neon-red inline-block" /> {t("research.sellVol")}</span>
+                <div className="flex items-center justify-center gap-4 mt-2">
+                  <span className="text-sm flex items-center gap-2"><span className="w-2 h-2 rounded-sm bg-neon-green inline-block" /> {t("research.buyVol")}</span>
+                  <span className="text-sm flex items-center gap-2"><span className="w-2 h-2 rounded-sm bg-neon-red inline-block" /> {t("research.sellVol")}</span>
                 </div>
               </div>
 
               {/* Social Sentiment */}
               <div className="p-3 rounded-xl bg-secondary/20 border border-border/15">
-                <p className="text-[10px] text-muted-foreground mb-2 font-mono flex items-center gap-1">
+                <p className="text-sm text-muted-foreground mb-2 font-mono flex items-center gap-2">
                   <Users size={10} /> {t("research.socialSentiment")}
                 </p>
                 <div className="space-y-2">
@@ -1112,8 +1112,8 @@ export default function TokenDetail() {
                   ].map((s) => (
                     <div key={s.label}>
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] text-muted-foreground">{s.label}</span>
-                        <span className={`text-[10px] font-mono font-bold ${s.score >= 70 ? "text-neon-green" : s.score >= 40 ? "text-yellow-500" : "text-neon-red"}`}>{s.score}</span>
+                        <span className="text-sm text-muted-foreground">{s.label}</span>
+                        <span className={`text-sm font-mono font-bold ${s.score >= 70 ? "text-neon-green" : s.score >= 40 ? "text-yellow-500" : "text-neon-red"}`}>{s.score}</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-secondary/40 overflow-hidden">
                         <motion.div initial={{ width: 0 }} animate={{ width: `${s.score}%` }} transition={{ duration: 0.8 }}
@@ -1123,10 +1123,10 @@ export default function TokenDetail() {
                   ))}
                 </div>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/10">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {t("research.mentions")}: <span className="font-mono font-semibold text-foreground">{data.socialSentiment.mentions24h.toLocaleString()}</span>
                   </span>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
+                  <span className={`text-sm font-medium px-2 py-1 rounded-md ${
                     data.socialSentiment.trend === "bullish" ? "bg-neon-green/10 text-neon-green" :
                     data.socialSentiment.trend === "bearish" ? "bg-neon-red/10 text-neon-red" : "bg-yellow-500/10 text-yellow-500"
                   }`}>
@@ -1151,10 +1151,10 @@ export default function TokenDetail() {
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold font-display">{t("research.aiChatTitle")} — {data.token}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">{t("research.aiChatDesc")}</p>
+                      <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto">{t("research.aiChatDesc")}</p>
                     </div>
                     {/* Quick prompts */}
-                    <div className="space-y-1.5 max-w-xs mx-auto">
+                    <div className="space-y-2.5 max-w-xs mx-auto">
                       {[
                         t("research.quickPrompt1").replace("{token}", data.token),
                         t("research.quickPrompt2").replace("{token}", data.token),
@@ -1162,7 +1162,7 @@ export default function TokenDetail() {
                         t("research.quickPrompt4").replace("{token}", data.token),
                       ].map((prompt, i) => (
                         <button key={i} onClick={() => { setChatInput(prompt); }}
-                          className="w-full text-left p-2.5 rounded-xl bg-secondary/30 border border-border/20 text-[11px] text-muted-foreground hover:text-foreground hover:border-neon-purple/30 transition-all">
+                          className="w-full text-left p-2.5 rounded-xl bg-secondary/30 border border-border/20 text-[13px] text-muted-foreground hover:text-foreground hover:border-neon-purple/30 transition-all">
                           <MessageSquare size={10} className="inline mr-1.5 text-neon-purple" />
                           {prompt}
                         </button>
@@ -1175,7 +1175,7 @@ export default function TokenDetail() {
                 {chatMessages.map((msg) => (
                   <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-xs ${
+                    <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-sm ${
                       msg.role === "ai" ? "bg-neon-purple/15 border border-neon-purple/20" : "bg-neon-cyan/15 border border-neon-cyan/20"
                     }`}>
                       {msg.role === "ai" ? <Bot size={14} className="text-neon-purple" /> : "🧑"}
@@ -1186,7 +1186,7 @@ export default function TokenDetail() {
                         : "bg-neon-cyan/10 border border-neon-cyan/15 rounded-tr-sm"
                     }`}>
                       {msg.content}
-                      <p className="text-[8px] text-muted-foreground mt-1.5 font-mono">
+                      <p className="text-[13px] text-muted-foreground mt-2.5 font-mono">
                         {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
@@ -1200,7 +1200,7 @@ export default function TokenDetail() {
                       <Bot size={14} className="text-neon-purple" />
                     </div>
                     <div className="bg-secondary/30 border border-border/20 rounded-2xl rounded-tl-sm px-4 py-3">
-                      <div className="flex gap-1">
+                      <div className="flex gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-neon-purple animate-bounce" style={{ animationDelay: "0ms" }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-neon-purple animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-neon-purple animate-bounce" style={{ animationDelay: "300ms" }} />

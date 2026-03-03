@@ -47,9 +47,10 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
   // ─── Global login guard ────────────────────────────────────────────────────
   // Redirect to internal /login page if user is not authenticated (only for protected routes).
   // Wait until auth check completes (authLoading=false) before redirecting.
+  // Use location.replace() for more reliable redirect in WeChat/mobile browsers.
   useEffect(() => {
     if (requireAuth && !authLoading && !isAuthenticated) {
-      window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname)}`;
+      window.location.replace(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
     }
   }, [requireAuth, authLoading, isAuthenticated]);
 
@@ -77,20 +78,37 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
           <MessageCircle size={24} className="text-white" />
         </div>
         <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">正在验证登录状态...</p>
+        <p className="text-sm text-muted-foreground">正在验证登录状态...</p>
       </div>
     );
   }
 
-  // Not authenticated on protected route — show redirect message while useEffect fires
+  // Not authenticated on protected route — show login CTA while redirect fires
+  // This prevents black screen on slow/WeChat browsers where location.replace() may be delayed
   if (requireAuth && !isAuthenticated) {
+    const returnTo = encodeURIComponent(window.location.pathname);
     return (
-      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-          <MessageCircle size={24} className="text-white" />
+      <div
+        className="flex flex-col h-[100dvh] items-center justify-center gap-6 px-8"
+        style={{ background: '#060b18' }}
+      >
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-[0_0_32px_rgba(0,212,255,0.3)]">
+            <MessageCircle size={32} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">NexusChat</h1>
+          <p className="text-sm text-gray-400 text-center">Web3 社交 · AI 投研 · 量化跟单</p>
         </div>
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">正在跳转到登录页...</p>
+        {/* Login button */}
+        <a
+          href={`/login?returnTo=${returnTo}`}
+          className="w-full max-w-xs flex items-center justify-center gap-2 h-12 rounded-2xl font-semibold text-white text-base"
+          style={{ background: 'linear-gradient(135deg, #00d4ff, #a855f7)', boxShadow: '0 0 24px rgba(0,212,255,0.25)' }}
+        >
+          立即登录 / 注册
+        </a>
+        <p className="text-sm text-gray-600 text-center">登录后即可访问所有功能</p>
       </div>
     );
   }
@@ -100,8 +118,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
-          {/* Slide-up + fade-in on mount for smooth page transitions */}
-          <div className="page-enter">
+          {/* key=location forces re-mount on route change, re-triggering the CSS animation */}
+          <div key={location} className="page-enter">
             {children}
           </div>
         </ErrorBoundary>
@@ -110,7 +128,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Bottom Tab Navigation */}
       {!hideNav && (
         <nav className="glass border-t border-border/50 px-2 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+          <div className="flex items-center justify-around h-[62px] max-w-lg mx-auto">
             {tabs.map((tab) => {
               const isActive =
                 location === tab.path ||
@@ -121,7 +139,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
               return (
                 <Link key={tab.path} href={tab.path}>
                   <button
-                    className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-xl transition-colors active:scale-90 transition-transform duration-100"
+                    className="relative flex flex-col items-center justify-center gap-1.5 w-16 h-[58px] rounded-xl transition-colors active:scale-90 transition-transform duration-100"
                     onMouseEnter={() => prefetchMap[tab.path]?.()}
                     onTouchStart={() => prefetchMap[tab.path]?.()}
                   >
@@ -136,7 +154,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
                     )}
                     <div className="relative">
                       <Icon
-                        size={22}
+                        size={23}
                         className={
                           isActive
                             ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
@@ -146,19 +164,19 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
                       {/* Unread badge — CSS scale animation */}
                       {tab.badge > 0 && (
                         <div
-                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
+                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-2 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
                           style={{
                             boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
                           }}
                         >
-                          <span className="text-[9px] font-bold text-white leading-none">
+                          <span className="text-sm font-bold text-white leading-none">
                             {tab.badge > 99 ? "99+" : tab.badge}
                           </span>
                         </div>
                       )}
                     </div>
                     <span
-                      className={`text-[10px] font-medium ${
+                      className={`text-[11px] font-medium leading-none ${
                         isActive ? "text-neon-cyan" : "text-muted-foreground"
                       }`}
                     >

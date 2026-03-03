@@ -5,7 +5,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
-import { compression } from "vite-plugin-compression2";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -361,12 +360,8 @@ function vitePluginInlinePreloadHelper(): Plugin {
   };
 }
 
-// Compression plugin: only active during production build (apply: "build" is set internally)
-// Generates .gz and .br files alongside assets for servers that support pre-compressed serving
-// Default algorithms: ["gzip", "brotliCompress"]
-const compressionPlugin = compression();
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginDisableReownAnalytics(), vitePluginInlinePreloadHelper(), compressionPlugin];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginDisableReownAnalytics(), vitePluginInlinePreloadHelper()];
 
 export default defineConfig({
   plugins,
@@ -404,11 +399,32 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Use Terser for better compression (15% smaller than esbuild default)
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console for debugging
+        drop_debugger: true,
+        pure_funcs: ['console.debug'],
+        passes: 2, // Two compression passes for better results
+      },
+      mangle: {
+        safari10: true, // Fix Safari 10 bugs
+      },
+      format: {
+        comments: false, // Remove all comments
+      },
+    },
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,
+    // Merge chunks smaller than 20KB into their importers to reduce file count
+    // This reduces 8 tiny chunks (1-15KB) into larger ones, cutting upload count
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
+        // Merge small chunks (< 20KB) into their importers automatically
+        experimentalMinChunkSize: 20_000,
         // Prevent Rollup from hoisting transitive imports of dynamic chunks
         // to the entry chunk's synchronous dependencies.
         // This keeps vendor-web3, vendor-misc etc. as truly async chunks.
@@ -493,9 +509,10 @@ export default defineConfig({
             id.includes("get-nonce") ||
             id.includes("cross-fetch") ||
             id.includes("html2canvas") ||
-            id.includes("react-remove-scroll") ||
-            id.includes("react-style-singleton") ||
-            id.includes("use-sidecar") ||
+            // NOTE: react-remove-scroll, react-style-singleton, use-sidecar are intentionally NOT here.
+            // They depend on use-callback-ref which is in the main vendor chunk.
+            // Putting them in vendor-web3 creates: vendor -> vendor-web3 -> vendor (circular!)
+            // causing 'A is not a function' on mobile browsers.
             // NOTE: use-callback-ref is intentionally NOT here.
             // It is shared by both @radix-ui (in vendor) and RainbowKit (vendor-web3).
             // Putting it in vendor-web3 would create: vendor -> vendor-web3 -> vendor (circular!)
@@ -521,9 +538,8 @@ export default defineConfig({
           if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
             return "vendor-charts";
           }
-          if (id.includes("framer-motion")) {
-            return "vendor-motion";
-          }
+          // framer-motion is used across all pages, keep in main vendor
+          // (no separate chunk needed — avoids extra file upload)
 
           // All remaining node_modules → single "vendor" chunk
           // This prevents circular dependencies between vendor sub-chunks

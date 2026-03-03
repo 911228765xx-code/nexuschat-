@@ -1,113 +1,32 @@
 /**
- * NexusChat Service Worker v5
- * Strategy:
- *   - Static assets (JS/CSS/fonts): Cache-first (long-lived, hashed filenames)
- *   - Navigation (HTML): Network-first with cache fallback (always fresh HTML)
- *   - API calls: Network-only (always fresh)
- * v5: Added Web Push notification support (push + notificationclick events).
+ * NexusChat Service Worker v7 - Self-Destruct Mode
+ *
+ * 彻底解决 SW 缓存导致的黑屏问题：
+ * 此 SW 激活后立即清空所有缓存并注销自身。
+ * 我们依赖 HTTP 缓存头（/assets/ 使用 immutable，HTML 使用 no-cache）
+ * 而不是 SW 缓存，避免旧 bundle 被永久缓存。
  */
-const CACHE_VERSION = "nexuschat-v5";
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-// Only precache the HTML shell — icons are on CDN, no local files to precache
-const PRECACHE_URLS = ["/"];
-
-// ---- Install: pre-cache app shell ----
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
-  );
+// 安装：立即跳过等待，强制激活
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
 
-// ---- Activate: clean up old caches ----
+// 激活：清空所有缓存，接管所有客户端，然后注销自身
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== STATIC_CACHE && k !== RUNTIME_CACHE)
-            .map((k) => caches.delete(k))
-        )
-      )
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(() => {
+        // 通知所有已打开的页面刷新以加载最新版本
+        return self.clients.matchAll({ type: "window" }).then((clients) => {
+          clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
+        });
+      })
+      .then(() => self.registration.unregister())
   );
-});
-
-// ---- Fetch: routing strategy ----
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET and cross-origin requests
-  if (request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;
-
-  // API calls: network-only, no cache
-  if (url.pathname.startsWith("/api/")) return;
-
-  // Static assets with content-hashed filenames: cache-first (permanent cache)
-  if (url.pathname.startsWith("/assets/")) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(RUNTIME_CACHE).then((c) => c.put(request, clone));
-            }
-            return response;
-          })
-      )
-    );
-    return;
-  }
-
-  // favicon and manifest: cache-first
-  if (
-    url.pathname === "/favicon.ico" ||
-    url.pathname === "/manifest.json" ||
-    url.pathname === "/robots.txt"
-  ) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(RUNTIME_CACHE).then((c) => c.put(request, clone));
-            }
-            return response;
-          })
-      )
-    );
-    return;
-  }
-
-  // Navigation (HTML pages): network-first with cache fallback
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put("/", clone));
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match("/").then((cached) => cached || caches.match("/"))
-        )
-    );
-    return;
-  }
 });
 
 // ---- Web Push: receive push notification ----

@@ -218,7 +218,7 @@ export default function EditProfile() {
           <button
             onClick={handleSave}
             disabled={!hasChanges}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${
+            className={`flex items-center gap-2.5 px-4 py-1.5 rounded-xl text-sm font-medium transition-all ${
               hasChanges
                 ? "bg-neon-cyan text-background hover:bg-neon-cyan/90"
                 : "bg-secondary/50 text-muted-foreground cursor-not-allowed"
@@ -259,7 +259,7 @@ export default function EditProfile() {
               <Camera size={14} className="text-background" />
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">{t("editProfile.tapToChange") || "Tap to change avatar"}</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("editProfile.tapToChange") || "Tap to change avatar"}</p>
         </div>
 
         {/* Avatar Picker */}
@@ -276,7 +276,7 @@ export default function EditProfile() {
                 <div className="flex border-b border-border/20">
                   <button
                     onClick={() => setAvatarTab("emoji")}
-                    className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
                       avatarTab === "emoji"
                         ? "text-neon-cyan border-b-2 border-neon-cyan"
                         : "text-muted-foreground"
@@ -286,7 +286,7 @@ export default function EditProfile() {
                   </button>
                   <button
                     onClick={() => setAvatarTab("nft")}
-                    className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
                       avatarTab === "nft"
                         ? "text-neon-purple border-b-2 border-neon-purple"
                         : "text-muted-foreground"
@@ -313,7 +313,7 @@ export default function EditProfile() {
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full mt-3 py-2.5 rounded-xl border border-dashed border-neon-cyan/30 text-xs text-neon-cyan hover:bg-neon-cyan/5 transition-colors flex items-center justify-center gap-2"
+                      className="w-full mt-3 py-2.5 rounded-xl border border-dashed border-neon-cyan/30 text-sm text-neon-cyan hover:bg-neon-cyan/5 transition-colors flex items-center justify-center gap-2"
                     >
                       <Camera size={14} />
                       {t("editProfile.uploadPhoto") || "Upload Photo"}
@@ -332,7 +332,7 @@ export default function EditProfile() {
                         </div>
                         <div className="flex-1 text-left">
                           <p className="text-sm font-medium">{nft.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{nft.collection}</p>
+                          <p className="text-sm text-muted-foreground">{nft.collection}</p>
                         </div>
                         <ExternalLink size={14} className="text-muted-foreground" />
                       </button>
@@ -356,7 +356,7 @@ export default function EditProfile() {
         <div className="px-4 space-y-5 pb-8">
           {/* Display Name */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block px-1">
+            <label className="text-sm text-muted-foreground mb-2.5 block px-2">
               {t("editProfile.displayName") || "Display Name"}
             </label>
             <input
@@ -367,12 +367,12 @@ export default function EditProfile() {
               className="w-full h-12 px-4 rounded-xl bg-secondary/40 border border-border/30 text-base font-display placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all"
               maxLength={30}
             />
-            <p className="text-[10px] text-muted-foreground mt-1 px-1">{displayName.length}/30</p>
+            <p className="text-sm text-muted-foreground mt-2 px-2">{displayName.length}/30</p>
           </div>
 
           {/* ENS Binding */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block px-1">
+            <label className="text-sm text-muted-foreground mb-2.5 block px-2">
               {t("editProfile.ensBinding") || "ENS Name"}
             </label>
             <div className="flex gap-2">
@@ -395,15 +395,15 @@ export default function EditProfile() {
               {!ensVerified && (
                 <button
                   onClick={handleVerifyENS}
-                  className="px-4 h-12 rounded-xl bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors whitespace-nowrap"
+                  className="px-4 h-12 rounded-xl bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors whitespace-nowrap"
                 >
                   {t("editProfile.verify") || "Verify"}
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5 mt-1.5 px-1">
+            <div className="flex items-center gap-2.5 mt-2.5 px-2">
               <Shield size={10} className="text-neon-cyan" />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("editProfile.ensNote") || "Verified ENS names are shown as your identity"}
               </p>
             </div>
@@ -411,7 +411,7 @@ export default function EditProfile() {
 
           {/* Wallet Address */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block px-1">
+            <label className="text-sm text-muted-foreground mb-2.5 block px-2">
               {t("editProfile.walletAddress") || "Wallet Address"}
             </label>
             <div className="flex items-center gap-2 h-12 px-4 rounded-xl bg-secondary/20 border border-border/20">
@@ -432,7 +432,7 @@ export default function EditProfile() {
 
           {/* Bio */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block px-1">
+            <label className="text-sm text-muted-foreground mb-2.5 block px-2">
               {t("editProfile.bio") || "Bio"}
             </label>
             <textarea
@@ -443,18 +443,18 @@ export default function EditProfile() {
               className="w-full px-4 py-3 rounded-xl bg-secondary/40 border border-border/30 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all resize-none"
               maxLength={200}
             />
-            <p className="text-[10px] text-muted-foreground mt-1 px-1">{bio.length}/200</p>
+            <p className="text-sm text-muted-foreground mt-2 px-2">{bio.length}/200</p>
           </div>
 
           {/* Social Links */}
           <div>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <label className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between mb-2 px-2">
+              <label className="text-sm text-muted-foreground">
                 {t("editProfile.socialLinks") || "Social Links"}
               </label>
               <button
                 onClick={() => setShowAddSocial(!showAddSocial)}
-                className="text-[10px] text-neon-cyan hover:underline flex items-center gap-1"
+                className="text-sm text-neon-cyan hover:underline flex items-center gap-2"
               >
                 <Plus size={10} />
                 {t("editProfile.addLink") || "Add Link"}
@@ -471,8 +471,8 @@ export default function EditProfile() {
                 >
                   <span className="text-lg">{link.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-muted-foreground">{link.platform}</p>
-                    <p className="text-xs text-foreground truncate font-mono">{link.url}</p>
+                    <p className="text-sm text-muted-foreground">{link.platform}</p>
+                    <p className="text-sm text-foreground truncate font-mono">{link.url}</p>
                   </div>
                   <button
                     onClick={() => removeSocialLink(link.id)}
@@ -496,8 +496,8 @@ export default function EditProfile() {
                   <div className="p-3.5 rounded-xl bg-card border border-neon-cyan/20 space-y-3">
                     {/* Platform selector */}
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1.5 block">Platform</label>
-                      <div className="flex flex-wrap gap-1.5">
+                      <label className="text-sm text-muted-foreground mb-2.5 block">Platform</label>
+                      <div className="flex flex-wrap gap-2.5">
                         {SOCIAL_PLATFORMS.filter(p => !socialLinks.find(l => l.platform === p.name)).map((p) => (
                           <button
                             key={p.name}
@@ -505,7 +505,7 @@ export default function EditProfile() {
                               setNewSocialPlatform(p.name);
                               setNewSocialUrl(p.prefix);
                             }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] transition-all ${
+                            className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] transition-all ${
                               newSocialPlatform === p.name
                                 ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30"
                                 : "bg-secondary/30 text-muted-foreground border border-border/20 hover:bg-secondary/50"
@@ -520,13 +520,13 @@ export default function EditProfile() {
 
                     {/* URL input */}
                     <div>
-                      <label className="text-[10px] text-muted-foreground mb-1.5 block">URL</label>
+                      <label className="text-sm text-muted-foreground mb-2.5 block">URL</label>
                       <input
                         type="url"
                         value={newSocialUrl}
                         onChange={(e) => setNewSocialUrl(e.target.value)}
                         placeholder="https://..."
-                        className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all"
+                        className="w-full h-10 px-3 rounded-lg bg-secondary/40 border border-border/30 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 transition-all"
                       />
                     </div>
 
@@ -534,13 +534,13 @@ export default function EditProfile() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => { setShowAddSocial(false); setNewSocialPlatform(""); setNewSocialUrl(""); }}
-                        className="flex-1 py-2 rounded-lg bg-secondary/30 text-xs text-muted-foreground hover:bg-secondary/50 transition-colors"
+                        className="flex-1 py-2 rounded-lg bg-secondary/30 text-sm text-muted-foreground hover:bg-secondary/50 transition-colors"
                       >
                         {t("editProfile.cancel") || "Cancel"}
                       </button>
                       <button
                         onClick={addSocialLink}
-                        className="flex-1 py-2 rounded-lg bg-neon-cyan/20 text-xs text-neon-cyan font-medium hover:bg-neon-cyan/30 transition-colors"
+                        className="flex-1 py-2 rounded-lg bg-neon-cyan/20 text-sm text-neon-cyan font-medium hover:bg-neon-cyan/30 transition-colors"
                       >
                         {t("editProfile.add") || "Add"}
                       </button>
@@ -553,7 +553,7 @@ export default function EditProfile() {
 
           {/* SBT & Badges */}
           <div>
-            <label className="text-xs text-muted-foreground mb-2 block px-1">
+            <label className="text-sm text-muted-foreground mb-2 block px-2">
               {t("editProfile.badges") || "Badges & SBTs"}
             </label>
             <div className="flex flex-wrap gap-2">
@@ -565,10 +565,10 @@ export default function EditProfile() {
               ].map((badge) => (
                 <div
                   key={badge.name}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-${badge.color}/10 border border-${badge.color}/20`}
+                  className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-full bg-${badge.color}/10 border border-${badge.color}/20`}
                 >
-                  <span className="text-xs">{badge.icon}</span>
-                  <span className={`text-[10px] font-medium text-${badge.color}`}>{badge.name}</span>
+                  <span className="text-sm">{badge.icon}</span>
+                  <span className={`text-sm font-medium text-${badge.color}`}>{badge.name}</span>
                 </div>
               ))}
             </div>
@@ -576,7 +576,7 @@ export default function EditProfile() {
 
           {/* Privacy Settings */}
           <div>
-            <label className="text-xs text-muted-foreground mb-2 block px-1">
+            <label className="text-sm text-muted-foreground mb-2 block px-2">
               {t("editProfile.privacy") || "Privacy"}
             </label>
             <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden divide-y divide-border/10">
@@ -594,7 +594,7 @@ export default function EditProfile() {
                   >
                     <div className="flex-1 text-left">
                       <p className="text-sm">{item.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{item.desc}</p>
+                      <p className="text-sm text-muted-foreground">{item.desc}</p>
                     </div>
                     <div
                       className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${

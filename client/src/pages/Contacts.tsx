@@ -324,7 +324,7 @@ export default function Contacts() {
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-3 h-14">
-          <button onClick={() => navigate("/app/chat")} className="p-1 text-muted-foreground hover:text-foreground">
+          <button onClick={() => navigate("/app/chat")} className="p-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft size={20} />
           </button>
           <h1 className="text-lg font-semibold font-display flex-1">{t("contacts.title") || "Contacts"}</h1>
@@ -336,7 +336,7 @@ export default function Contacts() {
           >
             <Inbox size={20} />
             {pendingIncoming.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-neon-red text-[9px] text-white flex items-center justify-center font-bold min-w-[18px] px-1">
+              <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-neon-red text-sm text-white flex items-center justify-center font-bold min-w-[18px] px-2">
                 {pendingIncoming.length}
               </span>
             )}
@@ -352,21 +352,22 @@ export default function Contacts() {
 
         {/* Search */}
         <div className="relative pb-3">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground" />
+          <Search size={16} className="absolute left-3 top-[18px] -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             placeholder={t("contacts.search") || "Search ENS, address, or note..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+            className="w-full h-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+            style={{ paddingLeft: '2.25rem' }}
           />
         </div>
 
         {/* Group filter chips */}
-        <div className="flex gap-1.5 pb-3 overflow-x-auto">
+        <div className="flex gap-2.5 pb-3 overflow-x-auto">
           <button
             onClick={() => setActiveGroupFilter(null)}
-            className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+            className={`shrink-0 px-2.5 py-1 rounded-lg text-[13px] font-medium transition-all ${
               !activeGroupFilter
                 ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                 : "bg-secondary/30 text-muted-foreground border border-border/20"
@@ -378,22 +379,22 @@ export default function Contacts() {
             <button
               key={g.id}
               onClick={() => setActiveGroupFilter(activeGroupFilter === g.id ? null : g.id)}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1 ${
+              className={`shrink-0 px-2.5 py-1 rounded-lg text-[13px] font-medium transition-all flex items-center gap-2 ${
                 activeGroupFilter === g.id
                   ? `bg-${g.color}/15 text-${g.color} border border-${g.color}/30`
                   : "bg-secondary/30 text-muted-foreground border border-border/20"
               }`}
             >
-              <span className="text-[10px]">{g.icon}</span>
+              <span className="text-sm">{g.icon}</span>
               {g.name}
-              <span className="text-[9px] opacity-60">
+              <span className="text-sm opacity-60">
                 {displayContacts.filter((c) => c.tags.includes(g.id)).length}
               </span>
             </button>
           ))}
           <button
             onClick={() => setShowNewGroupModal(true)}
-            className="shrink-0 px-2 py-1 rounded-lg text-[11px] text-muted-foreground border border-dashed border-border/30 hover:border-neon-cyan/30 hover:text-neon-cyan transition-all"
+            className="shrink-0 px-2 py-1 rounded-lg text-[13px] text-muted-foreground border border-dashed border-border/30 hover:border-neon-cyan/30 hover:text-neon-cyan transition-all"
           >
             <FolderPlus size={12} />
           </button>
@@ -404,7 +405,7 @@ export default function Contacts() {
         {/* Favorites Section */}
         {!searchQuery && !activeGroupFilter && favoriteContacts.length > 0 && (
           <div className="px-4 py-3">
-            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <h3 className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               ★ {t("contacts.favorites") || "Favorites"}
             </h3>
             <div className="flex gap-3 overflow-x-auto pb-2">
@@ -412,7 +413,7 @@ export default function Contacts() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedContact(c)}
-                  className="flex flex-col items-center gap-1.5 shrink-0 w-16"
+                  className="flex flex-col items-center gap-2.5 shrink-0 w-16"
                 >
                   <div className="relative">
                     <Avatar className="w-12 h-12 ring-2 ring-neon-cyan/30">
@@ -422,7 +423,7 @@ export default function Contacts() {
                       <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-neon-green border-2 border-background" />
                     )}
                   </div>
-                  <span className="text-[10px] text-foreground truncate w-full text-center">{c.name.split(".")[0]}</span>
+                  <span className="text-sm text-foreground truncate w-full text-center">{c.name.split(".")[0]}</span>
                 </button>
               ))}
             </div>
@@ -434,7 +435,7 @@ export default function Contacts() {
           {sortedLetters.map((letter) => (
             <div key={letter}>
               <div className="sticky top-0 z-[5] px-4 py-1.5 bg-background [backdrop-filter:none]">
-                <span className="text-[11px] font-bold text-neon-cyan font-mono">{letter}</span>
+                <span className="text-[13px] font-bold text-neon-cyan font-mono">{letter}</span>
               </div>
               {grouped[letter].map((contact) => (
                 <motion.button
@@ -452,24 +453,24 @@ export default function Contacts() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2.5">
                       <span className="text-sm font-medium truncate">{contact.name}</span>
                       {contact.isVerified && <Star size={11} className="text-neon-cyan fill-neon-cyan shrink-0" />}
                       {contact.isFavorite && <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0" />}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground font-mono">{contact.address}</span>
+                      <span className="text-sm text-muted-foreground font-mono">{contact.address}</span>
                       {contact.note && (
-                        <span className="text-[10px] text-neon-purple/70">· {contact.note}</span>
+                        <span className="text-sm text-neon-purple/70">· {contact.note}</span>
                       )}
                     </div>
                     {/* Tag pills */}
                     {contact.tags.length > 0 && (
-                      <div className="flex gap-1 mt-1">
+                      <div className="flex gap-2 mt-2">
                         {contact.tags.map((tagId) => {
                           const grp = groups.find((g) => g.id === tagId);
                           return grp ? (
-                            <span key={tagId} className="text-[8px] px-1.5 py-0.5 rounded-full bg-secondary/40 text-muted-foreground">
+                            <span key={tagId} className="text-[13px] px-2.5 py-1 rounded-full bg-secondary/40 text-muted-foreground">
                               {grp.icon} {grp.name}
                             </span>
                           ) : null;
@@ -477,7 +478,7 @@ export default function Contacts() {
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">{contact.lastActive}</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{contact.lastActive}</span>
                 </motion.button>
               ))}
             </div>
@@ -488,7 +489,7 @@ export default function Contacts() {
             {sortedLetters.map((letter) => (
               <button
                 key={letter}
-                className="w-4 h-4 flex items-center justify-center text-[8px] text-muted-foreground hover:text-neon-cyan font-mono"
+                className="w-4 h-4 flex items-center justify-center text-[13px] text-muted-foreground hover:text-neon-cyan font-mono"
               >
                 {letter}
               </button>
@@ -506,7 +507,7 @@ export default function Contacts() {
 
         {/* Total count */}
         <div className="px-4 py-6 text-center">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[13px] text-muted-foreground">
             {filteredContacts.length} {t("contacts.total") || "contacts"}
             {activeGroupFilter && ` · ${groups.find((g) => g.id === activeGroupFilter)?.name || ""}`}
           </span>
@@ -543,12 +544,12 @@ export default function Contacts() {
                     <AvatarFallback className="bg-neon-cyan/10 text-neon-cyan text-2xl font-display">{selectedContact.avatar}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2.5">
                       <h3 className="text-lg font-bold font-display">{selectedContact.name}</h3>
                       {selectedContact.isVerified && <Star size={14} className="text-neon-cyan fill-neon-cyan" />}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground font-mono">{selectedContact.address}</span>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-sm text-muted-foreground font-mono">{selectedContact.address}</span>
                       <button
                         onClick={() => { navigator.clipboard.writeText(selectedContact.address); toast("Address copied"); }}
                         className="text-muted-foreground hover:text-neon-cyan"
@@ -557,15 +558,15 @@ export default function Contacts() {
                       </button>
                     </div>
                     {selectedContact.ens && (
-                      <span className="text-[11px] text-neon-purple font-mono">{selectedContact.ens}</span>
+                      <span className="text-[13px] text-neon-purple font-mono">{selectedContact.ens}</span>
                     )}
                   </div>
                 </div>
 
                 {/* Note */}
                 <div className="p-3 rounded-xl bg-secondary/30 border border-border/20">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] text-muted-foreground font-medium">{t("contacts.note") || "Note"}</span>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[13px] text-muted-foreground font-medium">{t("contacts.note") || "Note"}</span>
                     {editingNote !== selectedContact.id ? (
                       <button
                         onClick={() => { setEditingNote(selectedContact.id); setEditNoteText(selectedContact.note || ""); }}
@@ -599,18 +600,18 @@ export default function Contacts() {
                 {/* Group tags */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                    <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-2">
                       <Tag size={11} /> {t("contacts.groups") || "Groups"}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2.5">
                     {groups.map((g) => {
                       const isActive = selectedContact.tags.includes(g.id);
                       return (
                         <button
                           key={g.id}
                           onClick={() => toggleContactTag(selectedContact.id, g.id)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all flex items-center gap-1 ${
+                          className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                             isActive
                               ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                               : "bg-secondary/30 text-muted-foreground border border-border/20 hover:border-neon-cyan/20"
@@ -629,31 +630,31 @@ export default function Contacts() {
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => { navigate(`/app/chat/${selectedContact.id}`); setSelectedContact(null); }}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/15 transition-colors"
+                    className="flex flex-col items-center gap-2.5 p-3 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/15 transition-colors"
                   >
                     <span className="text-neon-cyan text-lg">💬</span>
-                    <span className="text-[10px] text-neon-cyan font-medium">{t("contacts.sendMsg") || "Message"}</span>
+                    <span className="text-sm text-neon-cyan font-medium">{t("contacts.sendMsg") || "Message"}</span>
                   </button>
                   <button
                     onClick={() => toggleFavorite(selectedContact.id)}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors ${
+                    className={`flex flex-col items-center gap-2.5 p-3 rounded-xl border transition-colors ${
                       selectedContact.isFavorite
                         ? "bg-yellow-400/10 border-yellow-400/20"
                         : "bg-secondary/30 border-border/20 hover:bg-secondary/50"
                     }`}
                   >
                     <Star size={18} className={selectedContact.isFavorite ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground"} />
-                    <span className="text-[10px] font-medium text-muted-foreground">{selectedContact.isFavorite ? (t("contacts.unfav") || "Unfavorite") : (t("contacts.fav") || "Favorite")}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{selectedContact.isFavorite ? (t("contacts.unfav") || "Unfavorite") : (t("contacts.fav") || "Favorite")}</span>
                   </button>
                   <button
                     onClick={() => {
                       const amount = prompt(`${t("contacts.transferTo") || "Transfer ETH to"} ${selectedContact.name}:`);
                       if (amount) toast.success(`${t("contacts.transferSent") || "Sent"} ${amount} ETH → ${selectedContact.name}`);
                     }}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-neon-purple/10 border border-neon-purple/20 hover:bg-neon-purple/15 transition-colors"
+                    className="flex flex-col items-center gap-2.5 p-3 rounded-xl bg-neon-purple/10 border border-neon-purple/20 hover:bg-neon-purple/15 transition-colors"
                   >
                     <span className="text-neon-purple text-lg">💸</span>
-                    <span className="text-[10px] text-neon-purple font-medium">{t("contacts.transfer") || "Transfer"}</span>
+                    <span className="text-sm text-neon-purple font-medium">{t("contacts.transfer") || "Transfer"}</span>
                   </button>
                 </div>
               </div>
@@ -701,7 +702,7 @@ export default function Contacts() {
                 <div className="flex gap-0 mb-4 border-b border-border/20">
                   <button
                     onClick={() => setRequestTab("incoming")}
-                    className={`flex-1 py-2 text-sm font-medium border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2 text-sm font-medium border-b-2 transition-all flex items-center justify-center gap-2.5 ${
                       requestTab === "incoming"
                         ? "border-neon-cyan text-foreground"
                         : "border-transparent text-muted-foreground"
@@ -710,12 +711,12 @@ export default function Contacts() {
                     <Inbox size={14} />
                     {t("contacts.received") || "Received"}
                     {pendingIncoming.length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-neon-red/15 text-neon-red text-[9px] font-bold">{pendingIncoming.length}</span>
+                      <span className="px-2.5 py-1 rounded-full bg-neon-red/15 text-neon-red text-sm font-bold">{pendingIncoming.length}</span>
                     )}
                   </button>
                   <button
                     onClick={() => setRequestTab("outgoing")}
-                    className={`flex-1 py-2 text-sm font-medium border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2 text-sm font-medium border-b-2 transition-all flex items-center justify-center gap-2.5 ${
                       requestTab === "outgoing"
                         ? "border-neon-cyan text-foreground"
                         : "border-transparent text-muted-foreground"
@@ -724,7 +725,7 @@ export default function Contacts() {
                     <Clock size={14} />
                     {t("contacts.sent") || "Sent"}
                     {pendingOutgoing.length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-secondary/60 text-muted-foreground text-[9px] font-bold">{pendingOutgoing.length}</span>
+                      <span className="px-2.5 py-1 rounded-full bg-secondary/60 text-muted-foreground text-sm font-bold">{pendingOutgoing.length}</span>
                     )}
                   </button>
                 </div>
@@ -752,17 +753,17 @@ export default function Contacts() {
                           <AvatarFallback className="bg-secondary text-sm">{req.from.avatar}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-2.5">
                             <span className="text-sm font-semibold truncate">{req.from.name}</span>
-                            <span className="text-[9px] text-muted-foreground font-mono">{req.from.address}</span>
+                            <span className="text-sm text-muted-foreground font-mono">{req.from.address}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">"{req.message}"</p>
-                          <span className="text-[9px] text-muted-foreground mt-1 block">{req.timestamp}</span>
+                          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">"{req.message}"</p>
+                          <span className="text-sm text-muted-foreground mt-2 block">{req.timestamp}</span>
                         </div>
 
                         {/* Status / Actions */}
                         {req.status === "pending" && req.direction === "incoming" && (
-                          <div className="flex gap-1.5 shrink-0">
+                          <div className="flex gap-2.5 shrink-0">
                             <button
                               onClick={() => acceptRequest(req.id)}
                               className="p-2 rounded-xl bg-neon-green/15 text-neon-green border border-neon-green/20 hover:bg-neon-green/25 transition-colors"
@@ -778,19 +779,19 @@ export default function Contacts() {
                           </div>
                         )}
                         {req.status === "pending" && req.direction === "outgoing" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/30 text-[10px] text-muted-foreground flex items-center gap-1">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/30 text-sm text-muted-foreground flex items-center gap-2">
                             <Clock size={10} />
                             {t("contacts.waiting") || "Waiting"}
                           </span>
                         )}
                         {req.status === "accepted" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-neon-green/10 text-[10px] text-neon-green flex items-center gap-1">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-neon-green/10 text-sm text-neon-green flex items-center gap-2">
                             <Check size={10} />
                             {t("contacts.accepted") || "Accepted"}
                           </span>
                         )}
                         {req.status === "rejected" && (
-                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/20 text-[10px] text-muted-foreground flex items-center gap-1">
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-secondary/20 text-sm text-muted-foreground flex items-center gap-2">
                             <X size={10} />
                             {t("contacts.declined") || "Declined"}
                           </span>
@@ -806,7 +807,7 @@ export default function Contacts() {
                   ).length === 0 && (
                     <div className="text-center py-8">
                       <Inbox size={28} className="text-muted-foreground/30 mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">{t("contacts.noRequests") || "No requests"}</p>
+                      <p className="text-sm text-muted-foreground">{t("contacts.noRequests") || "No requests"}</p>
                     </div>
                   )}
                 </div>
@@ -843,7 +844,7 @@ export default function Contacts() {
               {/* Search by username */}
               <div className="space-y-3">
                   <div className="relative">
-                    <label className="text-[11px] text-muted-foreground font-medium mb-1 block">搜索用户名</label>
+                    <label className="text-[13px] text-muted-foreground font-medium mb-2 block">搜索用户名</label>
                     <input
                       autoFocus
                       value={userSearchQuery}
@@ -851,7 +852,7 @@ export default function Contacts() {
                       placeholder="输入用户名或昵称..."
                       className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
                     />
-                    {isSearching && <span className="absolute right-3 top-7 text-[10px] text-muted-foreground">搜索中...</span>}
+                    {isSearching && <span className="absolute right-3 top-7 text-sm text-muted-foreground">搜索中...</span>}
                   </div>
                   {/* Search results */}
                   {searchResults && searchResults.length > 0 && !selectedUserId && (
@@ -862,24 +863,24 @@ export default function Contacts() {
                           onClick={() => { setSelectedUserId(u.id); setSelectedUserName(u.name); setUserSearchQuery(u.name); }}
                           className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition-colors text-left border-b border-border/10 last:border-0"
                         >
-                          <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-sm font-bold shrink-0">
                             {u.name.slice(0, 1).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{u.name}</p>
-                            {u.username && <p className="text-[10px] text-muted-foreground">@{u.username}</p>}
+                            {u.username && <p className="text-sm text-muted-foreground">@{u.username}</p>}
                           </div>
                         </button>
                       ))}
                     </div>
                   )}
                   {searchResults && searchResults.length === 0 && userSearchQuery.length >= 1 && !isSearching && (
-                    <p className="text-xs text-muted-foreground text-center py-2">未找到用户</p>
+                    <p className="text-sm text-muted-foreground text-center py-2">未找到用户</p>
                   )}
                   {/* Selected user confirmation */}
                   {selectedUserId && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20">
-                      <div className="w-7 h-7 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-xs font-bold">
+                      <div className="w-7 h-7 rounded-full bg-neon-cyan/20 flex items-center justify-center text-neon-cyan text-sm font-bold">
                         {selectedUserName.slice(0, 1).toUpperCase()}
                       </div>
                       <p className="text-sm font-medium flex-1">{selectedUserName}</p>
@@ -928,7 +929,7 @@ export default function Contacts() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.groupIcon") || "Icon"}</label>
+                  <label className="text-[13px] text-muted-foreground font-medium mb-2 block">{t("contacts.groupIcon") || "Icon"}</label>
                   <div className="flex gap-2 flex-wrap">
                     {["📁", "💎", "🎨", "⚡", "📊", "🏛️", "🔥", "🌐", "🎯", "🛡️", "🧪", "🎮"].map((emoji) => (
                       <button
@@ -946,7 +947,7 @@ export default function Contacts() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] text-muted-foreground font-medium mb-1 block">{t("contacts.groupName") || "Name"}</label>
+                  <label className="text-[13px] text-muted-foreground font-medium mb-2 block">{t("contacts.groupName") || "Name"}</label>
                   <input
                     autoFocus
                     value={newGroupName}

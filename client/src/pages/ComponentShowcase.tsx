@@ -250,7 +250,7 @@ export default function ComponentsShowcase() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Foreground (Default)
                       </p>
                       <p className="text-foreground text-lg">
@@ -258,7 +258,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Muted Foreground
                       </p>
                       <p className="text-muted-foreground text-lg">
@@ -266,7 +266,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Primary
                       </p>
                       <p className="text-primary text-lg font-medium">
@@ -274,7 +274,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Secondary Foreground
                       </p>
                       <p className="text-secondary-foreground text-lg">
@@ -284,7 +284,7 @@ export default function ComponentsShowcase() {
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Accent Foreground
                       </p>
                       <p className="text-accent-foreground text-lg">
@@ -292,7 +292,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Destructive
                       </p>
                       <p className="text-destructive text-lg font-medium">
@@ -300,7 +300,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Card Foreground
                       </p>
                       <p className="text-card-foreground text-lg">
@@ -308,7 +308,7 @@ export default function ComponentsShowcase() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-2">
                         Popover Foreground
                       </p>
                       <p className="text-popover-foreground text-lg">
@@ -328,49 +328,49 @@ export default function ComponentsShowcase() {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="bg-primary text-primary-foreground rounded-lg p-4">
-                    <p className="font-medium mb-1">Primary</p>
+                    <p className="font-medium mb-2">Primary</p>
                     <p className="text-sm opacity-90">
                       Primary background with foreground text
                     </p>
                   </div>
                   <div className="bg-secondary text-secondary-foreground rounded-lg p-4">
-                    <p className="font-medium mb-1">Secondary</p>
+                    <p className="font-medium mb-2">Secondary</p>
                     <p className="text-sm opacity-90">
                       Secondary background with foreground text
                     </p>
                   </div>
                   <div className="bg-muted text-muted-foreground rounded-lg p-4">
-                    <p className="font-medium mb-1">Muted</p>
+                    <p className="font-medium mb-2">Muted</p>
                     <p className="text-sm opacity-90">
                       Muted background with foreground text
                     </p>
                   </div>
                   <div className="bg-accent text-accent-foreground rounded-lg p-4">
-                    <p className="font-medium mb-1">Accent</p>
+                    <p className="font-medium mb-2">Accent</p>
                     <p className="text-sm opacity-90">
                       Accent background with foreground text
                     </p>
                   </div>
                   <div className="bg-destructive text-destructive-foreground rounded-lg p-4">
-                    <p className="font-medium mb-1">Destructive</p>
+                    <p className="font-medium mb-2">Destructive</p>
                     <p className="text-sm opacity-90">
                       Destructive background with foreground text
                     </p>
                   </div>
                   <div className="bg-card text-card-foreground rounded-lg p-4 border">
-                    <p className="font-medium mb-1">Card</p>
+                    <p className="font-medium mb-2">Card</p>
                     <p className="text-sm opacity-90">
                       Card background with foreground text
                     </p>
                   </div>
                   <div className="bg-popover text-popover-foreground rounded-lg p-4 border">
-                    <p className="font-medium mb-1">Popover</p>
+                    <p className="font-medium mb-2">Popover</p>
                     <p className="text-sm opacity-90">
                       Popover background with foreground text
                     </p>
                   </div>
                   <div className="bg-background text-foreground rounded-lg p-4 border">
-                    <p className="font-medium mb-1">Background</p>
+                    <p className="font-medium mb-2">Background</p>
                     <p className="text-sm opacity-90">
                       Default background with foreground text
                     </p>
@@ -904,7 +904,7 @@ export default function ComponentsShowcase() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <Label htmlFor="name">Name</Label>
                       <Input id="name" defaultValue="Pedro Duarte" />
                     </div>
@@ -923,11 +923,11 @@ export default function ComponentsShowcase() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <Label htmlFor="current">Current password</Label>
                       <Input id="current" type="password" />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <Label htmlFor="new">New password</Label>
                       <Input id="new" type="password" />
                     </div>
@@ -1192,7 +1192,7 @@ export default function ComponentsShowcase() {
                   <CarouselContent>
                     {Array.from({ length: 5 }).map((_, index) => (
                       <CarouselItem key={index}>
-                        <div className="p-1">
+                        <div className="p-2">
                           <Card>
                             <CardContent className="flex aspect-square items-center justify-center p-6">
                               <span className="text-4xl font-semibold">

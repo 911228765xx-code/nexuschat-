@@ -184,7 +184,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       {/* Progress bar */}
       <div className="px-6 pt-[calc(env(safe-area-inset-top)+16px)] relative z-10">
-        <div className="flex gap-1.5">
+        <div className="flex gap-2.5">
           {STEPS.map((s) => (
             <div key={s.id} className="flex-1 h-1 rounded-full overflow-hidden bg-secondary/40">
               <motion.div
@@ -203,7 +203,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           ))}
         </div>
         <div className="flex justify-between mt-2">
-          <span className="text-[10px] text-muted-foreground font-mono">
+          <span className="text-sm text-muted-foreground font-mono">
             {step + 1} / {totalSteps}
           </span>
           <button
@@ -211,7 +211,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               localStorage.setItem("nexuschat_onboarded", "true");
               onComplete();
             }}
-            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             {t("onboarding.skip") || "Skip"}
           </button>
@@ -271,7 +271,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     whileTap={{ scale: 0.95 }}
                   >
                     <f.icon size={20} className={`${f.color} mx-auto`} />
-                    <p className="text-[10px] text-muted-foreground">{f.label}</p>
+                    <p className="text-sm text-muted-foreground">{f.label}</p>
                   </motion.div>
                 ))}
               </div>
@@ -316,15 +316,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         {educationCards[educationStep].visual}
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-sm font-bold mb-1">{educationCards[educationStep].title}</h3>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">{educationCards[educationStep].desc}</p>
+                        <h3 className="text-sm font-bold mb-2">{educationCards[educationStep].title}</h3>
+                        <p className="text-[13px] text-muted-foreground leading-relaxed">{educationCards[educationStep].desc}</p>
                       </div>
                     </div>
                   </motion.div>
                 </AnimatePresence>
 
                 {/* Card navigation dots */}
-                <div className="flex items-center justify-center gap-1.5 mt-3">
+                <div className="flex items-center justify-center gap-2.5 mt-3">
                   {educationCards.map((_, i) => (
                     <button
                       key={i}
@@ -351,7 +351,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         className="w-full flex items-center gap-3 p-3 text-left hover:bg-secondary/20 transition-colors"
                       >
                         <FaqIcon size={16} className="text-neon-cyan shrink-0" />
-                        <span className="flex-1 text-xs font-medium">{faq.q}</span>
+                        <span className="flex-1 text-sm font-medium">{faq.q}</span>
                         {isOpen ? (
                           <ChevronUp size={14} className="text-muted-foreground shrink-0" />
                         ) : (
@@ -367,7 +367,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden"
                           >
-                            <p className="px-3 pb-3 text-[11px] text-muted-foreground leading-relaxed border-t border-border/10 pt-2 mx-3">
+                            <p className="px-3 pb-3 text-[13px] text-muted-foreground leading-relaxed border-t border-border/10 pt-2 mx-3">
                               {faq.a}
                             </p>
                           </motion.div>
@@ -387,8 +387,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               >
                 <AlertTriangle size={16} className="text-neon-red shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-[11px] font-semibold text-neon-red">{t("onboarding.goldenRule") || "Golden Rule"}</p>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  <p className="text-[13px] font-semibold text-neon-red">{t("onboarding.goldenRule") || "Golden Rule"}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     {t("onboarding.goldenRuleDesc") || "NEVER share your seed phrase or private key with anyone — not even NexusChat. We will never ask for it."}
                   </p>
                 </div>
@@ -444,7 +444,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     <span className="text-2xl">{w.icon}</span>
                     <span className="flex-1 text-left text-sm font-medium">{w.name}</span>
                     {w.popular && !walletConnected && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan font-mono">Popular</span>
+                      <span className="text-sm px-2.5 py-1 rounded-full bg-neon-cyan/10 text-neon-cyan font-mono">Popular</span>
                     )}
                     {walletConnected ? (
                       <Check size={16} className="text-neon-green" />
@@ -461,7 +461,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   animate={{ opacity: 1, y: 0 }}
                   className="p-3 rounded-xl bg-neon-green/5 border border-neon-green/20 text-center"
                 >
-                  <p className="text-xs text-neon-green font-mono">
+                  <p className="text-sm text-neon-green font-mono">
                     ✓ {t("onboarding.connected") || "Connected"}: 0x71C7...3a9b
                   </p>
                 </motion.div>
@@ -471,7 +471,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <div className="text-center">
                 <button
                   onClick={() => setStep(1)}
-                  className="text-[11px] text-neon-cyan hover:underline"
+                  className="text-[13px] text-neon-cyan hover:underline"
                 >
                   {t("onboarding.noWallet") || "Don't have a wallet? Learn how to create one →"}
                 </button>
@@ -503,7 +503,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
               {/* Avatar selection */}
               <div className="space-y-3">
-                <label className="text-xs text-muted-foreground font-medium">{t("onboarding.chooseAvatar") || "Choose Avatar"}</label>
+                <label className="text-sm text-muted-foreground font-medium">{t("onboarding.chooseAvatar") || "Choose Avatar"}</label>
                 <div className="grid grid-cols-4 gap-3">
                   {avatars.map((a, i) => (
                     <motion.button
@@ -525,7 +525,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
               {/* Nickname */}
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground font-medium">{t("onboarding.nickname") || "Nickname"}</label>
+                <label className="text-sm text-muted-foreground font-medium">{t("onboarding.nickname") || "Nickname"}</label>
                 <input
                   type="text"
                   placeholder="e.g. cryptowhale"
@@ -537,7 +537,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-[10px] text-muted-foreground font-mono"
+                    className="text-sm text-muted-foreground font-mono"
                   >
                     Display: {avatars[selectedAvatar]} {nickname}.eth
                   </motion.p>
@@ -589,7 +589,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       </span>
                       <div className="flex-1 text-left">
                         <p className="text-sm font-medium">{g.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{g.members} {t("onboarding.members") || "members"}</p>
+                        <p className="text-sm text-muted-foreground">{g.members} {t("onboarding.members") || "members"}</p>
                       </div>
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                         isSelected ? "bg-neon-green" : "border border-border/40"
@@ -605,7 +605,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-xs text-neon-green text-center font-mono"
+                  className="text-sm text-neon-green text-center font-mono"
                 >
                   {selectedGroups.length} {t("onboarding.communitiesSelected") || "communities selected"}
                 </motion.p>
