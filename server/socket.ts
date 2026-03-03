@@ -16,6 +16,11 @@ interface ChatMessage {
 let _io: SocketIOServer | null = null;
 const userSockets = new Map<number, Set<string>>(); // userId → Set<socketId>
 
+/** Get the Socket.IO server instance */
+export function getSocketIO(): SocketIOServer | null {
+  return _io;
+}
+
 /** Emit an event to all sockets belonging to a specific user */
 export function emitToUser(userId: number, event: string, data: unknown): void {
   if (!_io) return;

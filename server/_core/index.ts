@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initSocketIO } from "../socket";
 import { startPriceAlertChecker } from "../priceAlertChecker";
+import { startBotScheduler } from "../botScheduler";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
 
@@ -73,6 +74,8 @@ async function startServer() {
 
   // Start background price alert checker (runs every 2 min)
   startPriceAlertChecker();
+  // Start Bot scheduler (posts at 09:00 and 21:00 daily)
+  startBotScheduler();
 }
 
 startServer().catch(console.error);

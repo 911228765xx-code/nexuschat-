@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, username, name FROM users WHERE isBot = TRUE ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, username, name FROM users WHERE isBot = TRUE ORDER BY id;",
+  "rows": [
+    {
+      "id": "181472",
+      "username": "AlphaHunter_0x",
+      "name": "AlphaHunter 🎯"
+    },
+    {
+      "id": "181473",
+      "username": "ChainAnalyst",
+      "name": "ChainAnalyst 📊"
+    },
+    {
+      "id": "181474",
+      "username": "CryptoSkeptic",
+      "name": "CryptoSkeptic ⚠️"
+    },
+    {
+      "id": "181475",
+      "username": "Web3Newbie",
+      "name": "Web3Newbie 🌱"
+    },
+    {
+      "id": "181476",
+      "username": "QuantTrader_Pro",
+      "name": "QuantTrader Pro ⚡"
+    },
+    {
+      "id": "181477",
+      "username": "NexusBot",
+      "name": "NexusBot 🤖"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\n181472\tAlphaHunter_0x\tAlphaHunter 🎯\n181473\tChainAnalyst\tChainAnalyst 📊\n181474\tCryptoSkeptic\tCryptoSkeptic ⚠️\n181475\tWeb3Newbie\tWeb3Newbie 🌱\n181476\tQuantTrader_Pro\tQuantTrader Pro ⚡\n181477\tNexusBot\tNexusBot 🤖\n",
+  "stderr": "",
+  "execution_time_ms": 1583
+}
