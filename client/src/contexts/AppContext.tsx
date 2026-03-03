@@ -144,7 +144,13 @@ interface AppState {
   totalUnreadMessages: number;
 }
 
-const AppContext = createContext<AppState | null>(null);
+// Use a module-level singleton to survive Vite HMR re-imports
+// Without this, HMR creates a new Context instance while old consumers still hold the old one
+declare global { interface Window { __nexuschat_app_ctx__?: ReturnType<typeof createContext<AppState | null>> } }
+if (!window.__nexuschat_app_ctx__) {
+  window.__nexuschat_app_ctx__ = createContext<AppState | null>(null);
+}
+const AppContext = window.__nexuschat_app_ctx__ as ReturnType<typeof createContext<AppState | null>>;
 
 // ==================== Storage Helpers ====================
 
