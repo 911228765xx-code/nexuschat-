@@ -423,7 +423,9 @@ export default function GroupChatRoom() {
   // ─── Invite link ──────────────────────────────────────────────────────────
   const createInviteLinkMutation = trpc.chat.createInviteLink.useMutation({
     onSuccess: (data) => {
-      const url = `${window.location.origin}/invite/${data.token}`;
+      // Use configured app URL (production domain) if available, fallback to current origin
+      const appBaseUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "") || window.location.origin;
+      const url = `${appBaseUrl}/invite/${data.token}`;
       setInviteUrl(url);
       setShowInviteModal(true);
     },
