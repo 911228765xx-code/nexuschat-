@@ -91,7 +91,7 @@ export default function PullToRefresh({ children, onRefresh, className }: PullTo
       {refreshing && (
         <div className="flex items-center justify-center gap-2 bg-neon-cyan/5 border-b border-neon-cyan/10 h-9">
           <RefreshCw size={12} className="text-neon-cyan animate-spin" />
-          <span className="text-[11px] text-neon-cyan font-medium">Refreshing...</span>
+          <span className="text-[13px] text-neon-cyan font-medium">Refreshing...</span>
         </div>
       )}
 

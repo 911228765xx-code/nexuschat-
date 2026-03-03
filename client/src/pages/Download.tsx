@@ -94,7 +94,7 @@ export default function DownloadPage() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="flex justify-center mb-10"
         >
-          <div className="flex rounded-xl border border-border/30 bg-card/30 p-1 gap-1">
+          <div className="flex rounded-xl border border-border/30 bg-card/30 p-2 gap-2">
             <button
               onClick={() => setActiveTab("android")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${

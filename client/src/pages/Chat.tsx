@@ -255,11 +255,11 @@ export default function Chat() {
           <div className="flex items-center gap-2">
             <Shield size={20} className="text-neon-cyan" />
             <h1 className="text-lg font-semibold font-display">{t("chat.title")}</h1>
-            <span className="text-[10px] font-mono text-neon-cyan bg-neon-cyan/10 px-1.5 py-0.5 rounded-full">
+            <span className="text-xs font-mono text-neon-cyan bg-neon-cyan/10 px-2.5 py-1 rounded-full">
               {t("chat.e2e")}
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearchPanel(true)}
               className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
@@ -332,11 +332,11 @@ export default function Chat() {
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-muted-foreground">{t("chat.noConversations") || "No conversations yet"}</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">{t("chat.startChat") || "Join a community below to get started"}</p>
+              <p className="text-xs text-muted-foreground/60 mt-2">{t("chat.startChat") || "Join a community below to get started"}</p>
             </div>
             {publicGroupsData && publicGroupsData.length > 0 && (
               <div className="w-full mt-2">
-                <p className="text-[10px] text-muted-foreground/50 font-mono uppercase tracking-widest px-1 mb-2">Active Communities</p>
+                <p className="text-xs text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Active Communities</p>
                 <div className="space-y-2">
                   {publicGroupsData.map((group) => (
                     <motion.div
@@ -372,7 +372,7 @@ export default function Chat() {
         {filtered.length > 0 && (
           <div className="px-4 py-2 flex items-center gap-2">
             <div className="h-px flex-1 bg-border/15" />
-            <span className="text-[10px] text-muted-foreground/40 font-mono">{filtered.length} {t("chat.conversations") || "conversations"}</span>
+            <span className="text-xs text-muted-foreground/40 font-mono">{filtered.length} {t("chat.conversations") || "conversations"}</span>
             <div className="h-px flex-1 bg-border/15" />
           </div>
         )}
@@ -423,7 +423,7 @@ export default function Chat() {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {isPinned && (
                         <Pin size={10} className="text-neon-cyan shrink-0 rotate-45" />
                       )}
@@ -434,7 +434,7 @@ export default function Chat() {
                         <BellOff size={10} className="text-muted-foreground shrink-0" />
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
                       {conv.time}
                     </span>
                   </div>
@@ -445,8 +445,8 @@ export default function Chat() {
 
                 {/* Unread badge */}
                 {conv.unread > 0 && (
-                  <div className={`shrink-0 min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center ${conv.isMuted ? "bg-muted-foreground/30" : "bg-neon-cyan"}`}>
-                    <span className={`text-[10px] font-bold leading-none ${conv.isMuted ? "text-muted-foreground" : "text-background"}`}>
+                  <div className={`shrink-0 min-w-5 h-5 px-2.5 rounded-full flex items-center justify-center ${conv.isMuted ? "bg-muted-foreground/30" : "bg-neon-cyan"}`}>
+                    <span className={`text-xs font-bold leading-none ${conv.isMuted ? "text-muted-foreground" : "text-background"}`}>
                       {conv.unread > 99 ? "99+" : conv.unread}
                     </span>
                   </div>
@@ -477,7 +477,7 @@ export default function Chat() {
             {/* Discover Public Groups */}
             {publicGroupsData && publicGroupsData.length > 0 && (
               <div className="mt-2">
-                <p className="text-[10px] text-muted-foreground/50 font-mono uppercase tracking-widest px-1 mb-2">Discover Groups</p>
+                <p className="text-xs text-muted-foreground/50 font-mono uppercase tracking-widest px-2 mb-2">Discover Groups</p>
                 <div className="space-y-2">
                   {publicGroupsData.map((group) => (
                     <motion.div
@@ -515,7 +515,7 @@ export default function Chat() {
             {/* End marker */}
             <div className="flex items-center gap-3 py-2">
               <div className="h-px flex-1 bg-border/10" />
-              <span className="text-[9px] text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
+              <span className="text-xs text-muted-foreground/30 font-mono uppercase tracking-widest">End</span>
               <div className="h-px flex-1 bg-border/10" />
             </div>
           </div>
@@ -622,7 +622,7 @@ export default function Chat() {
                   <button
                     key={f}
                     onClick={() => setActiveTimeFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
                       activeTimeFilter === f
                         ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/30"
                         : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
@@ -649,7 +649,7 @@ export default function Chat() {
                   <p className="text-xs text-muted-foreground mb-3 font-medium">
                     {searchResults.length} {t("chat.resultsFound")}
                   </p>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {searchResults.map((result, index) => (
                       <motion.div
                         key={result.id}
@@ -674,19 +674,19 @@ export default function Chat() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-medium font-display">{result.chatName}</span>
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-2">
                               <Clock size={10} />
                               {result.time}
                             </span>
                           </div>
-                          <p className="text-[11px] text-muted-foreground mb-0.5">{result.sender}:</p>
+                          <p className="text-[13px] text-muted-foreground mb-0.5">{result.sender}:</p>
                           <p className="text-xs leading-relaxed">
                             {highlightText(result.message, globalSearch)}
                           </p>
                         </div>
-                        <ChevronRight size={14} className="text-muted-foreground shrink-0 mt-1" />
+                        <ChevronRight size={14} className="text-muted-foreground shrink-0 mt-2" />
                       </motion.div>
                     ))}
                   </div>
@@ -706,7 +706,7 @@ export default function Chat() {
               {!isSearching && globalSearch.trim().length < 2 && (
                 <div className="px-4 py-6">
                   <p className="text-xs text-muted-foreground mb-4 font-medium">{t("chat.recentSearches")}</p>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {["staking yield", "NFT roadmap", "SOL report", "whale accumulation"].map((term) => (
                       <button
                         key={term}

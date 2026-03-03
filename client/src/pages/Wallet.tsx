@@ -288,20 +288,20 @@ function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t
 
         {/* Chain grid selector */}
         <div className="mb-4">
-          <p className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider">{t("wallet.selectChain") || "Select Network"}</p>
-          <div className="grid grid-cols-4 gap-1.5">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">{t("wallet.selectChain") || "Select Network"}</p>
+          <div className="grid grid-cols-4 gap-2.5">
             {displayedChains.map(c => (
               <button
                 key={c.name}
                 onClick={() => handleSelectChain(c.name)}
-                className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                className={`flex flex-col items-center gap-2 px-2 py-2 rounded-xl text-xs font-medium transition-all ${
                   receiveChain === c.name
                     ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40"
                     : "bg-secondary/40 text-muted-foreground border border-border/20 hover:border-border/40"
                 }`}
               >
                 <span className={`text-base ${c.color}`}>{c.icon}</span>
-                <span className="text-[9px] leading-tight text-center truncate w-full">{c.name}</span>
+                <span className="text-xs leading-tight text-center truncate w-full">{c.name}</span>
               </button>
             ))}
           </div>
@@ -324,15 +324,15 @@ function ReceiveModal({ walletAddress, receiveChain, setReceiveChain, onClose, t
         <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-secondary/40 border border-border/20">
           <span className={`text-lg ${activeChain.color}`}>{activeChain.icon}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-muted-foreground">{activeChain.name} {t("wallet.address") || "Address"}</p>
+            <p className="text-xs text-muted-foreground">{activeChain.name} {t("wallet.address") || "Address"}</p>
             <p className="text-xs font-mono truncate text-foreground">{chainAddress.slice(0, 16)}...{chainAddress.slice(-8)}</p>
           </div>
         </div>
 
         {/* Full address */}
         <div className="bg-secondary/40 rounded-xl px-3 py-2.5 mb-3">
-          <p className="text-[10px] text-muted-foreground mb-1">{t("wallet.fullAddress") || "Full Address"}</p>
-          <p className="text-[11px] font-mono break-all text-foreground leading-relaxed">{chainAddress}</p>
+          <p className="text-xs text-muted-foreground mb-2">{t("wallet.fullAddress") || "Full Address"}</p>
+          <p className="text-[13px] font-mono break-all text-foreground leading-relaxed">{chainAddress}</p>
         </div>
 
         <button
@@ -463,9 +463,9 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center gap-1 mb-5">
+        <div className="flex items-center gap-2 mb-5">
           {(["input", "quote", "confirm", "done"] as SwapStep[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-1">
+            <div key={s} className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full transition-colors ${
                 s === step ? "bg-neon-cyan" :
                 ["input", "quote", "confirm", "done"].indexOf(step) > i ? "bg-neon-cyan/40" : "bg-border/40"
@@ -473,15 +473,15 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
               {i < 3 && <div className="w-6 h-px bg-border/30" />}
             </div>
           ))}
-          <span className="ml-2 text-[10px] text-muted-foreground capitalize">{step}</span>
+          <span className="ml-2 text-xs text-muted-foreground capitalize">{step}</span>
         </div>
 
         {/* Step: Input */}
         {step === "input" && (
           <div className="space-y-3">
             {/* From token */}
-            <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
-              <p className="text-[10px] text-muted-foreground mb-2">From</p>
+            <div className="p-4 rounded-xl bg-secondary/40 border border-border/20">
+              <p className="text-xs text-muted-foreground mb-2">From</p>
               <div className="flex items-center gap-2">
                 <select value={swapFrom} onChange={(e) => setSwapFrom(e.target.value)}
                   className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
@@ -506,8 +506,8 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
             </div>
 
             {/* To token */}
-            <div className="p-3 rounded-xl bg-secondary/40 border border-border/20">
-              <p className="text-[10px] text-muted-foreground mb-2">To (estimated)</p>
+            <div className="p-4 rounded-xl bg-secondary/40 border border-border/20">
+              <p className="text-xs text-muted-foreground mb-2">To (estimated)</p>
               <div className="flex items-center gap-2">
                 <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)}
                   className="h-9 rounded-lg bg-secondary/60 border border-border/30 px-2 text-sm font-medium">
@@ -520,12 +520,12 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
             </div>
 
             {/* Slippage */}
-            <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between px-2">
               <span className="text-xs text-muted-foreground">Slippage tolerance</span>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 {["0.1", "0.5", "1.0"].map(s => (
                   <button key={s} onClick={() => setSlippage(s)}
-                    className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
+                    className={`px-2 py-1 rounded-md text-xs transition-colors ${
                       slippage === s ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "bg-secondary/40 text-muted-foreground"
                     }`}>{s}%</button>
                 ))}
@@ -552,7 +552,7 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
             )}
             {/* Error state */}
             {quoteError || (quoteData && !quoteData.success) ? (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
                 <p className="text-sm text-red-400">Failed to fetch price. Please try again.</p>
                 <button onClick={() => { setQuoteEnabled(false); setTimeout(() => setQuoteEnabled(true), 500); }}
                   className="mt-2 text-xs text-neon-cyan hover:underline">Retry</button>
@@ -560,12 +560,12 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
             ) : null}
             {/* Summary — shown when quote is ready */}
             {quote && (
-            <div className="p-3 rounded-xl bg-neon-cyan/5 border border-neon-cyan/20">
+            <div className="p-4 rounded-xl bg-neon-cyan/5 border border-neon-cyan/20">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-left">
                   <span className="text-sm font-mono font-bold">{swapAmount} {swapFrom}</span>
                   {quote.fromChange24h !== 0 && (
-                    <span className={`ml-1.5 text-[10px] ${quote.fromChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+                    <span className={`ml-1.5 text-xs ${quote.fromChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {quote.fromChange24h >= 0 ? "+" : ""}{quote.fromChange24h}%
                     </span>
                   )}
@@ -574,25 +574,25 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
                 <div className="text-right">
                   <span className="text-sm font-mono font-bold text-neon-cyan">{outputAmount} {swapTo}</span>
                   {quote.toChange24h !== 0 && (
-                    <span className={`ml-1.5 text-[10px] ${quote.toChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+                    <span className={`ml-1.5 text-xs ${quote.toChange24h >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {quote.toChange24h >= 0 ? "+" : ""}{quote.toChange24h}%
                     </span>
                   )}
                 </div>
               </div>
-              <div className="space-y-1 text-[11px] text-muted-foreground">
+              <div className="space-y-2 text-[13px] text-muted-foreground">
                 <div className="flex justify-between"><span>Rate</span><span className="font-mono">1 {swapFrom} = {rate.toFixed(4)} {swapTo}</span></div>
                 <div className="flex justify-between"><span>{swapFrom} price</span><span className="font-mono text-foreground">${quote.fromUsdPrice.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Price impact</span><span className="text-green-400">{priceImpact}%</span></div>
                 <div className="flex justify-between"><span>Min. received</span><span className="font-mono">{minReceived} {swapTo}</span></div>
                 <div className="flex justify-between"><span>Network fee</span><span>{gasFee}</span></div>
-                <div className="flex justify-between"><span className="text-[9px]">Source</span><span className="text-[9px] text-neon-cyan/60">CoinGecko Live</span></div>
+                <div className="flex justify-between"><span className="text-xs">Source</span><span className="text-xs text-neon-cyan/60">CoinGecko Live</span></div>
               </div>
             </div>
             )}
 
             {/* DEX selection */}
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Select DEX</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Select DEX</p>
             <div className="space-y-2">
               {dexOptions.map(dex => (
                 <button key={dex.name}
@@ -606,7 +606,7 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
                   <span className="text-xl">{dex.icon}</span>
                   <div className="flex-1 text-left">
                     <p className={`text-sm font-semibold ${dex.color}`}>{dex.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{dex.chain}</p>
+                    <p className="text-xs text-muted-foreground">{dex.chain}</p>
                   </div>
                   {selectedDex === dex.name && <span className="text-neon-cyan text-sm">✓</span>}
                   <a href={dex.url} target="_blank" rel="noopener noreferrer"
@@ -648,11 +648,11 @@ function SwapModal({ displayTokens, swapFrom, setSwapFrom, swapTo, setSwapTo, sw
               {swapAmount} {swapFrom} → {outputAmount} {swapTo}
             </p>
             <div className="w-full p-3 rounded-xl bg-secondary/40 border border-border/20">
-              <p className="text-[10px] text-muted-foreground mb-1">Transaction Hash</p>
-              <p className="text-[10px] font-mono break-all text-foreground">{txHash}</p>
+              <p className="text-xs text-muted-foreground mb-2">Transaction Hash</p>
+              <p className="text-xs font-mono break-all text-foreground">{txHash}</p>
               <button
                 onClick={() => { navigator.clipboard.writeText(txHash); toast.success("Hash copied!"); }}
-                className="mt-2 text-[10px] text-neon-cyan hover:underline flex items-center gap-1"
+                className="mt-2 text-xs text-neon-cyan hover:underline flex items-center gap-2"
               ><Copy size={10} /> Copy hash</button>
             </div>
             <div className="flex gap-2 w-full">
@@ -919,7 +919,7 @@ export default function Wallet() {
               💼
             </div>
             <div>
-              <h3 className="text-base font-bold text-white mb-1">连接您的 Web3 钱包</h3>
+              <h3 className="text-base font-bold text-white mb-2">连接您的 Web3 钱包</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 连接 MetaMask、WalletConnect 等钱包，查看您的真实资产、代币余额和交易记录
               </p>
@@ -949,7 +949,7 @@ export default function Wallet() {
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-neon-purple/5 rounded-full blur-3xl" />
 
           <div className="relative z-10">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground font-medium">{t("wallet.totalBalance") || "Total Balance"}</span>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
@@ -959,14 +959,14 @@ export default function Wallet() {
               </button>
             </div>
 
-            <div className="flex items-baseline gap-2 mb-1">
+            <div className="flex items-baseline gap-2 mb-2">
               <span className="text-3xl font-bold font-display tracking-tight">
                 {balanceVisible ? `$${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "••••••"}
               </span>
             </div>
 
             <div className="flex items-center gap-2 mb-4">
-              <span className={`text-sm font-mono flex items-center gap-1 ${totalChange >= 0 ? "text-neon-green" : "text-red-400"}`}>
+              <span className={`text-sm font-mono flex items-center gap-2 ${totalChange >= 0 ? "text-neon-green" : "text-red-400"}`}>
                 {totalChange >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {totalChange >= 0 ? "+" : ""}{totalChangePercent.toFixed(2)}%
               </span>
@@ -978,7 +978,7 @@ export default function Wallet() {
             {/* Wallet Address */}
             <div className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-lg bg-background/20 border border-white/10">
               <div className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />
-              <span className="flex-1 text-[10px] font-mono text-muted-foreground truncate">{walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}</span>
+              <span className="flex-1 text-xs font-mono text-muted-foreground truncate">{walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}</span>
               <button
                 onClick={() => { navigator.clipboard.writeText(walletAddress); toast.success("Address copied!"); }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
@@ -1011,10 +1011,10 @@ export default function Wallet() {
                         setShowSwap(true);
                       }
                     }}
-                    className={`flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl ${action.color} hover:opacity-80 transition-all`}
+                    className={`flex-1 flex flex-col items-center gap-2.5 py-2.5 rounded-xl ${action.color} hover:opacity-80 transition-all`}
                   >
                     <Icon size={16} />
-                    <span className="text-[10px] font-medium">{action.label}</span>
+                    <span className="text-xs font-medium">{action.label}</span>
                   </button>
                 );
               })}
@@ -1025,7 +1025,7 @@ export default function Wallet() {
 
       {/* Chain Filter + Tabs */}
       <div className="px-4 pt-2 pb-1 flex items-center justify-between">
-        <div className="flex items-center gap-1 bg-secondary/30 rounded-xl p-0.5">
+        <div className="flex items-center gap-2 bg-secondary/30 rounded-xl p-0.5">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -1052,7 +1052,7 @@ export default function Wallet() {
         <div className="relative">
           <button
             onClick={() => setShowChainFilter(!showChainFilter)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/30 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-secondary/30 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <Filter size={12} />
             {selectedChain}
@@ -1064,7 +1064,7 @@ export default function Wallet() {
                 initial={{ opacity: 0, y: -5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
-                className="absolute right-0 top-full mt-1 w-36 bg-popover border border-border rounded-xl shadow-xl z-20 overflow-hidden"
+                className="absolute right-0 top-full mt-2 w-36 bg-popover border border-border rounded-xl shadow-xl z-20 overflow-hidden"
               >
                 {chains.map((chain) => (
                   <button
@@ -1094,7 +1094,7 @@ export default function Wallet() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="space-y-1.5 pt-2"
+              className="space-y-2.5 pt-2"
             >
               {filteredTokens.map((token, i) => (
                 <motion.div
@@ -1126,12 +1126,12 @@ export default function Wallet() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[11px] text-muted-foreground">{token.name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-muted-foreground font-mono">
+                      <span className="text-[13px] text-muted-foreground">{token.name}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[13px] text-muted-foreground font-mono">
                           {balanceVisible ? token.balance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "••••"}
                         </span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md ${
+                        <span className={`text-xs font-mono px-2.5 py-1 rounded-md ${
                           token.change24h >= 0
                             ? "text-neon-green bg-neon-green/10"
                             : "text-red-400 bg-red-400/10"
@@ -1157,7 +1157,7 @@ export default function Wallet() {
               className="pt-2"
             >
               {/* NFT Summary */}
-              <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center justify-between mb-3 px-2">
                 <span className="text-xs text-muted-foreground">{filteredNFTs.length} NFTs</span>
                 <span className="text-xs text-muted-foreground">
                   Est. Value: <span className="text-neon-cyan font-mono">{totalNFTValue.toFixed(1)} ETH</span>
@@ -1182,7 +1182,7 @@ export default function Wallet() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       {nft.rarity && (
-                        <span className={`absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-md [backdrop-filter:none] ${
+                        <span className={`absolute top-2 right-2 text-xs font-bold px-2.5 py-1 rounded-md [backdrop-filter:none] ${
                           nft.rarity === "Legendary" ? "bg-yellow-500/80 text-black" :
                           nft.rarity === "Epic" ? "bg-purple-500/80 text-white" :
                           nft.rarity === "Rare" ? "bg-blue-500/80 text-white" :
@@ -1194,9 +1194,9 @@ export default function Wallet() {
                     </div>
                     <div className="p-2.5 bg-card">
                       <p className="text-xs font-semibold truncate">{nft.name}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-[10px] text-muted-foreground">{nft.collection}</span>
-                        <span className="text-[10px] text-neon-cyan font-mono">⟠ {nft.floorPrice}</span>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-muted-foreground">{nft.collection}</span>
+                        <span className="text-xs text-neon-cyan font-mono">⟠ {nft.floorPrice}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -1213,17 +1213,17 @@ export default function Wallet() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="space-y-1 pt-2"
+              className="space-y-2 pt-2"
             >
               {/* SWAP History Section */}
               {(swapHistoryData && swapHistoryData.length > 0) && (
                 <div className="mb-4">
-                  <div className="flex items-center gap-2 px-1 mb-2">
+                  <div className="flex items-center gap-2 px-2 mb-2">
                     <RefreshCw size={12} className="text-neon-cyan" />
-                    <span className="text-[11px] font-semibold text-neon-cyan uppercase tracking-wider">Swap History</span>
-                    <span className="text-[10px] text-muted-foreground">({swapHistoryData.length})</span>
+                    <span className="text-[13px] font-semibold text-neon-cyan uppercase tracking-wider">Swap History</span>
+                    <span className="text-xs text-muted-foreground">({swapHistoryData.length})</span>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {swapHistoryData.map((swap, i) => (
                       <motion.div
                         key={swap.id}
@@ -1246,12 +1246,12 @@ export default function Wallet() {
                             </span>
                           </div>
                           <div className="flex items-center justify-between mt-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground">{swap.dex}</span>
-                              <span className="text-[9px] text-muted-foreground/60 px-1 py-0.5 rounded bg-secondary/40">{swap.slippage}% slip</span>
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs text-muted-foreground">{swap.dex}</span>
+                              <span className="text-xs text-muted-foreground/60 px-2 py-1 rounded bg-secondary/40">{swap.slippage}% slip</span>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs text-muted-foreground">
                                 {new Date(swap.createdAt).toLocaleString()}
                               </span>
                               <span className="w-1.5 h-1.5 rounded-full bg-neon-green" />
@@ -1273,9 +1273,9 @@ export default function Wallet() {
 
               {/* On-chain Transactions */}
               {filteredTxs.length > 0 && (
-                <div className="flex items-center gap-2 px-1 mb-2">
+                <div className="flex items-center gap-2 px-2 mb-2">
                   <ArrowUpRight size={12} className="text-muted-foreground" />
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">On-chain Transactions</span>
+                  <span className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">On-chain Transactions</span>
                 </div>
               )}
               {filteredTxs.map((tx, i) => (
@@ -1292,9 +1292,9 @@ export default function Wallet() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2.5">
                         <span className="text-sm font-medium">{txTypeLabel(tx.type)}</span>
-                        <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-secondary/50">{tx.chain}</span>
+                        <span className="text-xs text-muted-foreground px-2.5 py-1 rounded bg-secondary/50">{tx.chain}</span>
                       </div>
                       <span className={`text-sm font-mono font-medium ${
                         tx.type === "receive" ? "text-neon-green" :
@@ -1305,11 +1305,11 @@ export default function Wallet() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[11px] text-muted-foreground truncate max-w-[60%]">
+                      <span className="text-[13px] text-muted-foreground truncate max-w-[60%]">
                         {tx.type === "swap" ? tx.token : tx.type === "receive" ? `From: ${tx.from}` : `To: ${tx.to}`}
                       </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-muted-foreground">{tx.time}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xs text-muted-foreground">{tx.time}</span>
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           tx.status === "confirmed" ? "bg-neon-green" :
                           tx.status === "pending" ? "bg-yellow-400" :
@@ -1354,7 +1354,7 @@ export default function Wallet() {
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25 }} className="w-full max-w-md bg-card rounded-t-2xl border-t border-border/30 p-5" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-bold font-display mb-3">{t("wallet.send") || "Send"}</h3>
               {/* Chain selector */}
-              <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+              <div className="flex gap-2.5 mb-4 overflow-x-auto pb-1">
                 {SEND_CHAINS_LOCAL.map(c => (
                   <button key={c.name} onClick={() => setSendChain(c.name)}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -1366,7 +1366,7 @@ export default function Wallet() {
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.token") || "Token"}</label>
+                  <label className="text-xs text-muted-foreground mb-2 block">{t("wallet.token") || "Token"}</label>
                   <select value={sendToken} onChange={(e) => setSendToken(e.target.value)} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm">
                     {displayTokens.length > 0
                       ? displayTokens.map(tk => <option key={tk.symbol} value={tk.symbol}>{tk.symbol} — {tk.balance.toFixed(4)}</option>)
@@ -1375,14 +1375,14 @@ export default function Wallet() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.recipientAddress") || "Recipient Address"}</label>
+                  <label className="text-xs text-muted-foreground mb-2 block">{t("wallet.recipientAddress") || "Recipient Address"}</label>
                   <input value={sendAddress} onChange={(e) => setSendAddress(e.target.value)} placeholder={activeChain.placeholder} className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none font-mono" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t("wallet.amount") || "Amount"}</label>
+                  <label className="text-xs text-muted-foreground mb-2 block">{t("wallet.amount") || "Amount"}</label>
                   <input type="number" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} placeholder="0.00" className="w-full h-10 rounded-xl bg-secondary/60 border border-border/30 px-3 text-sm placeholder:text-muted-foreground focus:border-neon-cyan/50 focus:outline-none" />
                 </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground px-1 py-1 bg-secondary/30 rounded-lg">
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-2 py-1 bg-secondary/30 rounded-lg">
                   <span>{t("wallet.gasFee") || "Gas Fee"}: <span className="text-neon-cyan font-mono">{activeChain.gas}</span></span>
                   <span>{t("wallet.network") || "Network"}: <span className="font-medium text-foreground">{activeChain.name}</span></span>
                 </div>
@@ -1452,11 +1452,11 @@ export default function Wallet() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
-                  <p className="text-[10px] text-muted-foreground">{t("wallet.chain") || "Chain"}</p>
+                  <p className="text-xs text-muted-foreground">{t("wallet.chain") || "Chain"}</p>
                   <p className="text-xs font-medium">{selectedNFT.chain}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-secondary/40 text-center">
-                  <p className="text-[10px] text-muted-foreground">{t("wallet.floor") || "Floor"}</p>
+                  <p className="text-xs text-muted-foreground">{t("wallet.floor") || "Floor"}</p>
                   <p className="text-xs font-medium font-mono">⟠ {selectedNFT.floorPrice}</p>
                 </div>
               </div>

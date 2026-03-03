@@ -88,7 +88,7 @@ export default function Home() {
             alt="NexusChat"
             className="w-16 h-16 rounded-2xl"
           />
-          <div className="flex gap-1.5">
+          <div className="flex gap-2.5">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -214,7 +214,7 @@ export default function Home() {
         </div>
         <div className="relative z-10 max-w-3xl mx-auto text-center">
           <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-6">
+            <span className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-6">
               <Sparkles size={12} />
               {t("home.badge")}
             </span>
@@ -276,7 +276,7 @@ export default function Home() {
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="text-2xl font-bold font-display text-gradient">{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                <p className="text-xs text-muted-foreground mt-2">{stat.label}</p>
               </div>
             ))}
           </motion.div>
@@ -306,7 +306,7 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-xl bg-[#ff3366]/10 flex items-center justify-center mb-3 group-hover:bg-[#ff3366]/15 transition-colors">
                     <Icon size={20} className="text-[#ff3366]" />
                   </div>
-                  <h3 className="text-base font-semibold font-display mb-1.5">{t(point.titleKey)}</h3>
+                  <h3 className="text-base font-semibold font-display mb-2.5">{t(point.titleKey)}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{t(point.descKey)}</p>
                 </motion.div>
               );
@@ -471,7 +471,7 @@ export default function Home() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
+                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-xs">⬆ {t('pwa.iosStep1b')}</span></p>
                 </div>
                 <div className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
@@ -491,7 +491,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-1.5 py-0.5 text-white text-xs">⋮ menu</span> in the top-right corner</p>
+                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-xs">⋮ menu</span> in the top-right corner</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>

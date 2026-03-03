@@ -164,19 +164,19 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
                       {/* Unread badge — CSS scale animation */}
                       {tab.badge > 0 && (
                         <div
-                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
+                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-2 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
                           style={{
                             boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
                           }}
                         >
-                          <span className="text-[9px] font-bold text-white leading-none">
+                          <span className="text-xs font-bold text-white leading-none">
                             {tab.badge > 99 ? "99+" : tab.badge}
                           </span>
                         </div>
                       )}
                     </div>
                     <span
-                      className={`text-[10px] font-medium ${
+                      className={`text-xs font-medium ${
                         isActive ? "text-neon-cyan" : "text-muted-foreground"
                       }`}
                     >

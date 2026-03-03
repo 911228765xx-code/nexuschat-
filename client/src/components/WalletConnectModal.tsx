@@ -228,7 +228,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
             <h2 className="text-xl font-bold text-white font-['Space_Grotesk']">
               {isConnected ? "已连接钱包" : t("wallet.title")}
             </h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-400 mt-2">
               {isConnected
                 ? `${currentChain ? currentChain.icon + " " + currentChain.name : "未知网络"} · ${address?.slice(0, 6)}...${address?.slice(-4)}`
                 : mobile
@@ -318,7 +318,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                   <span className="text-2xl leading-none">{wallet.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-tight">{wallet.name}</p>
-                    <p className="text-gray-500 text-[10px] mt-0.5">
+                    <p className="text-gray-500 text-xs mt-0.5">
                       {deepLinkAttempted === wallet.id ? "跳转中..." : "点击打开"}
                     </p>
                   </div>
@@ -337,7 +337,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
               </div>
             )}
 
-            <p className="text-[10px] text-gray-600 text-center mt-4 leading-relaxed">
+            <p className="text-xs text-gray-600 text-center mt-4 leading-relaxed">
               点击后将跳转到钱包 App 内置浏览器。<br/>
               若未安装，将自动跳转到应用商店下载。
             </p>

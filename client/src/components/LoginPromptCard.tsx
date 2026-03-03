@@ -62,7 +62,7 @@ export default function LoginPromptCard({
 
         {/* Title */}
         <div>
-          <h3 className="text-base font-bold text-foreground mb-1">
+          <h3 className="text-base font-bold text-foreground mb-2">
             登录后解锁{pageName ? `${pageName}` : "完整功能"}
           </h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
@@ -96,7 +96,7 @@ export default function LoginPromptCard({
           立即登录
         </button>
 
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           安全登录 · 无需密码 · 支持 Web3 钱包
         </p>
       </div>

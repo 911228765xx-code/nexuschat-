@@ -139,7 +139,7 @@ export default function Leaderboard() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
                   activeTab === tab.key
                     ? `bg-${tab.color}/15 text-${tab.color} border border-${tab.color}/30`
                     : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
@@ -160,7 +160,7 @@ export default function Leaderboard() {
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
                 timeRange === range
                   ? "bg-foreground/10 text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -198,7 +198,7 @@ export default function Leaderboard() {
                 <AvatarFallback className="bg-secondary text-xl">{data.list[1]?.avatar?.startsWith("http") ? data.list[1]?.name?.slice(0,2).toUpperCase() : data.list[1]?.avatar}</AvatarFallback>
               </Avatar>
               <span className="text-xs font-medium truncate max-w-full text-center">{data.list[1]?.name}</span>
-              <span className="text-[10px] font-mono text-slate-400 mt-0.5">{data.list[1]?.value}</span>
+              <span className="text-xs font-mono text-slate-400 mt-0.5">{data.list[1]?.value}</span>
               <div className="w-full mt-2 pt-5 pb-3 rounded-t-2xl bg-gradient-to-t from-slate-400/15 to-transparent border-t-2 border-x-2 border-slate-400/25 flex items-center justify-center">
                 <span className="text-2xl">🥈</span>
               </div>
@@ -239,7 +239,7 @@ export default function Leaderboard() {
                 <AvatarFallback className="bg-secondary text-xl">{data.list[2]?.avatar?.startsWith("http") ? data.list[2]?.name?.slice(0,2).toUpperCase() : data.list[2]?.avatar}</AvatarFallback>
               </Avatar>
               <span className="text-xs font-medium truncate max-w-full text-center">{data.list[2]?.name}</span>
-              <span className="text-[10px] font-mono text-amber-700/80 mt-0.5">{data.list[2]?.value}</span>
+              <span className="text-xs font-mono text-amber-700/80 mt-0.5">{data.list[2]?.value}</span>
               <div className="w-full mt-2 pt-3 pb-3 rounded-t-2xl bg-gradient-to-t from-amber-700/15 to-transparent border-t-2 border-x-2 border-amber-700/25 flex items-center justify-center">
                 <span className="text-2xl">🥉</span>
               </div>
@@ -256,11 +256,11 @@ export default function Leaderboard() {
               <AvatarFallback className="bg-secondary text-base">{data.me.avatar?.startsWith("http") ? data.me.name?.slice(0,2).toUpperCase() : data.me.avatar}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2.5">
                 <span className="text-sm font-semibold">{data.me.name}</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20">{t("leaderboard.you")}</span>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20">{t("leaderboard.you")}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground">{t("leaderboard.thisWeek")}: {data.me.change}</span>
+              <span className="text-xs text-muted-foreground">{t("leaderboard.thisWeek")}: {data.me.change}</span>
             </div>
             <span className={`text-sm font-bold font-mono text-${getTabColor()}`}>{data.me.value}</span>
           </div>
@@ -283,7 +283,7 @@ export default function Leaderboard() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium truncate block">{entry.name}</span>
-                <span className="text-[10px] text-neon-green font-mono">{entry.change}</span>
+                <span className="text-xs text-neon-green font-mono">{entry.change}</span>
               </div>
               <span className="text-xs font-bold font-mono text-muted-foreground">{entry.value}</span>
             </motion.div>

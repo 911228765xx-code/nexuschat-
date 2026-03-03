@@ -20,7 +20,7 @@ export function DashboardLayoutSkeleton() {
 
         {/* User profile area at bottom */}
         <div className="absolute bottom-4 left-4 right-4">
-          <div className="flex items-center gap-3 px-1">
+          <div className="flex items-center gap-3 px-2">
             <Skeleton className="h-9 w-9 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3 w-20" />

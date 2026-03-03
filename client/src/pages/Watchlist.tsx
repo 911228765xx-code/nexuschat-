@@ -258,21 +258,21 @@ export default function Watchlist() {
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <button onClick={() => setLocation("/app/research")}
-              className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
+              className="p-2.5 rounded-lg text-muted-foreground hover:bg-secondary/40 transition-colors">
               <ArrowLeft size={18} />
             </button>
             <div>
-              <h1 className="text-base font-bold font-display flex items-center gap-1.5">
+              <h1 className="text-base font-bold font-display flex items-center gap-2.5">
                 <Star size={16} className="text-yellow-500" fill="currentColor" />
                 {t("research.watchlist")}
               </h1>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {watchlist.length} {t("research.tokens")} · {alertCount} {t("research.alerts")}
                 <span className="ml-1 text-neon-cyan/60">· Synced</span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
             <button onClick={() => { setIsEditing(!isEditing); setSelectedItems(new Set()); }}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 isEditing ? "bg-neon-red/15 text-neon-red" : "text-muted-foreground hover:bg-secondary/40"
@@ -280,7 +280,7 @@ export default function Watchlist() {
               {isEditing ? t("research.done") : <Edit3 size={14} />}
             </button>
             <button onClick={() => setShowAddModal(true)}
-              className="p-1.5 rounded-lg bg-neon-purple/15 text-neon-purple hover:bg-neon-purple/25 transition-colors">
+              className="p-2.5 rounded-lg bg-neon-purple/15 text-neon-purple hover:bg-neon-purple/25 transition-colors">
               <Plus size={16} />
             </button>
           </div>
@@ -294,14 +294,14 @@ export default function Watchlist() {
               placeholder={t("research.searchTokens")}
               className="w-full h-8 pl-8 pr-3 rounded-lg bg-secondary/50 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             {([
               { key: "aiScore" as SortKey, label: "AI" },
               { key: "change24h" as SortKey, label: "24h" },
               { key: "change7d" as SortKey, label: "7d" },
             ]).map((s) => (
               <button key={s.key} onClick={() => handleSort(s.key)}
-                className={`px-2 py-1 rounded text-[9px] font-mono font-medium transition-all flex items-center gap-0.5 ${
+                className={`px-2 py-1 rounded text-xs font-mono font-medium transition-all flex items-center gap-0.5 ${
                   sortKey === s.key ? "bg-neon-cyan/20 text-neon-cyan" : "text-muted-foreground hover:text-foreground"
                 }`}>
                 {s.label}
@@ -320,7 +320,7 @@ export default function Watchlist() {
             <div className="flex items-center justify-between px-4 py-2 bg-neon-red/5">
               <span className="text-xs text-muted-foreground">{selectedItems.size} {t("research.selected")}</span>
               <button onClick={handleBulkRemove}
-                className="flex items-center gap-1 px-3 py-1 rounded-lg bg-neon-red/15 text-neon-red text-xs font-medium hover:bg-neon-red/25 transition-colors">
+                className="flex items-center gap-2 px-3 py-1 rounded-lg bg-neon-red/15 text-neon-red text-xs font-medium hover:bg-neon-red/25 transition-colors">
                 <Trash2 size={12} /> {t("research.removeSelected")}
               </button>
             </div>
@@ -343,7 +343,7 @@ export default function Watchlist() {
           sorted.map((item, idx) => (
             <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.03 }}
-              className="p-3 rounded-2xl bg-secondary/20 border border-border/15 hover:border-neon-purple/20 transition-all">
+              className="p-4 rounded-2xl bg-secondary/20 border border-border/15 hover:border-neon-purple/20 transition-all">
               <div className="flex items-center gap-3">
                 {/* Edit checkbox */}
                 {isEditing && (
@@ -368,24 +368,24 @@ export default function Watchlist() {
 
                 {/* Token Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2.5">
                     <span className="text-sm font-bold font-mono">{item.token}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
+                    <span className={`px-2.5 py-1 rounded text-xs font-medium ${signalBg(item.signal)} ${signalColor(item.signal)}`}>
                       {signalLabel(item.signal)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-muted-foreground">{item.category}</span>
-                    <span className="text-[10px] text-muted-foreground">·</span>
-                    <span className="text-[10px] text-muted-foreground">{item.marketCap}</span>
+                    <span className="text-xs text-muted-foreground">{item.category}</span>
+                    <span className="text-xs text-muted-foreground">·</span>
+                    <span className="text-xs text-muted-foreground">{item.marketCap}</span>
                   </div>
                 </div>
 
                 {/* Price & Change */}
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold font-mono">{item.price}</p>
-                  <div className="flex items-center justify-end gap-1 mt-0.5">
-                    <span className={`text-[10px] font-mono font-medium flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
+                  <div className="flex items-center justify-end gap-2 mt-0.5">
+                    <span className={`text-xs font-mono font-medium flex items-center gap-0.5 ${item.change24h >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                       {item.change24h >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
                       {Math.abs(item.change24h).toFixed(1)}%
                     </span>
@@ -394,17 +394,17 @@ export default function Watchlist() {
 
                 {/* Actions */}
                 {!isEditing && (
-                  <div className="flex flex-col gap-1 shrink-0">
+                  <div className="flex flex-col gap-2 shrink-0">
                     <button
                       onClick={() => {
                         if (editingAlert === item.id) { setEditingAlert(null); setAlertInput(""); }
                         else { setEditingAlert(item.id); setAlertInput(item.alertPrice); }
                       }}
-                      className={`p-1.5 rounded-lg transition-colors ${item.alertEnabled ? "text-neon-cyan bg-neon-cyan/10" : "text-muted-foreground hover:bg-secondary/40"}`}>
+                      className={`p-2.5 rounded-lg transition-colors ${item.alertEnabled ? "text-neon-cyan bg-neon-cyan/10" : "text-muted-foreground hover:bg-secondary/40"}`}>
                       {item.alertEnabled ? <Bell size={13} /> : <BellOff size={13} />}
                     </button>
                     <button onClick={() => handleRemove(item.id)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:bg-neon-red/10 hover:text-neon-red transition-colors">
+                      className="p-2.5 rounded-lg text-muted-foreground hover:bg-neon-red/10 hover:text-neon-red transition-colors">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -418,7 +418,7 @@ export default function Watchlist() {
                   <div className="h-full rounded-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all"
                     style={{ width: `${(item.aiScore / 10) * 100}%` }} />
                 </div>
-                <span className="text-[10px] font-mono text-neon-purple shrink-0">{item.aiScore.toFixed(1)}</span>
+                <span className="text-xs font-mono text-neon-purple shrink-0">{item.aiScore.toFixed(1)}</span>
               </div>
 
               {/* Alert Input */}
@@ -430,10 +430,10 @@ export default function Watchlist() {
                       <Bell size={12} className="text-neon-cyan shrink-0" />
                       <input type="number" value={alertInput} onChange={(e) => setAlertInput(e.target.value)}
                         placeholder={`${t("research.alertPrice")} (USD)`}
-                        className="flex-1 h-7 px-2 rounded-lg bg-background/40 border border-border/20 text-[11px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50"
+                        className="flex-1 h-7 px-2 rounded-lg bg-background/40 border border-border/20 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50"
                         autoFocus />
                       <button onClick={() => handleSetAlert(item.id)}
-                        className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-[10px] font-medium hover:bg-neon-cyan/30 transition-colors">
+                        className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-xs font-medium hover:bg-neon-cyan/30 transition-colors">
                         <Check size={12} />
                       </button>
                       <button onClick={() => { setEditingAlert(null); setAlertInput(""); }}
@@ -453,10 +453,10 @@ export default function Watchlist() {
 
               {/* Alert Badge */}
               {item.alertEnabled && editingAlert !== item.id && (
-                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border/10">
+                <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-border/10">
                   <Bell size={10} className="text-neon-cyan" />
-                  <span className="text-[10px] text-muted-foreground">{t("research.alertAt")}</span>
-                  <span className="text-[10px] font-mono font-semibold text-neon-cyan">${item.alertPrice}</span>
+                  <span className="text-xs text-muted-foreground">{t("research.alertAt")}</span>
+                  <span className="text-xs font-mono font-semibold text-neon-cyan">${item.alertPrice}</span>
                 </div>
               )}
             </motion.div>
@@ -475,11 +475,11 @@ export default function Watchlist() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-lg bg-card border-t border-border/30 rounded-t-3xl p-4 space-y-4 max-h-[70vh]">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold font-display flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold font-display flex items-center gap-2.5">
                   <Plus size={14} className="text-neon-purple" />
                   {t("research.addToWatchlist")}
                 </h3>
-                <button onClick={() => setShowAddModal(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                <button onClick={() => setShowAddModal(false)} className="p-2 text-muted-foreground hover:text-foreground">
                   <X size={16} />
                 </button>
               </div>
@@ -489,7 +489,7 @@ export default function Watchlist() {
                   placeholder={t("research.searchTokens")}
                   className="w-full h-9 pl-8 pr-3 rounded-xl bg-secondary/50 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
               </div>
-              <div className="space-y-1.5 overflow-y-auto max-h-[40vh]">
+              <div className="space-y-2.5 overflow-y-auto max-h-[40vh]">
                 {filteredAvailable.length === 0 ? (
                   <p className="text-center text-xs text-muted-foreground py-8">{t("research.noTokensFound")}</p>
                 ) : (
@@ -498,10 +498,10 @@ export default function Watchlist() {
                       <span className="text-lg">{token.icon}</span>
                       <div className="flex-1">
                         <p className="text-xs font-bold">{token.token}</p>
-                        <p className="text-[10px] text-muted-foreground">{token.price} · {token.category}</p>
+                        <p className="text-xs text-muted-foreground">{token.price} · {token.category}</p>
                       </div>
                       <button onClick={() => handleAdd(token)}
-                        className="px-3 py-1.5 rounded-lg bg-neon-purple/15 text-neon-purple text-[10px] font-medium hover:bg-neon-purple/25 transition-colors">
+                        className="px-3 py-1.5 rounded-lg bg-neon-purple/15 text-neon-purple text-xs font-medium hover:bg-neon-purple/25 transition-colors">
                         <Plus size={10} className="inline mr-0.5" /> {t("research.add")}
                       </button>
                     </div>

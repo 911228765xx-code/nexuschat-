@@ -182,12 +182,12 @@ export default function Notifications() {
             <Bell size={20} className="text-neon-cyan" />
             <h1 className="text-lg font-semibold font-display">{t("notifications.title")}</h1>
             {unreadCount > 0 && (
-              <span className="min-w-5 h-5 px-1.5 rounded-full bg-neon-red flex items-center justify-center">
-                <span className="text-[10px] font-bold text-white">{unreadCount}</span>
+              <span className="min-w-5 h-5 px-2.5 rounded-full bg-neon-red flex items-center justify-center">
+                <span className="text-xs font-bold text-white">{unreadCount}</span>
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={markAllRead}
               className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors"
@@ -215,7 +215,7 @@ export default function Notifications() {
               <button
                 key={tab.key}
                 onClick={() => setActiveFilter(tab.key)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeFilter === tab.key
                     ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30"
                     : "bg-secondary/40 text-muted-foreground border border-border/20 hover:bg-secondary/60"
@@ -224,7 +224,7 @@ export default function Notifications() {
                 <Icon size={12} />
                 {t(tab.labelKey)}
                 {count > 0 && (
-                  <span className="min-w-4 h-4 px-1 rounded-full bg-neon-red/80 text-[9px] text-white font-bold flex items-center justify-center">
+                  <span className="min-w-4 h-4 px-2 rounded-full bg-neon-red/80 text-xs text-white font-bold flex items-center justify-center">
                     {count}
                   </span>
                 )}
@@ -272,7 +272,7 @@ export default function Notifications() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2.5">
                         <span className={`text-sm font-medium font-display truncate ${!notification.read ? "text-foreground" : "text-muted-foreground"}`}>
                           {notification.title}
                         </span>
@@ -286,14 +286,14 @@ export default function Notifications() {
 
                       {/* Signal metadata */}
                       {notification.type === "signal" && (notification as any).data && (
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-secondary/40">
+                        <div className="flex items-center gap-2 mt-2.5">
+                          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-secondary/40">
                             {((notification as any).data.token) as string}
                           </span>
-                          <span className="text-[10px] font-mono text-neon-green">
+                          <span className="text-xs font-mono text-neon-green">
                             {((notification as any).data.change) as string}
                           </span>
-                          <span className="text-[10px] flex items-center gap-0.5 text-neon-purple">
+                          <span className="text-xs flex items-center gap-0.5 text-neon-purple">
                             <Sparkles size={8} />
                             {((notification as any).data.score) as string}
                           </span>
@@ -301,8 +301,8 @@ export default function Notifications() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[10px] text-muted-foreground">{notification.time}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground">{notification.time}</span>
                     </div>
                   </div>
 
@@ -314,7 +314,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           acceptFriendRequest(notification);
                         }}
-                        className="px-3 py-1 rounded-lg bg-neon-cyan/15 text-neon-cyan text-[11px] font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-all"
+                        className="px-3 py-1 rounded-lg bg-neon-cyan/15 text-neon-cyan text-[13px] font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-all"
                       >
                         {t("notifications.accept")}
                       </button>
@@ -323,7 +323,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           declineFriendRequest(notification.id);
                         }}
-                        className="px-3 py-1 rounded-lg bg-secondary/40 text-muted-foreground text-[11px] font-medium border border-border/20 hover:bg-secondary/60 transition-all"
+                        className="px-3 py-1 rounded-lg bg-secondary/40 text-muted-foreground text-[13px] font-medium border border-border/20 hover:bg-secondary/60 transition-all"
                       >
                         {t("notifications.decline")}
                       </button>
@@ -333,7 +333,7 @@ export default function Notifications() {
                   {/* Show action result */}
                   {notification.type === "friend_request" && notification.actionTaken && (
                     <div className="mt-2">
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">
+                      <span className="text-[13px] font-medium px-2 py-1 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20">
                         {t("notifications.accepted")}
                       </span>
                     </div>
@@ -347,7 +347,7 @@ export default function Notifications() {
               <div className="flex justify-center py-6">
                 <button
                   onClick={clearAll}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs text-muted-foreground hover:text-neon-red hover:bg-neon-red/5 border border-border/20 transition-all"
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs text-muted-foreground hover:text-neon-red hover:bg-neon-red/5 border border-border/20 transition-all"
                 >
                   <Trash2 size={13} />
                   {t("notifications.clearAll")}
@@ -393,7 +393,7 @@ export default function Notifications() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{t("notifications.quietHours")}</p>
-                      <p className="text-[11px] text-muted-foreground">{t("notifications.quietHoursDesc")}</p>
+                      <p className="text-[13px] text-muted-foreground">{t("notifications.quietHoursDesc")}</p>
                     </div>
                   </div>
                   <button
@@ -434,7 +434,7 @@ export default function Notifications() {
                           <p className={`text-sm font-medium ${enabled ? "" : "text-muted-foreground"}`}>
                             {t(setting.labelKey)}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">{t(setting.descKey)}</p>
+                          <p className="text-[13px] text-muted-foreground">{t(setting.descKey)}</p>
                         </div>
                       </div>
                       <button
@@ -463,7 +463,7 @@ export default function Notifications() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{t("notifications.sound")}</p>
-                      <p className="text-[11px] text-muted-foreground">{t("notifications.soundDesc")}</p>
+                      <p className="text-[13px] text-muted-foreground">{t("notifications.soundDesc")}</p>
                     </div>
                   </div>
                   <button
@@ -485,7 +485,7 @@ export default function Notifications() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{t("notifications.vibration")}</p>
-                      <p className="text-[11px] text-muted-foreground">{t("notifications.vibrationDesc")}</p>
+                      <p className="text-[13px] text-muted-foreground">{t("notifications.vibrationDesc")}</p>
                     </div>
                   </div>
                   <button

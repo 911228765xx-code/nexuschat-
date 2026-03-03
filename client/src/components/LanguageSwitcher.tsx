@@ -18,7 +18,7 @@ export default function LanguageSwitcher({ className = "" }: { className?: strin
     <div ref={ref} className={`relative ${className}`}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00d4ff]/40 hover:bg-white/10 transition-all text-sm"
+        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00d4ff]/40 hover:bg-white/10 transition-all text-sm"
       >
         <span className="text-lg leading-none">{localeInfo.flag}</span>
         <span className="text-gray-300 hidden sm:inline">{localeInfo.name}</span>

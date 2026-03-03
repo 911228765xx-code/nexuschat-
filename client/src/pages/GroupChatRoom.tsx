@@ -128,7 +128,7 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
         ))}
         {/* Fallback when receipts not yet loaded: show checkmark + count */}
         {!receipts && (
-          <span className="flex items-center gap-0.5 text-[10px] text-neon-cyan">
+          <span className="flex items-center gap-0.5 text-xs text-neon-cyan">
             <CheckCheck size={10} />
             {readCount}
           </span>
@@ -136,8 +136,8 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
       </div>
       {/* Tooltip */}
       {showTooltip && receipts && receipts.length > 0 && (
-        <div className="absolute bottom-5 right-0 z-50 bg-card border border-border/40 rounded-lg px-2 py-1.5 shadow-lg min-w-[100px] text-[10px] text-foreground whitespace-nowrap">
-          <p className="text-muted-foreground mb-1">已读 {readCount} 人</p>
+        <div className="absolute bottom-5 right-0 z-50 bg-card border border-border/40 rounded-lg px-2 py-1.5 shadow-lg min-w-[100px] text-xs text-foreground whitespace-nowrap">
+          <p className="text-muted-foreground mb-2">已读 {readCount} 人</p>
           {receipts.slice(0, 5).map(r => (
             <p key={r.userId} className="truncate">{r.name}</p>
           ))}
@@ -151,7 +151,7 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
 function renderMessageContent(msg: GroupMessage) {
   if (msg.messageType === "image" && msg.mediaUrl) {
     return (
-      <div className="mt-1">
+      <div className="mt-2">
         <img src={msg.mediaUrl} alt="Image" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer" loading="lazy" onClick={() => window.open(msg.mediaUrl, "_blank")} />
       </div>
     );
@@ -162,10 +162,10 @@ function renderMessageContent(msg: GroupMessage) {
       /\.(webm|mp3|ogg|m4a|wav|mp4)$/i.test(msg.mediaUrl);
     if (isVoice) {
       return (
-        <div className="mt-1 max-w-[220px]">
-          <div className="flex items-center gap-1.5 mb-1">
+        <div className="mt-2 max-w-[220px]">
+          <div className="flex items-center gap-2.5 mb-2">
             <Mic size={12} className="text-neon-cyan" />
-            <span className="text-[10px] text-muted-foreground">{msg.fileName ?? "语音消息"}</span>
+            <span className="text-xs text-muted-foreground">{msg.fileName ?? "语音消息"}</span>
           </div>
           <audio
             controls
@@ -177,11 +177,11 @@ function renderMessageContent(msg: GroupMessage) {
       );
     }
     return (
-      <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-1 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
+      <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
         <File size={18} className="text-neon-cyan shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium truncate">{msg.fileName ?? "File"}</p>
-          {msg.fileSize && <p className="text-[10px] text-muted-foreground">{formatFileSize(msg.fileSize)}</p>}
+          {msg.fileSize && <p className="text-xs text-muted-foreground">{formatFileSize(msg.fileSize)}</p>}
         </div>
         <Download size={14} className="text-muted-foreground shrink-0" />
       </a>
@@ -643,14 +643,14 @@ export default function GroupChatRoom() {
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold font-display truncate">{groupInfo?.name ?? "Group Chat"}</h2>
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
               <Users size={10} />
               {members.length} {t("group.members")} · {onlineCount} {t("group.online")}
             </p>
           </div>
           <button onClick={() => setShowSidebar(true)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors relative">
             <Users size={18} className="text-muted-foreground" />
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-neon-green text-[8px] text-background font-bold flex items-center justify-center">{onlineCount}</span>
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-neon-green text-[13px] text-background font-bold flex items-center justify-center">{onlineCount}</span>
           </button>
           <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
             <MoreVertical size={18} className="text-muted-foreground" />
@@ -676,8 +676,8 @@ export default function GroupChatRoom() {
         <div className="flex items-start gap-2">
           <Megaphone size={14} className="text-neon-purple shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-foreground leading-relaxed line-clamp-2">{announcement.content}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{announcement.author} · {announcement.time}</p>
+            <p className="text-[13px] text-foreground leading-relaxed line-clamp-2">{announcement.content}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{announcement.author} · {announcement.time}</p>
           </div>
           <button onClick={() => setShowAnnouncement(false)} className="w-5 h-5 flex items-center justify-center rounded hover:bg-secondary/60 transition-colors shrink-0">
             <X size={12} className="text-muted-foreground" />
@@ -686,10 +686,10 @@ export default function GroupChatRoom() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
         {hasMore && (
           <div className="flex justify-center py-2">
-            <button onClick={loadMoreMessages} disabled={isLoadingMore} className="text-xs text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-1.5">
+            <button onClick={loadMoreMessages} disabled={isLoadingMore} className="text-xs text-muted-foreground hover:text-foreground px-4 py-1.5 rounded-full border border-border/40 hover:border-border/80 transition-colors disabled:opacity-50 flex items-center gap-2.5">
               {isLoadingMore ? (<><svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>加载中...</>) : "加载更多消息"}
             </button>
           </div>
@@ -708,7 +708,7 @@ export default function GroupChatRoom() {
               >
                 <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                   {!msg.isMine && (
-                    <Avatar className={`w-7 h-7 shrink-0 mt-1 ${msg.isAI ? "ring-1 ring-neon-purple/50" : ""}`}>
+                    <Avatar className={`w-7 h-7 shrink-0 mt-2 ${msg.isAI ? "ring-1 ring-neon-purple/50" : ""}`}>
                       {msg.senderAvatar?.startsWith("http") && <AvatarImage src={msg.senderAvatar} alt={msg.sender} className="object-cover" loading="lazy" />}
                       <AvatarFallback className="bg-secondary text-xs">{msg.senderAvatar?.startsWith("http") ? (msg.sender?.[0]?.toUpperCase() ?? "?") : (msg.senderAvatar ?? "?")}</AvatarFallback>
                     </Avatar>
@@ -720,16 +720,16 @@ export default function GroupChatRoom() {
                     onTouchMove={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
                   >
                     {!msg.isMine && (
-                      <div className="flex items-center gap-1 mb-0.5 px-1">
+                      <div className="flex items-center gap-2 mb-0.5 px-2">
                         {getRoleBadge(msg.senderRole)}
-                        <span className={`text-[11px] font-medium ${msg.senderRole === "owner" ? "text-amber-400" : msg.senderRole === "admin" ? "text-neon-cyan" : "text-muted-foreground"}`}>
+                        <span className={`text-[13px] font-medium ${msg.senderRole === "owner" ? "text-amber-400" : msg.senderRole === "admin" ? "text-neon-cyan" : "text-muted-foreground"}`}>
                           {msg.sender}
                         </span>
                       </div>
                     )}
 
                     {msg.replyTo && (
-                      <div className={`flex items-center gap-1.5 mb-1 px-3 py-1.5 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40 text-[11px] text-muted-foreground ${msg.isMine ? "ml-auto" : ""}`}>
+                      <div className={`flex items-center gap-2.5 mb-2 px-3 py-1.5 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40 text-[13px] text-muted-foreground ${msg.isMine ? "ml-auto" : ""}`}>
                         <Reply size={10} className="shrink-0 text-neon-cyan" />
                         <span className="text-neon-cyan font-medium">{msg.replyTo.sender}</span>
                         <span className="truncate">{msg.replyTo.content}</span>
@@ -742,7 +742,7 @@ export default function GroupChatRoom() {
                       : "bg-secondary/60 text-foreground rounded-bl-md border border-border/20"
                     } ${msg.pending ? "opacity-60" : "opacity-100"}`}>
                       {msg.isAI && (
-                        <div className="flex items-center gap-1 mb-1.5 text-[10px] text-neon-purple font-mono">
+                        <div className="flex items-center gap-2 mb-2.5 text-xs text-neon-purple font-mono">
                           <Bot size={12} />NexusBot AI
                         </div>
                       )}
@@ -777,7 +777,7 @@ export default function GroupChatRoom() {
 
                     {/* Emoji picker popup */}
                     {emojiPickerMsgId === msg.id && (
-                      <div ref={emojiRef} className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}>
+                      <div ref={emojiRef} className={`absolute z-20 ${msg.isMine ? "right-0" : "left-0"} -top-12 flex items-center gap-2 px-2 py-1.5 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150`}>
                         {EMOJI_LIST.map((emoji) => (
                           <button key={emoji} onClick={() => handleReaction(msg.id, emoji)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-lg hover:scale-125 transform">
                             {emoji}
@@ -787,8 +787,8 @@ export default function GroupChatRoom() {
                     )}
 
                     {/* Reactions + time + read receipt */}
-                    <div className={`flex items-center gap-1 mt-1 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
-                      <span className="text-[10px] text-muted-foreground">{msg.time}</span>
+                    <div className={`flex items-center gap-2 mt-2 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
+                      <span className="text-xs text-muted-foreground">{msg.time}</span>
                       {/* Read receipt for own messages — avatar stack */}
                       {msg.isMine && !msg.pending && readCount > 0 && (
                         <ReadReceiptAvatars messageId={numericId} readCount={readCount} />
@@ -809,10 +809,10 @@ export default function GroupChatRoom() {
                         <button
                           key={emoji}
                           onClick={() => handleReaction(msg.id, emoji)}
-                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-colors text-xs ${data.mine ? "bg-neon-cyan/20 border border-neon-cyan/30" : "bg-secondary/50 hover:bg-secondary/80"}`}
+                          className={`flex items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors text-xs ${data.mine ? "bg-neon-cyan/20 border border-neon-cyan/30" : "bg-secondary/50 hover:bg-secondary/80"}`}
                         >
                           <span>{emoji}</span>
-                          <span className="text-[10px] text-muted-foreground">{data.count}</span>
+                          <span className="text-xs text-muted-foreground">{data.count}</span>
                         </button>
                       ))}
                     </div>
@@ -829,8 +829,8 @@ export default function GroupChatRoom() {
           <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-secondary/30 border-l-2 border-neon-cyan/40">
             <Reply size={14} className="text-neon-cyan shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-neon-cyan font-medium">{replyTo.sender}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{replyTo.content}</p>
+              <p className="text-[13px] text-neon-cyan font-medium">{replyTo.sender}</p>
+              <p className="text-[13px] text-muted-foreground truncate">{replyTo.content}</p>
             </div>
             <button onClick={() => setReplyTo(null)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-secondary/60 transition-colors">
               <X size={14} className="text-muted-foreground" />
@@ -842,13 +842,13 @@ export default function GroupChatRoom() {
           {showMentionMenu && filteredMentionMembers.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="mb-2 rounded-xl bg-popover [backdrop-filter:none] border border-border shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
               <div className="px-3 py-1.5 border-b border-border/30">
-                <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1"><AtSign size={10} />{t("group.mentionMember")}</p>
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-2"><AtSign size={10} />{t("group.mentionMember")}</p>
               </div>
               {filteredMentionMembers.map((member) => (
                 <button key={member.id} onClick={() => insertMention(member.name)} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/50 transition-colors">
                   <Avatar className="w-7 h-7">{member.avatar?.startsWith("http") && <AvatarImage src={member.avatar} alt={member.name} className="object-cover" loading="lazy" />}<AvatarFallback className="bg-secondary text-xs">{member.avatar?.startsWith("http") ? (member.name?.[0]?.toUpperCase() ?? "?") : (member.avatar ?? "?")}</AvatarFallback></Avatar>
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-1">{getRoleBadge(member.role)}<span className="text-xs font-medium truncate">{member.name}</span></div>
+                    <div className="flex items-center gap-2">{getRoleBadge(member.role)}<span className="text-xs font-medium truncate">{member.name}</span></div>
                   </div>
                 </button>
               ))}
@@ -856,7 +856,7 @@ export default function GroupChatRoom() {
           )}
         </AnimatePresence>
 
-        <div className="flex items-end gap-1.5">
+        <div className="flex items-end gap-2.5">
           {/* File upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -976,17 +976,17 @@ export default function GroupChatRoom() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2.5">
                       <h4 className="font-display font-bold text-sm truncate">{groupInfo?.name ?? "Group"}</h4>
-                      {groupInfo?.isTokenGated && <span className="text-[9px] px-1.5 py-0 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 shrink-0">🔒</span>}
+                      {groupInfo?.isTokenGated && <span className="text-xs px-2.5 py-0 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 shrink-0">🔒</span>}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">{members.length} {t("group.members")} · {onlineCount} online</p>
+                    <p className="text-[13px] text-muted-foreground">{members.length} {t("group.members")} · {onlineCount} online</p>
                   </div>
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="p-3 border-b border-border/20 grid grid-cols-4 gap-1">
+              <div className="p-3 border-b border-border/20 grid grid-cols-4 gap-2">
                 {[
                   { icon: Search, label: t("group.search"), action: () => { setShowSidebar(false); setShowSearch(true); } },
                   { icon: isMuted ? BellOff : Bell, label: isMuted ? t("group.unmute") : t("group.mute"), action: () => { setIsMuted(!isMuted); toast.success(isMuted ? "Notifications enabled" : "Group muted"); } },
@@ -995,9 +995,9 @@ export default function GroupChatRoom() {
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <button key={item.label} onClick={item.action} className="flex flex-col items-center gap-1 py-2 rounded-xl hover:bg-secondary/40 transition-colors">
+                    <button key={item.label} onClick={item.action} className="flex flex-col items-center gap-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors">
                       <Icon size={16} className="text-muted-foreground" />
-                      <span className="text-[9px] text-muted-foreground">{item.label}</span>
+                      <span className="text-xs text-muted-foreground">{item.label}</span>
                     </button>
                   );
                 })}
@@ -1009,10 +1009,10 @@ export default function GroupChatRoom() {
                   onClick={() => setAnnouncementExpanded(!announcementExpanded)}
                   className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-secondary/20 transition-colors"
                 >
-                  <h5 className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Megaphone size={12} />Group Announcement</h5>
-                  <div className="flex items-center gap-1">
+                  <h5 className="text-xs font-medium text-muted-foreground flex items-center gap-2"><Megaphone size={12} />Group Announcement</h5>
+                  <div className="flex items-center gap-2">
                     {isAdminOrOwner && (
-                      <span onClick={(e) => { e.stopPropagation(); setIsEditingAnnouncement(true); setEditAnnouncementText(announcement.content); setAnnouncementExpanded(true); setTimeout(() => announcementInputRef.current?.focus(), 100); }} className="text-[10px] text-neon-cyan hover:underline flex items-center gap-0.5 px-1">
+                      <span onClick={(e) => { e.stopPropagation(); setIsEditingAnnouncement(true); setEditAnnouncementText(announcement.content); setAnnouncementExpanded(true); setTimeout(() => announcementInputRef.current?.focus(), 100); }} className="text-xs text-neon-cyan hover:underline flex items-center gap-0.5 px-2">
                         <Settings size={10} />Edit
                       </span>
                     )}
@@ -1025,7 +1025,7 @@ export default function GroupChatRoom() {
                       <div className="space-y-2">
                         <textarea ref={announcementInputRef} value={editAnnouncementText} onChange={(e) => setEditAnnouncementText(e.target.value)} className="w-full h-20 px-3 py-2 rounded-xl bg-secondary/40 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none" placeholder="Write group announcement..." maxLength={300} />
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-muted-foreground">{editAnnouncementText.length}/300</span>
+                          <span className="text-xs text-muted-foreground">{editAnnouncementText.length}/300</span>
                           <div className="flex gap-2">
                             <button onClick={() => setIsEditingAnnouncement(false)} className="px-3 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">Cancel</button>
                             <button onClick={() => { if (editAnnouncementText.trim()) { setAnnouncement({ content: editAnnouncementText, author: user?.name ?? "Admin", time: "Just now" }); setIsEditingAnnouncement(false); setShowAnnouncement(true); toast.success("Announcement updated!"); } }} className="px-3 py-1 rounded-lg text-xs bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors">Save</button>
@@ -1043,7 +1043,7 @@ export default function GroupChatRoom() {
               <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <h5 className="text-xs font-medium text-muted-foreground">{t("group.members")} ({members.length})</h5>
-                  <span className="text-[10px] text-neon-green">{onlineCount} {t("group.online")}</span>
+                  <span className="text-xs text-neon-green">{onlineCount} {t("group.online")}</span>
                 </div>
                 {(showAllMembers ? members : members.slice(0, 8)).map((member) => (
                   <button key={member.id} className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors" onClick={() => setMemberActionTarget(member)}>
@@ -1052,11 +1052,11 @@ export default function GroupChatRoom() {
                       <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${getStatusColor(member.status)}`} />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2">
                         {getRoleBadge(member.role)}
                         <span className="text-xs font-medium truncate">{member.name}</span>
-                        {member.role === "owner" && <span className="text-[8px] px-1 py-0 rounded bg-amber-400/10 text-amber-400 border border-amber-400/20">Owner</span>}
-                        {member.role === "admin" && <span className="text-[8px] px-1 py-0 rounded bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20">Admin</span>}
+                        {member.role === "owner" && <span className="text-[13px] px-2 py-0 rounded bg-amber-400/10 text-amber-400 border border-amber-400/20">Owner</span>}
+                        {member.role === "admin" && <span className="text-[13px] px-2 py-0 rounded bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20">Admin</span>}
                       </div>
                     </div>
                     <ChevronRight size={14} className="text-muted-foreground/50 shrink-0" />
@@ -1065,7 +1065,7 @@ export default function GroupChatRoom() {
                 {members.length > 8 && (
                   <button
                     onClick={() => setShowAllMembers(!showAllMembers)}
-                    className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors mt-1"
+                    className="w-full flex items-center justify-center gap-2 py-1.5 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors mt-2"
                   >
                     {showAllMembers ? (
                       <><ChevronUp size={12} />Show less</>
@@ -1092,8 +1092,8 @@ export default function GroupChatRoom() {
                       <div className="flex items-center gap-3 pb-3 border-b border-border/20">
                         <Avatar className="w-12 h-12">{memberActionTarget.avatar?.startsWith("http") && <AvatarImage src={memberActionTarget.avatar} alt={memberActionTarget.name} className="object-cover" loading="lazy" />}<AvatarFallback className="bg-secondary text-lg">{memberActionTarget.avatar?.startsWith("http") ? (memberActionTarget.name?.[0]?.toUpperCase() ?? "?") : (memberActionTarget.avatar ?? "?")}</AvatarFallback></Avatar>
                         <div>
-                          <div className="flex items-center gap-1.5">{getRoleBadge(memberActionTarget.role)}<span className="font-semibold font-display text-sm">{memberActionTarget.name}</span></div>
-                          <p className="text-[10px] text-muted-foreground capitalize">{memberActionTarget.role}</p>
+                          <div className="flex items-center gap-2.5">{getRoleBadge(memberActionTarget.role)}<span className="font-semibold font-display text-sm">{memberActionTarget.name}</span></div>
+                          <p className="text-xs text-muted-foreground capitalize">{memberActionTarget.role}</p>
                         </div>
                       </div>
 
@@ -1186,15 +1186,15 @@ export default function GroupChatRoom() {
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">群组名称</label>
+                  <label className="text-xs text-muted-foreground mb-2.5 block">群组名称</label>
                   <input value={editGroupName} onChange={e => setEditGroupName(e.target.value)} maxLength={50} placeholder="输入群组名称" className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">群组描述</label>
+                  <label className="text-xs text-muted-foreground mb-2.5 block">群组描述</label>
                   <textarea value={editGroupDesc} onChange={e => setEditGroupDesc(e.target.value)} maxLength={200} rows={3} placeholder="群组简介..." className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">群组头像 URL（可选）</label>
+                  <label className="text-xs text-muted-foreground mb-2.5 block">群组头像 URL（可选）</label>
                   <input value={editGroupAvatar} onChange={e => setEditGroupAvatar(e.target.value)} placeholder="https://... 或输入 emoji" className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
                 </div>
                 <button onClick={() => updateGroupInfoMutation.mutate({ groupId, name: editGroupName.trim() || undefined, description: editGroupDesc.trim() || undefined, avatar: editGroupAvatar.trim() || undefined })} disabled={updateGroupInfoMutation.isPending} className="w-full py-3 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors text-sm font-medium disabled:opacity-50">
@@ -1213,16 +1213,16 @@ export default function GroupChatRoom() {
             <div className="flex items-center gap-2">
               <Search size={15} className="text-muted-foreground shrink-0" />
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="搜索消息..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
-              {searchQuery && <span className="text-[10px] text-muted-foreground">{searchResults.length} 条</span>}
+              {searchQuery && <span className="text-xs text-muted-foreground">{searchResults.length} 条</span>}
               <button onClick={() => { setShowSearch(false); setSearchQuery(""); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
                 <X size={14} />
               </button>
             </div>
             {searchQuery && searchResults.length > 0 && (
-              <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+              <div className="mt-2 max-h-48 overflow-y-auto space-y-2">
                 {searchResults.map(m => (
                   <button key={m.id} onClick={() => { const el = document.getElementById(`msg-${m.id}`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.classList.add("ring-2", "ring-neon-cyan/50"); setTimeout(() => el?.classList.remove("ring-2", "ring-neon-cyan/50"), 2000); setShowSearch(false); setSearchQuery(""); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-secondary/40 transition-colors">
-                    <p className="text-[10px] text-muted-foreground">{m.sender} · {m.time}</p>
+                    <p className="text-xs text-muted-foreground">{m.sender} · {m.time}</p>
                     <p className="text-xs text-foreground truncate">{m.content}</p>
                   </button>
                 ))}

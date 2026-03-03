@@ -93,7 +93,7 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-green">{totalInvited}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.totalInvited")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("invite.totalInvited")}</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-background/40">
               {statsLoading ? (
@@ -101,7 +101,7 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-cyan">{activeInvited}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.activeUsers")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("invite.activeUsers")}</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-background/40">
               {statsLoading ? (
@@ -109,13 +109,13 @@ export default function InviteFriends() {
               ) : (
                 <p className="text-2xl font-bold font-mono text-neon-purple">{totalRewards.toLocaleString()}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.npEarned")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("invite.npEarned")}</p>
             </div>
           </div>
 
           {/* Invite Code */}
           <div className="p-3.5 rounded-xl bg-background/60 border border-border/30">
-            <p className="text-[10px] text-muted-foreground mb-1.5">{t("invite.yourCode")}</p>
+            <p className="text-xs text-muted-foreground mb-2.5">{t("invite.yourCode")}</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-lg font-bold font-mono text-neon-green tracking-wider">
                 {statsLoading ? "..." : inviteCode}
@@ -168,7 +168,7 @@ export default function InviteFriends() {
               </div>
               <div>
                 <p className="text-xs font-medium">{t("invite.inviterReward")}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.inviterRewardDesc")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("invite.inviterRewardDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-green shrink-0">+500 NP</span>
             </div>
@@ -178,7 +178,7 @@ export default function InviteFriends() {
               </div>
               <div>
                 <p className="text-xs font-medium">{t("invite.inviteeReward")}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.inviteeRewardDesc")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("invite.inviteeRewardDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-cyan shrink-0">+200 NP</span>
             </div>
@@ -188,7 +188,7 @@ export default function InviteFriends() {
               </div>
               <div>
                 <p className="text-xs font-medium">{t("invite.tradingBonus")}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("invite.tradingBonusDesc")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("invite.tradingBonusDesc")}</p>
               </div>
               <span className="text-sm font-bold font-mono text-neon-purple shrink-0">10%</span>
             </div>
@@ -236,11 +236,11 @@ export default function InviteFriends() {
                           <span className="text-xs font-medium">{t("invite.invite")} {tier.count} {t("invite.friends")}</span>
                           {tier.unlocked && <CheckCircle2 size={12} className="text-neon-green" />}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{tier.reward}</p>
+                        <p className="text-xs text-muted-foreground">{tier.reward}</p>
                       </div>
                       {!tier.unlocked && (
-                        <div className="px-2 py-0.5 rounded-full bg-secondary/40 border border-border/20">
-                          <span className="text-[9px] text-muted-foreground">{totalInvited}/{tier.count}</span>
+                        <div className="px-2 py-1 rounded-full bg-secondary/40 border border-border/20">
+                          <span className="text-xs text-muted-foreground">{totalInvited}/{tier.count}</span>
                         </div>
                       )}
                     </div>
@@ -265,7 +265,7 @@ export default function InviteFriends() {
                       </div>
                       <div>
                         <p className="text-xs font-medium">{item.title}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{item.desc}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -308,7 +308,7 @@ export default function InviteFriends() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{friend.name}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                           friend.status === "active"
                             ? "bg-neon-green/10 text-neon-green border border-neon-green/20"
                             : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
@@ -317,7 +317,7 @@ export default function InviteFriends() {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">{formatDate(friend.joinedAt)}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(friend.joinedAt)}</span>
                       </div>
                     </div>
                     {friend.reward > 0 && (
@@ -349,7 +349,7 @@ export default function InviteFriends() {
                     className="h-full rounded-full bg-gradient-to-r from-neon-green to-neon-cyan"
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">
+                <p className="text-xs text-muted-foreground mt-2.5">
                   {t("invite.nextMilestone")}: {t("invite.invite")} {25 - totalInvited > 0 ? 25 - totalInvited : 0} {t("invite.moreToUnlock")}
                 </p>
               </div>
@@ -376,7 +376,7 @@ export default function InviteFriends() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium">{t("invite.referralReward")}: {friend.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{formatDate(friend.joinedAt)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(friend.joinedAt)}</p>
                       </div>
                       <span className="text-xs font-bold font-mono text-neon-green">+{friend.reward} NP</span>
                     </div>
