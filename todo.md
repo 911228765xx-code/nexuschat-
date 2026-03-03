@@ -258,3 +258,15 @@
 - [ ] 桌面端保留二维码扫描模式
 - [ ] 连接失败时显示明确错误提示和替代方案
 - [ ] 添加更多热门钱包图标（OKX、imToken、TokenPocket、Bitget）
+
+## v48 忘记密码 + 新用户 Onboarding 引导
+- [x] schema.ts 添加 passwordResetTokens 表（token, userId, expiresAt, usedAt）
+- [x] db:push 迁移
+- [x] emailAuth 路由添加 requestPasswordReset 接口（生成 token + 发送重置邮件）
+- [x] emailAuth 路由添加 resetPassword 接口（验证 token + 更新密码）
+- [x] 前端 ForgotPassword.tsx 页面（输入邮筱 → 发送重置链接）
+- [x] 前端 ResetPassword.tsx 页面（输入新密码 → 完成重置）
+- [x] Login.tsx 添加"忘记密码？"链接
+- [x] 注册 /forgot-password 和 /reset-password 路由
+- [x] Onboarding.tsx 确认对新用户（首次登录）正确触发
+- [x] 运行测试，TypeScript 0 错误

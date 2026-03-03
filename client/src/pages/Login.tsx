@@ -400,6 +400,27 @@ export default function Login() {
             {errors.password && <p style={S.errorText}>{errors.password}</p>}
           </div>
 
+          {/* Forgot password link — login mode only */}
+          {mode === "login" && (
+            <div style={{ textAlign: "right", marginBottom: "4px" }}>
+              <button
+                type="button"
+                onClick={() => setLocation("/forgot-password")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(0,212,255,0.6)",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  padding: "2px 0",
+                  fontFamily: "inherit",
+                }}
+              >
+                忘记密码？
+              </button>
+            </div>
+          )}
+
           {/* Submit */}
           <button type="submit" disabled={isPending} style={S.submitBtn(isPending)}>
             {isPending ? (

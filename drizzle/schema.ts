@@ -485,6 +485,21 @@ export const swapHistory = mysqlTable(
 export type SwapHistory = typeof swapHistory.$inferSelect;
 export type InsertSwapHistory = typeof swapHistory.$inferInsert;
 
+// ─── Password Reset Tokens ──────────────────────────────────────────────────
+export const passwordResetTokens = mysqlTable(
+  "password_reset_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    token: varchar("token", { length: 128 }).notNull().unique(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_reset_token").on(t.token)]
+);
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 // ── Web Push Subscriptions ──────────────────────────────────────────────────
 export const pushSubscriptions = mysqlTable(
   "push_subscriptions",

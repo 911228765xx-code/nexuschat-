@@ -38,6 +38,8 @@ const Watchlist = lazy(() => import("./pages/Watchlist"));
 const DMChat = lazy(() => import("./pages/DMChat"));
 const DownloadPage = lazy(() => import("./pages/Download"));
 const LoginPage = lazy(() => import("./pages/Login"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPassword"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 
 // ─── Minimal skeleton — matches dark bg, no white flash ──────────────────────
@@ -101,6 +103,12 @@ function RouteContent() {
             </Route>
             <Route path="/login">
               <LoginPage />
+            </Route>
+            <Route path="/forgot-password">
+              <ForgotPasswordPage />
+            </Route>
+            <Route path="/reset-password">
+              <ResetPasswordPage />
             </Route>
             <Route path="/download">
               <DownloadPage />

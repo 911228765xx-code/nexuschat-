@@ -99,6 +99,13 @@
       "when": 1772468532120,
       "tag": "0013_mixed_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1772516018650,
+      "tag": "0014_tricky_tyrannus",
+      "breakpoints": true
     }
   ]
 }
