@@ -50,6 +50,8 @@ interface Message {
   imageGallery?: string[];
   // Read receipt
   readStatus?: "sent" | "delivered" | "read";
+  // Optimistic message not yet confirmed by server
+  pending?: boolean;
 }
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
@@ -200,15 +202,34 @@ export default function ChatRoom() {
     if (!socket.connected || !isValidRoom) return;
     socket.joinGroup(groupId);
     const off = socket.onMessage((msg) => {
+      const isMine = msg.senderId === user?.id;
       setMessages((prev) => {
+        // Avoid duplicate by real DB id
         if (prev.some((m) => m.id === String(msg.id))) return prev;
+        // If this is our own message, replace the pending optimistic message
+        if (isMine) {
+          const pendingIdx = [...prev].reverse().findIndex(
+            (m) => m.pending === true && m.content === msg.content
+          );
+          if (pendingIdx !== -1) {
+            const realIdx = prev.length - 1 - pendingIdx;
+            const updated = [...prev];
+            updated[realIdx] = {
+              ...updated[realIdx],
+              id: String(msg.id),
+              pending: undefined,
+              readStatus: "delivered" as const,
+            };
+            return updated;
+          }
+        }
         const newMsg: Message = {
           id: String(msg.id),
           sender: msg.senderName,
           senderAvatar: msg.senderName?.slice(0, 1).toUpperCase() || "?",
           content: msg.content,
           time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-          isMine: msg.senderId === user?.id,
+          isMine,
           readStatus: "read" as const,
           ...(msg.mediaUrl ? { imageUrl: msg.mediaUrl } : {}),
         };
@@ -244,6 +265,7 @@ export default function ChatRoom() {
       time: now,
       isMine: true,
       readStatus: "sent",
+      pending: true, // mark as optimistic until server confirms
       ...(replyTo ? { replyTo: { sender: replyTo.sender, content: replyTo.content.slice(0, 60) } } : {}),
       ...(imagePreview ? { imageUrl: imagePreview } : {}),
     };

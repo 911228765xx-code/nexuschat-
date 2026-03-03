@@ -306,3 +306,10 @@
 - [x] 重写 SwipeBack 组件：移除 framer-motion drag，改用原生 Touch 事件
 - [x] 重写 SwipeMessage 组件：移除 framer-motion drag，改用原生 Touch 事件
 - [x] 运行测试，TypeScript 0 错误
+
+## v52 发送消息重复修复
+- [x] 诊断群聊/私信发送消息出现两条的根本原因（乐观更新 + Socket 广播双重添加）
+- [x] 修复 ChatRoom 重复消息（pending 标记 + 服务端广播时替换而非追加）
+- [x] 修复 GroupChatRoom 重复消息（同上）
+- [x] DMChat 不受影响（使用 tRPC invalidate 机制，无 Socket 广播）
+- [x] 运行测试，158/158 通过，TypeScript 0 错误

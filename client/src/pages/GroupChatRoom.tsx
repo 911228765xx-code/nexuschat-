@@ -41,6 +41,7 @@ interface GroupMessage {
   replyTo?: { sender: string; content: string };
   mentions?: string[];
   isPinned?: boolean;
+  pending?: boolean; // optimistic message not yet confirmed by server
 }
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
@@ -169,8 +170,25 @@ export default function GroupChatRoom() {
     const cleanup = onMessage((msg: SocketMessage) => {
       const isMine = user ? msg.senderId === user.id : false;
       setMessages((prev) => {
-        // Avoid duplicate (optimistic already added)
+        // Avoid duplicate by real DB id
         if (prev.some((m) => m.id === String(msg.id))) return prev;
+        // If this is our own message, replace the pending optimistic message
+        // (optimistic id is a 13-digit timestamp, server id is a small integer)
+        if (isMine) {
+          const pendingIdx = [...prev].reverse().findIndex(
+            (m) => m.pending === true && m.content === msg.content
+          );
+          if (pendingIdx !== -1) {
+            const realIdx = prev.length - 1 - pendingIdx;
+            const updated = [...prev];
+            updated[realIdx] = {
+              ...updated[realIdx],
+              id: String(msg.id),
+              pending: undefined,
+            };
+            return updated;
+          }
+        }
         return [...prev, {
           id: String(msg.id),
           sender: msg.senderName,
@@ -243,6 +261,7 @@ export default function GroupChatRoom() {
       content: input,
       time: now,
       isMine: true,
+      pending: true, // mark as optimistic until server confirms
       mentions,
       ...(replyTo ? { replyTo: { sender: replyTo.sender, content: replyTo.content.slice(0, 60) } } : {}),
     };
