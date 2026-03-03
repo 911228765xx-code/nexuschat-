@@ -487,7 +487,13 @@ export default function Trading() {
   const compareTraders = useMemo(() => traders.filter(tr => compareList.includes(tr.id)), [traders, compareList]);
 
   // Show skeleton while initial data loads
-  const isInitialLoading = !backendTraders && !strategies.length;
+  // Use a timeout to prevent infinite skeleton if API is slow/unavailable
+  const [skeletonTimeout, setSkeletonTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSkeletonTimeout(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+  const isInitialLoading = !skeletonTimeout && !backendTraders && !strategies.length;
 
   if (isInitialLoading) {
     return (

@@ -13,7 +13,7 @@ import {
   Megaphone, ChevronRight, Shield, Crown, Hash, AtSign,
   Pin, Settings, Bell, BellOff, LogOut, UserPlus, Search,
   Image as ImageIcon, Gift, Mic, Bot,
-  ChevronDown, Link2, File, Download, CheckCheck, Copy,
+  ChevronDown, ChevronUp, Link2, File, Download, CheckCheck, Copy,
   UserMinus, VolumeX, Volume2, RefreshCw, Trash2, Edit3, AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -103,6 +103,25 @@ function renderMessageContent(msg: GroupMessage) {
     );
   }
   if (msg.messageType === "file" && msg.mediaUrl) {
+    // Voice message: fileName starts with "语音消息" or mediaUrl is audio
+    const isVoice = (msg.fileName ?? "").startsWith("语音消息") ||
+      /\.(webm|mp3|ogg|m4a|wav|mp4)$/i.test(msg.mediaUrl);
+    if (isVoice) {
+      return (
+        <div className="mt-1 max-w-[220px]">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Mic size={12} className="text-neon-cyan" />
+            <span className="text-[10px] text-muted-foreground">{msg.fileName ?? "语音消息"}</span>
+          </div>
+          <audio
+            controls
+            src={msg.mediaUrl}
+            className="w-full h-8"
+            style={{ minWidth: 180 }}
+          />
+        </div>
+      );
+    }
     return (
       <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-1 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
         <File size={18} className="text-neon-cyan shrink-0" />
@@ -145,6 +164,8 @@ export default function GroupChatRoom() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // ─── Leave Group confirmation ───────────────────────────────────────────────
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
+  const [announcementExpanded, setAnnouncementExpanded] = useState(false);
   // ─── Group Settings modal ─────────────────────────────────────────────────
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [editGroupName, setEditGroupName] = useState("");
@@ -879,27 +900,24 @@ export default function GroupChatRoom() {
                 </div>
               </div>
 
-              {/* Group Info Card */}
-              <div className="p-4 border-b border-border/20">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-2xl overflow-hidden">
+              {/* Group Info Card - Compact */}
+              <div className="px-4 py-3 border-b border-border/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-lg overflow-hidden shrink-0">
                     {groupInfo?.avatar?.startsWith("http") ? (
                       <img src={groupInfo.avatar} alt={groupInfo.name ?? "Group"} className="w-full h-full object-cover" />
                     ) : (
                       <span>{groupInfo?.avatar ?? "🚀"}</span>
                     )}
                   </div>
-                  <div>
-                    <h4 className="font-display font-bold text-base">{groupInfo?.name ?? "Group"}</h4>
-                    <p className="text-xs text-muted-foreground">{members.length} {t("group.members")}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-display font-bold text-sm truncate">{groupInfo?.name ?? "Group"}</h4>
+                      {groupInfo?.isTokenGated && <span className="text-[9px] px-1.5 py-0 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 shrink-0">🔒</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">{members.length} {t("group.members")} · {onlineCount} online</p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{groupInfo?.description ?? "No description"}</p>
-                {groupInfo?.isTokenGated && (
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20">🔒 Token Gated</span>
-                  </div>
-                )}
               </div>
 
               {/* Quick Actions */}
@@ -921,28 +939,38 @@ export default function GroupChatRoom() {
               </div>
 
               {/* Announcement Edit Section */}
-              <div className="p-3 border-b border-border/20">
-                <div className="flex items-center justify-between mb-2">
+              <div className="border-b border-border/20">
+                <button
+                  onClick={() => setAnnouncementExpanded(!announcementExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-secondary/20 transition-colors"
+                >
                   <h5 className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Megaphone size={12} />Group Announcement</h5>
-                  {isAdminOrOwner && (
-                    <button onClick={() => { setIsEditingAnnouncement(true); setEditAnnouncementText(announcement.content); setTimeout(() => announcementInputRef.current?.focus(), 100); }} className="text-[10px] text-neon-cyan hover:underline flex items-center gap-0.5">
-                      <Settings size={10} />Edit
-                    </button>
-                  )}
-                </div>
-                {isEditingAnnouncement ? (
-                  <div className="space-y-2">
-                    <textarea ref={announcementInputRef} value={editAnnouncementText} onChange={(e) => setEditAnnouncementText(e.target.value)} className="w-full h-24 px-3 py-2 rounded-xl bg-secondary/40 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none" placeholder="Write group announcement..." maxLength={300} />
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground">{editAnnouncementText.length}/300</span>
-                      <div className="flex gap-2">
-                        <button onClick={() => setIsEditingAnnouncement(false)} className="px-3 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">Cancel</button>
-                        <button onClick={() => { if (editAnnouncementText.trim()) { setAnnouncement({ content: editAnnouncementText, author: user?.name ?? "Admin", time: "Just now" }); setIsEditingAnnouncement(false); setShowAnnouncement(true); toast.success("Announcement updated!"); } }} className="px-3 py-1 rounded-lg text-xs bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors">Save</button>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-1">
+                    {isAdminOrOwner && (
+                      <span onClick={(e) => { e.stopPropagation(); setIsEditingAnnouncement(true); setEditAnnouncementText(announcement.content); setAnnouncementExpanded(true); setTimeout(() => announcementInputRef.current?.focus(), 100); }} className="text-[10px] text-neon-cyan hover:underline flex items-center gap-0.5 px-1">
+                        <Settings size={10} />Edit
+                      </span>
+                    )}
+                    {announcementExpanded ? <ChevronUp size={12} className="text-muted-foreground" /> : <ChevronDown size={12} className="text-muted-foreground" />}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{announcement.content}</p>
+                </button>
+                {announcementExpanded && (
+                  <div className="px-3 pb-2.5">
+                    {isEditingAnnouncement ? (
+                      <div className="space-y-2">
+                        <textarea ref={announcementInputRef} value={editAnnouncementText} onChange={(e) => setEditAnnouncementText(e.target.value)} className="w-full h-20 px-3 py-2 rounded-xl bg-secondary/40 border border-border/30 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none" placeholder="Write group announcement..." maxLength={300} />
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">{editAnnouncementText.length}/300</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => setIsEditingAnnouncement(false)} className="px-3 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">Cancel</button>
+                            <button onClick={() => { if (editAnnouncementText.trim()) { setAnnouncement({ content: editAnnouncementText, author: user?.name ?? "Admin", time: "Just now" }); setIsEditingAnnouncement(false); setShowAnnouncement(true); toast.success("Announcement updated!"); } }} className="px-3 py-1 rounded-lg text-xs bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors">Save</button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{announcement.content}</p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -952,7 +980,7 @@ export default function GroupChatRoom() {
                   <h5 className="text-xs font-medium text-muted-foreground">{t("group.members")} ({members.length})</h5>
                   <span className="text-[10px] text-neon-green">{onlineCount} {t("group.online")}</span>
                 </div>
-                {members.map((member) => (
+                {(showAllMembers ? members : members.slice(0, 8)).map((member) => (
                   <button key={member.id} className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-secondary/40 transition-colors" onClick={() => setMemberActionTarget(member)}>
                     <div className="relative">
                       <Avatar className="w-8 h-8">{member.avatar?.startsWith("http") && <AvatarImage src={member.avatar} alt={member.name} className="object-cover" />}<AvatarFallback className="bg-secondary text-xs">{member.avatar?.startsWith("http") ? (member.name?.[0]?.toUpperCase() ?? "?") : (member.avatar ?? "?")}</AvatarFallback></Avatar>
@@ -969,6 +997,18 @@ export default function GroupChatRoom() {
                     <ChevronRight size={14} className="text-muted-foreground/50 shrink-0" />
                   </button>
                 ))}
+                {members.length > 8 && (
+                  <button
+                    onClick={() => setShowAllMembers(!showAllMembers)}
+                    className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors mt-1"
+                  >
+                    {showAllMembers ? (
+                      <><ChevronUp size={12} />Show less</>
+                    ) : (
+                      <><ChevronDown size={12} />Show all {members.length} members</>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Leave Group */}
