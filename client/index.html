@@ -302,20 +302,25 @@
       })();
     </script>
 
-    <!-- Force clear old SW caches on every page load to prevent stale JS bundles -->
+    <!-- SW registration: v7 self-destruct SW clears all caches and unregisters itself -->
     <script>
       (function() {
-        // Unregister old service workers and clear all caches
-        // This ensures users always get the latest version after a publish
-        if ('serviceWorker' in navigator && 'caches' in window) {
-          // Clear ALL caches immediately (async, non-blocking)
+        if (!('serviceWorker' in navigator)) return;
+
+        // Register the self-destruct SW so it can clear old caches
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+
+        // Listen for SW_UPDATED message: reload page to load fresh JS
+        navigator.serviceWorker.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'SW_UPDATED') {
+            window.location.reload();
+          }
+        });
+
+        // Also clear all caches eagerly on page load (belt-and-suspenders)
+        if ('caches' in window) {
           caches.keys().then(function(keys) {
-            keys.forEach(function(key) {
-              // Only clear old version caches (not current v6)
-              if (!key.includes('nexuschat-v6')) {
-                caches.delete(key);
-              }
-            });
+            keys.forEach(function(key) { caches.delete(key); });
           });
         }
       })();
