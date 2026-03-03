@@ -10,7 +10,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, Loader2, MessageCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 
 type Mode = "login" | "register";
@@ -413,21 +412,6 @@ export default function Login() {
             )}
           </button>
         </form>
-
-        {/* Divider */}
-        <div style={S.divider}>
-          <div style={S.dividerLine} />
-          <span style={S.dividerText}>或</span>
-          <div style={S.dividerLine} />
-        </div>
-
-        {/* Manus OAuth */}
-        <a href={getLoginUrl(returnPath)} style={S.oauthBtn}>
-          <div style={{ width: "18px", height: "18px", borderRadius: "6px", background: "linear-gradient(135deg, #00d4ff, #a855f7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <MessageCircle size={10} color="white" />
-          </div>
-          使用 Manus 账号登录
-        </a>
 
         {/* Terms */}
         <p style={S.terms}>
