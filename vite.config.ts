@@ -373,6 +373,11 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // Replace framer-motion with a no-op shim to fix Android Chrome black screen.
+      // framer-motion's AnimatePresence causes component tree to unmount without
+      // remounting on Android WebView, resulting in permanent black screen.
+      // The shim exports the same API surface but renders plain HTML elements.
+      "framer-motion": path.resolve(import.meta.dirname, "client", "src", "lib", "motion-shim.tsx"),
     },
   },
   envDir: path.resolve(import.meta.dirname),
