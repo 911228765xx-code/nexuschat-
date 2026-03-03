@@ -155,7 +155,7 @@ const AppContext = window.__nexuschat_app_ctx__ as ReturnType<typeof createConte
 // ==================== Storage Helpers ====================
 
 const STORAGE_PREFIX = "nexuschat_";
-const STORAGE_VERSION = "v4"; // Bump this to clear stale mock data
+const STORAGE_VERSION = "v5"; // Bump this to clear stale mock data
 
 // Auto-migrate: clear stale mock data when version changes
 (function migrateStorage() {

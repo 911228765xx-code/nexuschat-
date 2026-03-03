@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import VoiceRecorder from "@/components/VoiceRecorder";
 
 interface GroupMember {
   id: string;
@@ -732,12 +733,28 @@ export default function GroupChatRoom() {
               <Send size={18} />
             </button>
           ) : (
-            <button
-              onClick={() => toast.info("Voice message feature coming soon!")}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-all shrink-0"
-            >
-              <Mic size={18} />
-            </button>
+            <VoiceRecorder
+              disabled={!isValidGroup || !connected}
+              onVoiceMessage={(audioUrl, transcription, durationSeconds) => {
+                // Create a voice message in chat
+                const voiceMsg: GroupMessage = {
+                  id: Date.now().toString(),
+                  sender: user?.name ?? "User",
+                  senderAvatar: user?.avatar ?? "🎤",
+                  content: transcription || "[语音消息]",
+                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  isMine: true,
+                  messageType: "file",
+                  mediaUrl: audioUrl,
+                  fileName: `语音消息 ${Math.floor(durationSeconds / 60)}:${String(durationSeconds % 60).padStart(2, "0")}`,
+                  pending: true,
+                };
+                setMessages(prev => [...prev, voiceMsg]);
+                if (isValidGroup && connected) {
+                  socketSend({ groupId, content: transcription || "[语音消息]", messageType: "file", mediaUrl: audioUrl });
+                }
+              }}
+            />
           )}
         </div>
       </div>
