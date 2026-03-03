@@ -477,7 +477,7 @@ export const chatRouter = router({
 
   // Soft-delete a message (only sender can delete)
   deleteMessage: protectedProcedure
-    .input(z.object({ messageId: z.number() }))
+    .input(z.object({ messageId: z.number(), groupId: z.number().optional() }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -487,8 +487,17 @@ export const chatRouter = router({
         .from(messages)
         .where(eq(messages.id, input.messageId))
         .limit(1);
-      if (!rows[0] || rows[0].senderId !== ctx.user.id) {
-        throw new Error("Not authorized");
+      if (!rows[0]) throw new Error("Message not found");
+      const isSender = rows[0].senderId === ctx.user.id;
+      if (!isSender) {
+        // Allow group admin/owner to delete any message
+        if (input.groupId) {
+          const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+          if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+        } else {
+          throw new Error("Not authorized");
+        }
       }
       await db
         .update(messages)
@@ -721,5 +730,48 @@ export const chatRouter = router({
         .leftJoin(users, eq(groupMutes.userId, users.id))
         .where(and(eq(groupMutes.groupId, input.groupId), gt(groupMutes.expiresAt, now)));
     }),
+
+  // ─── Leave Group ──────────────────────────────────────────────────────────
+  leaveGroup: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const member = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!member[0]) throw new Error("Not a member");
+      if (member[0].role === "owner") throw new Error("Owner cannot leave. Transfer ownership first.");
+      await db.delete(groupMembers).where(
+        and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))
+      );
+      await db.update(chatGroups).set({ memberCount: sql`${chatGroups.memberCount} - 1` })
+        .where(eq(chatGroups.id, input.groupId));
+      return { ok: true };
+    }),
+
+  // ─── Update Group Info (owner/admin only) ────────────────────────────────
+  updateGroupInfo: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      name: z.string().min(1).max(100).optional(),
+      description: z.string().max(500).optional(),
+      avatar: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      const updates: Partial<{ name: string; description: string; avatar: string }> = {};
+      if (input.name !== undefined) updates.name = sanitizeInput(input.name);
+      if (input.description !== undefined) updates.description = sanitizeInput(input.description);
+      if (input.avatar !== undefined) updates.avatar = input.avatar;
+      if (Object.keys(updates).length === 0) return { ok: true };
+      await db.update(chatGroups).set(updates).where(eq(chatGroups.id, input.groupId));
+      return { ok: true };
+    }),
+
 });
+
 

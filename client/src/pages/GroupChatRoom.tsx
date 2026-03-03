@@ -14,7 +14,7 @@ import {
   Pin, Settings, Bell, BellOff, LogOut, UserPlus, Search,
   Image as ImageIcon, Gift, Mic, Bot,
   ChevronDown, Link2, File, Download, CheckCheck, Copy,
-  UserMinus, VolumeX, Volume2, RefreshCw
+  UserMinus, VolumeX, Volume2, RefreshCw, Trash2, Edit3, AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -88,8 +88,22 @@ export default function GroupChatRoom() {
   // ─── File upload ──────────────────────────────────────────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // ─── Message context menu (long press / right click) ─────────────────────
+  const [contextMenu, setContextMenu] = useState<{ msg: GroupMessage; x: number; y: number } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─── Group Settings modal ─────────────────────────────────────────────────
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupDesc, setEditGroupDesc] = useState("");
+  const [editGroupAvatar, setEditGroupAvatar] = useState("");
+  // ─── Message search ───────────────────────────────────────────────────────
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchResults = searchQuery.trim()
+    ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
   // ─── Real group info from DB ──────────────────────────────────────────
-  const { data: groupInfo } = trpc.chat.getGroupInfo.useQuery(
+  const { data: groupInfo, refetch: refetchGroupInfo } = trpc.chat.getGroupInfo.useQuery(
     { groupId: groupId },
     { enabled: isValidGroup, staleTime: 60_000 }
   );
@@ -434,6 +448,20 @@ export default function GroupChatRoom() {
     onError: () => toast.error("Failed to create invite link"),
   });
 
+  // ─── Delete / Leave / Update Group mutations ──────────────────────────────
+  const deleteMessageMutation = trpc.chat.deleteMessage.useMutation({
+    onSuccess: () => toast.success("消息已删除"),
+    onError: (e) => toast.error(e.message),
+  });
+  const leaveGroupMutation = trpc.chat.leaveGroup.useMutation({
+    onSuccess: () => { toast.success("已退出群组"); setLocation("/app/chat"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateGroupInfoMutation = trpc.chat.updateGroupInfo.useMutation({
+    onSuccess: () => { toast.success("群组信息已更新"); setShowGroupSettings(false); refetchGroupInfo(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   // ─── Group management mutations ────────────────────────────────────────────
   const kickMemberMutation = trpc.chat.kickMember.useMutation({
     onSuccess: () => { toast.success("Member removed"); setMemberActionTarget(null); refetchMembers(); },
@@ -586,6 +614,7 @@ export default function GroupChatRoom() {
             return (
               <motion.div
                 key={msg.id}
+                id={`msg-${msg.id}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
@@ -598,7 +627,12 @@ export default function GroupChatRoom() {
                       <AvatarFallback className="bg-secondary text-xs">{msg.senderAvatar?.startsWith("http") ? (msg.sender?.[0]?.toUpperCase() ?? "?") : (msg.senderAvatar ?? "?")}</AvatarFallback>
                     </Avatar>
                   )}
-                  <div className="relative">
+                  <div className="relative"
+                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ msg, x: e.clientX, y: e.clientY }); }}
+                    onTouchStart={(e) => { longPressTimer.current = setTimeout(() => { const t = e.touches[0]; setContextMenu({ msg, x: t.clientX, y: t.clientY }); }, 500); }}
+                    onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                    onTouchMove={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                  >
                     {!msg.isMine && (
                       <div className="flex items-center gap-1 mb-0.5 px-1">
                         {getRoleBadge(msg.senderRole)}
@@ -629,14 +663,30 @@ export default function GroupChatRoom() {
                       {renderMessageContent(msg)}
                     </div>
 
-                    {/* Action buttons (hover) */}
-                    <div className={`absolute top-0 ${msg.isMine ? "-left-16" : "-right-16"} hidden group-hover:flex items-center gap-0.5 z-10`}>
-                      <button onClick={() => setReplyTo(msg)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                    {/* Action buttons (hover on desktop) */}
+                    <div className={`absolute top-0 ${msg.isMine ? "-left-24" : "-right-24"} hidden group-hover:flex items-center gap-0.5 z-10`}>
+                      <button onClick={() => setReplyTo(msg)} title="Reply" className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                         <Reply size={13} />
                       </button>
-                      <button onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                      <button onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)} title="React" className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                         <Smile size={13} />
                       </button>
+                      <button onClick={() => { navigator.clipboard.writeText(msg.content); toast.success("已复制"); }} title="Copy" className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                        <Copy size={13} />
+                      </button>
+                      {(msg.isMine || myMember?.role === "owner" || myMember?.role === "admin") && (
+                        <button onClick={() => {
+                          const numId = parseInt(msg.id, 10);
+                          if (!isNaN(numId)) {
+                            setMessages(prev => prev.filter(m => m.id !== msg.id));
+                            deleteMessageMutation.mutate({ messageId: numId, groupId });
+                          } else {
+                            setMessages(prev => prev.filter(m => m.id !== msg.id));
+                          }
+                        }} title="Delete" className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/80 hover:bg-neon-red/20 text-muted-foreground hover:text-neon-red transition-colors">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Emoji picker popup */}
@@ -835,10 +885,10 @@ export default function GroupChatRoom() {
               {/* Quick Actions */}
               <div className="p-3 border-b border-border/20 grid grid-cols-4 gap-1">
                 {[
-                  { icon: Search, label: t("group.search"), action: () => { const q = prompt("Search messages..."); if (q) { const found = messages.filter(m => m.content.toLowerCase().includes(q.toLowerCase())); toast.info(`${found.length} messages found`); } } },
+                  { icon: Search, label: t("group.search"), action: () => { setShowSidebar(false); setShowSearch(true); } },
                   { icon: isMuted ? BellOff : Bell, label: isMuted ? t("group.unmute") : t("group.mute"), action: () => { setIsMuted(!isMuted); toast.success(isMuted ? "Notifications enabled" : "Group muted"); } },
                   { icon: Link2, label: t("group.invite") ?? "Invite", action: () => { setShowSidebar(false); createInviteLinkMutation.mutate({ groupId }); } },
-                  { icon: Settings, label: t("group.settings"), action: () => toast.info("Group settings coming soon") },
+                  { icon: Settings, label: t("group.settings"), action: () => { if (isAdminOrOwner) { setEditGroupName(groupInfo?.name ?? ""); setEditGroupDesc(groupInfo?.description ?? ""); setEditGroupAvatar(groupInfo?.avatar ?? ""); setShowGroupSettings(true); } else { toast.error("只有群主/管理员可以修改设置"); } } },
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
@@ -903,7 +953,7 @@ export default function GroupChatRoom() {
 
               {/* Leave Group */}
               <div className="p-3 border-t border-border/20">
-                <button onClick={() => { if (confirm(t("group.leaveConfirm") || "Leave this group?")) { toast.success(t("group.leftGroup") || "Left group"); setLocation("/app/chat"); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-neon-red hover:bg-neon-red/10 transition-colors text-sm">
+                <button onClick={() => { if (confirm(t("group.leaveConfirm") || "确定要退出该群组吗？")) { leaveGroupMutation.mutate({ groupId }); } }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-neon-red hover:bg-neon-red/10 transition-colors text-sm">
                   <LogOut size={16} />{t("group.leaveGroup")}
                 </button>
               </div>
@@ -961,6 +1011,102 @@ export default function GroupChatRoom() {
               </AnimatePresence>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Context Menu (right-click / long-press) ─────────────────────────── */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[160px] rounded-2xl bg-popover border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            style={{ left: Math.min(contextMenu.x, window.innerWidth - 180), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
+          >
+            <button onClick={() => { setReplyTo(contextMenu.msg); setContextMenu(null); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-secondary/60 transition-colors">
+              <Reply size={15} className="text-neon-cyan" />回复
+            </button>
+            <button onClick={() => { navigator.clipboard.writeText(contextMenu.msg.content); toast.success("已复制"); setContextMenu(null); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-secondary/60 transition-colors">
+              <Copy size={15} className="text-muted-foreground" />复制
+            </button>
+            <button onClick={() => { setEmojiPickerMsgId(contextMenu.msg.id); setContextMenu(null); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-secondary/60 transition-colors">
+              <Smile size={15} className="text-amber-400" />表情反应
+            </button>
+            {(contextMenu.msg.isMine || myMember?.role === "owner" || myMember?.role === "admin") && (
+              <>
+                <div className="h-px bg-border/30 mx-3" />
+                <button onClick={() => {
+                  const numId = parseInt(contextMenu.msg.id, 10);
+                  setMessages(prev => prev.filter(m => m.id !== contextMenu.msg.id));
+                  if (!isNaN(numId)) deleteMessageMutation.mutate({ messageId: numId, groupId });
+                  setContextMenu(null);
+                }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neon-red hover:bg-neon-red/10 transition-colors">
+                  <Trash2 size={15} />删除消息
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ─── Group Settings Modal ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showGroupSettings && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-sm rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border/20">
+                <h3 className="font-display font-bold text-base">群组设置</h3>
+                <button onClick={() => setShowGroupSettings(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">群组名称</label>
+                  <input value={editGroupName} onChange={e => setEditGroupName(e.target.value)} maxLength={50} placeholder="输入群组名称" className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">群组描述</label>
+                  <textarea value={editGroupDesc} onChange={e => setEditGroupDesc(e.target.value)} maxLength={200} rows={3} placeholder="群组简介..." className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 resize-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">群组头像 URL（可选）</label>
+                  <input value={editGroupAvatar} onChange={e => setEditGroupAvatar(e.target.value)} placeholder="https://... 或输入 emoji" className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                </div>
+                <button onClick={() => updateGroupInfoMutation.mutate({ groupId, name: editGroupName.trim() || undefined, description: editGroupDesc.trim() || undefined, avatar: editGroupAvatar.trim() || undefined })} disabled={updateGroupInfoMutation.isPending} className="w-full py-3 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors text-sm font-medium disabled:opacity-50">
+                  {updateGroupInfoMutation.isPending ? "保存中..." : "保存修改"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Message Search Panel ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-14 left-0 right-0 z-40 glass border-b border-border/30 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Search size={15} className="text-muted-foreground shrink-0" />
+              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="搜索消息..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
+              {searchQuery && <span className="text-[10px] text-muted-foreground">{searchResults.length} 条</span>}
+              <button onClick={() => { setShowSearch(false); setSearchQuery(""); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            {searchQuery && searchResults.length > 0 && (
+              <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                {searchResults.map(m => (
+                  <button key={m.id} onClick={() => { const el = document.getElementById(`msg-${m.id}`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.classList.add("ring-2", "ring-neon-cyan/50"); setTimeout(() => el?.classList.remove("ring-2", "ring-neon-cyan/50"), 2000); setShowSearch(false); setSearchQuery(""); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-secondary/40 transition-colors">
+                    <p className="text-[10px] text-muted-foreground">{m.sender} · {m.time}</p>
+                    <p className="text-xs text-foreground truncate">{m.content}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchQuery && searchResults.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground text-center py-2">未找到相关消息</p>
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
