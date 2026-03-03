@@ -15,6 +15,7 @@ import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { ENV } from "../_core/env";
 import { notifyOwner } from "../_core/notification";
+import { sendPasswordResetEmail } from "../_core/email";
 
 const SALT_ROUNDS = 10;
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
@@ -165,17 +166,29 @@ export const emailAuthRouter = router({
 
       const resetUrl = `${input.origin}/reset-password?token=${token}`;
 
+      // Try to send email via Resend; fall back to returning the URL directly
+      const emailResult = await sendPasswordResetEmail({
+        to: normalizedEmail,
+        resetUrl,
+        expiresInMinutes: 60,
+      });
+
+      const emailSent = emailResult.success;
+
       // Notify owner (best-effort — non-blocking)
       notifyOwner({
         title: "NexusChat 密码重置请求",
-        content: `用户 ${normalizedEmail} 请求重置密码。\n\n重置链接（1小时内有效）：\n${resetUrl}`,
+        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : "失败，降级展示链接"}\n\n重置链接（1小时内有效）：\n${resetUrl}`,
       }).catch(() => {});
 
-      // Return the reset URL so the UI can display it directly (no email required)
+      // If email was sent, don't expose the URL in the response (security)
+      // If email failed (no Resend key), return the URL so UI can display it
       return {
         success: true,
-        message: "重置链接已生成",
-        resetUrl,
+        message: emailSent ? "重置邮件已发送到您的邮筱" : "重置链接已生成",
+        emailSent,
+        // Only expose resetUrl when email sending is not available
+        resetUrl: emailSent ? undefined : resetUrl,
       };
     }),
 

@@ -270,3 +270,16 @@
 - [x] 注册 /forgot-password 和 /reset-password 路由
 - [x] Onboarding.tsx 确认对新用户（首次登录）正确触发
 - [x] 运行测试，TypeScript 0 错误
+
+## v49 Resend 邮件服务 + 移动端钱包深度链接
+- [x] 安装 resend npm 包
+- [x] 添加 RESEND_API_KEY secret
+- [x] 创建 server/_core/email.ts（sendPasswordResetEmail 封装）
+- [x] emailAuth.requestPasswordReset 接入 Resend 发送真实邮件
+- [x] 忘记密码页面优化：有 Resend 时显示"邮件已发送"，无 Resend 时降级显示链接
+- [x] 移动端检测工具函数（isMobile, isIOS, isAndroid）
+- [x] 重写 WalletConnectModal：移动端显示热门钱包深度链接列表（Trust/MetaMask/OKX/imToken/TokenPocket/Coinbase）
+- [x] 桌面端保留二维码扫描 + window.ethereum 检测
+- [x] 添加热门钱包图标（SVG/PNG CDN）
+- [x] 连接失败时显示明确错误提示
+- [x] 运行测试，TypeScript 0 错误
