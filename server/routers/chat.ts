@@ -653,6 +653,25 @@ export const chatRouter = router({
       return Object.fromEntries(rows.map(r => [r.messageId, r.count]));
     }),
 
+  // Returns up to 5 readers (with avatar) for a specific message
+  getReadReceipts: protectedProcedure
+    .input(z.object({ messageId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          userId: messageReadReceipts.userId,
+          name: users.name,
+          avatar: users.avatar,
+        })
+        .from(messageReadReceipts)
+        .innerJoin(users, eq(users.id, messageReadReceipts.userId))
+        .where(eq(messageReadReceipts.messageId, input.messageId))
+        .limit(5);
+      return rows.map(r => ({ userId: r.userId, name: r.name ?? "User", avatar: r.avatar ?? null }));
+    }),
+
   // ─── Group Management ─────────────────────────────────────────────────────
   kickMember: protectedProcedure
     .input(z.object({ groupId: z.number(), targetUserId: z.number() }))

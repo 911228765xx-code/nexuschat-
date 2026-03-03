@@ -17,6 +17,7 @@ import {
   UserMinus, VolumeX, Volume2, RefreshCw, Trash2, Edit3, AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -92,6 +93,59 @@ function renderContent(content: string, mentions?: string[]) {
   });
   if (remaining) parts.push(remaining);
   return <>{parts}</>;
+}
+
+// ─── Read Receipt Avatar Stack ───────────────────────────────────────────────
+function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readCount: number }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const { data: receipts } = trpc.chat.getReadReceipts.useQuery(
+    { messageId },
+    { enabled: showTooltip, staleTime: 30_000 }
+  );
+
+  return (
+    <div
+      className="relative flex items-center gap-0.5 cursor-default"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      {/* Avatar stack: show up to 3 */}
+      <div className="flex items-center">
+        {(receipts ?? []).slice(0, 3).map((r, i) => (
+          <div
+            key={r.userId}
+            className="w-4 h-4 rounded-full border border-card overflow-hidden bg-secondary"
+            style={{ marginLeft: i > 0 ? -4 : 0, zIndex: 3 - i }}
+          >
+            {r.avatar?.startsWith("http") ? (
+              <img src={r.avatar} alt={r.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[7px] text-foreground">
+                {r.avatar ?? r.name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+            )}
+          </div>
+        ))}
+        {/* Fallback when receipts not yet loaded: show checkmark + count */}
+        {!receipts && (
+          <span className="flex items-center gap-0.5 text-[10px] text-neon-cyan">
+            <CheckCheck size={10} />
+            {readCount}
+          </span>
+        )}
+      </div>
+      {/* Tooltip */}
+      {showTooltip && receipts && receipts.length > 0 && (
+        <div className="absolute bottom-5 right-0 z-50 bg-card border border-border/40 rounded-lg px-2 py-1.5 shadow-lg min-w-[100px] text-[10px] text-foreground whitespace-nowrap">
+          <p className="text-muted-foreground mb-1">已读 {readCount} 人</p>
+          {receipts.slice(0, 5).map(r => (
+            <p key={r.userId} className="truncate">{r.name}</p>
+          ))}
+          {readCount > 5 && <p className="text-muted-foreground">+{readCount - 5} 人</p>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function renderMessageContent(msg: GroupMessage) {
@@ -735,12 +789,9 @@ export default function GroupChatRoom() {
                     {/* Reactions + time + read receipt */}
                     <div className={`flex items-center gap-1 mt-1 flex-wrap ${msg.isMine ? "justify-end" : ""}`}>
                       <span className="text-[10px] text-muted-foreground">{msg.time}</span>
-                      {/* Read receipt for own messages */}
+                      {/* Read receipt for own messages — avatar stack */}
                       {msg.isMine && !msg.pending && readCount > 0 && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-neon-cyan">
-                          <CheckCheck size={10} />
-                          {readCount}
-                        </span>
+                        <ReadReceiptAvatars messageId={numericId} readCount={readCount} />
                       )}
                       {msg.pending && (
                         <span className="flex items-center gap-0.5">
@@ -865,13 +916,27 @@ export default function GroupChatRoom() {
       {/* Invite Link Modal */}
       <AnimatePresence>
         {showInviteModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowInviteModal(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 space-y-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed z-50 bg-black/60 flex items-center justify-center p-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }} onClick={() => setShowInviteModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 space-y-4 overflow-y-auto" style={{ maxHeight: '90vh', position: 'relative', margin: 'auto' }}>
               <div className="flex items-center justify-between">
                 <h3 className="font-display font-semibold text-sm flex items-center gap-2"><Link2 size={16} className="text-neon-cyan" />Invite Link</h3>
                 <button onClick={() => setShowInviteModal(false)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={16} /></button>
               </div>
-              <p className="text-xs text-muted-foreground">Share this link to invite people to the group. The link is valid indefinitely.</p>
+              <p className="text-xs text-muted-foreground">Share this link or scan the QR code to join the group.</p>
+              {/* QR Code */}
+              {inviteUrl && (
+                <div className="flex justify-center">
+                  <div className="p-3 rounded-2xl bg-white">
+                    <QRCodeSVG
+                      value={inviteUrl}
+                      size={160}
+                      bgColor="#ffffff"
+                      fgColor="#0a0a0f"
+                      level="M"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30">
                 <span className="flex-1 text-xs font-mono text-foreground truncate">{inviteUrl}</span>
                 <button onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success("Link copied!"); }} className="shrink-0 text-neon-cyan hover:text-neon-cyan/80 transition-colors">
