@@ -290,14 +290,14 @@ export default function Chat() {
         <div className="relative pb-3">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-[calc(50%+6px)] text-muted-foreground"
+            className="absolute left-3 top-[18px] -translate-y-1/2 text-muted-foreground pointer-events-none"
           />
           <input
             type="text"
             placeholder={t("chat.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+            className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
           />
         </div>
       </header>

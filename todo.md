@@ -375,3 +375,8 @@
 ## v59 Bug 修复
 - [x] 修复 App.tsx 中 JSDoc 注释块导致 Vite Babel 解析器报 "Unexpected token" 错误
 - [x] 修复 index.html 中 MutationObserver 因 root 元素为 null 导致的 TypeError（添加 if (rootEl) 防御检查）
+
+## v60 搜索框字体修复
+- [x] 修复 index.html 内联骨架屏样式中 body font-family 使用系统字体覆盖了 Inter 字体的问题
+- [x] 修复搜索框图标垂直定位偏移（top-[18px] 替代 calc 计算）
+- [x] 搜索框 input 显式添加 font-sans 类确保字体一致性
