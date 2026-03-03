@@ -1,9 +1,8 @@
 /*
  * SwipeBack — 右滑返回上一页手势组件
- * 从屏幕左边缘右滑触发返回操作
+ * 使用原生 Touch 事件实现，完全不依赖 framer-motion drag
  */
 import { useState, useCallback, useRef } from "react";
-import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -13,85 +12,93 @@ interface SwipeBackProps {
   enabled?: boolean;
 }
 
-const EDGE_WIDTH = 30; // px from left edge to trigger
-const THRESHOLD = 100; // px to complete swipe
+const EDGE_WIDTH = 30;
+const THRESHOLD = 100;
 
 export default function SwipeBack({ children, backPath, enabled = true }: SwipeBackProps) {
   const [, setLocation] = useLocation();
-  const x = useMotionValue(0);
+  const [swipeX, setSwipeX] = useState(0);
   const [isEdgeSwipe, setIsEdgeSwipe] = useState(false);
-  const startX = useRef(0);
+  const startXRef = useRef(0);
+  const startTouchXRef = useRef(0);
 
-  const indicatorOpacity = useTransform(x, [0, 40, THRESHOLD], [0, 0.6, 1]);
-  const indicatorX = useTransform(x, [0, THRESHOLD], [-20, 10]);
-  const overlayOpacity = useTransform(x, [0, THRESHOLD], [0, 0.15]);
+  const indicatorOpacity = Math.min(Math.max((swipeX - 0) / (THRESHOLD - 0), 0), 1) * 0.9;
+  const indicatorTranslate = Math.min(swipeX / THRESHOLD, 1) * 30 - 20;
+  const overlayOpacity = Math.min(swipeX / THRESHOLD, 1) * 0.15;
 
-  const handleDragStart = useCallback((_: any, info: PanInfo) => {
-    startX.current = info.point.x - info.offset.x;
-    // Only activate if starting from left edge
-    setIsEdgeSwipe(startX.current < EDGE_WIDTH);
-  }, []);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!enabled) return;
+    const touchX = e.touches[0].clientX;
+    startXRef.current = touchX;
+    startTouchXRef.current = touchX;
+    setIsEdgeSwipe(touchX < EDGE_WIDTH);
+  }, [enabled]);
 
-  const handleDrag = useCallback((_: any, info: PanInfo) => {
-    if (!isEdgeSwipe) {
-      x.set(0);
-      return;
-    }
-    // Only allow right swipe
-    if (info.offset.x < 0) {
-      x.set(0);
-    }
-  }, [isEdgeSwipe, x]);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!enabled || !isEdgeSwipe) return;
+    const delta = e.touches[0].clientX - startXRef.current;
+    if (delta < 0) { setSwipeX(0); return; }
+    setSwipeX(Math.min(delta, THRESHOLD * 1.5));
+  }, [enabled, isEdgeSwipe]);
 
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
-    if (isEdgeSwipe && info.offset.x > THRESHOLD && enabled) {
+  const handleTouchEnd = useCallback(() => {
+    if (!enabled) return;
+    if (isEdgeSwipe && swipeX > THRESHOLD) {
       if (backPath) {
         setLocation(backPath);
       } else {
         window.history.back();
       }
     }
+    setSwipeX(0);
     setIsEdgeSwipe(false);
-  }, [isEdgeSwipe, enabled, backPath, setLocation]);
+  }, [enabled, isEdgeSwipe, swipeX, backPath, setLocation]);
 
   if (!enabled) {
     return <>{children}</>;
   }
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div
+      className="relative h-full"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Left edge indicator */}
-      <motion.div
-        className="absolute left-0 top-0 bottom-0 w-10 flex items-center justify-center z-50 pointer-events-none"
-        style={{ opacity: indicatorOpacity, x: indicatorX }}
-      >
-        <div className="w-8 h-16 rounded-r-xl bg-neon-cyan/20 [backdrop-filter:none] border border-neon-cyan/30 border-l-0 flex items-center justify-center">
-          <ChevronLeft size={18} className="text-neon-cyan" />
+      {swipeX > 5 && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-10 flex items-center justify-center z-50 pointer-events-none"
+          style={{
+            opacity: indicatorOpacity,
+            transform: `translateX(${indicatorTranslate}px)`,
+            transition: "none",
+          }}
+        >
+          <div className="w-8 h-16 rounded-r-xl bg-neon-cyan/20 border border-neon-cyan/30 border-l-0 flex items-center justify-center">
+            <ChevronLeft size={18} className="text-neon-cyan" />
+          </div>
         </div>
-      </motion.div>
+      )}
 
       {/* Overlay */}
-      <motion.div
-        className="absolute inset-0 bg-black pointer-events-none z-40"
-        style={{ opacity: overlayOpacity }}
-      />
+      {swipeX > 5 && (
+        <div
+          className="absolute inset-0 bg-black pointer-events-none z-40"
+          style={{ opacity: overlayOpacity }}
+        />
+      )}
 
-      {/* Swipeable content */}
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={{ left: 0, right: 0.5 }}
-        dragMomentum={false}
-        onDragStart={handleDragStart}
-        onDrag={handleDrag}
-        onDragEnd={handleDragEnd}
-        style={{ x: isEdgeSwipe ? x : 0 }}
-        animate={!isEdgeSwipe ? { x: 0 } : undefined}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      {/* Content — translate with swipe */}
+      <div
         className="h-full"
+        style={{
+          transform: swipeX > 0 ? `translateX(${swipeX * 0.3}px)` : undefined,
+          transition: swipeX === 0 ? "transform 0.2s ease" : "none",
+        }}
       >
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }

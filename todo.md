@@ -300,3 +300,9 @@
 - [x] 修复 GroupChatRoom 群名称和成员数接入真实数据（getGroupInfo + getGroupMembers）
 - [x] 前端 ChatRoom 图片上传接 S3、删除持久化、打字指示器真实 Socket
 - [x] DMChat 对方用户信息改用 getUserInfo（替代 leaderboard 查找）
+
+## v51 消息列表黑屏修复
+- [x] 重写 PullToRefresh 组件：移除 framer-motion drag，改用原生 Touch 事件
+- [x] 重写 SwipeBack 组件：移除 framer-motion drag，改用原生 Touch 事件
+- [x] 重写 SwipeMessage 组件：移除 framer-motion drag，改用原生 Touch 事件
+- [x] 运行测试，TypeScript 0 错误

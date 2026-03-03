@@ -1,10 +1,9 @@
 /*
  * SwipeMessage — 左滑回复消息手势组件
- * 在聊天消息上左滑触发回复操作
+ * 使用原生 Touch 事件实现，完全不依赖 framer-motion drag
  */
 import { useRef, useState, useCallback } from "react";
 import { Reply } from "lucide-react";
-import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 
 interface SwipeMessageProps {
   children: React.ReactNode;
@@ -12,78 +11,84 @@ interface SwipeMessageProps {
   enabled?: boolean;
 }
 
+const REPLY_THRESHOLD = 60;
+
 export default function SwipeMessage({ children, onSwipeReply, enabled = true }: SwipeMessageProps) {
-  const x = useMotionValue(0);
+  const [swipeX, setSwipeX] = useState(0);
   const [swiping, setSwiping] = useState(false);
+  const startXRef = useRef(0);
   const hasTriggered = useRef(false);
 
-  // Reply icon opacity and scale based on drag distance
-  const replyOpacity = useTransform(x, [-80, -40, 0], [1, 0.5, 0]);
-  const replyScale = useTransform(x, [-80, -40, 0], [1, 0.7, 0.3]);
-  const replyX = useTransform(x, [-80, -40, 0], [0, 10, 30]);
+  const replyOpacity = Math.min(Math.abs(swipeX) / REPLY_THRESHOLD, 1);
+  const replyScale = 0.3 + Math.min(Math.abs(swipeX) / REPLY_THRESHOLD, 1) * 0.7;
+  const triggered = Math.abs(swipeX) >= REPLY_THRESHOLD;
 
-  const handleDragStart = useCallback(() => {
-    setSwiping(true);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!enabled) return;
+    startXRef.current = e.touches[0].clientX;
     hasTriggered.current = false;
-  }, []);
+    setSwiping(true);
+  }, [enabled]);
 
-  const handleDrag = useCallback((_: any, info: PanInfo) => {
-    // Only allow left swipe
-    if (info.offset.x > 0) {
-      x.set(0);
-      return;
-    }
-    // Trigger haptic feedback at threshold
-    if (info.offset.x < -60 && !hasTriggered.current) {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!enabled || !swiping) return;
+    const delta = e.touches[0].clientX - startXRef.current;
+    if (delta > 0) { setSwipeX(0); return; }
+    const clamped = Math.max(delta, -REPLY_THRESHOLD * 1.3);
+    setSwipeX(clamped);
+    if (clamped < -REPLY_THRESHOLD && !hasTriggered.current) {
       hasTriggered.current = true;
-      // Haptic feedback if available
-      if (navigator.vibrate) {
-        navigator.vibrate(10);
-      }
+      if (navigator.vibrate) navigator.vibrate(10);
     }
-  }, [x]);
+  }, [enabled, swiping]);
 
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+  const handleTouchEnd = useCallback(() => {
+    if (!enabled) return;
     setSwiping(false);
-    if (info.offset.x < -60 && onSwipeReply && enabled) {
+    if (swipeX < -REPLY_THRESHOLD && onSwipeReply) {
       onSwipeReply();
     }
-  }, [onSwipeReply, enabled]);
+    setSwipeX(0);
+  }, [enabled, swipeX, onSwipeReply]);
 
   if (!enabled) {
     return <>{children}</>;
   }
 
   return (
-    <div className="relative overflow-hidden">
+    <div
+      className="relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Reply indicator */}
-      <motion.div
-        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center"
-        style={{ opacity: replyOpacity, scale: replyScale, x: replyX }}
-      >
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-          hasTriggered.current ? "bg-neon-cyan/30" : "bg-secondary/60"
-        }`}>
-          <Reply size={16} className={hasTriggered.current ? "text-neon-cyan" : "text-muted-foreground"} />
+      {swiping && Math.abs(swipeX) > 5 && (
+        <div
+          className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center"
+          style={{
+            opacity: replyOpacity,
+            transform: `scale(${replyScale}) translateX(${Math.min(Math.abs(swipeX) / REPLY_THRESHOLD, 1) * -10}px)`,
+          }}
+        >
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+            triggered ? "bg-neon-cyan/30" : "bg-secondary/60"
+          }`}>
+            <Reply size={16} className={triggered ? "text-neon-cyan" : "text-muted-foreground"} />
+          </div>
         </div>
-      </motion.div>
+      )}
 
-      {/* Swipeable content */}
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: -80, right: 0 }}
-        dragElastic={{ left: 0.3, right: 0 }}
-        dragMomentum={false}
-        onDragStart={handleDragStart}
-        onDrag={handleDrag}
-        onDragEnd={handleDragEnd}
-        style={{ x }}
-        animate={!swiping ? { x: 0 } : undefined}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      {/* Content — translate with swipe */}
+      <div
         className="relative z-10"
+        style={{
+          transform: swipeX !== 0 ? `translateX(${swipeX}px)` : undefined,
+          transition: !swiping ? "transform 0.2s ease" : "none",
+        }}
       >
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }
