@@ -10,7 +10,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -753,7 +753,8 @@ export default function Discover() {
                   >
                     <div className="flex items-start gap-3">
                       <Avatar className="w-10 h-10 shrink-0">
-                        <AvatarFallback className="bg-secondary text-base">{post.author.avatar}</AvatarFallback>
+                        {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
+                        <AvatarFallback className="bg-secondary text-base">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -852,7 +853,8 @@ export default function Discover() {
                   {/* Author row */}
                   <div className="flex items-start gap-3">
                     <Avatar className="w-10 h-10 shrink-0">
-                      <AvatarFallback className="bg-secondary text-base">{post.author.avatar}</AvatarFallback>
+                      {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
+                      <AvatarFallback className="bg-secondary text-base">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -1061,7 +1063,8 @@ export default function Discover() {
                                 post.commentList.map((comment) => (
                                   <div key={comment.id} className="flex gap-2.5 group">
                                     <Avatar className="w-7 h-7 shrink-0">
-                                      <AvatarFallback className="bg-secondary/60 text-[10px]">{comment.author.avatar}</AvatarFallback>
+                                      {comment.author.avatar?.startsWith("http") && <AvatarImage src={comment.author.avatar} alt={comment.author.name} className="object-cover" />}
+                                      <AvatarFallback className="bg-secondary/60 text-[10px]">{comment.author.avatar?.startsWith("http") ? comment.author.name?.slice(0,2).toUpperCase() : comment.author.avatar}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-baseline gap-1.5">
@@ -1221,7 +1224,8 @@ export default function Discover() {
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className={`w-12 h-12 shrink-0 ${community.isTokenGated ? "ring-2 ring-neon-purple/40" : ""}`}>
-                      <AvatarFallback className="bg-secondary text-lg">{community.avatar}</AvatarFallback>
+                      {community.avatar?.startsWith("http") && <AvatarImage src={community.avatar} alt={community.name} className="object-cover" />}
+                      <AvatarFallback className="bg-secondary text-lg">{community.avatar?.startsWith("http") ? community.name?.slice(0,2).toUpperCase() : community.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -1287,7 +1291,8 @@ export default function Discover() {
                 className="flex items-center gap-3 p-3.5 rounded-2xl bg-card/50 border border-border/20"
               >
                 <Avatar className="w-12 h-12 shrink-0">
-                  <AvatarFallback className="bg-secondary text-lg font-display">{user.avatar}</AvatarFallback>
+                  {user.avatar?.startsWith("http") && <AvatarImage src={user.avatar} alt={user.name} className="object-cover" />}
+                  <AvatarFallback className="bg-secondary text-lg font-display">{user.avatar?.startsWith("http") ? user.name?.slice(0,2).toUpperCase() : user.avatar}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

@@ -13,7 +13,7 @@ import {
   MessageSquare, ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -396,8 +396,11 @@ export default function Chat() {
                 {/* Avatar */}
                 <div className="relative shrink-0">
                   <Avatar className={`w-12 h-12 ${conv.isTokenGated ? "ring-2 ring-neon-purple/60" : ""}`}>
+                    {conv.avatar?.startsWith("http") && (
+                      <AvatarImage src={conv.avatar} alt={conv.name} className="object-cover" />
+                    )}
                     <AvatarFallback className="bg-secondary text-foreground text-lg font-display">
-                      {conv.avatar}
+                      {conv.avatar?.startsWith("http") ? (conv.name?.slice(0, 2).toUpperCase() ?? "?") : (conv.avatar ?? "?")}
                     </AvatarFallback>
                   </Avatar>
                   {conv.isOnline && (
@@ -660,8 +663,11 @@ export default function Chat() {
                         }}
                       >
                         <Avatar className="w-10 h-10 shrink-0">
+                          {result.chatAvatar?.startsWith("http") && (
+                            <AvatarImage src={result.chatAvatar} alt={result.chatName} className="object-cover" />
+                          )}
                           <AvatarFallback className="bg-secondary text-foreground text-sm font-display">
-                            {result.chatAvatar}
+                            {result.chatAvatar?.startsWith("http") ? (result.chatName?.charAt(0).toUpperCase() ?? "?") : (result.chatAvatar ?? "?")}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">

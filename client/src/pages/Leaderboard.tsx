@@ -9,7 +9,7 @@ import {
   TrendingUp, Sparkles, ChevronDown, Flame, Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
@@ -194,7 +194,8 @@ export default function Leaderboard() {
               className="flex-1 flex flex-col items-center"
             >
               <Avatar className="w-14 h-14 ring-2 ring-slate-400/50 mb-2">
-                <AvatarFallback className="bg-secondary text-xl">{data.list[1]?.avatar}</AvatarFallback>
+                {data.list[1]?.avatar?.startsWith("http") && <AvatarImage src={data.list[1].avatar} alt={data.list[1].name} className="object-cover" />}
+                <AvatarFallback className="bg-secondary text-xl">{data.list[1]?.avatar?.startsWith("http") ? data.list[1]?.name?.slice(0,2).toUpperCase() : data.list[1]?.avatar}</AvatarFallback>
               </Avatar>
               <span className="text-xs font-medium truncate max-w-full text-center">{data.list[1]?.name}</span>
               <span className="text-[10px] font-mono text-slate-400 mt-0.5">{data.list[1]?.value}</span>
@@ -215,7 +216,8 @@ export default function Leaderboard() {
                   <Crown size={22} className="text-amber-400 drop-shadow-lg" />
                 </div>
                 <Avatar className="w-[72px] h-[72px] ring-2 ring-amber-400/70 mb-2 mt-2">
-                  <AvatarFallback className="bg-secondary text-2xl">{data.list[0]?.avatar}</AvatarFallback>
+                  {data.list[0]?.avatar?.startsWith("http") && <AvatarImage src={data.list[0].avatar} alt={data.list[0].name} className="object-cover" />}
+                  <AvatarFallback className="bg-secondary text-2xl">{data.list[0]?.avatar?.startsWith("http") ? data.list[0]?.name?.slice(0,2).toUpperCase() : data.list[0]?.avatar}</AvatarFallback>
                 </Avatar>
               </div>
               <span className="text-sm font-bold font-display truncate max-w-full text-center">{data.list[0]?.name}</span>
@@ -233,7 +235,8 @@ export default function Leaderboard() {
               className="flex-1 flex flex-col items-center"
             >
               <Avatar className="w-14 h-14 ring-2 ring-amber-700/50 mb-2">
-                <AvatarFallback className="bg-secondary text-xl">{data.list[2]?.avatar}</AvatarFallback>
+                {data.list[2]?.avatar?.startsWith("http") && <AvatarImage src={data.list[2].avatar} alt={data.list[2].name} className="object-cover" />}
+                <AvatarFallback className="bg-secondary text-xl">{data.list[2]?.avatar?.startsWith("http") ? data.list[2]?.name?.slice(0,2).toUpperCase() : data.list[2]?.avatar}</AvatarFallback>
               </Avatar>
               <span className="text-xs font-medium truncate max-w-full text-center">{data.list[2]?.name}</span>
               <span className="text-[10px] font-mono text-amber-700/80 mt-0.5">{data.list[2]?.value}</span>
@@ -249,7 +252,8 @@ export default function Leaderboard() {
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold font-mono text-muted-foreground w-8 text-center">#{data.me.rank}</span>
             <Avatar className="w-10 h-10 ring-2 ring-neon-cyan/40">
-              <AvatarFallback className="bg-secondary text-base">{data.me.avatar}</AvatarFallback>
+              {data.me.avatar?.startsWith("http") && <AvatarImage src={data.me.avatar} alt={data.me.name} className="object-cover" />}
+              <AvatarFallback className="bg-secondary text-base">{data.me.avatar?.startsWith("http") ? data.me.name?.slice(0,2).toUpperCase() : data.me.avatar}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -274,7 +278,8 @@ export default function Leaderboard() {
             >
               <span className="text-xs font-bold font-mono text-muted-foreground w-6 text-center">{entry.rank}</span>
               <Avatar className="w-9 h-9">
-                <AvatarFallback className="bg-secondary text-sm">{entry.avatar}</AvatarFallback>
+                {entry.avatar?.startsWith("http") && <AvatarImage src={entry.avatar} alt={entry.name} className="object-cover" />}
+                <AvatarFallback className="bg-secondary text-sm">{entry.avatar?.startsWith("http") ? entry.name?.slice(0,2).toUpperCase() : entry.avatar}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium truncate block">{entry.name}</span>

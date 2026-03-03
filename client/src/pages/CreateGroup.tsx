@@ -10,7 +10,7 @@ import {
   X, ChevronRight, Sparkles, Crown, Coins, Plus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -263,7 +263,8 @@ export default function CreateGroup() {
                       className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/20 transition-colors"
                     >
                       <Avatar className="w-5 h-5">
-                        <AvatarFallback className="text-[9px] bg-secondary">{c.avatar}</AvatarFallback>
+                        {c.avatar?.startsWith("http") && <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />}
+                        <AvatarFallback className="text-[9px] bg-secondary">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
                       </Avatar>
                       <span className="text-[11px] text-neon-cyan font-medium">{c.name.split(".")[0]}</span>
                       <X size={10} className="text-neon-cyan/60" />
@@ -291,7 +292,8 @@ export default function CreateGroup() {
                     >
                       <div className="relative">
                         <Avatar className="w-10 h-10">
-                          <AvatarFallback className="bg-secondary text-sm font-display">{contact.avatar}</AvatarFallback>
+                          {contact.avatar?.startsWith("http") && <AvatarImage src={contact.avatar} alt={contact.name} className="object-cover" />}
+                          <AvatarFallback className="bg-secondary text-sm font-display">{contact.avatar?.startsWith("http") ? contact.name?.slice(0,2).toUpperCase() : contact.avatar}</AvatarFallback>
                         </Avatar>
                         {contact.isOnline && (
                           <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-neon-green border-2 border-background" />
@@ -415,7 +417,8 @@ export default function CreateGroup() {
               <div className="flex -space-x-2">
                 {selectedContacts.slice(0, 8).map((c) => (
                   <Avatar key={c.id} className="w-9 h-9 border-2 border-background">
-                    <AvatarFallback className="bg-secondary text-[10px] font-display">{c.avatar}</AvatarFallback>
+                    {c.avatar?.startsWith("http") && <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />}
+                    <AvatarFallback className="bg-secondary text-[10px] font-display">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
                   </Avatar>
                 ))}
                 {selected.length > 8 && (
@@ -587,7 +590,8 @@ export default function CreateGroup() {
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/30 transition-colors"
                   >
                     <Avatar className="w-9 h-9">
-                      <AvatarFallback className="bg-secondary text-sm font-display">{c.avatar}</AvatarFallback>
+                      {c.avatar?.startsWith("http") && <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />}
+                      <AvatarFallback className="bg-secondary text-sm font-display">{c.avatar?.startsWith("http") ? c.name?.slice(0,2).toUpperCase() : c.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium truncate">{c.name}</p>

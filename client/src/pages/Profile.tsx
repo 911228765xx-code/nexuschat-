@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
@@ -96,7 +96,8 @@ export default function Profile() {
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
               <Avatar className="w-16 h-16 ring-2 ring-neon-cyan/40">
-                <AvatarFallback className="bg-secondary text-xl font-display">{profile.avatar}</AvatarFallback>
+                {profile.avatar?.startsWith("http") && <AvatarImage src={profile.avatar} alt={profile.displayName} className="object-cover" />}
+                <AvatarFallback className="bg-secondary text-xl font-display">{profile.avatar?.startsWith("http") ? profile.displayName?.slice(0,2).toUpperCase() : profile.avatar}</AvatarFallback>
               </Avatar>
               {profile.ensVerified && (
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">

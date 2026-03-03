@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import LightMarkdown from "@/components/LightMarkdown";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -146,7 +146,8 @@ function RepostModal({
             <div className="rounded-xl border border-border/30 p-3 bg-secondary/20">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Avatar className="w-5 h-5">
-                  <AvatarFallback className="bg-secondary text-[9px]">{post.author.avatar}</AvatarFallback>
+                  {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
+                  <AvatarFallback className="bg-secondary text-[9px]">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
                 </Avatar>
                 <span className="text-xs font-medium">{post.author.name}</span>
                 {post.author.isVerified && <Star size={10} className="text-neon-cyan fill-neon-cyan" />}
@@ -403,7 +404,8 @@ export default function PostDetail() {
           {/* Author */}
           <div className="flex items-start gap-3 mb-4">
             <Avatar className="w-12 h-12 shrink-0">
-              <AvatarFallback className="bg-secondary text-xl">{post.author.avatar}</AvatarFallback>
+              {post.author.avatar?.startsWith("http") && <AvatarImage src={post.author.avatar} alt={post.author.name} className="object-cover" />}
+              <AvatarFallback className="bg-secondary text-xl">{post.author.avatar?.startsWith("http") ? post.author.name?.slice(0,2).toUpperCase() : post.author.avatar}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -605,7 +607,8 @@ export default function PostDetail() {
               >
                 <div className="flex gap-3">
                   <Avatar className="w-9 h-9 shrink-0">
-                    <AvatarFallback className="bg-secondary text-sm">{comment.author.avatar}</AvatarFallback>
+                    {comment.author.avatar?.startsWith("http") && <AvatarImage src={comment.author.avatar} alt={comment.author.name} className="object-cover" />}
+                    <AvatarFallback className="bg-secondary text-sm">{comment.author.avatar?.startsWith("http") ? comment.author.name?.slice(0,2).toUpperCase() : comment.author.avatar}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1">

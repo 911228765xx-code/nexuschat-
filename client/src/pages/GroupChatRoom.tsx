@@ -509,8 +509,12 @@ export default function GroupChatRoom() {
           <button onClick={() => setLocation("/app/chat")} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
             <ArrowLeft size={20} />
           </button>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-lg">
-            {groupInfo?.avatar ?? "🚀"}
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-lg overflow-hidden">
+            {groupInfo?.avatar?.startsWith("http") ? (
+              <img src={groupInfo.avatar} alt={groupInfo.name ?? "Group"} className="w-full h-full object-cover" />
+            ) : (
+              <span>{groupInfo?.avatar ?? "🚀"}</span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold font-display truncate">{groupInfo?.name ?? "Group Chat"}</h2>
@@ -804,7 +808,13 @@ export default function GroupChatRoom() {
               {/* Group Info Card */}
               <div className="p-4 border-b border-border/20">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-2xl">{groupInfo?.avatar ?? "🚀"}</div>
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/20 flex items-center justify-center text-2xl overflow-hidden">
+                    {groupInfo?.avatar?.startsWith("http") ? (
+                      <img src={groupInfo.avatar} alt={groupInfo.name ?? "Group"} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{groupInfo?.avatar ?? "🚀"}</span>
+                    )}
+                  </div>
                   <div>
                     <h4 className="font-display font-bold text-base">{groupInfo?.name ?? "Group"}</h4>
                     <p className="text-xs text-muted-foreground">{members.length} {t("group.members")}</p>
