@@ -265,10 +265,18 @@
           var rootEl = document.getElementById('root');
           root = rootEl;
 
+          // Only hide skeleton when root has meaningful content
+          // Use a short delay (300ms) to avoid hiding on loading spinners
+          var hideTimer = null;
           var observer = new MutationObserver(function() {
             if (rootEl && rootEl.children.length > 0) {
-              observer.disconnect();
-              hideSkeleton();
+              // Check if the content is more than just a loading spinner
+              // by waiting a short moment for React to settle
+              if (hideTimer) clearTimeout(hideTimer);
+              hideTimer = setTimeout(function() {
+                observer.disconnect();
+                hideSkeleton();
+              }, 400);
             }
           });
 

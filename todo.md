@@ -390,3 +390,8 @@
 - [x] 修复 Contacts/Discover/Research 页面搜索框图标垂直定位（-translate-y-[calc(50%+6px)] → top-[18px]）
 - [x] 修复 Research.tsx 历史报告弹窗 prose + LightMarkdown 双重样式冲突导致文字混乱
 - [x] 统一搜索框添加 font-sans 类
+
+## v62 移动端登录黑屏修复
+- [x] 修复未登录时骨架屏消失后黑屏问题（AppLayout未登录状态改为显示登录引导页）
+- [x] 修复骨架屏隐藏时机（添加400ms延迟，App.tsx主动调用__nexusHideSkeleton）
+- [x] 修复微信内置浏览器重定向（window.location.href → window.location.replace）

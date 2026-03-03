@@ -264,6 +264,15 @@ function AppContent() {
     return !onboarded && window.location.pathname.startsWith("/app");
   });
 
+  // Tell the HTML skeleton screen that React has fully mounted and rendered.
+  // This is more reliable than MutationObserver on slow/WeChat mobile browsers.
+  useEffect(() => {
+    const w = window as Window & typeof globalThis & { __nexusHideSkeleton?: () => void };
+    if (typeof w.__nexusHideSkeleton === 'function') {
+      w.__nexusHideSkeleton();
+    }
+  }, []);
+
   return (
     <>
       {/* Sync connected wallet address into AppContext profile */}

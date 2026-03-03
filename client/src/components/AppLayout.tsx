@@ -47,9 +47,10 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
   // ─── Global login guard ────────────────────────────────────────────────────
   // Redirect to internal /login page if user is not authenticated (only for protected routes).
   // Wait until auth check completes (authLoading=false) before redirecting.
+  // Use location.replace() for more reliable redirect in WeChat/mobile browsers.
   useEffect(() => {
     if (requireAuth && !authLoading && !isAuthenticated) {
-      window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname)}`;
+      window.location.replace(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
     }
   }, [requireAuth, authLoading, isAuthenticated]);
 
@@ -82,15 +83,32 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
     );
   }
 
-  // Not authenticated on protected route — show redirect message while useEffect fires
+  // Not authenticated on protected route — show login CTA while redirect fires
+  // This prevents black screen on slow/WeChat browsers where location.replace() may be delayed
   if (requireAuth && !isAuthenticated) {
+    const returnTo = encodeURIComponent(window.location.pathname);
     return (
-      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-          <MessageCircle size={24} className="text-white" />
+      <div
+        className="flex flex-col h-[100dvh] items-center justify-center gap-6 px-8"
+        style={{ background: '#060b18' }}
+      >
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-[0_0_32px_rgba(0,212,255,0.3)]">
+            <MessageCircle size={32} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">NexusChat</h1>
+          <p className="text-sm text-gray-400 text-center">Web3 社交 · AI 投研 · 量化跟单</p>
         </div>
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">正在跳转到登录页...</p>
+        {/* Login button */}
+        <a
+          href={`/login?returnTo=${returnTo}`}
+          className="w-full max-w-xs flex items-center justify-center gap-2 h-12 rounded-2xl font-semibold text-white text-base"
+          style={{ background: 'linear-gradient(135deg, #00d4ff, #a855f7)', boxShadow: '0 0 24px rgba(0,212,255,0.25)' }}
+        >
+          立即登录 / 注册
+        </a>
+        <p className="text-xs text-gray-600 text-center">登录后即可访问所有功能</p>
       </div>
     );
   }
