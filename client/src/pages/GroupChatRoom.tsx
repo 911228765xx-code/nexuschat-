@@ -2,7 +2,7 @@
  * GroupChatRoom — 群聊聊天室页面
  * 新功能：表情反应持久化、邀请链接弹窗、文件上传、已读回执、群管理后台（踢人/禁言/转让群主）
  */
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatChatTimestamp } from "@/lib/timeFormat";
 import { useParams, useLocation } from "wouter";
@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
 import VoiceRecorder from "@/components/VoiceRecorder";
@@ -63,6 +68,53 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── Pure helper functions (outside component to avoid re-creation on render) ──
+function getRoleBadge(role?: string) {
+  if (role === "owner") return <Crown size={10} className="text-amber-400" />;
+  if (role === "admin") return <Shield size={10} className="text-neon-cyan" />;
+  return null;
+}
+
+function renderContent(content: string, mentions?: string[]) {
+  if (!mentions || mentions.length === 0) return <span>{content}</span>;
+  const parts: (string | React.ReactElement)[] = [];
+  let remaining = content;
+  let key = 0;
+  mentions.forEach((mention) => {
+    const idx = remaining.indexOf(`@${mention}`);
+    if (idx >= 0) {
+      if (idx > 0) parts.push(remaining.slice(0, idx));
+      parts.push(<span key={key++} className="text-neon-cyan font-medium cursor-pointer hover:underline">@{mention}</span>);
+      remaining = remaining.slice(idx + mention.length + 1);
+    }
+  });
+  if (remaining) parts.push(remaining);
+  return <>{parts}</>;
+}
+
+function renderMessageContent(msg: GroupMessage) {
+  if (msg.messageType === "image" && msg.mediaUrl) {
+    return (
+      <div className="mt-1">
+        <img src={msg.mediaUrl} alt="Image" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer" onClick={() => window.open(msg.mediaUrl, "_blank")} />
+      </div>
+    );
+  }
+  if (msg.messageType === "file" && msg.mediaUrl) {
+    return (
+      <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-1 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
+        <File size={18} className="text-neon-cyan shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium truncate">{msg.fileName ?? "File"}</p>
+          {msg.fileSize && <p className="text-[10px] text-muted-foreground">{formatFileSize(msg.fileSize)}</p>}
+        </div>
+        <Download size={14} className="text-muted-foreground shrink-0" />
+      </a>
+    );
+  }
+  return <div className="whitespace-pre-wrap">{renderContent(msg.content, msg.mentions)}</div>;
 }
 
 export default function GroupChatRoom() {
@@ -328,6 +380,17 @@ export default function GroupChatRoom() {
     { enabled: visibleMsgIds.length > 0, staleTime: 15_000 }
   );
 
+  // ─── Pre-process reactions and read counts into Maps for O(1) lookup ────────
+  const reactionsMap = useMemo(() => {
+    if (!reactionsData) return {} as Record<number, Record<string, { count: number; mine: boolean }>>;
+    return reactionsData as Record<number, Record<string, { count: number; mine: boolean }>>;
+  }, [reactionsData]);
+
+  const readCountsMap = useMemo(() => {
+    if (!readCountsData) return {} as Record<number, number>;
+    return readCountsData as Record<number, number>;
+  }, [readCountsData]);
+
   // ─── Toggle reaction (persisted) ──────────────────────────────────────────
   const toggleReactionMutation = trpc.chat.toggleReaction.useMutation({
     onSuccess: () => { utils.chat.getReactions.invalidate(); }
@@ -482,57 +545,10 @@ export default function GroupChatRoom() {
     onError: (e) => toast.error(e.message),
   });
 
-  const getRoleBadge = (role?: string) => {
-    if (role === "owner") return <Crown size={10} className="text-amber-400" />;
-    if (role === "admin") return <Shield size={10} className="text-neon-cyan" />;
-    return null;
-  };
-
   const getStatusColor = (status: string) => {
     if (status === "online") return "bg-neon-green";
     if (status === "away") return "bg-amber-400";
     return "bg-muted-foreground/30";
-  };
-
-  const renderContent = (content: string, mentions?: string[]) => {
-    if (!mentions || mentions.length === 0) return <span>{content}</span>;
-    const parts: (string | React.ReactElement)[] = [];
-    let remaining = content;
-    let key = 0;
-    mentions.forEach((mention) => {
-      const idx = remaining.indexOf(`@${mention}`);
-      if (idx >= 0) {
-        if (idx > 0) parts.push(remaining.slice(0, idx));
-        parts.push(<span key={key++} className="text-neon-cyan font-medium cursor-pointer hover:underline">@{mention}</span>);
-        remaining = remaining.slice(idx + mention.length + 1);
-      }
-    });
-    if (remaining) parts.push(remaining);
-    return <>{parts}</>;
-  };
-
-  // ─── Render message bubble content based on type ──────────────────────────
-  const renderMessageContent = (msg: GroupMessage) => {
-    if (msg.messageType === "image" && msg.mediaUrl) {
-      return (
-        <div className="mt-1">
-          <img src={msg.mediaUrl} alt="Image" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer" onClick={() => window.open(msg.mediaUrl, "_blank")} />
-        </div>
-      );
-    }
-    if (msg.messageType === "file" && msg.mediaUrl) {
-      return (
-        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-1 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
-          <File size={18} className="text-neon-cyan shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate">{msg.fileName ?? "File"}</p>
-            {msg.fileSize && <p className="text-[10px] text-muted-foreground">{formatFileSize(msg.fileSize)}</p>}
-          </div>
-          <Download size={14} className="text-muted-foreground shrink-0" />
-        </a>
-      );
-    }
-    return <div className="whitespace-pre-wrap">{renderContent(msg.content, msg.mentions)}</div>;
   };
 
   return (
@@ -603,24 +619,17 @@ export default function GroupChatRoom() {
             </button>
           </div>
         )}
-        <AnimatePresence initial={false}>
           {messages.map((msg) => {
             const numericId = Number(msg.id);
-            const msgReactions = (!isNaN(numericId) && numericId < 1_700_000_000_000 && reactionsData)
-              ? reactionsData[numericId] ?? {}
-              : {};
-            const readCount = (!isNaN(numericId) && numericId < 1_700_000_000_000 && readCountsData)
-              ? (readCountsData as Record<number, number>)[numericId] ?? 0
-              : 0;
+            const isRealMsg = !isNaN(numericId) && numericId < 1_700_000_000_000;
+            const msgReactions = isRealMsg ? (reactionsMap[numericId] ?? {}) : {};
+            const readCount = isRealMsg ? (readCountsMap[numericId] ?? 0) : 0;
 
             return (
-              <motion.div
+              <div
                 key={msg.id}
                 id={`msg-${msg.id}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`flex ${msg.isMine ? "justify-end" : "justify-start"} group relative`}
+                className={`flex ${msg.isMine ? "justify-end" : "justify-start"} group relative animate-in fade-in slide-in-from-bottom-2 duration-200`}
               >
                 <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                   {!msg.isMine && (
@@ -737,10 +746,9 @@ export default function GroupChatRoom() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
-        </AnimatePresence>
       </div>
 
       {/* Input Area */}
@@ -1001,7 +1009,7 @@ export default function GroupChatRoom() {
                             <Volume2 size={18} className="text-neon-green" />
                             <div className="text-left"><p className="text-sm font-medium">Unmute</p><p className="text-xs text-muted-foreground">Restore messaging ability</p></div>
                           </button>
-                          <button onClick={() => { if (confirm(`Remove ${memberActionTarget.name} from group?`)) kickMemberMutation.mutate({ groupId, targetUserId: Number(memberActionTarget.id) }); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-neon-red/5 hover:bg-neon-red/10 transition-colors">
+                          <button onClick={() => { kickMemberMutation.mutate({ groupId, targetUserId: Number(memberActionTarget.id) }); setMemberActionTarget(null); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-neon-red/5 hover:bg-neon-red/10 transition-colors">
                             <UserMinus size={18} className="text-neon-red" />
                             <div className="text-left"><p className="text-sm font-medium text-neon-red">Remove from Group</p><p className="text-xs text-muted-foreground">Kick this member out</p></div>
                           </button>
@@ -1010,7 +1018,7 @@ export default function GroupChatRoom() {
 
                       {/* Transfer ownership (only owner can do this) */}
                       {myMember?.role === "owner" && memberActionTarget.role !== "owner" && memberActionTarget.id !== String(user?.id) && (
-                        <button onClick={() => { if (confirm(`Transfer ownership to ${memberActionTarget.name}?`)) transferOwnershipMutation.mutate({ groupId, newOwnerId: Number(memberActionTarget.id) }); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-400/5 hover:bg-amber-400/10 transition-colors">
+                        <button onClick={() => { transferOwnershipMutation.mutate({ groupId, newOwnerId: Number(memberActionTarget.id) }); setMemberActionTarget(null); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-400/5 hover:bg-amber-400/10 transition-colors">
                           <RefreshCw size={18} className="text-amber-400" />
                           <div className="text-left"><p className="text-sm font-medium text-amber-400">Transfer Ownership</p><p className="text-xs text-muted-foreground">Make this member the new owner</p></div>
                         </button>
@@ -1121,6 +1129,33 @@ export default function GroupChatRoom() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ─── Leave Group AlertDialog ──────────────────────────────────────────── */}
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent className="bg-card border border-border/40 max-w-sm mx-4">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-base">
+              <LogOut size={18} className="text-neon-red" />
+              退出群聊
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              确定要退出 <span className="text-foreground font-medium">{groupInfo?.name ?? "该群组"}</span> 吗？退出后将无法查看群消息，需要重新申请加入。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="flex-1 h-10 rounded-xl border-border/40 hover:bg-secondary/60">
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => leaveGroupMutation.mutate({ groupId })}
+              disabled={leaveGroupMutation.isPending}
+              className="flex-1 h-10 rounded-xl bg-neon-red/15 text-neon-red border border-neon-red/30 hover:bg-neon-red/25 transition-colors"
+            >
+              {leaveGroupMutation.isPending ? "退出中..." : "确认退出"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
