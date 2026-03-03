@@ -362,3 +362,12 @@
 - [x] 优化splash screen：DashboardLayout在auth加载期间显示骨架屏，减少视觉等待
 - [x] 为群聊页面用户头像添加loading=lazy懒加载（消息头像+成员列表+已读头像）
 - [x] 真机模拟测试（移动端393px + 桌面端1280px）验证所有功能通过
+
+## v58 深度加载优化（视频反馈）
+- [x] HTML内联骨架屏：Splash淡出后立即显示纯纯HTML骨架屏，无需等待React挂载
+- [x] main.tsx挂载后立即隐藏骨架屏，无缝过渡到真实内容
+- [x] 启用Terser压缩（比esbuild压缩率高约15%）
+- [x] 修复compression2插件配置，仅build时运行
+- [x] AppLayout路由切换动画（key=location，每次路由变化重新触发）
+- [x] PageLoader改为骨架屏效果，减少布局跳动
+- [x] 真机模拟测试通过（移动端393px + 桌面端1280px）

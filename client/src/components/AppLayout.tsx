@@ -100,8 +100,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
-          {/* Slide-up + fade-in on mount for smooth page transitions */}
-          <div className="page-enter">
+          {/* key=location forces re-mount on route change, re-triggering the CSS animation */}
+          <div key={location} className="page-enter">
             {children}
           </div>
         </ErrorBoundary>

@@ -41,6 +41,36 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="manifest" href="/manifest.json" />
 
+    <!-- CRITICAL: Inline theme + background to prevent any white/gray flash -->
+    <style>
+      /* Reset and base */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 100%; height: 100%; background-color: #0a0a14; color: #ffffff; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      #root { min-height: 100vh; background-color: #0a0a14; }
+
+      /* Splash screen */
+      @keyframes splashBounce {
+        0%, 100% { transform: translateY(0); opacity: 0.5; }
+        50% { transform: translateY(-6px); opacity: 1; }
+      }
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .splash-dot { animation: splashBounce 0.8s ease-in-out infinite; }
+      .splash-dot:nth-child(2) { animation-delay: 0.15s; }
+      .splash-dot:nth-child(3) { animation-delay: 0.3s; }
+
+      /* Inline skeleton screen styles */
+      .sk-shimmer {
+        background: linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 6px;
+      }
+    </style>
+
     <!-- Blocking theme script: prevents white flash before React hydrates -->
     <script>
       (function() {
@@ -50,9 +80,11 @@
           if (theme === 'dark') {
             document.documentElement.classList.add('dark');
             document.documentElement.style.backgroundColor = '#0a0a14';
+            document.body && (document.body.style.backgroundColor = '#0a0a14');
           } else {
             document.documentElement.classList.remove('dark');
             document.documentElement.style.backgroundColor = '#f5f5f7';
+            document.body && (document.body.style.backgroundColor = '#f5f5f7');
           }
         } catch(e) {
           document.documentElement.classList.add('dark');
@@ -75,14 +107,14 @@
   </head>
 
   <body>
-    <!-- Inline splash screen: visible before React mounts, removed when React takes over -->
+    <!-- Splash screen: visible immediately, removed when React mounts -->
     <div id="splash-screen" style="
       position: fixed; inset: 0; z-index: 9999;
       background: #0a0a14;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 20px;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.3s ease;
     ">
       <!-- NexusChat logo icon -->
       <div style="
@@ -97,51 +129,167 @@
       </div>
       <!-- App name -->
       <div style="text-align: center;">
-        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">NexusChat</div>
-        <div style="font-family: 'Inter', sans-serif; font-size: 12px; color: rgba(0,212,255,0.6); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase;">AI · Web3 · Social</div>
+        <div style="font-family: 'Space Grotesk', -apple-system, sans-serif; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">NexusChat</div>
+        <div style="font-family: 'Inter', -apple-system, sans-serif; font-size: 12px; color: rgba(0,212,255,0.6); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase;">AI · Web3 · Social</div>
       </div>
       <!-- Loading dots -->
       <div style="display: flex; gap: 6px; margin-top: 8px;">
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5); animation: splashBounce 0.8s ease-in-out infinite;"></div>
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5); animation: splashBounce 0.8s ease-in-out 0.15s infinite;"></div>
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5); animation: splashBounce 0.8s ease-in-out 0.3s infinite;"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
       </div>
     </div>
-    <style>
-      @keyframes splashBounce {
-        0%, 100% { transform: translateY(0); opacity: 0.5; }
-        50% { transform: translateY(-6px); opacity: 1; }
-      }
-    </style>
+
+    <!-- Inline skeleton screen: shown after splash fades, before React renders content -->
+    <div id="skeleton-screen" style="
+      position: fixed; inset: 0; z-index: 9998;
+      background: #0a0a14;
+      display: none;
+      flex-direction: column;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    ">
+      <!-- Top nav skeleton -->
+      <div style="height: 56px; background: #111120; border-bottom: 1px solid #1e1e3a; display: flex; align-items: center; padding: 0 16px; gap: 12px;">
+        <div class="sk-shimmer" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+        <div class="sk-shimmer" style="width: 120px; height: 16px;"></div>
+        <div style="flex: 1;"></div>
+        <div class="sk-shimmer" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+        <div class="sk-shimmer" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+      </div>
+      <!-- Content area skeleton -->
+      <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+        <!-- Row 1 -->
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+          <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+            <div class="sk-shimmer" style="width: 60%; height: 14px;"></div>
+            <div class="sk-shimmer" style="width: 80%; height: 12px;"></div>
+          </div>
+          <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
+        </div>
+        <!-- Row 2 -->
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+          <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+            <div class="sk-shimmer" style="width: 50%; height: 14px;"></div>
+            <div class="sk-shimmer" style="width: 70%; height: 12px;"></div>
+          </div>
+          <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
+        </div>
+        <!-- Row 3 -->
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+          <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+            <div class="sk-shimmer" style="width: 55%; height: 14px;"></div>
+            <div class="sk-shimmer" style="width: 75%; height: 12px;"></div>
+          </div>
+          <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
+        </div>
+        <!-- Row 4 -->
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+          <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+            <div class="sk-shimmer" style="width: 65%; height: 14px;"></div>
+            <div class="sk-shimmer" style="width: 85%; height: 12px;"></div>
+          </div>
+          <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
+        </div>
+      </div>
+      <!-- Bottom nav skeleton -->
+      <div style="height: 64px; background: #111120; border-top: 1px solid #1e1e3a; display: flex; align-items: center; justify-content: space-around; padding: 0 8px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
-      // Remove splash screen once React has mounted
-      document.addEventListener('DOMContentLoaded', function() {
-        var root = document.getElementById('root');
+      (function() {
         var splash = document.getElementById('splash-screen');
-        if (!splash) return;
-        // Use MutationObserver to detect when React renders content into #root
-        var observer = new MutationObserver(function() {
-          if (root && root.children.length > 0) {
+        var skeleton = document.getElementById('skeleton-screen');
+        var root = document.getElementById('root');
+        var skeletonShown = false;
+        var reactMounted = false;
+
+        function showSkeleton() {
+          if (skeletonShown) return;
+          skeletonShown = true;
+          // Fade out splash, fade in skeleton simultaneously
+          if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(function() {
+              if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+            }, 300);
+          }
+          if (skeleton) {
+            skeleton.style.display = 'flex';
+            requestAnimationFrame(function() {
+              skeleton.style.opacity = '1';
+            });
+          }
+        }
+
+        function hideSkeleton() {
+          if (!skeletonShown || reactMounted) return;
+          reactMounted = true;
+          if (skeleton) {
+            skeleton.style.opacity = '0';
+            setTimeout(function() {
+              if (skeleton && skeleton.parentNode) skeleton.parentNode.removeChild(skeleton);
+            }, 200);
+          }
+        }
+
+        // Show skeleton after JS starts executing (vendor.js downloaded)
+        // This replaces the splash as soon as JS is available
+        document.addEventListener('DOMContentLoaded', function() {
+          // Show skeleton after a short delay to let splash show first
+          // Then transition to skeleton when JS is loaded
+          var observer = new MutationObserver(function() {
+            if (root && root.children.length > 0) {
+              observer.disconnect();
+              hideSkeleton();
+            }
+          });
+          observer.observe(root, { childList: true, subtree: true });
+
+          // Show skeleton when main.tsx starts executing (JS loaded)
+          // We detect this by watching for React to start rendering
+          // Fallback: show skeleton after 1.5s if splash is still showing
+          setTimeout(showSkeleton, 1500);
+
+          // Hard timeout: remove everything after 8s
+          setTimeout(function() {
             observer.disconnect();
-            splash.style.opacity = '0';
-            setTimeout(function() {
-              if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
-            }, 400);
-          }
+            if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+            if (skeleton && skeleton.parentNode) skeleton.parentNode.removeChild(skeleton);
+          }, 8000);
         });
-        observer.observe(root, { childList: true });
-        // Fallback: remove after 5 seconds in case React fails to mount
-        setTimeout(function() {
-          observer.disconnect();
-          if (splash && splash.parentNode) {
-            splash.style.opacity = '0';
-            setTimeout(function() {
-              if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
-            }, 400);
-          }
-        }, 5000);
-      });
+
+        // Expose function for React to call when it's ready
+        window.__nexusHideSkeleton = hideSkeleton;
+        window.__nexusShowSkeleton = showSkeleton;
+      })();
     </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script

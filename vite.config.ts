@@ -404,6 +404,22 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Use Terser for better compression (15% smaller than esbuild default)
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console for debugging
+        drop_debugger: true,
+        pure_funcs: ['console.debug'],
+        passes: 2, // Two compression passes for better results
+      },
+      mangle: {
+        safari10: true, // Fix Safari 10 bugs
+      },
+      format: {
+        comments: false, // Remove all comments
+      },
+    },
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,

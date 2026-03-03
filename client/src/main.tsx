@@ -85,6 +85,13 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// JS is now loaded — immediately switch from splash to skeleton screen
+// This ensures users see a skeleton instead of black screen while React initializes
+try {
+  const showSkeleton = (window as any).__nexusShowSkeleton;
+  if (typeof showSkeleton === 'function') showSkeleton();
+} catch(_) {}
+
 window.__APP_RENDER_START__ = Date.now();
 try {
   createRoot(document.getElementById("root")!).render(
