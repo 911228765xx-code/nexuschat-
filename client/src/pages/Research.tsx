@@ -4,6 +4,7 @@
  * Design: Cyberpunk dark theme with neon accents, Space Grotesk headings
  */
 import { useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -788,13 +789,13 @@ export default function Research() {
         </div>
       </div>
 
-      {/* AI Report Modal - Beautiful Visualized Design */}
-      {showAiReport && (
-        <div className="fixed inset-x-0 top-0 z-[100] sm:flex sm:items-center sm:justify-center" style={{bottom: 'calc(62px + env(safe-area-inset-bottom, 0px))'}}>
+      {/* AI Report Modal - rendered via Portal to avoid overflow-hidden parent stacking context */}
+      {showAiReport && createPortal(
+        <div className="fixed inset-0 z-[100] sm:flex sm:items-center sm:justify-center" style={{zIndex: 100}}>
           {/* Backdrop - click to close */}
           <div className="absolute inset-0 bg-black/80" onClick={() => setShowAiReport(false)} />
-          {/* Bottom sheet panel - sits at the bottom of this container */}
-          <div className="absolute bottom-0 left-0 right-0 sm:static sm:max-w-3xl sm:mx-4 sm:rounded-3xl rounded-t-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col">
+          {/* Bottom sheet panel */}
+          <div className="absolute bottom-0 left-0 right-0 sm:static sm:max-w-3xl sm:mx-4 sm:rounded-3xl rounded-t-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col" style={{maxHeight: 'calc(100dvh - 62px)'}}>
 
             {/* Gradient Header Banner */}
             <div className="relative px-5 pt-5 pb-5 bg-gradient-to-br from-[#0f1629] via-[#130d2a] to-[#0a1020] border-b border-white/[0.06] shrink-0">
@@ -927,7 +928,7 @@ export default function Research() {
             )}
 
             {/* Report Content - Styled Markdown */}
-            <div className="overflow-y-auto" style={{maxHeight: 'calc(100dvh - 62px - 260px)'}}>
+            <div className="overflow-y-auto flex-1" style={{minHeight: 0}}>
               {aiReportContent ? (
                 <div className="px-5 py-5 pb-6 report-markdown">
                   <LightMarkdown>{aiReportContent}</LightMarkdown>
@@ -941,7 +942,7 @@ export default function Research() {
             </div>
 
             {/* Footer Actions Bar */}
-            <div className="px-4 pt-3 border-t border-white/[0.06] bg-[#060b18] flex items-center justify-between gap-3 shrink-0" style={{paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))'}}>
+            <div className="px-4 pt-3 border-t border-white/[0.06] bg-[#060b18] flex items-center justify-between gap-3 shrink-0" style={{paddingBottom: 'calc(max(12px, env(safe-area-inset-bottom, 0px)) + 62px)'}}>
               <p className="text-xs text-gray-600 sm:hidden">仅供参考，不构成投资建议</p>
               <p className="text-sm text-gray-600 hidden sm:block">本报告由 AI 生成，仅供参考，不构成投资建议</p>
               <div className="flex items-center gap-2 ml-auto">
@@ -965,7 +966,7 @@ export default function Research() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Share to Feed Dialog */}
       {showShareDialog && (
