@@ -397,54 +397,46 @@ export const walletRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const MORALIS_KEY = process.env.MORALIS_API_KEY ?? "";
-      if (!MORALIS_KEY) return [];
+      const data = await fetchBscScanV2<{
+        status: string;
+        message: string;
+        result: Array<{
+          hash: string;
+          from: string;
+          to: string;
+          value: string;
+          timeStamp: string;
+          isError: string;
+          gas: string;
+          gasPrice: string;
+        }>;
+      }>({
+        module: "account",
+        action: "txlist",
+        address: input.address,
+        startblock: "0",
+        endblock: "99999999",
+        page: input.page.toString(),
+        offset: input.offset.toString(),
+        sort: "desc",
+      });
 
-      try {
-        const cursor = input.page > 1 ? undefined : undefined; // pagination via cursor not page number
-        const params = new URLSearchParams({
-          chain: "bsc",
-          limit: input.offset.toString(),
-          order: "DESC",
-        });
-        const url = `https://deep-index.moralis.io/api/v2/${input.address}?${params.toString()}`;
-        const res = await fetch(url, {
-          headers: { "X-API-Key": MORALIS_KEY },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) return [];
-
-        const data = await res.json() as {
-          result: Array<{
-            hash: string;
-            from_address: string;
-            to_address: string;
-            value: string;
-            block_timestamp: string;
-            receipt_status: string;
-            gas: string;
-            gas_price: string;
-            transaction_fee: string;
-          }>;
-        };
-
-        if (!Array.isArray(data.result)) return [];
-
-        return data.result.map((tx) => ({
-          hash: tx.hash,
-          from: tx.from_address,
-          to: tx.to_address,
-          value: tx.value,
-          valueFormatted: (parseFloat(tx.value) / 1e18).toFixed(6),
-          timestamp: new Date(tx.block_timestamp).getTime(),
-          isError: tx.receipt_status === "0",
-          isIncoming: tx.to_address?.toLowerCase() === input.address.toLowerCase(),
-          gasUsed: tx.gas,
-          gasPrice: tx.gas_price,
-        }));
-      } catch {
+      if (!data || data.status !== "1" || !Array.isArray(data.result)) {
         return [];
       }
+
+      return data.result.map((tx: { hash: string; from: string; to: string; value: string; timeStamp: string; isError: string; gas: string; gasPrice: string }) => ({
+        hash: tx.hash,
+        from: tx.from,
+        to: tx.to,
+        value: tx.value,
+        valueFormatted: (parseFloat(tx.value) / 1e18).toFixed(6),
+        timestamp: parseInt(tx.timeStamp, 10) * 1000,
+        isError: tx.isError === "1",
+        isIncoming: tx.to.toLowerCase() === input.address.toLowerCase(),
+        gasUsed: tx.gas,
+        gasPrice: tx.gasPrice,
+      }));
     }),
 
   //
