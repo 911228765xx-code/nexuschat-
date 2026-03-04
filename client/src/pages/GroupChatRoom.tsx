@@ -583,10 +583,20 @@ export default function GroupChatRoom() {
       const appBaseUrl = configuredUrl || "https://nexuschat.best";
       const url = `${appBaseUrl}/invite/${data.token}`;
       setInviteUrl(url);
-      setShowInviteModal(true);
+      // Modal is already open (opened immediately on click), just update the URL
     },
-    onError: () => toast.error("Failed to create invite link"),
+    onError: () => {
+      toast.error("Failed to create invite link");
+      setShowInviteModal(false);
+    },
   });
+
+  // Open invite modal immediately and trigger API in parallel for faster perceived response
+  const handleOpenInviteModal = () => {
+    setInviteUrl(""); // reset previous URL
+    setShowInviteModal(true);
+    createInviteLinkMutation.mutate({ groupId });
+  };
 
   // ─── Delete / Leave / Update Group mutations ──────────────────────────────
   const deleteMessageMutation = trpc.chat.deleteMessage.useMutation({
@@ -923,9 +933,9 @@ export default function GroupChatRoom() {
                 <button onClick={() => setShowInviteModal(false)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60"><X size={16} /></button>
               </div>
               <p className="text-sm text-muted-foreground">Share this link or scan the QR code to join the group.</p>
-              {/* QR Code */}
-              {inviteUrl && (
-                <div className="flex justify-center">
+              {/* QR Code - show skeleton while loading, QR when ready */}
+              <div className="flex justify-center">
+                {inviteUrl ? (
                   <div className="p-3 rounded-2xl bg-white">
                     <QRCodeSVG
                       value={inviteUrl}
@@ -935,8 +945,13 @@ export default function GroupChatRoom() {
                       level="M"
                     />
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="w-[184px] h-[184px] rounded-2xl bg-secondary/40 border border-border/20 flex flex-col items-center justify-center gap-2 animate-pulse">
+                    <div className="w-6 h-6 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin" style={{ animationDuration: '0.8s' }} />
+                    <span className="text-xs text-muted-foreground">Generating...</span>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30">
                 <span className="flex-1 text-sm font-mono text-foreground truncate">{inviteUrl}</span>
                 <button onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success("Link copied!"); }} className="shrink-0 text-neon-cyan hover:text-neon-cyan/80 transition-colors">
@@ -990,7 +1005,7 @@ export default function GroupChatRoom() {
                 {[
                   { icon: Search, label: t("group.search"), action: () => { setShowSidebar(false); setShowSearch(true); } },
                   { icon: isMuted ? BellOff : Bell, label: isMuted ? t("group.unmute") : t("group.mute"), action: () => { setIsMuted(!isMuted); toast.success(isMuted ? "Notifications enabled" : "Group muted"); } },
-                  { icon: Link2, label: t("group.invite") ?? "Invite", action: () => { setShowSidebar(false); createInviteLinkMutation.mutate({ groupId }); } },
+                  { icon: Link2, label: t("group.invite") ?? "Invite", action: () => { setShowSidebar(false); handleOpenInviteModal(); } },
                   { icon: Settings, label: t("group.settings"), action: () => { if (isAdminOrOwner) { setEditGroupName(groupInfo?.name ?? ""); setEditGroupDesc(groupInfo?.description ?? ""); setEditGroupAvatar(groupInfo?.avatar ?? ""); setShowGroupSettings(true); } else { toast.error("只有群主/管理员可以修改设置"); } } },
                 ].map((item) => {
                   const Icon = item.icon;

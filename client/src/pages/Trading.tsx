@@ -548,12 +548,14 @@ export default function Trading() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
       {/* Price Ticker */}
-      <div className="bg-background border-b border-border/20 overflow-hidden h-7 flex items-center">
+      <div className="bg-background border-b border-border/20 overflow-hidden h-8 flex items-center" style={{ isolation: 'isolate', contain: 'layout style' }}>
         <div
           className="flex items-center gap-6 whitespace-nowrap"
           style={{
             animation: `ticker-scroll ${displayTicker.length * 4}s linear infinite`,
             willChange: 'transform',
+            transform: 'translateZ(0)',
+            backfaceVisibility: 'hidden',
           }}
         >
           {[...displayTicker, ...displayTicker].map((coin, i) => (

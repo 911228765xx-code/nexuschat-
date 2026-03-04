@@ -529,7 +529,7 @@ export default function Research() {
               <span>{showHistory ? "▲" : "▼"}</span>
             </button>
             {showHistory && (
-              <div className="mt-2 space-y-2.5 max-h-52 overflow-y-auto">
+              <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-0.5 scrollbar-hide">
                 {reportHistory.map((report) => (
                   <button
                     key={report.id}
@@ -539,21 +539,34 @@ export default function Research() {
                       setShowAiReport(true);
                       setShowHistory(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/30 border border-border/15 hover:border-[#a855f7]/30 transition-all text-left"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#0f1629]/80 border border-white/[0.06] hover:border-[#a855f7]/30 hover:bg-[#a855f7]/5 transition-all text-left group"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono font-bold text-[#a855f7]">{report.tokenSymbol}</span>
-                      {report.sentiment && (
-                        <span className={`text-sm px-2.5 py-1 rounded-full ${
-                          report.sentiment === 'bullish' ? 'bg-neon-green/15 text-neon-green' :
-                          report.sentiment === 'bearish' ? 'bg-neon-red/15 text-neon-red' :
-                          'bg-muted/30 text-muted-foreground'
-                        }`}>{report.sentiment}</span>
-                      )}
+                    {/* Token avatar */}
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#a855f7]/30 to-[#00d4ff]/20 flex items-center justify-center shrink-0 border border-[#a855f7]/20">
+                      <span className="text-xs font-black text-[#a855f7]">{report.tokenSymbol.slice(0, 2)}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(report.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
-                    </span>
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-sm font-bold font-mono text-white">{report.tokenSymbol}</span>
+                        {report.sentiment && (
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
+                            report.sentiment === 'bullish' ? 'bg-emerald-500/15 text-emerald-400' :
+                            report.sentiment === 'bearish' ? 'bg-red-500/15 text-red-400' :
+                            'bg-yellow-500/15 text-yellow-400'
+                          }`}>
+                            {report.sentiment === 'bullish' ? '▲ 看多' : report.sentiment === 'bearish' ? '▼ 看空' : '◆ 中性'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500">
+                        {new Date(report.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    {/* Arrow */}
+                    <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center shrink-0 group-hover:bg-[#a855f7]/20 transition-colors">
+                      <svg className="w-2.5 h-2.5 text-gray-500 group-hover:text-[#a855f7]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                    </div>
                   </button>
                 ))}
               </div>
