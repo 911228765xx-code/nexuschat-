@@ -10,7 +10,6 @@ import { serveStatic, setupVite } from "./vite";
 import { initSocketIO } from "../socket";
 import { startPriceAlertChecker } from "../priceAlertChecker";
 import { startBotScheduler } from "../botScheduler";
-import { registerHealthRoute, startDbHealthMonitor } from "../utils/dbHealthCheck";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
@@ -52,8 +51,6 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // Health check endpoint (before tRPC so it's always available)
-  registerHealthRoute(app);
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // SSE streaming endpoints (must be before tRPC middleware)
@@ -92,8 +89,6 @@ async function startServer() {
   startPriceAlertChecker();
   // Start Bot scheduler (posts at 09:00 and 21:00 daily)
   startBotScheduler();
-  // Start DB health monitor (checks every 5 min, alerts owner on repeated failures)
-  startDbHealthMonitor();
 }
 
 startServer().catch(console.error);

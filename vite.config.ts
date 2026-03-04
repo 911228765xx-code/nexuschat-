@@ -565,12 +565,8 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
     ],
-    // HMR WebSocket: In the Manus proxy environment, the browser accesses the app
-    // via a proxied domain (*.manus.computer) over HTTPS (port 443).
-    // Vite's HMR client defaults to ws://localhost:5173 which is unreachable.
-    // Setting clientPort:443 + protocol:"wss" tells the Vite HMR client to
-    // connect to wss://<current-page-host>:443 instead of ws://localhost:5173.
-    // The proxy forwards WebSocket upgrades on port 443 to the dev server.
+    // HMR: use the proxied domain so the browser can reach the WebSocket
+    // without this, Vite tries ws://localhost:5173 which is blocked by the proxy
     hmr: {
       clientPort: 443,
       protocol: "wss",
