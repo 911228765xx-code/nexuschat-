@@ -24,6 +24,12 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
+    // Never serve HTML for API routes — return 503 JSON so tRPC client can retry
+    if (url.startsWith("/api/")) {
+      res.status(503).json({ error: "Service temporarily unavailable" });
+      return;
+    }
+
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,
