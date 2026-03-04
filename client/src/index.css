@@ -305,6 +305,8 @@ button:not(:disabled):active,
 .overflow-y-scroll,
 .overflow-x-scroll {
   -webkit-overflow-scrolling: touch;
+  /* Promote scrollable containers to compositor layer for smooth 60fps scroll */
+  will-change: scroll-position;
 }
 
 /* Page enter animation — used by AppLayout for route transitions */
@@ -314,4 +316,46 @@ button:not(:disabled):active,
 }
 .page-enter {
   animation: page-enter 180ms ease-out both;
+  /* Prevent layout jank during entry animation */
+  will-change: opacity, transform;
+}
+
+/* ─── Performance & rendering optimizations ─────────────────────────────────── */
+/* GPU-accelerate fixed nav to avoid repaint on every scroll tick */
+nav.glass,
+.glass {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Promote pulsing skeleton elements to compositor layer */
+.animate-pulse {
+  will-change: opacity;
+}
+.animate-spin {
+  will-change: transform;
+}
+
+/* Prevent image layout shift: lazy-loaded images fill their containers predictably */
+img[loading="lazy"] {
+  content-visibility: auto;
+}
+
+/* Reduce motion for users who prefer it — removes animations without breaking layout */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: none;
+    opacity: 1;
+  }
+  .animate-pulse {
+    animation: none;
+    opacity: 0.6;
+  }
+  .animate-spin {
+    animation: none;
+  }
 }

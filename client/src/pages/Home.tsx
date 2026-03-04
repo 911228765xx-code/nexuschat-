@@ -44,6 +44,16 @@ export default function Home() {
       setLocation('/app/chat');
     }
   }, [loading, user, setLocation]);
+
+  // Smart CTA: logged-in → go straight to app; guest → go to login with returnTo
+  // This eliminates the extra redirect hop (Home → AppLayout → Login)
+  const handleEnterApp = () => {
+    if (user) {
+      setLocation('/app/chat');
+    } else {
+      window.location.href = '/login?returnTo=%2Fapp%2Fchat';
+    }
+  };
   const { t } = useI18n();
   const [walletOpen, setWalletOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -148,7 +158,7 @@ export default function Home() {
               {t('pwa.downloadApp')}
             </Button>
             <Button
-              onClick={() => setLocation("/app/chat")}
+              onClick={handleEnterApp}
               className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-9 px-4"
               variant="outline"
             >
@@ -160,7 +170,7 @@ export default function Home() {
           {/* Mobile: Enter App button + Hamburger */}
           <div className="flex sm:hidden items-center gap-2">
             <Button
-              onClick={() => setLocation("/app/chat")}
+              onClick={handleEnterApp}
               className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-8 px-3"
               variant="outline"
             >
@@ -241,7 +251,7 @@ export default function Home() {
             className="flex flex-col sm:flex-row gap-3 justify-center"
           >
             <Button
-              onClick={() => setLocation("/app/chat")}
+              onClick={handleEnterApp}
               className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-12 px-8 text-base font-semibold glow-cyan"
             >
               {t("home.cta")}
@@ -406,7 +416,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
-              onClick={() => setLocation("/app/chat")}
+              onClick={handleEnterApp}
               className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-12 px-10 text-base font-semibold glow-cyan"
             >
               {t("cta.button")}

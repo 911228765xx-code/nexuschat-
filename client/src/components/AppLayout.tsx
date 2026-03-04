@@ -9,7 +9,7 @@
  * Unauthenticated users on protected routes are redirected to the Manus OAuth login page.
  */
 import { useLocation, Link } from "wouter";
-import { MessageCircle, Compass, Brain, TrendingUp, User, Loader2 } from "lucide-react";
+import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
@@ -70,15 +70,42 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
     { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
   ];
 
-  // Show full-screen loading spinner while auth check is in progress (protected routes only)
+  // Show skeleton screen while auth check is in progress (protected routes only)
+  // Matches the app layout structure to prevent layout shift and feel native
   if (requireAuth && authLoading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-          <MessageCircle size={24} className="text-white" />
+      <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
+        {/* Content skeleton — mimics Chat page structure */}
+        <div className="flex-1 overflow-hidden" style={{ padding: '16px' }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
+            <div className="h-6 w-28 rounded-lg bg-secondary/60 animate-pulse" />
+            <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse" />
+          </div>
+          <div className="h-10 w-full rounded-xl bg-secondary/40 animate-pulse" style={{ marginBottom: '12px' }} />
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-border/10" style={{ paddingTop: '12px', paddingBottom: '12px' }}>
+              <div className="w-12 h-12 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+              <div className="flex-1">
+                <div className="flex justify-between" style={{ marginBottom: '8px' }}>
+                  <div className="h-3.5 rounded bg-secondary/60 animate-pulse" style={{ width: `${60 + i * 10}px` }} />
+                  <div className="h-3 w-10 rounded bg-secondary/40 animate-pulse" />
+                </div>
+                <div className="h-3 rounded bg-secondary/40 animate-pulse" style={{ width: `${80 + i * 15}px` }} />
+              </div>
+            </div>
+          ))}
         </div>
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">正在验证登录状态...</p>
+        {/* Bottom nav skeleton */}
+        <div className="flex-shrink-0 border-t border-border/20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', background: 'var(--background)' }}>
+          <div className="flex items-center justify-around" style={{ height: '62px' }}>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5">
+                <div className="w-6 h-6 rounded bg-secondary/60 animate-pulse" />
+                <div className="w-8 h-2 rounded bg-secondary/40 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
