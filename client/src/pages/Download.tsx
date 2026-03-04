@@ -12,7 +12,7 @@ import { useI18n } from "@/contexts/I18nContext";
 const ANDROID_APK_URL =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.2-android_005a11e0.zip";
 const QR_ANDROID =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-android_d009212f.png";
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-android-v102_76400638.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
