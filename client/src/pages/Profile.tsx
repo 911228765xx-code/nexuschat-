@@ -79,7 +79,7 @@ export default function Profile() {
           <a
             href="/"
             className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors"
-            title={t("profile.backToHome") || "返回首页"}
+            title={t("profile.backToHome") || "返回主页"}
           >
             <Home size={18} className="text-muted-foreground" />
           </a>
