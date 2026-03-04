@@ -3,10 +3,10 @@
  * 身份卡片、核心数据、功能入口、主题切换、设置
  * v1.9: AppContext全局状态接入
  */
-import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2, Globe, Home, Languages } from "lucide-react";
+import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2, Globe, Home, Languages, ArrowLeft } from "lucide-react";
 import { LOCALES } from "@/contexts/I18nContext";
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRouter } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -76,8 +76,14 @@ export default function Profile() {
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
-          <h1 className="text-lg font-semibold font-display">{t("profile.title")}</h1>
-          <div className="flex-1" />
+          <a
+            href="/"
+            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors"
+            title={t("profile.backToHome") || "返回首页"}
+          >
+            <Home size={18} className="text-muted-foreground" />
+          </a>
+          <h1 className="text-lg font-semibold font-display flex-1 text-center">{t("profile.title")}</h1>
           <Link href="/app/edit-profile">
             <button className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors">
               <Edit3 size={18} className="text-muted-foreground" />
@@ -317,21 +323,6 @@ export default function Profile() {
             </div>
           </motion.div>
 
-          {/* Back to Website */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.28 }}
-          >
-            <a
-              href="/"
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-neon-cyan/5 border border-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/10 transition-colors"
-            >
-              <Home size={16} />
-              {t("profile.backToHome") || "Back to Website"}
-            </a>
-          </motion.div>
-
           {/* Logout — clear session and redirect to /login */}
           <button
             onClick={() => {
@@ -346,7 +337,7 @@ export default function Profile() {
 
           {/* Version info */}
           <div className="text-center pb-4">
-            <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v2.1.0</p>
+            <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v1.0.0</p>
             <p className="text-sm text-muted-foreground/30 mt-1">Built for Web3 • Powered by NexusAI</p>
           </div>
         </div>

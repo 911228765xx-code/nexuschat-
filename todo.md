@@ -448,9 +448,16 @@
 
 ## v_cap App 图标 + 版本更新机制
 
-- [ ] 生成 App 图标并配置到 Android/iOS 工程
-- [ ] 服务端版本检测接口（tRPC app.getVersion）
-- [ ] 数据库 appConfig 表存储版本配置（latestVersion、minVersion、downloadUrl）
-- [ ] 前端 App 启动时版本检测（强制/可选更新弹窗）
-- [ ] 设置页「版本更新」入口（显示当前版本 + 手动检查）
-- [ ] 真机模拟测试验证
+- [x] 生成 App 图标并配置到 Android/iOS 工程
+- [x] 服务端版本检测接口（tRPC app.getVersion）
+- [x] 数据库 appConfig 表存储版本配置（latestVersion、minVersion、downloadUrl）
+- [x] 前端 App 启动时版本检测（强制/可选更新弹窗）
+- [x] 设置页「版本更新」入口（显示当前版本 + 手动检查）
+- [x] 真机模拟测试验证
+
+## v_fix 返回按钮 + 图标 + 推送 + 下载页
+
+- [x] 修复首页及各子页面返回按钮缺失（不影响登录和导航逻辑）
+- [x] 生成品牌 Logo 并替换 App 图标（Android + iOS 全套尺寸）
+- [x] 接入 Web Push 推送通知（Service Worker v8 + VAPID + Settings 开关）
+- [x] APK 下载页已存在并完整（Android + iOS 双平台）

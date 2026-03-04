@@ -860,6 +860,8 @@
   "settings.language": "语言",
   "settings.languageChanged": "语言已切换",
   "settings.notifications": "通知",
+  "settings.pushNotifications": "推送通知",
+  "settings.pushDisabled": "开启后可在后台收到新消息提醒",
   "settings.support": "支持",
   "settings.about": "关于",
   "settings.logout": "退出登录",

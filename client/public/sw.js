@@ -1,10 +1,8 @@
 /**
- * NexusChat Service Worker v7 - Self-Destruct Mode
+ * NexusChat Service Worker v8 - Push Notifications Support
  *
- * 彻底解决 SW 缓存导致的黑屏问题：
- * 此 SW 激活后立即清空所有缓存并注销自身。
- * 我们依赖 HTTP 缓存头（/assets/ 使用 immutable，HTML 使用 no-cache）
- * 而不是 SW 缓存，避免旧 bundle 被永久缓存。
+ * 策略：不缓存任何资源（依赖 HTTP 缓存头），仅处理 Web Push 通知。
+ * 这样既解决了旧版本 SW 缓存导致的黑屏问题，又支持推送通知。
  */
 
 // 安装：立即跳过等待，强制激活
@@ -25,8 +23,12 @@ self.addEventListener("activate", (event) => {
           clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
         });
       })
-      .then(() => self.registration.unregister())
   );
+});
+
+// Fetch：直接透传，不缓存任何资源
+self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request));
 });
 
 // ---- Web Push: receive push notification ----
@@ -47,7 +49,7 @@ self.addEventListener("push", (event) => {
     badge: data.badge,
     data: { url: data.url },
     vibrate: [200, 100, 200],
-    tag: "nexuschat-message",
+    tag: "nexuschat-notification",
     renotify: true,
   };
 
@@ -68,7 +70,7 @@ self.addEventListener("notificationclick", (event) => {
         for (const client of clients) {
           if (client.url.includes(self.location.origin) && "focus" in client) {
             client.focus();
-            client.navigate(targetUrl);
+            if ("navigate" in client) client.navigate(targetUrl);
             return;
           }
         }
