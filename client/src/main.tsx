@@ -1,9 +1,10 @@
-// build:2026-03-04T08:30:48.759Z
+// build:2026-03-04T08:41:28.752Z
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { TRPCClientError, httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
+import { toast } from "sonner";
 import App from "./App";
 import "./index.css";
 // Web3 providers are loaded on-demand inside Wallet page only
@@ -11,7 +12,39 @@ import "./index.css";
 import { initSentry } from "@/lib/sentry";
 initSentry();
 
-// No-login mode: API errors are logged but never redirect to login page
+// ─── 503 / Server-Restart Detection ─────────────────────────────────────────
+// Track whether we've already shown the "server restarting" toast so we don't
+// spam the user with repeated notifications during a brief restart window.
+let serverRestartToastId: string | number | undefined;
+
+function is503Error(error: unknown): boolean {
+  if (!(error instanceof TRPCClientError)) return false;
+  // Our vite.ts catch-all now returns { error: "Service temporarily unavailable" }
+  // with HTTP 503 status. tRPC wraps this as a TRPCClientError with the JSON body.
+  const msg = error.message ?? "";
+  return (
+    msg.includes("Service temporarily unavailable") ||
+    msg.includes("503") ||
+    // Fallback: the old HTML response before our fix was applied
+    msg.includes("Unexpected token '<'")
+  );
+}
+
+function showServerRestartToast() {
+  if (serverRestartToastId) return; // already showing
+  serverRestartToastId = toast.loading("服务器重启中，请稍候...", {
+    duration: Infinity, // keep until dismissed
+    id: "server-restart",
+  });
+}
+
+function dismissServerRestartToast() {
+  if (!serverRestartToastId) return;
+  toast.dismiss(serverRestartToastId);
+  serverRestartToastId = undefined;
+}
+
+// ─── QueryClient ─────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -23,19 +56,50 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       // Don't refetch when network reconnects (we handle this manually)
       refetchOnReconnect: false,
-      // Retry failed requests only once
-      retry: 1,
+      // Smart retry: retry 503 errors up to 3 times with 2s delay; other errors once
+      retry: (failureCount, error) => {
+        if (is503Error(error)) return failureCount < 3;
+        return failureCount < 1;
+      },
+      retryDelay: (attemptIndex, error) => {
+        if (is503Error(error)) return 2_000; // 2s fixed delay for server restart
+        return Math.min(1_000 * 2 ** attemptIndex, 10_000); // exponential for other errors
+      },
+    },
+    mutations: {
+      // Retry mutations once on 503 (server restart during submit)
+      retry: (failureCount, error) => {
+        if (is503Error(error)) return failureCount < 1;
+        return false;
+      },
+      retryDelay: 2_000,
     },
   },
 });
+
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    console.error("[API Query Error]", event.query.state.error);
+    const error = event.query.state.error;
+    if (is503Error(error)) {
+      showServerRestartToast();
+    } else {
+      console.error("[API Query Error]", error);
+    }
+  }
+  // When a query succeeds after retrying, dismiss the restart toast
+  if (event.type === "updated" && event.action.type === "success") {
+    dismissServerRestartToast();
   }
 });
+
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    console.error("[API Mutation Error]", event.mutation.state.error);
+    const error = event.mutation.state.error;
+    if (is503Error(error)) {
+      showServerRestartToast();
+    } else {
+      console.error("[API Mutation Error]", error);
+    }
   }
 });
 
