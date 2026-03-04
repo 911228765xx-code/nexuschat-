@@ -461,3 +461,12 @@
 - [x] 生成品牌 Logo 并替换 App 图标（Android + iOS 全套尺寸）
 - [x] 接入 Web Push 推送通知（Service Worker v8 + VAPID + Settings 开关）
 - [x] APK 下载页已存在并完整（Android + iOS 双平台）
+
+## v52 钱包数据真实化修复
+- [x] Profile 页「我的钱包」移除硬编码 $12,480.50，改为读取已连接钱包的实时链上总资产
+- [x] 通过 useWallet 获取已连接地址，调用 trpc.wallet.getBalance + trpc.wallet.getTokenBalances 计算真实总额
+- [x] 未连接钱包时显示「未连接」占位符
+- [x] 服务端 getBalance 改用 BSC 公共 RPC（eth_getBalance），不再依赖 BscScan V1 API
+- [x] 服务端 getTokenBalances 改用 BSC RPC eth_call 查询 15 种主流代币余额，价格通过 CoinGecko ID 获取
+- [x] 服务端 getTransactions 改用 fetchBscScanV2（需 API key，无 key 时返回空列表）
+- [x] 158 个测试全部通过，TypeScript 0 错误

@@ -5,7 +5,7 @@
  */
 import { Copy, ChevronRight, Wallet, TrendingUp, FileText, Users, Gift, Trophy, CheckSquare, Settings, Bell, Moon, Sun, LogOut, Shield, Edit3, Loader2, Globe, Home, Languages, ArrowLeft } from "lucide-react";
 import { LOCALES } from "@/contexts/I18nContext";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation, useRouter } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useWallet } from "@/hooks/useWallet";
 
 export default function Profile() {
   const { t, locale, setLocale } = useI18n();
@@ -41,11 +42,42 @@ export default function Profile() {
     { enabled: !!me?.id, retry: false, staleTime: 30_000 }
   );
 
+  // ─── Real wallet data from connected Web3 wallet ───
+  const { address: walletAddress, isConnected: walletConnected } = useWallet();
+  const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(walletAddress ?? "");
+
+  // BNB native balance + USD value
+  const { data: bnbData, isLoading: bnbLoading } = trpc.wallet.getBalance.useQuery(
+    { address: walletAddress ?? "" },
+    { enabled: isValidAddress, staleTime: 60_000, refetchOnWindowFocus: false }
+  );
+
+  // BEP-20 token balances + USD values
+  const { data: tokenData, isLoading: tokenLoading } = trpc.wallet.getTokenBalances.useQuery(
+    { address: walletAddress ?? "" },
+    { enabled: isValidAddress, staleTime: 60_000, refetchOnWindowFocus: false }
+  );
+
+  // Compute total wallet value in USD
+  const walletTotalUsd = useMemo(() => {
+    if (!walletConnected || !isValidAddress) return null;
+    const bnbUsd = bnbData?.usdValue ? parseFloat(bnbData.usdValue) : 0;
+    const tokenUsd = tokenData ? tokenData.reduce((sum, t) => sum + (t.usdValue ?? 0), 0) : 0;
+    return bnbUsd + tokenUsd;
+  }, [walletConnected, isValidAddress, bnbData, tokenData]);
+
+  const walletValueDisplay = useMemo(() => {
+    if (!walletConnected) return t("profile.walletNotConnected") || "未连接";
+    if (bnbLoading || tokenLoading) return "...";
+    if (walletTotalUsd === null) return "--";
+    return `$${walletTotalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }, [walletConnected, bnbLoading, tokenLoading, walletTotalUsd, t]);
+
   const menuSections = [
     {
       title: t("profile.activity"),
       items: [
-        { icon: Wallet, label: t("profile.wallet"), value: "$12,480.50", color: "text-neon-cyan" },
+        { icon: Wallet, label: t("profile.wallet"), value: walletValueDisplay, color: "text-neon-cyan" },
         { icon: TrendingUp, label: t("profile.strategies"), value: "3", color: "text-neon-green" },
         { icon: FileText, label: t("profile.researchHistory"), value: "23", color: "text-neon-purple" },
         { icon: Users, label: t("profile.groups"), value: "12", color: "text-foreground" },

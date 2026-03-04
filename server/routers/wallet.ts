@@ -6,14 +6,76 @@ import { users, swapHistory } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
-// BscScan API base URL (free tier, no API key needed for basic queries)
-const BSCSCAN_API = "https://api.bscscan.com/api";
-const BSCSCAN_KEY = process.env.BSCSCAN_API_KEY ?? "YourApiKeyToken"; // free tier fallback
+// BSC public RPC endpoints (no API key required)
+const BSC_RPC_ENDPOINTS = [
+  "https://bsc-dataseed.binance.org/",
+  "https://bsc-dataseed1.binance.org/",
+  "https://bsc-dataseed2.binance.org/",
+];
 
-async function fetchBscScan<T>(params: Record<string, string>): Promise<T | null> {
+// BscScan V2 API (optional, for transaction history)
+const BSCSCAN_V2_API = "https://api.bscscan.com/v2/api";
+const BSCSCAN_KEY = process.env.BSCSCAN_API_KEY ?? "";
+
+interface BscToken {
+  symbol: string;
+  name: string;
+  contractAddress: string;
+  decimals: number;
+  cgId: string;
+}
+
+// Well-known BSC BEP-20 tokens
+const BSC_KNOWN_TOKENS: BscToken[] = [
+  { symbol: "USDT",  name: "Tether USD",          contractAddress: "0x55d398326f99059fF775485246999027B3197955", decimals: 18, cgId: "tether" },
+  { symbol: "USDC",  name: "USD Coin",             contractAddress: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18, cgId: "usd-coin" },
+  { symbol: "BUSD",  name: "Binance USD",          contractAddress: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", decimals: 18, cgId: "binance-usd" },
+  { symbol: "CAKE",  name: "PancakeSwap Token",    contractAddress: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", decimals: 18, cgId: "pancakeswap-token" },
+  { symbol: "ETH",   name: "Ethereum (BSC)",       contractAddress: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", decimals: 18, cgId: "ethereum" },
+  { symbol: "BTC",   name: "Bitcoin (BSC)",        contractAddress: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", decimals: 18, cgId: "bitcoin" },
+  { symbol: "XRP",   name: "XRP Token (BSC)",      contractAddress: "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE", decimals: 18, cgId: "ripple" },
+  { symbol: "ADA",   name: "Cardano Token (BSC)",  contractAddress: "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47", decimals: 18, cgId: "cardano" },
+  { symbol: "DOT",   name: "Polkadot Token (BSC)", contractAddress: "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402", decimals: 18, cgId: "polkadot" },
+  { symbol: "LINK",  name: "Chainlink (BSC)",      contractAddress: "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD", decimals: 18, cgId: "chainlink" },
+  { symbol: "LTC",   name: "Litecoin Token (BSC)", contractAddress: "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94", decimals: 18, cgId: "litecoin" },
+  { symbol: "MATIC", name: "Polygon (BSC)",        contractAddress: "0xCC42724C6683B7E57334c4E856f4c9965ED682bD", decimals: 18, cgId: "matic-network" },
+  { symbol: "DOGE",  name: "Dogecoin (BSC)",       contractAddress: "0xbA2aE424d960c26247Dd6c32edC70B295c744C43", decimals: 8,  cgId: "dogecoin" },
+  { symbol: "SOL",   name: "Solana (BSC)",         contractAddress: "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF", decimals: 18, cgId: "solana" },
+  { symbol: "AVAX",  name: "Avalanche (BSC)",      contractAddress: "0x1CE0c2827e2eF14D5C4f29a091d735A204794041", decimals: 18, cgId: "avalanche-2" },
+];
+
+// Call BSC RPC with fallback across multiple endpoints
+async function callBscRpc<T>(method: string, params: unknown[]): Promise<T | null> {
+  for (const endpoint of BSC_RPC_ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) continue;
+      const json = (await res.json()) as { result?: T; error?: unknown };
+      if (json.error) continue;
+      return json.result ?? null;
+    } catch {
+      // try next endpoint
+    }
+  }
+  return null;
+}
+
+// ERC-20 balanceOf(address) ABI-encoded call data
+function encodeBalanceOf(address: string): string {
+  const addr = address.replace(/^0x/, "").toLowerCase().padStart(64, "0");
+  return "0x70a08231" + addr;
+}
+
+async function fetchBscScanV2<T>(params: Record<string, string>): Promise<T | null> {
+  if (!BSCSCAN_KEY) return null;
   try {
-    const url = new URL(BSCSCAN_API);
-    Object.entries({ ...params, apikey: BSCSCAN_KEY }).forEach(([k, v]) =>
+    const url = new URL(BSCSCAN_V2_API);
+    Object.entries({ ...params, chainid: "56", apikey: BSCSCAN_KEY }).forEach(([k, v]) =>
       url.searchParams.set(k, v)
     );
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
@@ -62,8 +124,7 @@ export const walletRouter = router({
       .limit(1);
     return result[0] ?? null;
   }),
-
-  // ─── Get BNB balance from BscScan ─────────────────────────────────────────
+  // ─── Get BNB balance via BSC public RPC (no API key required) ────────────────
   getBalance: publicProcedure
     .input(
       z.object({
@@ -71,23 +132,20 @@ export const walletRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const data = await fetchBscScan<{ status: string; message: string; result: string }>({
-        module: "account",
-        action: "balance",
-        address: input.address,
-        tag: "latest",
-      });
+      // Use BSC public RPC directly — no API key required
+      const hexBalance = await callBscRpc<string>("eth_getBalance", [input.address, "latest"]);
 
-      if (!data || data.status !== "1") {
+      if (!hexBalance) {
         return { bnbBalance: "0", bnbBalanceFormatted: "0.0000", usdValue: null };
       }
 
-      const bnb = Number(BigInt(data.result)) / 1e18;
+      const bnbWei = parseInt(hexBalance, 16);
+      const bnb = bnbWei / 1e18;
       const bnbFormatted = bnb.toFixed(4);
 
       // Fetch BNB price in USD from CoinGecko (cached)
       let usdValue: string | null = null;
-      const bnbPriceData = await cachedFetch<any>(
+      const bnbPriceData = await cachedFetch<{ binancecoin?: { usd?: number } }>(
         "bnb-usd-price",
         "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd",
         TTL.prices,
@@ -97,10 +155,10 @@ export const walletRouter = router({
         usdValue = (bnb * bnbPriceData.binancecoin.usd).toFixed(2);
       }
 
-      return { bnbBalance: data.result, bnbBalanceFormatted: bnbFormatted, usdValue };
+      return { bnbBalance: hexBalance, bnbBalanceFormatted: bnbFormatted, usdValue };
     }),
 
-  // ─── Get BEP-20 token balances ────────────────────────────────────────────
+  // ─── Get BEP-20 token balances via BSC public RPC (no API key required) ─────
   getTokenBalances: publicProcedure
     .input(
       z.object({
@@ -108,72 +166,72 @@ export const walletRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const data = await fetchBscScan<{
-        status: string;
-        message: string;
-        result: Array<{
-          tokenName: string;
-          tokenSymbol: string;
-          tokenDecimal: string;
-          contractAddress: string;
-          balance: string;
-        }>;
-      }>({
-        module: "account",
-        action: "tokenlist",
-        address: input.address,
-      });
+      // Query balances for all known BSC tokens in parallel via RPC eth_call
+      const balanceResults = await Promise.all(
+        BSC_KNOWN_TOKENS.map(async (token) => {
+          try {
+            const hexBal = await callBscRpc<string>("eth_call", [
+              { to: token.contractAddress, data: encodeBalanceOf(input.address) },
+              "latest",
+            ]);
+            if (!hexBal || hexBal === "0x" || hexBal === "0x0") return null;
+            const rawBal = parseInt(hexBal, 16);
+            if (rawBal === 0) return null;
+            const formatted = (rawBal / Math.pow(10, token.decimals)).toFixed(6);
+            if (parseFloat(formatted) <= 0) return null;
+            return { ...token, balanceFormatted: formatted, usdPrice: 0, usdValue: 0, change24h: 0 };
+          } catch {
+            return null;
+          }
+        })
+      );
 
-      if (!data || data.status !== "1" || !Array.isArray(data.result)) {
-        return [];
-      }
-      const tokens = data.result
-        .filter((t) => parseFloat(t.balance) > 0)
-        .slice(0, 20)
-        .map((t) => ({
-          name: t.tokenName,
-          symbol: t.tokenSymbol,
-          decimals: parseInt(t.tokenDecimal, 10),
-          contractAddress: t.contractAddress.toLowerCase(),
-          balance: t.balance,
-          balanceFormatted: (
-            parseFloat(t.balance) / Math.pow(10, parseInt(t.tokenDecimal, 10))
-          ).toFixed(6),
-          usdPrice: 0,
-          usdValue: 0,
-          change24h: 0,
-        }));
+      const tokens = balanceResults.filter((t): t is NonNullable<typeof t> => t !== null);
 
-      // ── Enrich with CoinGecko BSC contract prices ──────────────────────────
-      if (tokens.length > 0) {
-        try {
-          const contractList = tokens.map((t) => t.contractAddress).join(",");
-          const cacheKey = `bsc-token-prices-${contractList.slice(0, 64)}`;
-          const priceUrl = `https://api.coingecko.com/api/v3/simple/token_price/binance-smart-chain?contract_addresses=${contractList}&vs_currencies=usd&include_24hr_change=true`;
-          const priceData = await cachedFetch<Record<string, { usd?: number; usd_24h_change?: number }>>(
-            cacheKey,
-            priceUrl,
-            TTL.prices,
-            (res) => res.json(),
-          );
-          if (priceData) {
-            for (const token of tokens) {
-              const p = priceData[token.contractAddress];
-              if (p?.usd) {
-                const bal = parseFloat(token.balanceFormatted);
-                token.usdPrice = p.usd;
-                token.usdValue = parseFloat((bal * p.usd).toFixed(2));
-                token.change24h = parseFloat((p.usd_24h_change ?? 0).toFixed(2));
-              }
+      if (tokens.length === 0) return [];
+
+      // ── Enrich with CoinGecko prices by CoinGecko ID ──────────────────────
+      try {
+        const cgIdSet = new Set(tokens.map((t) => t.cgId));
+        const cgIds = Array.from(cgIdSet).join(",");
+        const priceUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${cgIds}&vs_currencies=usd&include_24hr_change=true`;
+        const cacheKey = `bsc-token-cg-prices-${cgIds.slice(0, 80)}`;
+        const priceData = await cachedFetch<Record<string, { usd?: number; usd_24h_change?: number }>>(
+          cacheKey,
+          priceUrl,
+          TTL.prices,
+          (res) => res.json(),
+        );
+        if (priceData) {
+          for (const token of tokens) {
+            const p = priceData[token.cgId];
+            if (p?.usd) {
+              const bal = parseFloat(token.balanceFormatted);
+              token.usdPrice = p.usd;
+              token.usdValue = parseFloat((bal * p.usd).toFixed(2));
+              token.change24h = parseFloat((p.usd_24h_change ?? 0).toFixed(2));
             }
           }
-        } catch {
-          // Price enrichment is best-effort — return tokens without prices on failure
         }
+      } catch {
+        // Price enrichment is best-effort
       }
 
       // Sort by USD value descending
-      return tokens.sort((a, b) => b.usdValue - a.usdValue);
+      return tokens
+        .filter((t) => t.usdValue > 0 || parseFloat(t.balanceFormatted) > 0)
+        .sort((a, b) => b.usdValue - a.usdValue)
+        .map((t) => ({
+          name: t.name,
+          symbol: t.symbol,
+          decimals: t.decimals,
+          contractAddress: t.contractAddress.toLowerCase(),
+          balance: t.balanceFormatted,
+          balanceFormatted: t.balanceFormatted,
+          usdPrice: t.usdPrice,
+          usdValue: t.usdValue,
+          change24h: t.change24h,
+        }));
     }),
 
   // ─── Get swap quote from CoinGecko ──────────────────────────────────────────
@@ -329,8 +387,7 @@ export const walletRouter = router({
         .limit(input.limit);
       return rows;
     }),
-
-  // ─── Get transaction history ───────────────────────────────────────────────
+  // ─── Get transaction history via BscScan V2 (optional, requires API key) ────────
   getTransactions: publicProcedure
     .input(
       z.object({
@@ -340,7 +397,7 @@ export const walletRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const data = await fetchBscScan<{
+      const data = await fetchBscScanV2<{
         status: string;
         message: string;
         result: Array<{
@@ -368,7 +425,7 @@ export const walletRouter = router({
         return [];
       }
 
-      return data.result.map((tx) => ({
+      return data.result.map((tx: { hash: string; from: string; to: string; value: string; timeStamp: string; isError: string; gas: string; gasPrice: string }) => ({
         hash: tx.hash,
         from: tx.from,
         to: tx.to,
