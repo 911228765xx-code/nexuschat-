@@ -795,7 +795,7 @@ export default function Research() {
           <div className="absolute bottom-0 left-0 right-0 sm:static sm:max-w-3xl sm:mx-4 sm:rounded-3xl rounded-t-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col" style={{maxHeight: '85dvh', bottom: 'calc(62px + env(safe-area-inset-bottom, 0px))'}}>
 
             {/* Gradient Header Banner */}
-            <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#0f1629] via-[#130d2a] to-[#0a1020] border-b border-white/[0.06] shrink-0">
+            <div className="relative px-5 pt-5 pb-5 bg-gradient-to-br from-[#0f1629] via-[#130d2a] to-[#0a1020] border-b border-white/[0.06] shrink-0">
               {/* Decorative glow orbs */}
               <div className="absolute top-0 right-0 w-48 h-48 bg-[#a855f7]/8 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#00d4ff]/6 rounded-full blur-2xl pointer-events-none" />
@@ -803,34 +803,34 @@ export default function Research() {
               <div className="relative flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   {/* Token identity */}
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#a855f7] to-[#00d4ff] flex items-center justify-center shrink-0 shadow-lg">
-                      <Sparkles size={16} className="text-white" />
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#a855f7] to-[#00d4ff] flex items-center justify-center shrink-0 shadow-lg">
+                      <Sparkles size={18} className="text-white" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-black text-white font-['Space_Grotesk'] tracking-wide">{aiReportToken}</span>
-                        <span className="text-sm text-[#a855f7]/70 font-mono bg-[#a855f7]/10 px-2 py-1 rounded-full border border-[#a855f7]/20">AI REPORT</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xl font-black text-white font-['Space_Grotesk'] tracking-wide">{aiReportToken}</span>
+                        <span className="text-xs text-[#a855f7]/70 font-mono bg-[#a855f7]/10 px-2 py-0.5 rounded-full border border-[#a855f7]/20 leading-5">AI REPORT</span>
                       </div>
-                      <p className="text-[13px] text-gray-500 mt-0.5">深度投研分析 · 仅供参考</p>
+                      <p className="text-xs text-gray-500 mt-1">深度投研分析 · 仅供参考，不构成投资建议</p>
                     </div>
                   </div>
 
                   {/* Status badges row */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Sentiment badge */}
-                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-sm font-semibold border ${
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold border ${
                       aiReportSentiment === "bullish"
                         ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : aiReportSentiment === "bearish"
                         ? "bg-red-500/15 text-red-300 border-red-500/30"
                         : "bg-yellow-500/15 text-yellow-300 border-yellow-500/30"
                     }`}>
-                      <span className="text-sm">{aiReportSentiment === "bullish" ? "▲" : aiReportSentiment === "bearish" ? "▼" : "◆"}</span>
+                      <span>{aiReportSentiment === "bullish" ? "▲" : aiReportSentiment === "bearish" ? "▼" : "◆"}</span>
                       {aiReportSentiment === "bullish" ? "看多" : aiReportSentiment === "bearish" ? "看空" : "中性"}
                     </div>
                     {/* Risk badge */}
-                    <div className={`flex items-center gap-2.5 px-2.5 py-1 rounded-full text-sm font-medium border ${
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border ${
                       aiReportRisk === "low"
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                         : aiReportRisk === "high"
@@ -841,13 +841,13 @@ export default function Research() {
                     </div>
                     {/* AI Score badge */}
                     {aiScore !== null && (
-                      <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-sm font-bold border ${
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold border ${
                         aiScore >= 8 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : aiScore >= 6 ? "bg-[#00d4ff]/10 text-[#00d4ff] border-[#00d4ff]/25"
                         : "bg-red-500/10 text-red-400 border-red-500/20"
                       }`}>
-                        <Sparkles size={9} />
-                        {aiScore}/10
+                        <Sparkles size={10} />
+                        AI {aiScore}/10
                       </div>
                     )}
                   </div>
@@ -856,7 +856,7 @@ export default function Research() {
                 {/* Close button */}
                 <button
                   onClick={() => setShowAiReport(false)}
-                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors shrink-0"
+                  className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors shrink-0 mt-0.5"
                 >
                   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -865,23 +865,23 @@ export default function Research() {
 
             {/* Key Metrics Grid - Visualized Data Cards */}
             {(aiKeyMetrics.length > 0 || isSearching) && (
-              <div className="px-4 py-3 border-b border-white/[0.06] bg-[#060b18] shrink-0 max-h-[200px] overflow-y-auto">
+              <div className="px-4 py-3 border-b border-white/[0.06] bg-[#060b18] shrink-0 max-h-[220px] overflow-y-auto">
                 {isSearching && aiKeyMetrics.length === 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] animate-pulse">
-                        <div className="h-2 bg-white/10 rounded mb-2 w-3/4" />
-                        <div className="h-3 bg-white/15 rounded w-full" />
+                      <div key={i} className="bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] animate-pulse">
+                        <div className="h-2 bg-white/10 rounded mb-2.5 w-3/4" />
+                        <div className="h-4 bg-white/15 rounded w-full" />
                       </div>
                     ))}
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
                       {aiKeyMetrics.slice(0, 5).map((m, i) => (
-                        <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06] hover:border-[#a855f7]/20 transition-colors">
-                          <p className="text-sm text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
-                          <p className={`text-sm font-bold font-mono truncate ${
+                        <div key={i} className="bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] hover:border-[#a855f7]/20 transition-colors">
+                          <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-2 truncate leading-tight">{m.label}</p>
+                          <p className={`text-[13px] font-bold font-mono truncate ${
                             m.isChange
                               ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
                               : "text-white"
@@ -898,11 +898,11 @@ export default function Research() {
                       ))}
                     </div>
                     {aiKeyMetrics.length > 5 && (
-                      <div className="grid grid-cols-4 gap-2 mt-2">
+                      <div className="grid grid-cols-4 gap-2.5 mt-2.5">
                         {aiKeyMetrics.slice(5).map((m, i) => (
-                          <div key={i} className="bg-white/[0.03] rounded-xl px-2.5 py-2 border border-white/[0.06]">
-                            <p className="text-sm text-gray-500 uppercase tracking-wider mb-2 truncate">{m.label}</p>
-                            <p className={`text-sm font-bold font-mono truncate ${
+                          <div key={i} className="bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06]">
+                            <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-2 truncate leading-tight">{m.label}</p>
+                            <p className={`text-[13px] font-bold font-mono truncate ${
                               m.isChange
                                 ? (m.changeVal ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
                                 : "text-white"
@@ -927,7 +927,7 @@ export default function Research() {
             {/* Report Content - Styled Markdown */}
             <div className="overflow-y-auto" style={{maxHeight: '55vh'}}>
               {aiReportContent ? (
-                <div className="px-5 py-4 report-markdown">
+                <div className="px-5 py-5 pb-6 report-markdown">
                   <LightMarkdown>{aiReportContent}</LightMarkdown>
                 </div>
               ) : (

@@ -470,3 +470,12 @@
 - [x] 服务端 getTokenBalances 改用 BSC RPC eth_call 查询 15 种主流代币余额，价格通过 CoinGecko ID 获取
 - [x] 服务端 getTransactions 改用 fetchBscScanV2（需 API key，无 key 时返回空列表）
 - [x] 158 个测试全部通过，TypeScript 0 错误
+
+## v53 AI 投研深度报告排版优化
+- [x] 定位深度投研报告渲染组件，分析拥挤原因
+- [x] 增加段落间距、标题层级字号、分区视觉分隔线
+- [x] 优化移动端阅读体验（行高、内边距、代码块等）
+- [x] H1/H2/H3 字号层级明显拉开（18px/16px/14px），H2 增加左边青色色条
+- [x] 列表项行间距从 0.25rem 增大到 0.5rem，引用块内边距增大
+- [x] Header 区域字号增大（token 名称 xl→xl），badge 内边距增大
+- [x] 报告内容区域内边距从 py-4 增大到 py-5 pb-6
