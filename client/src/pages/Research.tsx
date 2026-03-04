@@ -790,9 +790,9 @@ export default function Research() {
 
       {/* AI Report Modal - Beautiful Visualized Design */}
       {showAiReport && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[100] sm:flex sm:items-center sm:justify-center">
           <div className="absolute inset-0 bg-black/80 [backdrop-filter:none]" onClick={() => setShowAiReport(false)} />
-          <div className="relative w-full sm:max-w-3xl max-h-[95vh] sm:max-h-[90vh] sm:mx-4 sm:rounded-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col">
+          <div className="absolute bottom-0 left-0 right-0 sm:static sm:max-w-3xl sm:mx-4 sm:rounded-3xl rounded-t-3xl bg-[#080d1e] border border-[#a855f7]/20 shadow-[0_0_80px_rgba(168,85,247,0.15)] overflow-hidden flex flex-col" style={{maxHeight: '85dvh', bottom: 'calc(62px + env(safe-area-inset-bottom, 0px))'}}>
 
             {/* Gradient Header Banner */}
             <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-[#0f1629] via-[#130d2a] to-[#0a1020] border-b border-white/[0.06] shrink-0">
@@ -925,7 +925,7 @@ export default function Research() {
             )}
 
             {/* Report Content - Styled Markdown */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto" style={{maxHeight: '55vh'}}>
               {aiReportContent ? (
                 <div className="px-5 py-4 report-markdown">
                   <LightMarkdown>{aiReportContent}</LightMarkdown>
