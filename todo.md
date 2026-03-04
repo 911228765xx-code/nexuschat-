@@ -430,3 +430,18 @@
 - [ ] AppLayout：auth loading 骨架屏替换 Loader2 spinner
 - [ ] 全局字体：确认 font-display: swap 已配置（Google Fonts 不阻塞渲染）
 - [ ] 图片懒加载：确认关键页面图片有 loading="lazy"
+
+## Capacitor 原生 App 封壳
+
+- [ ] 安装 @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios @capacitor/keyboard @capacitor/status-bar
+- [ ] 创建 capacitor.config.ts 配置文件
+- [ ] 修改 vite.config.ts 输出路径适配 Capacitor（outDir → dist/public）
+- [ ] 添加 package.json cap:build / cap:sync / cap:android / cap:ios 脚本
+- [ ] 适配 iOS/Android 安全区域（验证 env(safe-area-inset-bottom) 完整覆盖所有 fixed 元素）
+- [ ] 适配键盘弹出时底部导航不被遮挡（@capacitor/keyboard 插件 + KeyboardResize.None）
+- [ ] 配置 App 图标和启动屏（capacitor-assets 工具）
+- [ ] 配置深链接（App Links / Universal Links，nexuschat.best）
+- [ ] 生成 Android 工程（npx cap add android）
+- [ ] 生成 iOS 工程（npx cap add ios）
+- [ ] 构建并同步（pnpm build && npx cap sync）
+- [ ] 输出 Android APK 工程供用户构建

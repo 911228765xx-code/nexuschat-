@@ -359,3 +359,35 @@ img[loading="lazy"] {
     animation: none;
   }
 }
+
+/* ─── Capacitor / Native App Adaptations ─────────────────────────────────── */
+
+/* CSS variable set by useCapacitor hook when keyboard is open */
+:root {
+  --keyboard-height: 0px;
+}
+
+/* When keyboard is open in Capacitor native app:
+   Scroll containers with .keyboard-aware class get extra bottom padding
+   so content is not hidden behind the keyboard.
+   Bottom nav stays fixed (Keyboard resize=none in capacitor.config.ts) */
+body.keyboard-open .keyboard-aware {
+  padding-bottom: var(--keyboard-height) !important;
+}
+
+/* iOS safe area top padding for status bar overlay (notch/dynamic island) */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* iOS/Android safe area bottom padding (used on bottom nav and fixed footers) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Capacitor: ensure full-screen layout on iOS with notch/home indicator */
+html, body {
+  height: 100%;
+  /* Support iOS safe area in viewport */
+  min-height: -webkit-fill-available;
+}

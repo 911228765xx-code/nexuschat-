@@ -10,6 +10,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider } from "./contexts/I18nContext";
 import AppLayout from "./components/AppLayout";
 import { AppProvider, useApp } from "./contexts/AppContext";
+import { useCapacitor } from "./hooks/useCapacitor";
+import { useDeepLink } from "./hooks/useDeepLink";
 
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
 const Onboarding = lazy(() => import("./components/Onboarding"));
@@ -259,6 +261,12 @@ function RouteContent() {
 }
 
 function AppContent() {
+  // Initialize Capacitor native plugins (keyboard, status bar, back button)
+  // No-op in browser environments
+  useCapacitor();
+  // Handle deep links and universal links in native app
+  useDeepLink();
+
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
     return !onboarded && window.location.pathname.startsWith("/app");
