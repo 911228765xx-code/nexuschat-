@@ -547,23 +547,40 @@ export default function Trading() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Public data (traders, strategies, prices) is always visible; personal data silently hidden when not logged in */}
-      {/* Price Ticker */}
-      <div className="bg-background border-b border-border/20 overflow-hidden h-8 flex items-center" style={{ isolation: 'isolate', contain: 'layout style' }}>
+      {/* Price Ticker — uses a duplicated-list marquee rendered in its own stacking context.
+           The outer div clips overflow; the inner track uses CSS animation on a dedicated
+           GPU layer (translateZ(0)) so button:active scale() on ancestors cannot interfere. */}
+      <div
+        className="bg-background border-b border-border/20 h-8 flex items-center"
+        style={{
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 0,
+          /* Create a new stacking context so ancestor transforms don't bleed in */
+          isolation: 'isolate',
+          /* Clip only on the inline axis to prevent vertical clipping of descenders */
+          clipPath: 'inset(0)',
+        }}
+      >
         <div
           className="flex items-center gap-6 whitespace-nowrap"
           style={{
+            /* Use the CSS custom animation defined in index.css */
             animation: `ticker-scroll ${displayTicker.length * 4}s linear infinite`,
-            willChange: 'transform',
+            /* Promote to its own compositor layer — completely isolated from parent transforms */
             transform: 'translateZ(0)',
+            willChange: 'transform',
             backfaceVisibility: 'hidden',
+            /* Prevent the element itself from being affected by pointer events / active states */
+            pointerEvents: 'none',
           }}
         >
           {[...displayTicker, ...displayTicker].map((coin, i) => (
-            <span key={`${coin.symbol}-${i}`} className="flex items-center gap-2.5 text-[13px]">
-              <span className="font-mono font-medium text-foreground">{coin.symbol}</span>
+            <span key={`${coin.symbol}-${i}`} className="inline-flex items-center gap-2.5 text-[13px] leading-none">
+              <span className="font-mono font-semibold text-foreground">{coin.symbol}</span>
               <span className="font-mono text-muted-foreground">${coin.price.toLocaleString()}</span>
-              <span className={`font-mono ${coin.change >= 0 ? "text-neon-green" : "text-neon-red"}`}>
-                {coin.change >= 0 ? "+" : ""}{coin.change}%
+              <span className={`font-mono ${coin.change >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>
+                {coin.change >= 0 ? '+' : ''}{coin.change}%
               </span>
             </span>
           ))}

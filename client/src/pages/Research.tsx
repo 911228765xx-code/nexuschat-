@@ -805,7 +805,7 @@ export default function Research() {
 
             {/* Key Metrics Grid - Visualized Data Cards */}
             {(aiKeyMetrics.length > 0 || isSearching) && (
-              <div className="px-4 py-3 border-b border-white/[0.06] bg-[#060b18] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] bg-[#060b18] shrink-0 max-h-[200px] overflow-y-auto">
                 {isSearching && aiKeyMetrics.length === 0 ? (
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {Array.from({ length: 5 }).map((_, i) => (
