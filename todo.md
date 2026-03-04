@@ -479,3 +479,10 @@
 - [x] 列表项行间距从 0.25rem 增大到 0.5rem，引用块内边距增大
 - [x] Header 区域字号增大（token 名称 xl→xl），badge 内边距增大
 - [x] 报告内容区域内边距从 py-4 增大到 py-5 pb-6
+
+## v54 AI 投研报告弹窗空白修复
+- [x] 报告内容区 maxHeight 固定导致下方大量空白，改为 flex-1 自适应
+- [x] 弹窗整体高度随内容自动收缩，不超过 85dvh
+- [x] 根本原因：Tailwind 4 中 @layer 外的样式优先级低于 @layer utilities，导致 margin 被覆盖
+- [x] 将 LightMarkdown 和 report-markdown 样式全部移入 @layer components，优先级正确生效
+- [x] 删除文件中重复的旧样式块，避免冲突
