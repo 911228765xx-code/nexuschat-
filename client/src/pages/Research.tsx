@@ -315,6 +315,7 @@ export default function Research() {
       toast.success("报告已发布到社区动态");
       setShowShareDialog(false);
       setShareComment("");
+      setShowAiReport(false);
     },
     onError: (err) => toast.error("发布失败: " + err.message),
   });
@@ -324,6 +325,7 @@ export default function Research() {
       toast.success("报告已分享到社区\u52a8\u6001");
       setShowShareDialog(false);
       setShareComment("");
+      setShowAiReport(false);
     },
     onError: (err) => toast.error("分享失败: " + err.message),
   });
@@ -956,7 +958,7 @@ export default function Research() {
                 </button>
                 {/* Share to Feed button - always visible */}
                 <button
-                  onClick={() => { setShowShareDialog(true); setShareComment(""); }}
+                  onClick={() => { setShowAiReport(false); setShowShareDialog(true); setShareComment(""); }}
                   className="flex items-center gap-2.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#a855f7] to-[#00d4ff] text-sm text-white font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-[#a855f7]/20"
                 >
                   <Share2 size={12} />
@@ -971,7 +973,7 @@ export default function Research() {
       {/* Share to Feed Dialog */}
       {showShareDialog && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 [backdrop-filter:none]" onClick={() => setShowShareDialog(false)} />
+          <div className="absolute inset-0 bg-black/60 [backdrop-filter:none]" onClick={() => { setShowShareDialog(false); setShowAiReport(true); }} />
           <div className="relative w-full max-w-md rounded-2xl bg-[#0f1629] border border-[#a855f7]/30 shadow-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/10">
               <h3 className="text-base font-bold text-white font-['Space_Grotesk'] flex items-center gap-2">
@@ -1018,7 +1020,7 @@ export default function Research() {
             {/* Actions */}
             <div className="px-5 py-3 border-t border-white/10 flex items-center justify-end gap-3">
               <button
-                onClick={() => setShowShareDialog(false)}
+                onClick={() => { setShowShareDialog(false); setShowAiReport(true); }}
                 className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
               >取消</button>
               {!authUser ? (
