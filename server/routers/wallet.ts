@@ -87,7 +87,7 @@ async function fetchBscScanV2<T>(params: Record<string, string>): Promise<T | nu
 }
 
 export const walletRouter = router({
-  // ─── Update wallet address ─────────────────────────────────────────────────
+  //
   updateAddress: protectedProcedure
     .input(
       z.object({
@@ -106,7 +106,7 @@ export const walletRouter = router({
       return { success: true };
     }),
 
-  // ─── Get wallet profile from DB ────────────────────────────────────────────
+  //
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -124,7 +124,7 @@ export const walletRouter = router({
       .limit(1);
     return result[0] ?? null;
   }),
-  // ─── Get BNB balance via BSC public RPC (no API key required) ────────────────
+  //
   getBalance: publicProcedure
     .input(
       z.object({
@@ -158,7 +158,7 @@ export const walletRouter = router({
       return { bnbBalance: hexBalance, bnbBalanceFormatted: bnbFormatted, usdValue };
     }),
 
-  // ─── Get BEP-20 token balances via BSC public RPC (no API key required) ─────
+  //
   getTokenBalances: publicProcedure
     .input(
       z.object({
@@ -190,7 +190,7 @@ export const walletRouter = router({
 
       if (tokens.length === 0) return [];
 
-      // ── Enrich with CoinGecko prices by CoinGecko ID ──────────────────────
+      //
       try {
         const cgIdSet = new Set(tokens.map((t) => t.cgId));
         const cgIds = Array.from(cgIdSet).join(",");
@@ -234,7 +234,7 @@ export const walletRouter = router({
         }));
     }),
 
-  // ─── Get swap quote from CoinGecko ──────────────────────────────────────────
+  //
   getSwapQuote: publicProcedure
     .input(
       z.object({
@@ -335,7 +335,7 @@ export const walletRouter = router({
       }
     }),
 
-  // ─── Save swap to history ─────────────────────────────────────────────────
+  //
   saveSwapHistory: protectedProcedure
     .input(
       z.object({
@@ -369,7 +369,7 @@ export const walletRouter = router({
       return { success: true };
     }),
 
-  // ─── Get swap history ─────────────────────────────────────────────────────
+  //
   getSwapHistory: protectedProcedure
     .input(
       z.object({
@@ -387,7 +387,7 @@ export const walletRouter = router({
         .limit(input.limit);
       return rows;
     }),
-  // ─── Get transaction history via BscScan V2 (optional, requires API key) ────────
+  //
   getTransactions: publicProcedure
     .input(
       z.object({
@@ -439,7 +439,7 @@ export const walletRouter = router({
       }));
     }),
 
-  // ─── Get Ethereum mainnet ERC-20 token balances (Alchemy + CoinGecko) ─────────────
+  //
   // Uses Alchemy JSON-RPC for accurate real-time balances.
   // Falls back to Etherscan free API if ALCHEMY_API_KEY is not set.
   // Enriches each token with USD price and 24h change from CoinGecko.
@@ -469,7 +469,7 @@ export const walletRouter = router({
         "0xbe9895146f7af43049ca1c1ae358b0541ea49704": { cgId: "coinbase-wrapped-staked-eth", symbol: "cbETH", name: "Coinbase Wrapped Staked ETH" },
       };
 
-      // ── Alchemy: get token balances ────────────────────────────────────────────
+      //
       async function alchemyPost<T>(method: string, params: unknown[]): Promise<T | null> {
         if (!ALCHEMY_KEY) return null;
         try {
@@ -485,7 +485,7 @@ export const walletRouter = router({
         } catch { return null; }
       }
 
-      // ── Fetch ETH native balance ──────────────────────────────────────────────
+      //
       async function fetchEthBalance(): Promise<number> {
         const hexBal = await alchemyPost<string>("eth_getBalance", [input.address, "latest"]);
         if (hexBal) return parseInt(hexBal, 16) / 1e18;
@@ -499,7 +499,7 @@ export const walletRouter = router({
         return 0;
       }
 
-      // ── CoinGecko prices ──────────────────────────────────────────────────────────
+      //
       async function fetchPrices(ids: string[]): Promise<Record<string, { usd: number; usd_24h_change: number }>> {
         if (!ids.length) return {};
         try {
@@ -523,7 +523,7 @@ export const walletRouter = router({
         chain: "ETH";
       };
 
-      // ── Main: Alchemy path ──────────────────────────────────────────────────────
+      //
       const [rawTokens, ethBalance] = await Promise.all([
         alchemyPost<{ tokenBalances: Array<{ contractAddress: string; tokenBalance: string }> }>("alchemy_getTokenBalances", [input.address, "erc20"]),
         fetchEthBalance(),
@@ -580,7 +580,7 @@ export const walletRouter = router({
           });
         });
       } else {
-        // ── Fallback: Etherscan tokentx deduplicated list ───────────────────────
+        //
         try {
           const params = new URLSearchParams({
             module: "account", action: "tokenlist",

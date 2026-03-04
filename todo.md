@@ -486,3 +486,13 @@
 - [x] 根本原因：Tailwind 4 中 @layer 外的样式优先级低于 @layer utilities，导致 margin 被覆盖
 - [x] 将 LightMarkdown 和 report-markdown 样式全部移入 @layer components，优先级正确生效
 - [x] 删除文件中重复的旧样式块，避免冲突
+
+## v55 弹窗空白彻底修复
+- [ ] flex-1 在 maxHeight 容器内被撑满导致空白，改为内容区固定 max-h 滚动
+- [ ] 弹窗整体 h-auto，不再依赖 flex-1 撑高
+
+## v55 弹窗空白彻底修复
+- [x] 内容区 maxHeight 改为 calc(100dvh - 62px - 260px)，确保内容不超出屏幕
+- [x] 弹窗容器底部边界改为 bottom: calc(62px + env(safe-area-inset-bottom))
+- [x] Footer 添加 safe-area padding，移动端内容不被底部导航栏遮挡
+- [x] 排版样式移入 @layer components，Tailwind 4 优先级问题彻底解决
