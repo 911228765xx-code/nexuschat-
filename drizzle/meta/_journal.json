@@ -134,6 +134,13 @@
       "when": 1772530231684,
       "tag": "0018_nostalgic_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1772606302860,
+      "tag": "0019_blushing_lockjaw",
+      "breakpoints": true
     }
   ]
 }

@@ -43,6 +43,7 @@ const LoginPage = lazy(() => import("./pages/Login"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
+const AppUpdateDialog = lazy(() => import("./components/AppUpdateDialog").then(m => ({ default: m.AppUpdateDialog })));
 
 // ─── Route prefetch helpers (called on nav hover/touch to preload JS chunks) ──
 // Each function triggers the dynamic import so the chunk is fetched before navigation.
@@ -302,6 +303,11 @@ function AppContent() {
       {/* PWA install banner — shown to mobile users who haven't installed yet */}
       <Suspense fallback={null}>
         <PWAInstallBanner />
+      </Suspense>
+
+      {/* App version update check — auto-checks on startup, shows dialog if update available */}
+      <Suspense fallback={null}>
+        <AppUpdateDialog autoCheck />
       </Suspense>
     </>
   );

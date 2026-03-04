@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO app_config (`key`, `value`, `description`) VALUES ('app_version_latest', '2.0.0', '最新版本号'), ('app_version_min', '1.5.0', '最低支持版本（低于此版本强制更新）'), ('app_version_download_android', 'https://nexuschat.best/download/nexuschat-2.0.0.apk', 'Android APK 下载地址'), ('app_version_download_ios', 'https://apps.apple.com/app/nexuschat', 'iOS App Store 地址'), ('app_version_release_notes', '• 全新 AI 投研引擎，分析速度提升 3x\\n• 新增跟单策略回测功能\\n• 修复若干已知问题', '更新说明') ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute INSERT INTO app_config (`key`, `value`, `description`) VALUES ('app_version_latest', '2.0.0', '最新版本号'), ('app_version_min', '1.5.0', '最低支持版本（低于此版本强制更新）'), ('app_version_download_android', 'https://nexuschat.best/download/nexuschat-2.0.0.apk', 'Android APK 下载地址'), ('app_version_download_ios', 'https://apps.apple.com/app/nexuschat', 'iOS App Store 地址'), ('app_version_release_notes', '• 全新 AI 投研引擎，分析速度提升 3x\\n• 新增跟单策略回测功能\\n• 修复若干已知问题', '更新说明') ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'key' in 'field list'"
+  ]
+}

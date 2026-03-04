@@ -628,3 +628,19 @@ export const groupMutes = mysqlTable(
   (t) => [index("idx_mutes_group_user").on(t.groupId, t.userId)]
 );
 export type GroupMute = typeof groupMutes.$inferSelect;
+
+// ─── App Version Config ───────────────────────────────────────────────────────
+// Stores app version info for OTA update checks
+export const appConfig = mysqlTable("app_config", {
+  id: int("id").autoincrement().primaryKey(),
+  platform: mysqlEnum("platform", ["android", "ios", "all"]).notNull().default("all"),
+  latestVersion: varchar("latestVersion", { length: 20 }).notNull().default("1.0.0"),
+  minVersion: varchar("minVersion", { length: 20 }).notNull().default("1.0.0"),
+  downloadUrlAndroid: text("downloadUrlAndroid"),
+  downloadUrlIos: text("downloadUrlIos"),
+  releaseNotes: text("releaseNotes"),
+  isForceUpdate: boolean("isForceUpdate").default(false).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AppConfig = typeof appConfig.$inferSelect;
+export type InsertAppConfig = typeof appConfig.$inferInsert;

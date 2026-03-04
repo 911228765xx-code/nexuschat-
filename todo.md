@@ -445,3 +445,12 @@
 - [ ] 生成 iOS 工程（npx cap add ios）
 - [ ] 构建并同步（pnpm build && npx cap sync）
 - [ ] 输出 Android APK 工程供用户构建
+
+## v_cap App 图标 + 版本更新机制
+
+- [ ] 生成 App 图标并配置到 Android/iOS 工程
+- [ ] 服务端版本检测接口（tRPC app.getVersion）
+- [ ] 数据库 appConfig 表存储版本配置（latestVersion、minVersion、downloadUrl）
+- [ ] 前端 App 启动时版本检测（强制/可选更新弹窗）
+- [ ] 设置页「版本更新」入口（显示当前版本 + 手动检查）
+- [ ] 真机模拟测试验证

@@ -20,3 +20,6 @@ export const getLoginUrl = (returnPath?: string) => {
 
   return url.toString();
 };
+
+// Current native app shell version — bump when releasing a new APK/IPA
+export const CURRENT_APP_VERSION = "1.0.0";

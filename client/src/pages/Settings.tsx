@@ -17,6 +17,9 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { AppUpdateDialog } from "@/components/AppUpdateDialog";
+import { CURRENT_APP_VERSION } from "@/const";
+import { RefreshCw } from "lucide-react";
 
 type SettingsSection = "main" | "security" | "privacy" | "about";
 
@@ -38,6 +41,7 @@ export default function Settings() {
   const { profile } = useApp();
   const [section, setSection] = useState<SettingsSection>("main");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
   // ─── Backend-backed settings ─────────────────────────────────────────────
@@ -344,12 +348,13 @@ export default function Settings() {
             <span className="text-4xl">🔗</span>
           </div>
           <h2 className="text-xl font-bold font-display">NexusChat</h2>
-          <p className="text-sm text-muted-foreground mt-2">{t("settings.version")} 2.1.0</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("settings.version")} {CURRENT_APP_VERSION}</p>
           <p className="text-sm text-muted-foreground mt-1">{t("settings.buildDate")}: 2026-02-27</p>
         </div>
 
         <div className="space-y-2">
           {[
+            { icon: <RefreshCw size={16} className="text-[#00d4ff]" />, label: "检查更新", value: "", action: () => setShowUpdateDialog(true) },
             { icon: <Globe size={16} className="text-neon-cyan" />, label: t("settings.website"), value: "nexuschat.app", action: () => toast.info("Opening nexuschat.app") },
             { icon: <MessageSquare size={16} className="text-neon-green" />, label: t("settings.community"), value: "Discord", action: () => toast.info("Opening Discord") },
             { icon: <FileText size={16} className="text-neon-purple" />, label: t("settings.docs"), value: "docs.nexuschat.app", action: () => toast.info("Opening docs") },
@@ -537,7 +542,7 @@ export default function Settings() {
                 <Info size={16} className="text-muted-foreground" />
               </div>
               <span className="flex-1 text-sm text-left">{t("settings.about")}</span>
-              <span className="text-sm text-muted-foreground font-mono">v2.1.0</span>
+              <span className="text-sm text-muted-foreground font-mono">v{CURRENT_APP_VERSION}</span>
               <ChevronRight size={14} className="text-muted-foreground" />
             </button>
           </div>
@@ -554,7 +559,7 @@ export default function Settings() {
 
         {/* Version info */}
         <div className="text-center py-2">
-          <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v2.1.0 (Build 2026.02)</p>
+          <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v{CURRENT_APP_VERSION} (Build 2026.03)</p>
           <p className="text-sm text-muted-foreground/30 mt-1">{t("settings.builtWith")}</p>
         </div>
 
@@ -613,6 +618,12 @@ export default function Settings() {
       {section === "security" && renderSecurity()}
       {section === "privacy" && renderPrivacy()}
       {section === "about" && renderAbout()}
+
+      {/* Version update dialog — opened from About section */}
+      <AppUpdateDialog
+        open={showUpdateDialog}
+        onClose={() => setShowUpdateDialog(false)}
+      />
     </div>
   );
 }
