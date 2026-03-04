@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
 const ANDROID_APK_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.0-android_d637d435.zip";
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.1-android_efe1a36a.zip";
 const QR_ANDROID =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-android_d009212f.png";
 const QR_IOS =
@@ -29,7 +29,7 @@ export default function DownloadPage() {
 
   const androidSteps = [
     "点击下方「下载 Android APK」按钮，下载 zip 压缩包",
-    "解压 zip 文件，得到 NexusChat-v1.0.0.apk",
+    "解压 zip 文件，得到 NexusChat-v1.0.1.apk",
     "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
     "点击 APK 文件，按提示完成安装",
   ];
@@ -147,7 +147,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.0.0-android.zip";
+                  link.download = "NexusChat-v1.0.1-android.zip";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -159,7 +159,7 @@ export default function DownloadPage() {
                 下载 Android APK（2.4 MB）
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.0.0 · 需要 Android 5.0+
+                版本 v1.0.1 · 需要 Android 5.0+
               </p>
             </div>
 
