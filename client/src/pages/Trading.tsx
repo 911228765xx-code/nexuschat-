@@ -743,6 +743,58 @@ export default function Trading() {
                   </motion.div>
                 ))}
 
+                {/* Empty state guidance when no strategies */}
+                {strategies.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3"
+                  >
+                    {/* Intro text */}
+                    <div className="text-center py-4">
+                      <div className="w-12 h-12 rounded-2xl bg-neon-green/10 border border-neon-green/20 flex items-center justify-center mx-auto mb-3">
+                        <Zap size={22} className="text-neon-green" />
+                      </div>
+                      <p className="text-sm font-semibold text-foreground mb-1">开始你的第一个跟单策略</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
+                        创建策略后，系统将自动跟随顶级交易员的信号，实现智能化自动交易。
+                      </p>
+                    </div>
+                    {/* Example strategy cards */}
+                    <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider px-1">示例策略参考</p>
+                    {[
+                      { name: "BTC 动量策略", pair: "BTC/USDT", risk: "中风险", winRate: "68%", profit: "+$1,240", riskColor: "text-yellow-400 border-yellow-400/30 bg-yellow-400/10" },
+                      { name: "ETH 趋势跟踪", pair: "ETH/USDT", risk: "低风险", winRate: "72%", profit: "+$860", riskColor: "text-neon-green border-neon-green/30 bg-neon-green/10" },
+                    ].map((ex) => (
+                      <div
+                        key={ex.name}
+                        className="p-4 rounded-2xl bg-secondary/20 border border-border/20 opacity-60 relative"
+                      >
+                        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] bg-secondary/60 text-muted-foreground font-mono">示例</div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-semibold font-display">{ex.name}</span>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full border font-mono ${ex.riskColor}`}>{ex.risk}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="text-xs text-muted-foreground font-mono">{ex.pair}</span>
+                          <span className="text-xs text-muted-foreground">via AI Signal</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="px-3 py-2 rounded-lg bg-secondary/30 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">胜率</p>
+                            <p className="text-xs font-mono font-semibold">{ex.winRate}</p>
+                          </div>
+                          <div className="px-3 py-2 rounded-lg bg-secondary/30 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">收益</p>
+                            <p className="text-xs font-mono font-semibold text-neon-green">{ex.profit}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+
                 {/* Quick Create CTA */}
                 <button
                   onClick={() => setModalType("createStrategy")}

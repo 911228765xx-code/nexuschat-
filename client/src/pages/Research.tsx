@@ -266,10 +266,31 @@ export default function Research() {
 
    // tRPC: report history
   const [showHistory, setShowHistory] = useState(false);
+  const [historyTimeFilter, setHistoryTimeFilter] = useState<"all" | "7d" | "30d" | "90d">("all");
+  const [historySortFilter, setHistorySortFilter] = useState<"newest" | "oldest" | "bullish" | "bearish">("newest");
   const { data: reportHistory, refetch: refetchHistory } = trpc.research.getHistory.useQuery(
     undefined,
     { staleTime: 30_000 }
   );
+
+  const filteredHistory = useMemo(() => {
+    if (!reportHistory) return [];
+    let list = [...reportHistory];
+    // Time filter
+    if (historyTimeFilter !== "all") {
+      const days = historyTimeFilter === "7d" ? 7 : historyTimeFilter === "30d" ? 30 : 90;
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      list = list.filter(r => new Date(r.createdAt).getTime() > cutoff);
+    }
+    // Sort / sentiment filter
+    switch (historySortFilter) {
+      case "newest": list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); break;
+      case "oldest": list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); break;
+      case "bullish": list = list.filter(r => r.sentiment === "bullish"); break;
+      case "bearish": list = list.filter(r => r.sentiment === "bearish"); break;
+    }
+    return list;
+  }, [reportHistory, historyTimeFilter, historySortFilter]);
   // tRPC: price alerts
   const { data: serverAlerts, refetch: refetchAlerts } = trpc.research.myAlerts.useQuery(
     undefined,
@@ -529,8 +550,46 @@ export default function Research() {
               <span>{showHistory ? "▲" : "▼"}</span>
             </button>
             {showHistory && (
+              <>
+              {/* Filter controls */}
+              <div className="mt-2 flex gap-1.5 flex-wrap">
+                {/* Time range */}
+                {(["all", "7d", "30d", "90d"] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setHistoryTimeFilter(t)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border ${
+                      historyTimeFilter === t
+                        ? "bg-[#a855f7]/25 text-[#a855f7] border-[#a855f7]/40"
+                        : "bg-white/[0.03] text-gray-500 border-white/[0.06] hover:text-gray-300"
+                    }`}
+                  >
+                    {t === "all" ? "全部" : t}
+                  </button>
+                ))}
+                <div className="w-px bg-white/10 mx-0.5" />
+                {/* Sort / sentiment */}
+                {(["newest", "oldest", "bullish", "bearish"] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setHistorySortFilter(s)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border ${
+                      historySortFilter === s
+                        ? s === "bullish" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : s === "bearish" ? "bg-red-500/20 text-red-400 border-red-500/30"
+                          : "bg-[#a855f7]/25 text-[#a855f7] border-[#a855f7]/40"
+                        : "bg-white/[0.03] text-gray-500 border-white/[0.06] hover:text-gray-300"
+                    }`}
+                  >
+                    {s === "newest" ? "最新" : s === "oldest" ? "最早" : s === "bullish" ? "▲ 看多" : "▼ 看空"}
+                  </button>
+                ))}
+              </div>
               <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-0.5 scrollbar-hide">
-                {reportHistory.map((report) => (
+                {filteredHistory.length === 0 && (
+                  <div className="py-6 text-center text-sm text-gray-500">暂无匹配的报告</div>
+                )}
+                {filteredHistory.map((report) => (
                   <button
                     key={report.id}
                     onClick={() => {
@@ -570,6 +629,7 @@ export default function Research() {
                   </button>
                 ))}
               </div>
+              </>
             )}
           </div>
         )}

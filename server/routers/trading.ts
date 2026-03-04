@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { priceAlerts, tradingPositions } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
+import { getPrices as getMultiSourcePrices } from "../utils/priceService";
 
 // CoinGecko free API - no key required
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
@@ -32,37 +33,11 @@ export const tradingRouter = router({
       }).optional()
     )
     .query(async ({ input }) => {
-      const symbols = input?.symbols ?? ["BTC", "ETH", "BNB", "SOL", "ARB", "LINK", "AVAX", "CAKE"];
-      const ids = symbols
-        .map((s) => SYMBOL_TO_ID[s.toUpperCase()])
-        .filter(Boolean)
-        .join(",");
+      const symbols = (input?.symbols ?? ["BTC", "ETH", "BNB", "SOL", "ARB", "LINK", "AVAX", "CAKE"])
+        .map(s => s.toUpperCase());
 
-      if (!ids) {
-        return symbols.map((s) => ({ symbol: s, price: 0, change: 0, volume: 0, marketCap: 0 }));
-      }
-
-      const cacheKey = `prices:${ids}`;
-      const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`;
-
-      const data = await cachedFetch<Record<string, { usd: number; usd_24h_change: number; usd_24h_vol: number; usd_market_cap: number }>>(
-        cacheKey,
-        url,
-        TTL.prices,
-        (res) => res.json(),
-      );
-
-      return symbols.map((symbol) => {
-        const id = SYMBOL_TO_ID[symbol.toUpperCase()];
-        const coin = id && data ? data[id] : null;
-        return {
-          symbol: symbol.toUpperCase(),
-          price: coin?.usd ?? 0,
-          change: coin ? parseFloat((coin.usd_24h_change ?? 0).toFixed(2)) : 0,
-          volume: coin?.usd_24h_vol ?? 0,
-          marketCap: coin?.usd_market_cap ?? 0,
-        };
-      });
+      // Use multi-source price service: CoinGecko → CoinCap → Binance
+      return getMultiSourcePrices(symbols);
     }),
 
   // ─── Get detailed chart data for a single coin ────────────────────────────
