@@ -645,13 +645,13 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* Filters */}
-              <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">
+              {/* Filters - Row 1: Type filters */}
+              <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide">
                 {searchFilters.map((f) => (
                   <button
                     key={f}
                     onClick={() => setActiveFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
                       activeFilter === f
                         ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30"
                         : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
@@ -660,12 +660,14 @@ export default function Chat() {
                     {f}
                   </button>
                 ))}
-                <div className="w-px bg-border/30 mx-1 self-stretch" />
+              </div>
+              {/* Filters - Row 2: Time filters */}
+              <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">
                 {timeFilters.map((f) => (
                   <button
                     key={f}
                     onClick={() => setActiveTimeFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                       activeTimeFilter === f
                         ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/30"
                         : "bg-secondary/40 text-muted-foreground border border-transparent hover:bg-secondary/60"
