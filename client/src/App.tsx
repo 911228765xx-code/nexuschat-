@@ -268,6 +268,10 @@ function AppContent() {
   useCapacitor();
   // Handle deep links and universal links in native app
   useDeepLink();
+  // Track current route to suppress update banners on non-app pages
+  const [currentPath] = useLocation();
+  // Suppress update dialogs/banners on landing page and download page to avoid loops
+  const isUpdateSuppressed = currentPath === "/download" || currentPath === "/" || currentPath === "/login";
 
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const onboarded = localStorage.getItem("nexuschat_onboarded");
@@ -300,9 +304,12 @@ function AppContent() {
       )}
 
       {/* Version update banner — shown at top of app when new version is available */}
-      <Suspense fallback={null}>
-        <UpdateBanner />
-      </Suspense>
+      {/* Suppressed on /download, /, /login to avoid update loops */}
+      {!isUpdateSuppressed && (
+        <Suspense fallback={null}>
+          <UpdateBanner />
+        </Suspense>
+      )}
 
       <RouteContent />
 
@@ -312,9 +319,12 @@ function AppContent() {
       </Suspense>
 
       {/* App version update check — auto-checks on startup, shows dialog if update available */}
-      <Suspense fallback={null}>
-        <AppUpdateDialog autoCheck />
-      </Suspense>
+      {/* Suppressed on /download, /, /login to avoid update loops */}
+      {!isUpdateSuppressed && (
+        <Suspense fallback={null}>
+          <AppUpdateDialog autoCheck />
+        </Suspense>
+      )}
     </>
   );
 }
