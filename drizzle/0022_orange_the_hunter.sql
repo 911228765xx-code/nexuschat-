@@ -1,0 +1,1 @@
+ALTER TABLE `chat_groups` ADD `category` varchar(30) DEFAULT 'community';

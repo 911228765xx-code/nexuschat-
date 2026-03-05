@@ -418,7 +418,10 @@ export default function GroupChatRoom() {
   const [rpNote, setRpNote] = useState("");
   const [rpCount, setRpCount] = useState("5"); // 份数，默认5  // ─── Red packet claim state (persisted via API) ─────────────────────────────────
   const [claimedPackets, setClaimedPackets] = useState<Set<string>>(new Set());
-  const claimRedPacketMutation = trpc.chat.claimRedPacket.useMutation();// ─── Transfer modal ───────────────────────────────────────────────────────
+  const claimRedPacketMutation = trpc.chat.claimRedPacket.useMutation();
+  // ─── Red packet claim result modal ──────────────────────────────────────────
+  const [claimResult, setClaimResult] = useState<{ amount: string; token: string; rank: number; total: number } | null>(null);
+  // ─── Transfer modal ───────────────────────────────────────────────────────
   const [showTransfer, setShowTransfer] = useState(false);
   const [tfAmount, setTfAmount] = useState("");
   const [tfToken, setTfToken] = useState("USDT");
@@ -522,7 +525,7 @@ export default function GroupChatRoom() {
   const myMember = members.find(m => m.id === String(user?.id));
   const isAdminOrOwner = myMember?.role === "owner" || myMember?.role === "admin";
 
-  const { connected, joinGroup, leaveGroup, sendMessage: socketSend, onMessage } = useSocket({
+  const { connected, joinGroup, leaveGroup, sendMessage: socketSend, onMessage, onCustomEvent } = useSocket({
     userId: user?.id,
     userName: user?.name ?? user?.username ?? "User",
   });
@@ -532,6 +535,22 @@ export default function GroupChatRoom() {
     joinGroup(groupId);
     return () => { leaveGroup(groupId); };
   }, [connected, isValidGroup, groupId, joinGroup, leaveGroup]);
+
+  // ─── Listen for group announcement updates ────────────────────────────────
+  useEffect(() => {
+    if (!connected) return;
+    const cleanup = onCustomEvent("group_announcement", (data: unknown) => {
+      const ann = data as { groupId: number; groupName: string; content: string; updatedBy: string };
+      if (ann.groupId !== groupId) return;
+      toast.success(`📢 群公告已更新`, {
+        description: ann.content,
+        duration: 5000,
+      });
+      // Refresh announcement display
+      setAnnouncement(prev => ({ ...prev, content: ann.content, author: ann.updatedBy }));
+    });
+    return cleanup;
+  }, [connected, groupId, onCustomEvent]);
 
   useEffect(() => {
     const cleanup = onMessage((msg: SocketMessage) => {
@@ -895,7 +914,8 @@ export default function GroupChatRoom() {
     setMessages(prev => prev.map(m =>
       m.id === msgId ? { ...m, redPacketClaimed: newClaimed, redPacketClaimers: claimers } : m
     ));
-    toast.success(`🧧 抢到 ${perAmount} ${msg.redPacketToken ?? "USDT"}!  第 ${newClaimed}/${total} 份`);
+    // 弹出抢包结果弹窗
+    setClaimResult({ amount: perAmount, token: msg.redPacketToken ?? "USDT", rank: newClaimed, total });
   };  // ─── Transfer send ────────────────────────────────────────────────────────
   const handleSendTransfer = () => {
     if (!tfAmount || isNaN(parseFloat(tfAmount)) || parseFloat(tfAmount) <= 0) {
@@ -1760,6 +1780,102 @@ export default function GroupChatRoom() {
                   className="w-full py-3 rounded-xl bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 hover:bg-neon-cyan/30 font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   确认转账
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Red Packet Claim Result Modal ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {claimResult && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setClaimResult(null)}
+          >
+            <motion.div
+              className="relative flex flex-col items-center"
+              initial={{ scale: 0.5, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 火焰粒子动画背景 */}
+              <div className="absolute inset-0 pointer-events-none">
+                {[...Array(12)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{
+                      background: ["#ff6b35","#ffd700","#ff3366","#00d4ff","#a855f7"][i % 5],
+                      left: `${10 + (i * 7) % 80}%`,
+                      top: `${5 + (i * 11) % 60}%`,
+                    }}
+                    initial={{ scale: 0, opacity: 1 }}
+                    animate={{ scale: [0, 1.5, 0], opacity: [1, 1, 0], y: [-20, -60 - i * 5] }}
+                    transition={{ duration: 1.2, delay: i * 0.08, ease: "easeOut" }}
+                  />
+                ))}
+              </div>
+
+              {/* 卡片主体 */}
+              <div className="bg-gradient-to-b from-[#c0392b] to-[#922b21] rounded-3xl shadow-2xl overflow-hidden" style={{ width: 280 }}>
+                {/* 顶部标题 */}
+                <div className="bg-gradient-to-br from-[#e74c3c] to-[#c0392b] px-6 pt-8 pb-4 text-center">
+                  <motion.div
+                    initial={{ rotate: -10, scale: 0.8 }}
+                    animate={{ rotate: [0, -5, 5, 0], scale: [1, 1.1, 1] }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                    className="text-6xl mb-3"
+                  >
+                    🧧
+                  </motion.div>
+                  <p className="text-red-100 text-sm font-medium">恭喜你抢到了红包！</p>
+                </div>
+
+                {/* 金额展示 */}
+                <div className="bg-[#f9e4b7] px-6 py-6 text-center">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1.2, 1] }}
+                    transition={{ duration: 0.5, delay: 0.3, type: "spring" }}
+                  >
+                    <p className="text-[#8b4513] text-sm mb-1">收到金额</p>
+                    <p className="text-[#c0392b] font-bold" style={{ fontSize: 40, lineHeight: 1.2 }}>
+                      {claimResult.amount}
+                    </p>
+                    <p className="text-[#8b4513] text-lg font-semibold mt-1">{claimResult.token}</p>
+                  </motion.div>
+
+                  <div className="mt-4 pt-4 border-t border-[#d4a85a]/40 flex items-center justify-center gap-2 text-sm text-[#8b4513]">
+                    <span>第 {claimResult.rank} 个抢到</span>
+                    <span className="text-[#d4a85a]">·</span>
+                    <span>共 {claimResult.total} 份</span>
+                  </div>
+
+                  {claimResult.rank === 1 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.6 }}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-600 text-xs font-semibold"
+                    >
+                      🏆 手气最佳！手最快的人
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* 关闭按钮 */}
+                <button
+                  onClick={() => setClaimResult(null)}
+                  className="w-full py-3.5 bg-[#c0392b] text-red-100 text-sm font-semibold hover:bg-[#a93226] transition-colors"
+                >
+                  收下了，谢谢！
                 </button>
               </div>
             </motion.div>

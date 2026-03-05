@@ -61,9 +61,19 @@ export default function Chat() {
   );
 
   // tRPC: public groups list (for community square, up to 50 groups)
+  // Map Chinese category labels to backend keys
+  const categoryKeyMap: Record<string, string> = {
+    "全部": "all",
+    "DeFi": "defi",
+    "NFT": "nft",
+    "游戏": "gaming",
+    "交易": "trading",
+    "社区": "community",
+  };
+  const categoryKey = categoryKeyMap[communityCategory] ?? "all";
   const { data: publicGroupsData, refetch: refetchPublicGroups } = trpc.chat.listGroups.useQuery(
-    { limit: 50 },
-    { staleTime: 60_000 }
+    { limit: 50, category: categoryKey === "all" ? undefined : categoryKey },
+    { staleTime: 30_000 }
   );
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
 

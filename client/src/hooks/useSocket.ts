@@ -111,5 +111,12 @@ export function useSocket({ userId, userName }: UseSocketOptions) {
     []
   );
 
-  return { connected, joinGroup, leaveGroup, sendMessage, sendTyping, onMessage, onTyping };
+  const onCustomEvent = useCallback((event: string, handler: (data: unknown) => void) => {
+    socketRef.current?.on(event, handler);
+    return () => {
+      socketRef.current?.off(event, handler);
+    };
+  }, []);
+
+  return { connected, joinGroup, leaveGroup, sendMessage, sendTyping, onMessage, onTyping, onCustomEvent };
 }

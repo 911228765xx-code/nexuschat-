@@ -10,14 +10,18 @@ import { rateLimitWrite } from "../rateLimit";
 export const chatRouter = router({
   // List public groups
   listGroups: publicProcedure
-    .input(z.object({ limit: z.number().default(20) }).optional())
+    .input(z.object({ limit: z.number().default(20), category: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      const conditions = [eq(chatGroups.isPublic, true)];
+      if (input?.category && input.category !== "all") {
+        conditions.push(eq(chatGroups.category, input.category));
+      }
       return db
         .select()
         .from(chatGroups)
-        .where(eq(chatGroups.isPublic, true))
+        .where(and(...conditions))
         .orderBy(desc(chatGroups.memberCount))
         .limit(input?.limit ?? 20);
     }),
@@ -31,6 +35,7 @@ export const chatRouter = router({
       isTokenGated: z.boolean().default(false),
       tokenGateAmount: z.string().optional(),
       tokenGateContract: z.string().optional(),
+      category: z.string().max(30).optional().default("community"),
     }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
@@ -45,6 +50,7 @@ export const chatRouter = router({
         tokenGateAmount: input.tokenGateAmount ?? undefined,
         tokenGateContract: input.tokenGateContract ?? undefined,
         memberCount: 1,
+        category: input.category ?? "community",
       });
       const groupId = (result as any).insertId as number;
       // Add creator as owner
@@ -865,6 +871,25 @@ export const chatRouter = router({
         createdBy: ctx.user.id,
         isPinned: true,
       });
+      // Get group info and all members to push notification
+      const [groupInfo] = await db.select({ name: chatGroups.name })
+        .from(chatGroups).where(eq(chatGroups.id, input.groupId)).limit(1);
+      const members = await db.select({ userId: groupMembers.userId })
+        .from(groupMembers).where(eq(groupMembers.groupId, input.groupId));
+      // Emit real-time notification to all members (except sender)
+      const senderName = ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`;
+      const groupName = groupInfo?.name ?? `Group #${input.groupId}`;
+      const preview = input.content.length > 60 ? input.content.slice(0, 60) + "..." : input.content;
+      for (const member of members) {
+        if (member.userId === ctx.user.id) continue;
+        emitToUser(member.userId, "group_announcement", {
+          groupId: input.groupId,
+          groupName,
+          content: preview,
+          updatedBy: senderName,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       return { ok: true };
     }),
 

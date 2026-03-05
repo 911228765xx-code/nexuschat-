@@ -58,7 +58,8 @@ export default function CreateGroup() {
   });
   const [adminIds, setAdminIds] = useState<string[]>([]);
   const [allowInvite, setAllowInvite] = useState(true);
-  const [muteNewMembers, setMuteNewMembers] = useState(false);  // ─── Load real contacts from backend ────────────────────────────────────────
+  const [muteNewMembers, setMuteNewMembers] = useState(false);
+  const [groupCategory, setGroupCategory] = useState("community");  // ─── Load real contacts from backend ────────────────────────────────────────
   const { isAuthenticated } = useAuth();
   const { data: friendsData } = trpc.contacts.listFriends.useQuery(undefined, { enabled: isAuthenticated, staleTime: 60_000 }); const [debouncedSearch, setDebouncedSearch] = useState("");
   // Debounce search input
@@ -153,6 +154,7 @@ export default function CreateGroup() {
       isTokenGated: tokenGate.enabled,
       tokenGateAmount: tokenGate.enabled ? tokenGate.minAmount : undefined,
       tokenGateContract: tokenGate.enabled ? tokenGate.contractAddress : undefined,
+      category: groupCategory,
     });
   };
 
@@ -399,6 +401,36 @@ export default function CreateGroup() {
                 maxLength={200}
               />
               <p className="text-sm text-muted-foreground mt-2 px-2">{groupDesc.length}/200</p>
+            </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-medium text-foreground/80 mb-3 px-1">
+                群组分类
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: "defi", label: "DeFi", emoji: "💰" },
+                  { key: "nft", label: "NFT", emoji: "🎨" },
+                  { key: "gaming", label: "游戏", emoji: "🎮" },
+                  { key: "trading", label: "交易", emoji: "📈" },
+                  { key: "community", label: "社区", emoji: "👥" },
+                ].map(cat => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setGroupCategory(cat.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                      groupCategory === cat.key
+                        ? "bg-neon-cyan/20 border-neon-cyan/50 text-neon-cyan"
+                        : "bg-secondary/40 border-border/30 text-muted-foreground hover:border-border/60"
+                    }`}
+                  >
+                    <span>{cat.emoji}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Members Preview */}

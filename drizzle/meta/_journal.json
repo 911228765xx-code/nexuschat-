@@ -155,6 +155,13 @@
       "when": 1772702579289,
       "tag": "0021_misty_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1772704424057,
+      "tag": "0022_orange_the_hunter",
+      "breakpoints": true
     }
   ]
 }

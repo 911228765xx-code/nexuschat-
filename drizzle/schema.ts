@@ -47,6 +47,7 @@ export const chatGroups = mysqlTable("chat_groups", {
   maxMembers: int("maxMembers").default(500).notNull(),
   memberCount: int("memberCount").default(0).notNull(),
   isPublic: boolean("isPublic").default(true).notNull(),
+  category: varchar("category", { length: 30 }).default("community"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
