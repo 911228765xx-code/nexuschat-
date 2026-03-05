@@ -12,7 +12,7 @@ import {
   ArrowLeft, Send, Smile, MoreVertical, X, Reply, Users,
   Megaphone, ChevronRight, Shield, Crown, Hash, AtSign,
   Pin, Settings, Bell, BellOff, LogOut, UserPlus, Search,
-  Image as ImageIcon, Gift, Mic, Bot,
+  Image as ImageIcon, Gift, Mic, Bot, ArrowUpDown, Wallet, Plus, Video,
   ChevronDown, ChevronUp, Link2, File, Download, CheckCheck, Copy,
   UserMinus, VolumeX, Volume2, RefreshCw, Trash2, Edit3, AlertTriangle
 } from "lucide-react";
@@ -51,10 +51,20 @@ interface GroupMessage {
   mentions?: string[];
   isPinned?: boolean;
   pending?: boolean;
-  messageType?: "text" | "image" | "file";
+  messageType?: "text" | "image" | "file" | "video" | "redpacket" | "transfer";
   mediaUrl?: string;
   fileName?: string;
   fileSize?: number;
+  isRedPacket?: boolean;
+  isTransfer?: boolean;
+  cryptoAmount?: string;
+  cryptoToken?: string;
+  redPacketAmount?: string;
+  redPacketToken?: string;
+  redPacketNote?: string;
+  transferAmount?: string;
+  transferToken?: string;
+  transferNote?: string;
 }
 
 const EMOJI_LIST = ["👍", "❤️", "🔥", "🚀", "😂", "😮", "🎉", "💎"];
@@ -149,6 +159,54 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
 }
 
 function renderMessageContent(msg: GroupMessage) {
+  // Red packet bubble
+  if (msg.isRedPacket) {
+    return (
+      <div className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"}`} style={{ minWidth: 200 }}>
+        <div className="bg-gradient-to-br from-red-500 to-orange-500 p-3.5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <Gift size={16} className="text-white" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-bold font-mono">{msg.cryptoAmount} {msg.cryptoToken}</p>
+              <p className="text-white/70 text-sm">Crypto Red Packet</p>
+            </div>
+          </div>
+          {msg.content && <p className="text-white/90 text-sm mt-2 italic">"{msg.content}"</p>}
+        </div>
+        <div className="bg-gradient-to-br from-red-600/20 to-orange-600/20 border border-red-500/20 px-3 py-1.5 flex items-center justify-between">
+          <span className="text-sm text-red-400/80">🧧 NexusChat Red Packet</span>
+          <button className="text-sm text-red-400 font-medium hover:text-red-300 transition-colors">
+            {msg.isMine ? "Sent" : "Open →"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // Transfer bubble
+  if (msg.isTransfer) {
+    return (
+      <div className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"}`} style={{ minWidth: 200 }}>
+        <div className="bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/30 p-3.5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-full bg-neon-cyan/20 flex items-center justify-center">
+              <ArrowUpDown size={14} className="text-neon-cyan" />
+            </div>
+            <div>
+              <p className="text-foreground text-sm font-bold font-mono">{msg.cryptoAmount} {msg.cryptoToken}</p>
+              <p className="text-muted-foreground text-sm">{msg.isMine ? "Transfer sent" : "Transfer received"}</p>
+            </div>
+          </div>
+          {msg.content && <p className="text-muted-foreground text-sm mt-2">Note: {msg.content}</p>}
+        </div>
+        <div className="bg-card/50 border-x border-b border-neon-cyan/20 px-3 py-1.5 flex items-center justify-between">
+          <span className="text-sm text-muted-foreground flex items-center gap-2"><Wallet size={10} /> On-chain Transfer</span>
+          <span className="text-sm text-neon-green font-mono">Confirmed ✓</span>
+        </div>
+      </div>
+    );
+  }
   if (msg.messageType === "image" && msg.mediaUrl) {
     return (
       <div className="mt-2">
@@ -156,10 +214,24 @@ function renderMessageContent(msg: GroupMessage) {
       </div>
     );
   }
+  // Video message
+  if (msg.messageType === "video" && msg.mediaUrl) {
+    return (
+      <div className="mt-2 max-w-[260px]">
+        <video
+          src={msg.mediaUrl}
+          controls
+          className="w-full rounded-xl max-h-[200px] object-cover"
+          preload="metadata"
+        />
+        {msg.fileName && <p className="text-sm text-muted-foreground mt-1 truncate">{msg.fileName}</p>}
+      </div>
+    );
+  }
   if (msg.messageType === "file" && msg.mediaUrl) {
     // Voice message: fileName starts with "语音消息" or mediaUrl is audio
     const isVoice = (msg.fileName ?? "").startsWith("语音消息") ||
-      /\.(webm|mp3|ogg|m4a|wav|mp4)$/i.test(msg.mediaUrl);
+      /\.(webm|mp3|ogg|m4a|wav)$/i.test(msg.mediaUrl);
     if (isVoice) {
       return (
         <div className="mt-2 max-w-[220px]">
@@ -225,6 +297,20 @@ export default function GroupChatRoom() {
   const [editGroupName, setEditGroupName] = useState("");
   const [editGroupDesc, setEditGroupDesc] = useState("");
   const [editGroupAvatar, setEditGroupAvatar] = useState("");
+  // ─── Attachment menu ────────────────────────────────────────────────────────
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  // ─── Red packet modal ─────────────────────────────────────────────────────
+  const [showRedPacket, setShowRedPacket] = useState(false);
+  const [rpAmount, setRpAmount] = useState("");
+  const [rpToken, setRpToken] = useState("USDT");
+  const [rpNote, setRpNote] = useState("");
+  // ─── Transfer modal ───────────────────────────────────────────────────────
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [tfAmount, setTfAmount] = useState("");
+  const [tfToken, setTfToken] = useState("USDT");
+  const [tfNote, setTfNote] = useState("");
+  // ─── Video upload ref ─────────────────────────────────────────────────────
+  const videoInputRef = useRef<HTMLInputElement>(null);
   // ─── Message search ───────────────────────────────────────────────────────
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -574,7 +660,93 @@ export default function GroupChatRoom() {
     }
   };
 
-  // ─── Invite link ──────────────────────────────────────────────────────────
+   // ─── Video upload ────────────────────────────────────────────────────────
+  const handleVideoUpload = async (file: File) => {
+    if (file.size > 100 * 1024 * 1024) { toast.error("视频文件过大（最大 100MB）"); return; }
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        const result = await uploadImageMutation.mutateAsync({ base64, mimeType: file.type });
+        const newMsg: GroupMessage = {
+          id: Date.now().toString(),
+          sender: user?.name ?? "User",
+          senderAvatar: user?.avatar ?? "🦊",
+          senderRole: "member",
+          content: `[Video: ${file.name}]`,
+          time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          isMine: true,
+          messageType: "video",
+          mediaUrl: result.url,
+          fileName: file.name,
+          fileSize: file.size,
+        };
+        setMessages(prev => [...prev, newMsg]);
+        if (isValidGroup && connected) socketSend({ groupId, content: `[Video: ${file.name}]`, mediaUrl: result.url, messageType: "video" });
+        toast.success("视频发送成功！");
+      };
+    } catch {
+      toast.error("视频上传失败");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ─── Red packet send ──────────────────────────────────────────────────────
+  const handleSendRedPacket = () => {
+    if (!rpAmount || isNaN(parseFloat(rpAmount)) || parseFloat(rpAmount) <= 0) {
+      toast.error("请输入有效金额");
+      return;
+    }
+    const newMsg: GroupMessage = {
+      id: Date.now().toString(),
+      sender: user?.name ?? "User",
+      senderAvatar: user?.avatar ?? "🦊",
+      senderRole: "member",
+      content: `[红包: ${rpAmount} ${rpToken}]`,
+      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      isMine: true,
+      messageType: "redpacket",
+      redPacketAmount: rpAmount,
+      redPacketToken: rpToken,
+      redPacketNote: rpNote || "恭喜发财，大吉大利！",
+    };
+    setMessages(prev => [...prev, newMsg]);
+    if (isValidGroup && connected) socketSend({ groupId, content: `[红包: ${rpAmount} ${rpToken}]`, messageType: "redpacket", redPacketAmount: rpAmount, redPacketToken: rpToken, redPacketNote: rpNote || "恭喜发财，大吉大利！" });
+    setShowRedPacket(false);
+    setRpAmount(""); setRpNote(""); setRpToken("USDT");
+    toast.success("红包已发出！");
+  };
+
+  // ─── Transfer send ────────────────────────────────────────────────────────
+  const handleSendTransfer = () => {
+    if (!tfAmount || isNaN(parseFloat(tfAmount)) || parseFloat(tfAmount) <= 0) {
+      toast.error("请输入有效金额");
+      return;
+    }
+    const newMsg: GroupMessage = {
+      id: Date.now().toString(),
+      sender: user?.name ?? "User",
+      senderAvatar: user?.avatar ?? "🦊",
+      senderRole: "member",
+      content: `[转账: ${tfAmount} ${tfToken}]`,
+      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      isMine: true,
+      messageType: "transfer",
+      transferAmount: tfAmount,
+      transferToken: tfToken,
+      transferNote: tfNote,
+    };
+    setMessages(prev => [...prev, newMsg]);
+    if (isValidGroup && connected) socketSend({ groupId, content: `[转账: ${tfAmount} ${tfToken}]`, messageType: "transfer", transferAmount: tfAmount, transferToken: tfToken, transferNote: tfNote });
+    setShowTransfer(false);
+    setTfAmount(""); setTfNote(""); setTfToken("USDT");
+    toast.success("转账已发出！");
+  };
+
+  // ─── Invite link ────────────────────────────────────────────────────────
   const createInviteLinkMutation = trpc.chat.createInviteLink.useMutation({
     onSuccess: (data) => {
       // Use configured app URL (production domain) if available
@@ -867,15 +1039,47 @@ export default function GroupChatRoom() {
         </AnimatePresence>
 
         <div className="flex items-end gap-2.5">
-          {/* File upload button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0 text-muted-foreground disabled:opacity-50"
-          >
-            {isUploading ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <ImageIcon size={18} />}
-          </button>
+          {/* Attachment menu button */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowAttachMenu(prev => !prev)}
+              disabled={isUploading}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors text-muted-foreground disabled:opacity-50"
+            >
+              {isUploading
+                ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                : <Plus size={18} />}
+            </button>
+            <AnimatePresence>
+              {showAttachMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  className="absolute bottom-12 left-0 z-50 bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden w-44"
+                >
+                  <button onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-sm">
+                    <ImageIcon size={16} className="text-neon-cyan" />
+                    <span>图片 / 文件</span>
+                  </button>
+                  <button onClick={() => { videoInputRef.current?.click(); setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-sm border-t border-border/30">
+                    <Video size={16} className="text-neon-purple" />
+                    <span>视频</span>
+                  </button>
+                  <button onClick={() => { setShowRedPacket(true); setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-sm border-t border-border/30">
+                    <Gift size={16} className="text-red-400" />
+                    <span>发红包</span>
+                  </button>
+                  <button onClick={() => { setShowTransfer(true); setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-sm border-t border-border/30">
+                    <ArrowUpDown size={16} className="text-neon-green" />
+                    <span>转账</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+          <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleVideoUpload(f); e.target.value = ""; }} />
 
           <button onClick={() => { setInput((prev) => prev + "@"); setShowMentionMenu(true); setMentionFilter(""); inputRef.current?.focus(); }} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors shrink-0 text-muted-foreground">
             <AtSign size={18} />
@@ -1276,6 +1480,96 @@ export default function GroupChatRoom() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── 红包弹窗 ──────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showRedPacket && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setShowRedPacket(false)}>
+            <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className="w-full max-w-md bg-card border-t border-border/40 rounded-t-2xl p-5 pb-8" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-bold text-base flex items-center gap-2"><Gift size={18} className="text-[#ff6b35]" />发红包</h3>
+                <button onClick={() => setShowRedPacket(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"><X size={16} /></button>
+              </div>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    placeholder="金额"
+                    value={rpAmount}
+                    onChange={e => setRpAmount(e.target.value)}
+                    className="flex-1 bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#ff6b35]/50"
+                  />
+                  <select value={rpToken} onChange={e => setRpToken(e.target.value)} className="bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+                    <option value="USDT">USDT</option>
+                    <option value="USDC">USDC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  placeholder="祝福语（可选）"
+                  value={rpNote}
+                  onChange={e => setRpNote(e.target.value)}
+                  className="w-full bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#ff6b35]/50"
+                />
+                <button
+                  onClick={handleSendRedPacket}
+                  disabled={!rpAmount || parseFloat(rpAmount) <= 0}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#ff6b35] to-[#ff3366] text-white font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  发送红包
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── 转账弹窗 ──────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showTransfer && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setShowTransfer(false)}>
+            <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className="w-full max-w-md bg-card border-t border-border/40 rounded-t-2xl p-5 pb-8" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-bold text-base flex items-center gap-2"><ArrowUpDown size={18} className="text-neon-cyan" />转账</h3>
+                <button onClick={() => setShowTransfer(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"><X size={16} /></button>
+              </div>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    placeholder="金额"
+                    value={tfAmount}
+                    onChange={e => setTfAmount(e.target.value)}
+                    className="flex-1 bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-neon-cyan/50"
+                  />
+                  <select value={tfToken} onChange={e => setTfToken(e.target.value)} className="bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+                    <option value="USDT">USDT</option>
+                    <option value="USDC">USDC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  placeholder="备注（可选）"
+                  value={tfNote}
+                  onChange={e => setTfNote(e.target.value)}
+                  className="w-full bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-neon-cyan/50"
+                />
+                <button
+                  onClick={handleSendTransfer}
+                  disabled={!tfAmount || parseFloat(tfAmount) <= 0}
+                  className="w-full py-3 rounded-xl bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 hover:bg-neon-cyan/30 font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  确认转账
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

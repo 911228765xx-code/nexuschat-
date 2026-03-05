@@ -62,12 +62,29 @@ export function useSocket({ userId, userName }: UseSocketOptions) {
   }, []);
 
   const sendMessage = useCallback(
-    (data: { groupId: number; content: string; messageType?: "text" | "image" | "file"; mediaUrl?: string }) => {
+    (data: {
+      groupId: number;
+      content: string;
+      messageType?: "text" | "image" | "file" | "video" | "redpacket" | "transfer";
+      mediaUrl?: string;
+      redPacketAmount?: string;
+      redPacketToken?: string;
+      redPacketNote?: string;
+      transferAmount?: string;
+      transferToken?: string;
+      transferNote?: string;
+    }) => {
       socketRef.current?.emit("send_message", {
         groupId: data.groupId,
         content: data.content,
         messageType: data.messageType || "text",
         mediaUrl: data.mediaUrl,
+        redPacketAmount: data.redPacketAmount,
+        redPacketToken: data.redPacketToken,
+        redPacketNote: data.redPacketNote,
+        transferAmount: data.transferAmount,
+        transferToken: data.transferToken,
+        transferNote: data.transferNote,
       });
     },
     []
