@@ -863,8 +863,12 @@ export default function Chat() {
                         );
                       }}
                     >
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-neon-purple/20 to-neon-cyan/10 flex items-center justify-center shrink-0 text-lg">
-                        {group.avatar || "💬"}
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-neon-purple/20 to-neon-cyan/10 flex items-center justify-center shrink-0 text-lg overflow-hidden">
+                        {group.avatar && group.avatar.startsWith("http") ? (
+                          <img src={group.avatar} alt={group.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{group.avatar || "💬"}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">{group.name}</p>
