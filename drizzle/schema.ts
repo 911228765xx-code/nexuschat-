@@ -78,7 +78,7 @@ export const messages = mysqlTable(
     senderId: int("senderId").notNull(),
     receiverId: int("receiverId"),
     content: text("content").notNull(),
-    messageType: mysqlEnum("messageType", ["text", "image", "file", "system"]).default("text").notNull(),
+    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer"]).default("text").notNull(),
     mediaUrl: text("mediaUrl"),
     isEncrypted: boolean("isEncrypted").default(false).notNull(),
     isDeleted: boolean("isDeleted").default(false).notNull(),
@@ -644,3 +644,40 @@ export const appConfig = mysqlTable("app_config", {
 });
 export type AppConfig = typeof appConfig.$inferSelect;
 export type InsertAppConfig = typeof appConfig.$inferInsert;
+
+// ─── Red Packet Claims ────────────────────────────────────────────────────────
+// Tracks who has claimed which red packet (for multi-person grab)
+export const redPacketClaims = mysqlTable(
+  "red_packet_claims",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    messageId: bigint("messageId", { mode: "number" }).notNull(),
+    groupId: int("groupId").notNull(),
+    claimedBy: int("claimedBy").notNull(),
+    claimedAt: timestamp("claimedAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_rpc_message").on(t.messageId),
+    index("idx_rpc_claimer").on(t.messageId, t.claimedBy),
+  ]
+);
+export type RedPacketClaim = typeof redPacketClaims.$inferSelect;
+export type InsertRedPacketClaim = typeof redPacketClaims.$inferInsert;
+
+// ─── Group Announcements ──────────────────────────────────────────────────────
+// Stores pinned announcements for groups
+export const groupAnnouncements = mysqlTable(
+  "group_announcements",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    content: text("content").notNull(),
+    createdBy: int("createdBy").notNull(),
+    isPinned: boolean("isPinned").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_ann_group").on(t.groupId, t.isPinned)]
+);
+export type GroupAnnouncement = typeof groupAnnouncements.$inferSelect;
+export type InsertGroupAnnouncement = typeof groupAnnouncements.$inferInsert;

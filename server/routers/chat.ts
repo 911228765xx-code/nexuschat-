@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes } from "../../drizzle/schema";
+import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, groupAnnouncements } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
@@ -788,6 +788,97 @@ export const chatRouter = router({
       if (input.avatar !== undefined) updates.avatar = input.avatar;
       if (Object.keys(updates).length === 0) return { ok: true };
       await db.update(chatGroups).set(updates).where(eq(chatGroups.id, input.groupId));
+      return { ok: true };
+    }),
+
+  // ─── Red Packet: Claim ───────────────────────────────────────────────────
+  claimRedPacket: protectedProcedure
+    .input(z.object({
+      messageId: z.number(),
+      groupId: z.number(),
+      totalShares: z.number().min(1).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Check if already claimed by this user
+      const existing = await db.select().from(redPacketClaims)
+        .where(and(eq(redPacketClaims.messageId, input.messageId), eq(redPacketClaims.claimedBy, ctx.user.id)))
+        .limit(1);
+      if (existing.length > 0) return { ok: false, reason: "already_claimed" as const };
+      // Check if all shares taken
+      const claimCount = await db.select({ count: sql<number>`count(*)` }).from(redPacketClaims)
+        .where(eq(redPacketClaims.messageId, input.messageId));
+      if ((claimCount[0]?.count ?? 0) >= input.totalShares) return { ok: false, reason: "exhausted" as const };
+      // Record claim
+      await db.insert(redPacketClaims).values({
+        messageId: input.messageId,
+        groupId: input.groupId,
+        claimedBy: ctx.user.id,
+      });
+      return { ok: true, reason: "" as const };
+    }),
+
+  // ─── Red Packet: Get claim status ────────────────────────────────────────
+  getRedPacketStatus: protectedProcedure
+    .input(z.object({ messageId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { claimedCount: 0, claimedByMe: false };
+      const claims = await db.select({ claimedBy: redPacketClaims.claimedBy })
+        .from(redPacketClaims).where(eq(redPacketClaims.messageId, input.messageId));
+      return {
+        claimedCount: claims.length,
+        claimedByMe: claims.some(c => c.claimedBy === ctx.user.id),
+      };
+    }),
+
+  // ─── Group Announcements: Get ─────────────────────────────────────────────
+  getAnnouncement: publicProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const ann = await db.select().from(groupAnnouncements)
+        .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)))
+        .orderBy(desc(groupAnnouncements.updatedAt)).limit(1);
+      return ann[0] ?? null;
+    }),
+
+  // ─── Group Announcements: Set (owner/admin only) ──────────────────────────
+  setAnnouncement: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      content: z.string().min(1).max(1000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      await db.delete(groupAnnouncements)
+        .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)));
+      await db.insert(groupAnnouncements).values({
+        groupId: input.groupId,
+        content: sanitizeInput(input.content),
+        createdBy: ctx.user.id,
+        isPinned: true,
+      });
+      return { ok: true };
+    }),
+
+  // ─── Group Announcements: Delete (owner/admin only) ───────────────────────
+  deleteAnnouncement: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      await db.delete(groupAnnouncements)
+        .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)));
       return { ok: true };
     }),
 

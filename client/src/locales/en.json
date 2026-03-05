@@ -452,6 +452,7 @@
   "profile.toNext": "to Diamond",
   "profile.activity": "My Activity",
   "profile.wallet": "My Wallet",
+  "profile.walletNotConnected": "Not Connected",
   "profile.strategies": "My Strategies",
   "profile.researchHistory": "Research History",
   "profile.communities": "My Communities",
@@ -1044,5 +1045,7 @@
   "pwa.iosStep2b": "\"Add to Home Screen\"",
   "pwa.iosStep3": "Tap \"Add\" to install NexusChat on your home screen",
   "pwa.downloadApp": "Download App",
-  "pwa.downloadAppDesc": "Install on your phone for the best experience"
+  "pwa.downloadAppDesc": "Install on your phone for the best experience",
+  "chat.conversations": "conversations",
+  "chat.noConversations": "No conversations yet"
 }

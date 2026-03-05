@@ -449,6 +449,7 @@
   "profile.toNext": "距鑽石節點還差",
   "profile.activity": "我的活動",
   "profile.wallet": "我的錢包",
+  "profile.walletNotConnected": "未連接",
   "profile.strategies": "我的跟單策略",
   "profile.researchHistory": "我的投研歷史",
   "profile.communities": "我的社群",

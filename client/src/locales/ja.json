@@ -452,6 +452,7 @@
   "profile.toNext": "ダイヤモンドまで",
   "profile.activity": "アクティビティ",
   "profile.wallet": "ウォレット",
+  "profile.walletNotConnected": "未接続",
   "profile.strategies": "マイ戦略",
   "profile.researchHistory": "リサーチ履歴",
   "profile.communities": "コミュニティ",

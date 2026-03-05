@@ -452,6 +452,7 @@
   "profile.toNext": "حتى الماسية",
   "profile.activity": "نشاطي",
   "profile.wallet": "محفظتي",
+  "profile.walletNotConnected": "غير متصل",
   "profile.strategies": "استراتيجياتي",
   "profile.researchHistory": "سجل الأبحاث",
   "profile.communities": "مجتمعاتي",

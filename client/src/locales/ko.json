@@ -452,6 +452,7 @@
   "profile.toNext": "다이아몬드까지",
   "profile.activity": "활동",
   "profile.wallet": "지갑",
+  "profile.walletNotConnected": "연결 안됨",
   "profile.strategies": "내 전략",
   "profile.researchHistory": "리서치 기록",
   "profile.communities": "커뮤니티",

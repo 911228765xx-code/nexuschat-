@@ -47,6 +47,8 @@ export default function Chat() {
   // ─── 社群广场 ───────────────────────────────────────────────────────────────────────
   const [showCommunitySquare, setShowCommunitySquare] = useState(false);
   const [communitySearchQuery, setCommunitySearchQuery] = useState("");
+  const [communityCategory, setCommunityCategory] = useState<string>("全部");
+  const COMMUNITY_CATEGORIES = ["全部", "DeFi", "NFT", "游戏", "交易", "社区"];
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
@@ -65,16 +67,26 @@ export default function Chat() {
   );
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
 
-  // Filtered community groups based on search query
+  // Filtered community groups based on search query + category
   const filteredCommunityGroups = useMemo(() => {
     if (!publicGroupsData) return [];
-    if (!communitySearchQuery.trim()) return publicGroupsData;
-    const q = communitySearchQuery.toLowerCase();
-    return publicGroupsData.filter(g =>
-      g.name.toLowerCase().includes(q) ||
-      (g.description ?? "").toLowerCase().includes(q)
-    );
-  }, [publicGroupsData, communitySearchQuery]);
+    let result = publicGroupsData;
+    if (communityCategory !== "全部") {
+      const cat = communityCategory.toLowerCase();
+      result = result.filter(g =>
+        g.name.toLowerCase().includes(cat) ||
+        (g.description ?? "").toLowerCase().includes(cat)
+      );
+    }
+    if (communitySearchQuery.trim()) {
+      const q = communitySearchQuery.toLowerCase();
+      result = result.filter(g =>
+        g.name.toLowerCase().includes(q) ||
+        (g.description ?? "").toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [publicGroupsData, communitySearchQuery, communityCategory]);
 
   // tRPC: my joined groups (protectedProcedure)
   const { data: myGroupsData, refetch: refetchMyGroups } = trpc.chat.myGroups.useQuery(
@@ -794,6 +806,23 @@ export default function Chat() {
                     autoFocus
                   />
                 </div>
+              </div>
+
+              {/* Category Tags */}
+              <div className="px-4 pb-2 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {COMMUNITY_CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCommunityCategory(cat)}
+                    className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                      communityCategory === cat
+                        ? 'bg-neon-purple text-white'
+                        : 'bg-secondary/50 text-muted-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
               </div>
 
               {/* Group List */}

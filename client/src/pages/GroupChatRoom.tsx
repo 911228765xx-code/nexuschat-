@@ -416,10 +416,9 @@ export default function GroupChatRoom() {
   const [rpAmount, setRpAmount] = useState("");
   const [rpToken, setRpToken] = useState("USDT");
   const [rpNote, setRpNote] = useState("");
-  const [rpCount, setRpCount] = useState("5"); // 份数，默认5份
-  // ─── Red packet claim state (local simulation) ─────────────────────────────────
+  const [rpCount, setRpCount] = useState("5"); // 份数，默认5  // ─── Red packet claim state (persisted via API) ─────────────────────────────────
   const [claimedPackets, setClaimedPackets] = useState<Set<string>>(new Set());
-  // ─── Transfer modal ───────────────────────────────────────────────────────
+  const claimRedPacketMutation = trpc.chat.claimRedPacket.useMutation();// ─── Transfer modal ───────────────────────────────────────────────────────
   const [showTransfer, setShowTransfer] = useState(false);
   const [tfAmount, setTfAmount] = useState("");
   const [tfToken, setTfToken] = useState("USDT");
@@ -454,6 +453,18 @@ export default function GroupChatRoom() {
   const [announcement, setAnnouncement] = useState(defaultAnnouncement);
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
   const [editAnnouncementText, setEditAnnouncementText] = useState(defaultAnnouncement.content);
+  // Load announcement from DB
+  const { data: dbAnnouncement } = trpc.chat.getAnnouncement.useQuery(
+    { groupId },
+    { enabled: isValidGroup, staleTime: 60_000 }
+  );
+  useEffect(() => {
+    if (dbAnnouncement) {
+      setAnnouncement({ content: dbAnnouncement.content, author: "Admin", time: "" });
+      setEditAnnouncementText(dbAnnouncement.content);
+    }
+  }, [dbAnnouncement]);
+  const setAnnouncementMutation = trpc.chat.setAnnouncement.useMutation();
   const [memberActionTarget, setMemberActionTarget] = useState<GroupMember | null>(null);
   const [pinnedMessage] = useState<GroupMessage | null>(null);
   const announcementInputRef = useRef<HTMLTextAreaElement>(null);
@@ -852,26 +863,39 @@ export default function GroupChatRoom() {
   };
 
   // ─── Red packet claim handler ─────────────────────────────────────────────────────
-  const handleClaimRedPacket = (msgId: string) => {
+  const handleClaimRedPacket = async (msgId: string) => {
     if (claimedPackets.has(msgId)) {
       toast.info("你已经抢过这个红包了！");
       return;
     }
-    setMessages(prev => prev.map(m => {
-      if (m.id !== msgId) return m;
-      const claimed = (m.redPacketClaimed ?? 0);
-      const total = (m.redPacketTotal ?? 5);
-      if (claimed >= total) {
-        toast.error("红包已被抢完！下次手快一点😄");
-        return m;
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg) return;
+    const total = msg.redPacketTotal ?? parseInt(rpCount) ?? 5;
+    const claimed = msg.redPacketClaimed ?? 0;
+    if (claimed >= total) {
+      toast.error("红包已被抢完！下次手快一点😄");
+      return;
+    }
+    try {
+      const result = await claimRedPacketMutation.mutateAsync({
+        messageId: Number(msgId),
+        groupId: groupId,
+        totalShares: total,
+      });
+      if (!result.ok) {
+        if (result.reason === "already_claimed") toast.info("你已经抢过这个红包了！");
+        else if (result.reason === "exhausted") toast.error("红包已被抢完！下次手快一点😄");
+        return;
       }
-      const claimers = [...(m.redPacketClaimers ?? []), user?.name ?? "小幸运"];
-      const newClaimed = claimed + 1;
-      const perAmount = (parseFloat(m.redPacketAmount ?? "0") / total).toFixed(4);
-      setClaimedPackets(prev2 => new Set(Array.from(prev2).concat(msgId)));
-      toast.success(`🧧 抢到 ${perAmount} ${m.redPacketToken}!  第 ${newClaimed}/${total} 份`);
-      return { ...m, redPacketClaimed: newClaimed, redPacketClaimers: claimers };
-    }));
+    } catch { /* network error, fallback to local */ }
+    const perAmount = (parseFloat(msg.redPacketAmount ?? "0") / total).toFixed(4);
+    const newClaimed = claimed + 1;
+    const claimers = [...(msg.redPacketClaimers ?? []), user?.name ?? "小幸运"];
+    setClaimedPackets(prev => new Set(Array.from(prev).concat(msgId)));
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, redPacketClaimed: newClaimed, redPacketClaimers: claimers } : m
+    ));
+    toast.success(`🧧 抢到 ${perAmount} ${msg.redPacketToken ?? "USDT"}!  第 ${newClaimed}/${total} 份`);
   };  // ─── Transfer send ────────────────────────────────────────────────────────
   const handleSendTransfer = () => {
     if (!tfAmount || isNaN(parseFloat(tfAmount)) || parseFloat(tfAmount) <= 0) {
@@ -1399,7 +1423,7 @@ export default function GroupChatRoom() {
                           <span className="text-sm text-muted-foreground">{editAnnouncementText.length}/300</span>
                           <div className="flex gap-2">
                             <button onClick={() => setIsEditingAnnouncement(false)} className="px-3 py-1 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">Cancel</button>
-                            <button onClick={() => { if (editAnnouncementText.trim()) { setAnnouncement({ content: editAnnouncementText, author: user?.name ?? "Admin", time: "Just now" }); setIsEditingAnnouncement(false); setShowAnnouncement(true); toast.success("Announcement updated!"); } }} className="px-3 py-1 rounded-lg text-sm bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors">Save</button>
+                            <button onClick={async () => { if (editAnnouncementText.trim()) { try { await setAnnouncementMutation.mutateAsync({ groupId, content: editAnnouncementText }); } catch { /* fallback */ } setAnnouncement({ content: editAnnouncementText, author: user?.name ?? "Admin", time: "刚刚" }); setIsEditingAnnouncement(false); setShowAnnouncement(true); toast.success("公告已更新！"); } }} className="px-3 py-1 rounded-lg text-sm bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors">保存</button>
                           </div>
                         </div>
                       </div>

@@ -141,6 +141,20 @@
       "when": 1772606302860,
       "tag": "0019_blushing_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1772702435374,
+      "tag": "0020_magical_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1772702579289,
+      "tag": "0021_misty_union_jack",
+      "breakpoints": true
     }
   ]
 }
