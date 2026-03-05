@@ -62,6 +62,10 @@ interface GroupMessage {
   redPacketAmount?: string;
   redPacketToken?: string;
   redPacketNote?: string;
+  redPacketTotal?: number;     // 总份数
+  redPacketClaimed?: number;   // 已领取份数
+  redPacketClaimers?: string[]; // 已领取人名列表
+  redPacketExpired?: boolean;  // 是否已过期
   transferAmount?: string;
   transferToken?: string;
   transferNote?: string;
@@ -236,28 +240,66 @@ function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
   );
 }
 
-function renderMessageContent(msg: GroupMessage) {
-  // Red packet bubble
-  if (msg.isRedPacket) {
+function renderMessageContent(msg: GroupMessage, onClaim?: (id: string) => void, claimedSet?: Set<string>) {
+  // Red packet bubble (new style with multi-claim support)
+  if (msg.isRedPacket || msg.messageType === "redpacket") {
+    const total = msg.redPacketTotal ?? 1;
+    const claimed = msg.redPacketClaimed ?? 0;
+    const isClaimed = claimedSet?.has(msg.id) ?? false;
+    const isExpired = claimed >= total;
+    const claimers = msg.redPacketClaimers ?? [];
+    const amount = msg.redPacketAmount ?? msg.cryptoAmount ?? "?";
+    const token = msg.redPacketToken ?? msg.cryptoToken ?? "";
+    const note = msg.redPacketNote ?? msg.content ?? "";
     return (
-      <div className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"}`} style={{ minWidth: 200 }}>
-        <div className="bg-gradient-to-br from-red-500 to-orange-500 p-3.5">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <Gift size={16} className="text-white" />
+      <div className={`rounded-2xl overflow-hidden ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"}`} style={{ minWidth: 220 }}>
+        {/* Header */}
+        <div className="bg-gradient-to-br from-red-500 via-orange-500 to-[#ff6b35] p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="text-xl">🧧</span>
             </div>
             <div>
-              <p className="text-white text-sm font-bold font-mono">{msg.cryptoAmount} {msg.cryptoToken}</p>
-              <p className="text-white/70 text-sm">Crypto Red Packet</p>
+              <p className="text-white font-bold font-mono text-base">{amount} {token}</p>
+              <p className="text-white/70 text-xs">加密红包 · {total} 份</p>
             </div>
           </div>
-          {msg.content && <p className="text-white/90 text-sm mt-2 italic">"{msg.content}"</p>}
+          {note && note !== `[红包: ${amount} ${token}]` && (
+            <p className="text-white/90 text-sm italic">"{note}"</p>
+          )}
         </div>
-        <div className="bg-gradient-to-br from-red-600/20 to-orange-600/20 border border-red-500/20 px-3 py-1.5 flex items-center justify-between">
-          <span className="text-sm text-red-400/80">🧧 NexusChat Red Packet</span>
-          <button className="text-sm text-red-400 font-medium hover:text-red-300 transition-colors">
-            {msg.isMine ? "Sent" : "Open →"}
-          </button>
+        {/* Progress bar */}
+        <div className="bg-gradient-to-br from-red-900/40 to-orange-900/30 border-x border-red-500/20 px-3 pt-2 pb-1">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-red-300/80">已抢 {claimed}/{total} 份</span>
+            {claimers.length > 0 && (
+              <span className="text-xs text-red-300/60 truncate max-w-[100px]">{claimers.slice(-2).join("、")}抢到</span>
+            )}
+          </div>
+          <div className="h-1 bg-red-900/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full transition-all duration-500"
+              style={{ width: total > 0 ? `${Math.min(100, (claimed / total) * 100)}%` : "0%" }}
+            />
+          </div>
+        </div>
+        {/* Action button */}
+        <div className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border border-red-500/20 border-t-0 px-3 py-2 flex items-center justify-between">
+          <span className="text-xs text-red-400/60">🧧 NexusChat 红包</span>
+          {msg.isMine ? (
+            <span className="text-xs text-orange-400 font-medium">已发出 ✓</span>
+          ) : isExpired ? (
+            <span className="text-xs text-muted-foreground">已抢完</span>
+          ) : isClaimed ? (
+            <span className="text-xs text-yellow-400 font-medium">已领取 ✓</span>
+          ) : (
+            <button
+              onClick={() => onClaim?.(msg.id)}
+              className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-black font-bold px-3 py-1 rounded-full active:scale-95 transition-transform"
+            >
+              手气抢🧧
+            </button>
+          )}
         </div>
       </div>
     );
@@ -374,6 +416,9 @@ export default function GroupChatRoom() {
   const [rpAmount, setRpAmount] = useState("");
   const [rpToken, setRpToken] = useState("USDT");
   const [rpNote, setRpNote] = useState("");
+  const [rpCount, setRpCount] = useState("5"); // 份数，默认5份
+  // ─── Red packet claim state (local simulation) ─────────────────────────────────
+  const [claimedPackets, setClaimedPackets] = useState<Set<string>>(new Set());
   // ─── Transfer modal ───────────────────────────────────────────────────────
   const [showTransfer, setShowTransfer] = useState(false);
   const [tfAmount, setTfAmount] = useState("");
@@ -731,8 +776,20 @@ export default function GroupChatRoom() {
   };
 
    // ─── Video upload ────────────────────────────────────────────────────────
+  const MAX_VIDEO_MB = 50;
   const handleVideoUpload = async (file: File) => {
-    if (file.size > 100 * 1024 * 1024) { toast.error("视频文件过大（最大 100MB）"); return; }
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      toast.error(`视频文件过大（${sizeMB}MB），超出 ${MAX_VIDEO_MB}MB 限制`, {
+        duration: 6000,
+        description: "建议：① 手机相册「编辑」→ 降低分辨率/帧率  ② 使用 HandBrake 免费压缩  ③ 剪短视频时长",
+        action: {
+          label: "下载 HandBrake",
+          onClick: () => window.open("https://handbrake.fr", "_blank"),
+        },
+      });
+      return;
+    }
     setIsUploading(true);
     try {
       const reader = new FileReader();
@@ -764,12 +821,13 @@ export default function GroupChatRoom() {
     }
   };
 
-  // ─── Red packet send ──────────────────────────────────────────────────────
+  // ─── Red packet send ────────────────────────────────────────────────────────
   const handleSendRedPacket = () => {
     if (!rpAmount || isNaN(parseFloat(rpAmount)) || parseFloat(rpAmount) <= 0) {
       toast.error("请输入有效金额");
       return;
     }
+    const totalCount = Math.max(1, Math.min(100, parseInt(rpCount) || 5));
     const newMsg: GroupMessage = {
       id: Date.now().toString(),
       sender: user?.name ?? "User",
@@ -782,15 +840,39 @@ export default function GroupChatRoom() {
       redPacketAmount: rpAmount,
       redPacketToken: rpToken,
       redPacketNote: rpNote || "恭喜发财，大吉大利！",
+      redPacketTotal: totalCount,
+      redPacketClaimed: 0,
+      redPacketClaimers: [],
     };
     setMessages(prev => [...prev, newMsg]);
     if (isValidGroup && connected) socketSend({ groupId, content: `[红包: ${rpAmount} ${rpToken}]`, messageType: "redpacket", redPacketAmount: rpAmount, redPacketToken: rpToken, redPacketNote: rpNote || "恭喜发财，大吉大利！" });
     setShowRedPacket(false);
-    setRpAmount(""); setRpNote(""); setRpToken("USDT");
-    toast.success("红包已发出！");
+    setRpAmount(""); setRpNote(""); setRpToken("USDT"); setRpCount("5");
+    toast.success(`红包已发出！共 ${totalCount} 份，等待群友抢包🧧`);
   };
 
-  // ─── Transfer send ────────────────────────────────────────────────────────
+  // ─── Red packet claim handler ─────────────────────────────────────────────────────
+  const handleClaimRedPacket = (msgId: string) => {
+    if (claimedPackets.has(msgId)) {
+      toast.info("你已经抢过这个红包了！");
+      return;
+    }
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const claimed = (m.redPacketClaimed ?? 0);
+      const total = (m.redPacketTotal ?? 5);
+      if (claimed >= total) {
+        toast.error("红包已被抢完！下次手快一点😄");
+        return m;
+      }
+      const claimers = [...(m.redPacketClaimers ?? []), user?.name ?? "小幸运"];
+      const newClaimed = claimed + 1;
+      const perAmount = (parseFloat(m.redPacketAmount ?? "0") / total).toFixed(4);
+      setClaimedPackets(prev2 => new Set(Array.from(prev2).concat(msgId)));
+      toast.success(`🧧 抢到 ${perAmount} ${m.redPacketToken}!  第 ${newClaimed}/${total} 份`);
+      return { ...m, redPacketClaimed: newClaimed, redPacketClaimers: claimers };
+    }));
+  };  // ─── Transfer send ────────────────────────────────────────────────────────
   const handleSendTransfer = () => {
     if (!tfAmount || isNaN(parseFloat(tfAmount)) || parseFloat(tfAmount) <= 0) {
       toast.error("请输入有效金额");
@@ -998,7 +1080,7 @@ export default function GroupChatRoom() {
                           <Bot size={12} />NexusBot AI
                         </div>
                       )}
-                      {renderMessageContent(msg)}
+                      {renderMessageContent(msg, handleClaimRedPacket, claimedPackets)}
                     </div>
 
                     {/* Action buttons (hover on desktop) */}
@@ -1564,7 +1646,7 @@ export default function GroupChatRoom() {
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    placeholder="金额"
+                    placeholder="总金额"
                     value={rpAmount}
                     onChange={e => setRpAmount(e.target.value)}
                     className="flex-1 bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#ff6b35]/50"
@@ -1575,6 +1657,26 @@ export default function GroupChatRoom() {
                     <option value="ETH">ETH</option>
                     <option value="BNB">BNB</option>
                   </select>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <label className="text-xs text-muted-foreground mb-1 block">份数（多人抢包）</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      placeholder="份数"
+                      value={rpCount}
+                      onChange={e => setRpCount(e.target.value)}
+                      className="w-full bg-secondary/40 border border-border/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#ff6b35]/50"
+                    />
+                  </div>
+                  {rpAmount && rpCount && parseFloat(rpAmount) > 0 && parseInt(rpCount) > 0 && (
+                    <div className="text-right pt-4">
+                      <p className="text-xs text-muted-foreground">平均每份</p>
+                      <p className="text-sm font-mono text-[#ff6b35]">{(parseFloat(rpAmount) / parseInt(rpCount)).toFixed(4)} {rpToken}</p>
+                    </div>
+                  )}
                 </div>
                 <input
                   type="text"
@@ -1588,7 +1690,7 @@ export default function GroupChatRoom() {
                   disabled={!rpAmount || parseFloat(rpAmount) <= 0}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-[#ff6b35] to-[#ff3366] text-white font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  发送红包
+                  🧧 发出 {rpCount || 5} 份红包
                 </button>
               </div>
             </motion.div>

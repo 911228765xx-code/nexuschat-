@@ -10,7 +10,7 @@ import { formatMessageTime } from "@/lib/timeFormat";
 import {
   Search, Plus, Users, Lock, Shield, X, Clock, ArrowUp,
   Pin, BellOff, Bell, Trash2, Archive, MoreHorizontal, Filter,
-  MessageSquare, ChevronRight
+  MessageSquare, ChevronRight, Globe, Hash
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -44,6 +44,9 @@ export default function Chat() {
   const [activeTimeFilter, setActiveTimeFilter] = useState("Any Time");
   // isSearching and searchResults now derived from trpc query below
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // ─── 社群广场 ───────────────────────────────────────────────────────────────────────
+  const [showCommunitySquare, setShowCommunitySquare] = useState(false);
+  const [communitySearchQuery, setCommunitySearchQuery] = useState("");
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
@@ -55,12 +58,23 @@ export default function Chat() {
     { enabled: isAuthenticated, refetchInterval: isAuthenticated ? 30_000 : false, staleTime: 15_000 }
   );
 
-  // tRPC: public groups list
-  const { data: publicGroupsData } = trpc.chat.listGroups.useQuery(
-    { limit: 5 },
+  // tRPC: public groups list (for community square, up to 50 groups)
+  const { data: publicGroupsData, refetch: refetchPublicGroups } = trpc.chat.listGroups.useQuery(
+    { limit: 50 },
     { staleTime: 60_000 }
   );
   const joinGroupMutation = trpc.chat.joinGroup.useMutation();
+
+  // Filtered community groups based on search query
+  const filteredCommunityGroups = useMemo(() => {
+    if (!publicGroupsData) return [];
+    if (!communitySearchQuery.trim()) return publicGroupsData;
+    const q = communitySearchQuery.toLowerCase();
+    return publicGroupsData.filter(g =>
+      g.name.toLowerCase().includes(q) ||
+      (g.description ?? "").toLowerCase().includes(q)
+    );
+  }, [publicGroupsData, communitySearchQuery]);
 
   // tRPC: my joined groups (protectedProcedure)
   const { data: myGroupsData, refetch: refetchMyGroups } = trpc.chat.myGroups.useQuery(
@@ -260,6 +274,13 @@ export default function Chat() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowCommunitySquare(true); refetchPublicGroups(); }}
+              title="发现社群"
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
+            >
+              <Globe size={18} className="text-neon-purple" />
+            </button>
             <button
               onClick={() => setShowSearchPanel(true)}
               className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
@@ -722,6 +743,105 @@ export default function Chat() {
                 </div>
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ─── 社群广场弹窗 ─────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showCommunitySquare && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex flex-col"
+            onClick={() => setShowCommunitySquare(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="absolute bottom-0 left-0 right-0 max-h-[85vh] bg-card rounded-t-3xl flex flex-col overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border/20">
+                <div className="flex items-center gap-2">
+                  <Globe size={20} className="text-neon-purple" />
+                  <h2 className="text-base font-bold font-display">发现社群</h2>
+                  <span className="text-xs font-mono text-neon-purple bg-neon-purple/10 px-2 py-0.5 rounded-full">
+                    {filteredCommunityGroups.length} 个公开群
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowCommunitySquare(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="px-4 py-3">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="搜索群名称或描述..."
+                    value={communitySearchQuery}
+                    onChange={e => setCommunitySearchQuery(e.target.value)}
+                    className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm focus:outline-none focus:border-neon-purple/50 transition-all"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Group List */}
+              <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-2">
+                {filteredCommunityGroups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                    <Hash size={40} className="mb-3 opacity-30" />
+                    <p className="text-sm">{communitySearchQuery ? "没有找到匹配的社群" : "暂无公开社群"}</p>
+                  </div>
+                ) : (
+                  filteredCommunityGroups.map(group => (
+                    <motion.div
+                      key={group.id}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-3 p-3.5 rounded-2xl bg-secondary/20 border border-border/10 hover:border-neon-purple/30 transition-all cursor-pointer"
+                      onClick={() => {
+                        joinGroupMutation.mutate(
+                          { groupId: group.id },
+                          {
+                            onSuccess: () => {
+                              setShowCommunitySquare(false);
+                              setLocation(`/app/group/${group.id}`);
+                            },
+                            onError: () => {
+                              setLocation(`/app/group/${group.id}`);
+                            },
+                          }
+                        );
+                      }}
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-neon-purple/20 to-neon-cyan/10 flex items-center justify-center shrink-0 text-lg">
+                        {group.avatar || "💬"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{group.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{group.description || "公开社群"}</p>
+                        <p className="text-xs text-neon-purple/70 mt-0.5">{group.memberCount} 名成员</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-xs bg-neon-purple/15 text-neon-purple px-2.5 py-1 rounded-full font-medium">
+                          加入
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
