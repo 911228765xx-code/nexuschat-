@@ -158,6 +158,84 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
   );
 }
 
+// 视频气泡组件：支持移动端点击弹出操作菜单
+function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false);
+
+  const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowMenu(true);
+  };
+
+  return (
+    <div className="mt-2 max-w-[260px] relative">
+      {/* 视频缩略图 + 播放按鈕遮罩层 */}
+      <div className="relative cursor-pointer" onClick={handleTap} onTouchEnd={handleTap}>
+        <video
+          src={msg.mediaUrl}
+          className="w-full rounded-xl max-h-[200px] object-cover pointer-events-none"
+          preload="metadata"
+        />
+        {/* 播放图标遮罩 */}
+        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/30">
+          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
+            <svg viewBox="0 0 24 24" fill="white" className="w-6 h-6 ml-1"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      </div>
+      {msg.fileName && <p className="text-xs text-muted-foreground mt-1 truncate">{msg.fileName}</p>}
+
+      {/* 操作菜单弹窗 */}
+      {showMenu && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setShowMenu(false)}>
+          <div className="w-full max-w-md bg-card border-t border-border/40 rounded-t-2xl pb-8" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-4" />
+            <p className="text-sm text-muted-foreground px-5 mb-3 truncate">{msg.fileName ?? "视频"}</p>
+            <button
+              onClick={() => { setShowMenu(false); setShowPlayer(true); }}
+              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 transition-colors text-sm"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-neon-cyan"><path d="M8 5v14l11-7z"/></svg>
+              <span>播放视频</span>
+            </button>
+            <button
+              onClick={() => { window.open(msg.mediaUrl, "_blank"); setShowMenu(false); }}
+              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 transition-colors text-sm border-t border-border/20"
+            >
+              <Download size={18} className="text-neon-purple" />
+              <span>下载视频</span>
+            </button>
+            <button
+              onClick={() => setShowMenu(false)}
+              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 transition-colors text-sm border-t border-border/20 text-muted-foreground"
+            >
+              <X size={18} />
+              <span>取消</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 全屏播放弹窗 */}
+      {showPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90" onClick={() => setShowPlayer(false)}>
+          <div className="w-full max-w-lg px-4" onClick={e => e.stopPropagation()}>
+            <video
+              src={msg.mediaUrl}
+              controls
+              autoPlay
+              className="w-full rounded-xl max-h-[80vh]"
+            />
+            <button onClick={() => setShowPlayer(false)} className="mt-4 w-full py-2.5 rounded-xl bg-white/10 text-white text-sm">关闭</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function renderMessageContent(msg: GroupMessage) {
   // Red packet bubble
   if (msg.isRedPacket) {
@@ -214,18 +292,10 @@ function renderMessageContent(msg: GroupMessage) {
       </div>
     );
   }
-  // Video message
+  // Video message — 带操作菜单的视频气泡（移动端/桌面端兼容）
   if (msg.messageType === "video" && msg.mediaUrl) {
     return (
-      <div className="mt-2 max-w-[260px]">
-        <video
-          src={msg.mediaUrl}
-          controls
-          className="w-full rounded-xl max-h-[200px] object-cover"
-          preload="metadata"
-        />
-        {msg.fileName && <p className="text-sm text-muted-foreground mt-1 truncate">{msg.fileName}</p>}
-      </div>
+      <VideoMessageBubble msg={msg} />
     );
   }
   if (msg.messageType === "file" && msg.mediaUrl) {
