@@ -22,4 +22,4 @@ export const getLoginUrl = (returnPath?: string) => {
 };
 
 // Current native app shell version — bump when releasing a new APK/IPA
-export const CURRENT_APP_VERSION = "1.0.0";
+export const CURRENT_APP_VERSION = "1.1.0";
