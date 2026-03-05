@@ -19,9 +19,10 @@ import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { AppUpdateDialog } from "@/components/AppUpdateDialog";
 import { CURRENT_APP_VERSION } from "@/const";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Upload } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
-type SettingsSection = "main" | "security" | "privacy" | "about";
+type SettingsSection = "main" | "security" | "privacy" | "about" | "adminVersion";
 
 const LANGUAGES = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -39,6 +40,8 @@ export default function Settings() {
   const { t, locale, setLocale } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const { profile } = useApp();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [section, setSection] = useState<SettingsSection>("main");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -84,6 +87,55 @@ export default function Settings() {
     const newVal = !current;
     setter(newVal);
     updateSettingsMut.mutate({ [key]: newVal });
+  };
+
+  // ─── Admin: Version release state ─────────────────────────────────────────
+  const [adminLatestVersion, setAdminLatestVersion] = useState("");
+  const [adminMinVersion, setAdminMinVersion] = useState("");
+  const [adminReleaseNotes, setAdminReleaseNotes] = useState("");
+  const [adminForceUpdate, setAdminForceUpdate] = useState(false);
+  const [adminSaving, setAdminSaving] = useState(false);
+
+  const currentVersionQuery = trpc.appVersion.checkVersion.useQuery(
+    { currentVersion: CURRENT_APP_VERSION, platform: "web" },
+    { staleTime: 30_000, enabled: section === "adminVersion" }
+  );
+
+  // Sync form from DB when entering admin panel
+  useEffect(() => {
+    if (section === "adminVersion" && currentVersionQuery.data) {
+      const d = currentVersionQuery.data;
+      setAdminLatestVersion(d.latestVersion);
+      setAdminMinVersion(d.minVersion);
+      setAdminReleaseNotes(d.releaseNotes ?? "");
+      setAdminForceUpdate(d.isForceUpdate);
+    }
+  }, [section, currentVersionQuery.data]);
+
+  const updateConfigMut = trpc.appVersion.updateConfig.useMutation({
+    onSuccess: () => {
+      toast.success("版本配置已更新");
+      currentVersionQuery.refetch();
+      setAdminSaving(false);
+    },
+    onError: (err) => {
+      toast.error(err.message || "更新失败");
+      setAdminSaving(false);
+    },
+  });
+
+  const handleAdminSave = () => {
+    if (!adminLatestVersion.trim() || !adminMinVersion.trim()) {
+      toast.error("请填写最新版本号和最低版本号");
+      return;
+    }
+    setAdminSaving(true);
+    updateConfigMut.mutate({
+      latestVersion: adminLatestVersion.trim(),
+      minVersion: adminMinVersion.trim(),
+      releaseNotes: adminReleaseNotes.trim(),
+      isForceUpdate: adminForceUpdate,
+    });
   };
 
   // ─── API Key management ─────────────────────────────────────────────────
@@ -384,6 +436,137 @@ export default function Settings() {
     </motion.div>
   );
 
+  // ─── Admin: Version Release Panel ───
+  const renderAdminVersion = () => (
+    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full">
+      <header className="glass sticky top-0 z-20 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
+        <div className="flex items-center gap-3 h-14">
+          <button onClick={() => setSection("main")} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/60 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <Upload size={18} className="text-neon-purple" />
+          <h1 className="text-base font-semibold font-display">版本发布管理</h1>
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-neon-purple/15 border border-neon-purple/30 text-neon-purple text-xs font-medium">Admin</span>
+        </div>
+      </header>
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+        {/* Current version info */}
+        <div className="p-4 rounded-2xl bg-card/50 border border-border/20">
+          <p className="text-xs text-muted-foreground mb-2">当前数据库配置</p>
+          {currentVersionQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">加载中...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">最新版本</p>
+                <p className="text-sm font-mono font-bold text-[#00d4ff]">v{currentVersionQuery.data?.latestVersion ?? CURRENT_APP_VERSION}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">最低版本</p>
+                <p className="text-sm font-mono font-bold text-amber-400">v{currentVersionQuery.data?.minVersion ?? CURRENT_APP_VERSION}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground">强制更新</p>
+                <p className="text-sm font-medium">{currentVersionQuery.data?.isForceUpdate ? '是（低于最低版本强制更新）' : '否'}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Form */}
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">最新版本号 <span className="text-neon-red">*</span></label>
+            <input
+              type="text"
+              value={adminLatestVersion}
+              onChange={(e) => setAdminLatestVersion(e.target.value)}
+              placeholder="例如：1.2.0"
+              className="w-full px-3 py-2.5 rounded-xl bg-secondary/30 border border-border/30 text-sm font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20"
+            />
+            <p className="text-xs text-muted-foreground mt-1">用户版本低于此值时显示更新提示</p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">最低兼容版本号 <span className="text-neon-red">*</span></label>
+            <input
+              type="text"
+              value={adminMinVersion}
+              onChange={(e) => setAdminMinVersion(e.target.value)}
+              placeholder="例如：1.0.0"
+              className="w-full px-3 py-2.5 rounded-xl bg-secondary/30 border border-border/30 text-sm font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20"
+            />
+            <p className="text-xs text-muted-foreground mt-1">用户版本低于此值时强制更新（不可跳过）</p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">更新说明</label>
+            <textarea
+              value={adminReleaseNotes}
+              onChange={(e) => setAdminReleaseNotes(e.target.value)}
+              placeholder="本次更新内容，例如：新增群红包功能、修复若干 Bug..."
+              rows={4}
+              className="w-full px-3 py-2.5 rounded-xl bg-secondary/30 border border-border/30 text-sm focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/20 border border-border/20">
+            <div>
+              <p className="text-sm font-medium">强制更新模式</p>
+              <p className="text-xs text-muted-foreground mt-0.5">开启后所有用户必须更新才能继续使用</p>
+            </div>
+            <div
+              role="switch"
+              aria-checked={adminForceUpdate}
+              tabIndex={0}
+              onClick={() => setAdminForceUpdate(!adminForceUpdate)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setAdminForceUpdate(!adminForceUpdate); }}
+              className="shrink-0 cursor-pointer"
+            >
+              <div className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${
+                adminForceUpdate ? 'bg-neon-red/30 border border-neon-red/40' : 'bg-secondary border border-border'
+              }`}>
+                <motion.div
+                  layout
+                  className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-colors ${
+                    adminForceUpdate ? 'bg-neon-red' : 'bg-muted-foreground'
+                  }`}
+                  animate={{ left: adminForceUpdate ? 'calc(100% - 22px)' : '2px' }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <button
+          onClick={handleAdminSave}
+          disabled={adminSaving}
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-neon-purple/80 to-neon-cyan/80 text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {adminSaving ? (
+            <><RefreshCw size={15} className="animate-spin" /> 保存中...</>
+          ) : (
+            <><Upload size={15} /> 发布版本更新</>
+          )}
+        </button>
+
+        {/* Warning */}
+        <div className="p-3.5 rounded-xl bg-amber-400/5 border border-amber-400/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-400/80 leading-relaxed">
+              发布后用户将在下次打开 App 或 30 分钟内收到更新提示。强制更新模式下用户无法跳过，请谨慎使用。
+            </p>
+          </div>
+        </div>
+
+        <div className="h-4" />
+      </div>
+    </motion.div>
+  );
+
   // ─── Main Settings ───
   const renderMain = () => (
     <div className="flex flex-col h-full">
@@ -510,6 +693,28 @@ export default function Settings() {
           )}
         </AnimatePresence>
 
+        {/* Admin Panel (only visible to admin users) */}
+        {isAdmin && (
+          <div>
+            <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">管理员工具</h3>
+            <div className="rounded-2xl bg-neon-purple/5 border border-neon-purple/20 overflow-hidden">
+              <button
+                onClick={() => setSection("adminVersion")}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-neon-purple/10 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-neon-purple/15 flex items-center justify-center">
+                  <Upload size={16} className="text-neon-purple" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm">版本发布管理</p>
+                  <p className="text-xs text-muted-foreground">发布新版本，管理强制更新</p>
+                </div>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* About & Support */}
         <div>
           <h3 className="text-sm text-muted-foreground font-medium mb-3 px-2">{t("settings.support")}</h3>
@@ -618,6 +823,7 @@ export default function Settings() {
       {section === "security" && renderSecurity()}
       {section === "privacy" && renderPrivacy()}
       {section === "about" && renderAbout()}
+      {section === "adminVersion" && renderAdminVersion()}
 
       {/* Version update dialog — opened from About section */}
       <AppUpdateDialog

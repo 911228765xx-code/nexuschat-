@@ -44,6 +44,7 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 const AppUpdateDialog = lazy(() => import("./components/AppUpdateDialog").then(m => ({ default: m.AppUpdateDialog })));
+const UpdateBanner = lazy(() => import("./components/UpdateBanner").then(m => ({ default: m.UpdateBanner })));
 
 // ─── Route prefetch helpers (called on nav hover/touch to preload JS chunks) ──
 // Each function triggers the dynamic import so the chunk is fetched before navigation.
@@ -297,6 +298,11 @@ function AppContent() {
           <Onboarding onComplete={() => setShowOnboarding(false)} />
         </Suspense>
       )}
+
+      {/* Version update banner — shown at top of app when new version is available */}
+      <Suspense fallback={null}>
+        <UpdateBanner />
+      </Suspense>
 
       <RouteContent />
 
