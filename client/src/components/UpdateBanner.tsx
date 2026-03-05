@@ -55,9 +55,21 @@ export function UpdateBanner() {
 
   const handleUpdate = useCallback(() => {
     if (data?.downloadUrl) {
-      window.open(data.downloadUrl, "_blank");
+      if (platform === "web") {
+        // Web platform: navigate to the download/update page
+        if (data.latestVersion) {
+          sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
+        }
+        setDismissed(true);
+        setTimeout(() => {
+          window.location.href = data.downloadUrl!;
+        }, 200);
+      } else {
+        // Native app (Android/iOS): open download URL in new tab
+        window.open(data.downloadUrl, "_blank");
+      }
     } else {
-      // Web: dismiss banner first to avoid black screen flash, then reload
+      // Fallback: reload page to get latest assets
       if (data?.latestVersion) {
         sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
       }
@@ -66,7 +78,7 @@ export function UpdateBanner() {
         window.location.reload();
       }, 300);
     }
-  }, [data?.downloadUrl, data?.latestVersion]);
+  }, [data?.downloadUrl, data?.latestVersion, platform]);
 
   const show = !dismissed && (data?.hasUpdate || data?.isForceUpdate);
   const isForce = data?.isForceUpdate ?? false;

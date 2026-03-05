@@ -514,3 +514,9 @@
 - [x] UpdateBanner 组件（顶部更新提示条，30分钟轮询）
 - [x] AppUpdateDialog 组件（启动时自动检查更新弹窗）
 - [x] App.tsx 集成 UpdateBanner 和 AppUpdateDialog
+
+## 版本更新逻辑区分（2026-03-05 第二批）
+- [ ] 数据库 schema 添加 androidDownloadUrl、iosDownloadUrl、webDownloadUrl 字段
+- [ ] 后端 checkVersion 接口按平台返回对应下载地址
+- [ ] 管理员版本发布面板支持配置各平台下载地址
+- [ ] UpdateBanner 和 AppUpdateDialog 按平台跳转对应下载地址

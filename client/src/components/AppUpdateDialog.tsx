@@ -78,16 +78,28 @@ export function AppUpdateDialog({
 
   const handleUpdate = () => {
     if (data?.downloadUrl) {
-      // Native app: open download URL
-      window.open(data.downloadUrl, "_blank");
+      if (platform === "web") {
+        // Web platform: navigate to the download/update page
+        if (data.latestVersion) {
+          sessionStorage.setItem(SHOWN_DIALOG_KEY, data.latestVersion);
+        }
+        setOpen(false);
+        onClose?.();
+        // Navigate to the download URL (e.g. /download page)
+        setTimeout(() => {
+          window.location.href = data.downloadUrl!;
+        }, 200);
+      } else {
+        // Native app (Android/iOS): open download URL in new tab
+        window.open(data.downloadUrl, "_blank");
+      }
     } else {
-      // Web: just close the dialog and reload the page to get latest assets
+      // Fallback: reload page to get latest assets
       if (data?.latestVersion) {
         sessionStorage.setItem(SHOWN_DIALOG_KEY, data.latestVersion);
       }
       setOpen(false);
       onClose?.();
-      // Small delay before reload to let dialog close animation finish
       setTimeout(() => {
         window.location.reload();
       }, 300);

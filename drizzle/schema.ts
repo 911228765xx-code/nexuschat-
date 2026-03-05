@@ -639,6 +639,7 @@ export const appConfig = mysqlTable("app_config", {
   minVersion: varchar("minVersion", { length: 20 }).notNull().default("1.0.0"),
   downloadUrlAndroid: text("downloadUrlAndroid"),
   downloadUrlIos: text("downloadUrlIos"),
+  downloadUrlWeb: text("downloadUrlWeb"),
   releaseNotes: text("releaseNotes"),
   isForceUpdate: boolean("isForceUpdate").default(false).notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

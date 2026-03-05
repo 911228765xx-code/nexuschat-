@@ -42,6 +42,7 @@ export const appVersionRouter = router({
         minVersion: CURRENT_APP_VERSION,
         downloadUrlAndroid: "https://nexuschat.best/download",
         downloadUrlIos: "https://nexuschat.best/download",
+        downloadUrlWeb: "https://nexuschat.best/download",
         releaseNotes: "初始版本",
         isForceUpdate: false,
       };
@@ -61,6 +62,7 @@ export const appVersionRouter = router({
             minVersion: rows[0].minVersion,
             downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
             downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
+            downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
             releaseNotes: rows[0].releaseNotes ?? "",
             isForceUpdate: rows[0].isForceUpdate,
           };
@@ -72,16 +74,24 @@ export const appVersionRouter = router({
       const hasUpdate =
         compareSemver(input.currentVersion, config.latestVersion) < 0;
 
+      // Return platform-specific download URL
+      let downloadUrl: string;
+      if (input.platform === "ios") {
+        downloadUrl = config.downloadUrlIos;
+      } else if (input.platform === "web") {
+        downloadUrl = config.downloadUrlWeb;
+      } else {
+        downloadUrl = config.downloadUrlAndroid;
+      }
+
       return {
         currentVersion: input.currentVersion,
         latestVersion: config.latestVersion,
         minVersion: config.minVersion,
         hasUpdate,
         isForceUpdate: isForceUpdate || config.isForceUpdate,
-        downloadUrl:
-          input.platform === "ios"
-            ? config.downloadUrlIos
-            : config.downloadUrlAndroid,
+        platform: input.platform,
+        downloadUrl,
         releaseNotes: config.releaseNotes,
       };
     }),
@@ -96,6 +106,7 @@ export const appVersionRouter = router({
         minVersion: z.string().max(20),
         downloadUrlAndroid: z.string().url().max(500).optional(),
         downloadUrlIos: z.string().url().max(500).optional(),
+        downloadUrlWeb: z.string().url().max(500).optional(),
         releaseNotes: z.string().max(2000).optional(),
         isForceUpdate: z.boolean().optional(),
       })
@@ -123,6 +134,7 @@ export const appVersionRouter = router({
             minVersion: input.minVersion,
             downloadUrlAndroid: input.downloadUrlAndroid,
             downloadUrlIos: input.downloadUrlIos,
+            downloadUrlWeb: input.downloadUrlWeb,
             releaseNotes: input.releaseNotes,
             isForceUpdate: input.isForceUpdate ?? false,
           })
@@ -134,6 +146,7 @@ export const appVersionRouter = router({
           minVersion: input.minVersion,
           downloadUrlAndroid: input.downloadUrlAndroid,
           downloadUrlIos: input.downloadUrlIos,
+          downloadUrlWeb: input.downloadUrlWeb,
           releaseNotes: input.releaseNotes,
           isForceUpdate: input.isForceUpdate ?? false,
         });

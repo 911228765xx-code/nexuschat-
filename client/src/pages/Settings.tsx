@@ -95,6 +95,9 @@ export default function Settings() {
   const [adminReleaseNotes, setAdminReleaseNotes] = useState("");
   const [adminForceUpdate, setAdminForceUpdate] = useState(false);
   const [adminSaving, setAdminSaving] = useState(false);
+  const [adminDownloadUrlAndroid, setAdminDownloadUrlAndroid] = useState("");
+  const [adminDownloadUrlIos, setAdminDownloadUrlIos] = useState("");
+  const [adminDownloadUrlWeb, setAdminDownloadUrlWeb] = useState("");
 
   const currentVersionQuery = trpc.appVersion.checkVersion.useQuery(
     { currentVersion: CURRENT_APP_VERSION, platform: "web" },
@@ -135,6 +138,9 @@ export default function Settings() {
       minVersion: adminMinVersion.trim(),
       releaseNotes: adminReleaseNotes.trim(),
       isForceUpdate: adminForceUpdate,
+      ...(adminDownloadUrlAndroid.trim() ? { downloadUrlAndroid: adminDownloadUrlAndroid.trim() } : {}),
+      ...(adminDownloadUrlIos.trim() ? { downloadUrlIos: adminDownloadUrlIos.trim() } : {}),
+      ...(adminDownloadUrlWeb.trim() ? { downloadUrlWeb: adminDownloadUrlWeb.trim() } : {}),
     });
   };
 
@@ -509,7 +515,40 @@ export default function Settings() {
               className="w-full px-3 py-2.5 rounded-xl bg-secondary/30 border border-border/30 text-sm focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 resize-none"
             />
           </div>
-
+          {/* Download URLs */}
+          <div className="space-y-3 p-3.5 rounded-xl bg-secondary/10 border border-border/20">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">下载地址（留空则保持原有地址）</p>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">📱 Android APK 下载地址</label>
+              <input
+                type="url"
+                value={adminDownloadUrlAndroid}
+                onChange={(e) => setAdminDownloadUrlAndroid(e.target.value)}
+                placeholder="https://nexuschat.best/download/nexuschat.apk"
+                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">🍎 iOS 下载地址</label>
+              <input
+                type="url"
+                value={adminDownloadUrlIos}
+                onChange={(e) => setAdminDownloadUrlIos(e.target.value)}
+                placeholder="https://apps.apple.com/app/nexuschat"
+                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">🌐 Web 更新页面地址</label>
+              <input
+                type="url"
+                value={adminDownloadUrlWeb}
+                onChange={(e) => setAdminDownloadUrlWeb(e.target.value)}
+                placeholder="https://nexuschat.best/download"
+                className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border/30 text-xs font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20"
+              />
+            </div>
+          </div>
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/20 border border-border/20">
             <div>
               <p className="text-sm font-medium">强制更新模式</p>

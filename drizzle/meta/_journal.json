@@ -162,6 +162,13 @@
       "when": 1772704424057,
       "tag": "0022_orange_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1772711111945,
+      "tag": "0023_flashy_pyro",
+      "breakpoints": true
     }
   ]
 }
