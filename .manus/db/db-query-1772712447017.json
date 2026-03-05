@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, platform, latestVersion, minVersion, downloadUrlWeb, isForceUpdate FROM app_config LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, platform, latestVersion, minVersion, downloadUrlWeb, isForceUpdate FROM app_config LIMIT 5;",
+  "rows": [
+    {
+      "id": "30001",
+      "platform": "all",
+      "latestVersion": "1.1.0",
+      "minVersion": "1.0.0",
+      "downloadUrlWeb": "NULL",
+      "isForceUpdate": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tplatform\tlatestVersion\tminVersion\tdownloadUrlWeb\tisForceUpdate\n30001\tall\t1.1.0\t1.0.0\tNULL\t0\n",
+  "stderr": "",
+  "execution_time_ms": 1629
+}
