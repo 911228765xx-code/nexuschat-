@@ -20,6 +20,9 @@ function getPlatform(): "android" | "ios" | "web" {
   return "web";
 }
 
+// Key to store the version we've already shown the dialog for
+const SHOWN_DIALOG_KEY = "nexuschat_update_dialog_shown_v";
+
 interface AppUpdateDialogProps {
   /** If true, only show when there's an update (auto-check on mount) */
   autoCheck?: boolean;
@@ -44,12 +47,17 @@ export function AppUpdateDialog({
     }
   );
 
-  // Auto-check: show dialog if update available
+  // Auto-check: show dialog if update available AND we haven't shown it for this version yet
   useEffect(() => {
-    if (autoCheck && data?.hasUpdate) {
-      setOpen(true);
+    if (autoCheck && data?.hasUpdate && data?.latestVersion) {
+      const shownVersion = sessionStorage.getItem(SHOWN_DIALOG_KEY);
+      // Only show if we haven't already shown the dialog for this version
+      // (unless it's a force update, which always shows)
+      if (data.isForceUpdate || shownVersion !== data.latestVersion) {
+        setOpen(true);
+      }
     }
-  }, [autoCheck, data?.hasUpdate]);
+  }, [autoCheck, data?.hasUpdate, data?.latestVersion, data?.isForceUpdate]);
 
   // External open (from Settings)
   useEffect(() => {
@@ -60,13 +68,29 @@ export function AppUpdateDialog({
 
   const handleClose = () => {
     if (data?.isForceUpdate) return; // Cannot close force update
+    // Mark this version as "dialog shown" so it doesn't reappear this session
+    if (data?.latestVersion) {
+      sessionStorage.setItem(SHOWN_DIALOG_KEY, data.latestVersion);
+    }
     setOpen(false);
     onClose?.();
   };
 
   const handleUpdate = () => {
     if (data?.downloadUrl) {
+      // Native app: open download URL
       window.open(data.downloadUrl, "_blank");
+    } else {
+      // Web: just close the dialog and reload the page to get latest assets
+      if (data?.latestVersion) {
+        sessionStorage.setItem(SHOWN_DIALOG_KEY, data.latestVersion);
+      }
+      setOpen(false);
+      onClose?.();
+      // Small delay before reload to let dialog close animation finish
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
     }
   };
 
@@ -115,7 +139,8 @@ export function AppUpdateDialog({
                   {data?.releaseNotes && (
                     <div className="mt-3 p-3 rounded-lg bg-secondary/30 border border-border/20">
                       <p className="text-xs text-muted-foreground mb-1">更新内容</p>
-                      <p className="text-sm leading-relaxed">{data.releaseNotes}</p>
+                      {/* Use whitespace-pre-line to preserve line breaks in release notes */}
+                      <p className="text-sm leading-relaxed whitespace-pre-line">{data.releaseNotes}</p>
                     </div>
                   )}
                   {isForce && (

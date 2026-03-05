@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, openId, name, role, createdAt FROM users ORDER BY createdAt ASC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, openId, name, role, createdAt FROM users ORDER BY createdAt ASC LIMIT 10;",
+  "rows": [
+    {
+      "id": "181477",
+      "openId": "bot_nexus_bot",
+      "name": "NexusBot 🤖",
+      "role": "user",
+      "createdAt": "2026-02-01 07:58:04"
+    },
+    {
+      "id": "181550",
+      "openId": "silent_Web3Farmer_r0v2_1772524781351_72",
+      "name": "Web3Farmer_r0v2",
+      "role": "user",
+      "createdAt": "2026-02-12 02:59:41"
+    },
+    {
+      "id": "181479",
+      "openId": "silent_CryptoWhale_hl9j_1772524765407_1",
+      "name": "CryptoWhale_hl9j",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:25"
+    },
+    {
+      "id": "181486",
+      "openId": "silent_EthWhale_4iyh_1772524766981_8",
+      "name": "EthWhale_4iyh",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:27"
+    },
+    {
+      "id": "181490",
+      "openId": "silent_Web3Degen_sxby_1772524767877_12",
+      "name": "Web3Degen_sxby",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:28"
+    },
+    {
+      "id": "181501",
+      "openId": "silent_DeFiHodler_ohxu_1772524770347_23",
+      "name": "DeFiHodler_ohxu",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:30"
+    },
+    {
+      "id": "181523",
+      "openId": "silent_BlockAnon_yuqt_1772524775288_45",
+      "name": "BlockAnon_yuqt",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:35"
+    },
+    {
+      "id": "181530",
+      "openId": "silent_Web3Dev_7x0i_1772524776859_52",
+      "name": "Web3Dev_7x0i",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:37"
+    },
+    {
+      "id": "181533",
+      "openId": "silent_BlockDev_dsip_1772524777531_55",
+      "name": "BlockDev_dsip",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:38"
+    },
+    {
+      "id": "181540",
+      "openId": "silent_Web3Trader_lpu9_1772524779109_62",
+      "name": "Web3Trader_lpu9",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:39"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\trole\tcreatedAt\n181477\tbot_nexus_bot\tNexusBot 🤖\tuser\t2026-02-01 07:58:04\n181550\tsilent_Web3Farmer_r0v2_1772524781351_72\tWeb3Farmer_r0v2\tuser\t2026-02-12 02:59:41\n181479\tsilent_CryptoWhale_hl9j_1772524765407_1\tCryptoWhale_hl9j\tuser\t2026-02-13 02:59:25\n181486\tsilent_EthWhale_4iyh_1772524766981_8\tEthWhale_4iyh\tuser\t2026-02-13 02:59:27\n181490\tsilent_Web3Degen_sxby_1772524767877_12\tWeb3Degen_sxby\tuser\t2026-02-13 02:59:28\n181501\tsilent_DeFiHodler_ohxu_1772524770347_23\tDeFiHodler_ohxu\tuser\t2026-02-13 02:59:30\n181523\tsilent_BlockAnon_yuqt_1772524775288_45\tBlockAnon_yuqt\tuser\t2026-02-13 02:59:35\n181530\tsilent_Web3Dev_7x0i_1772524776859_52\tWeb3Dev_7x0i\tuser\t2026-02-13 02:59:37\n181533\tsilent_BlockDev_dsip_1772524777531_55\tBlockDev_dsip\tuser\t2026-02-13 02:59:38\n181540\tsilent_Web3Trader_lpu9_1772524779109_62\tWeb3Trader_lpu9\tuser\t2026-02-13 02:59:39\n",
+  "stderr": "",
+  "execution_time_ms": 1622
+}

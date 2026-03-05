@@ -57,10 +57,16 @@ export function UpdateBanner() {
     if (data?.downloadUrl) {
       window.open(data.downloadUrl, "_blank");
     } else {
-      // Web: reload to get latest version
-      window.location.reload();
+      // Web: dismiss banner first to avoid black screen flash, then reload
+      if (data?.latestVersion) {
+        sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
+      }
+      setDismissed(true);
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
     }
-  }, [data?.downloadUrl]);
+  }, [data?.downloadUrl, data?.latestVersion]);
 
   const show = !dismissed && (data?.hasUpdate || data?.isForceUpdate);
   const isForce = data?.isForceUpdate ?? false;
