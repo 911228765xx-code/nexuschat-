@@ -54,22 +54,20 @@ export function UpdateBanner() {
   }, [data?.isForceUpdate, data?.latestVersion]);
 
   const handleUpdate = useCallback(() => {
-    if (data?.downloadUrl) {
-      if (platform === "web") {
-        // Web platform: navigate to the download/update page
-        if (data.latestVersion) {
-          sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
-        }
-        setDismissed(true);
-        setTimeout(() => {
-          window.location.href = data.downloadUrl!;
-        }, 200);
-      } else {
-        // Native app (Android/iOS): open download URL in new tab
-        window.open(data.downloadUrl, "_blank");
+    if (platform === "web") {
+      // Web platform: directly reload to get the latest deployed assets
+      if (data?.latestVersion) {
+        sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
       }
+      setDismissed(true);
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    } else if (data?.downloadUrl) {
+      // Native app (Android/iOS): open download URL to install the new APK/IPA
+      window.open(data.downloadUrl, "_blank");
     } else {
-      // Fallback: reload page to get latest assets
+      // Fallback: reload page
       if (data?.latestVersion) {
         sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
       }
