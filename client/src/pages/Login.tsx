@@ -6,11 +6,13 @@
  * - 无 blur-[Npx] CSS filter（同上）
  * - 纯实色背景，inline style 确保所有 Android/iOS 浏览器正常渲染
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, Loader2, MessageCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { TURNSTILE_SITE_KEY } from "@/const";
 
 type Mode = "login" | "register";
 
@@ -22,6 +24,8 @@ export default function Login() {
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   // Get returnPath from URL query params
   const returnPath = (() => {
@@ -72,7 +76,16 @@ export default function Login() {
     if (mode === "login") {
       loginMutation.mutate({ email, password });
     } else {
-      registerMutation.mutate({ email, password, name });
+      registerMutation.mutate(
+        { email, password, name, turnstileToken: turnstileToken || undefined },
+        {
+          onError: () => {
+            // Reset Turnstile on error so user can retry
+            turnstileRef.current?.reset();
+            setTurnstileToken("");
+          },
+        }
+      );
     }
   };
 
@@ -421,6 +434,19 @@ export default function Login() {
             </div>
           )}
 
+          {/* Cloudflare Turnstile — register mode only, only shown if site key is configured */}
+          {mode === "register" && TURNSTILE_SITE_KEY && (
+            <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken("")}
+                onError={() => setTurnstileToken("")}
+                options={{ theme: "dark", size: "normal" }}
+              />
+            </div>
+          )}
           {/* Submit */}
           <button type="submit" disabled={isPending} style={S.submitBtn(isPending)}>
             {isPending ? (

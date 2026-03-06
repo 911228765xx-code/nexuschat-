@@ -16,9 +16,37 @@ import { getDb } from "../db";
 import { ENV } from "../_core/env";
 import { notifyOwner } from "../_core/notification";
 import { sendPasswordResetEmail } from "../_core/email";
+import { isDisposableEmail } from "../utils/disposableEmailBlocklist";
+
+/** Verify Cloudflare Turnstile token server-side */
+async function verifyTurnstile(token: string, remoteip?: string): Promise<boolean> {
+  const secretKey = ENV.turnstileSecretKey;
+  // If no secret key configured (dev mode), skip verification
+  if (!secretKey || secretKey === "1x0000000000000000000000000000000AA") return true;
+  try {
+    const formData = new URLSearchParams();
+    formData.append("secret", secretKey);
+    formData.append("response", token);
+    if (remoteip) formData.append("remoteip", remoteip);
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json() as { success: boolean };
+    return data.success === true;
+  } catch {
+    // Network error — fail open in dev, fail closed in prod
+    return process.env.NODE_ENV !== "production";
+  }
+}
 
 const SALT_ROUNDS = 10;
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+// Rate limiting: track registration attempts per IP (in-memory, resets on restart)
+const ipRegisterAttempts = new Map<string, { count: number; resetAt: number }>();
+const IP_REGISTER_LIMIT = 5; // max 5 registrations per IP per 24h
+const IP_REGISTER_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /** Generate a unique openId for email-registered users */
 function emailOpenId(email: string): string {
@@ -33,11 +61,56 @@ export const emailAuthRouter = router({
         email: z.string().email("请输入有效的邮箱地址").max(320),
         password: z.string().min(8, "密码至少 8 位").max(128),
         name: z.string().min(1, "请输入昵称").max(50),
+        /** Cloudflare Turnstile token — required in production */
+        turnstileToken: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂时不可用" });
+
+      // ── 方案3：临时邮箱黑名单校验 ──
+      if (isDisposableEmail(input.email)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "请使用真实邮箱地址注册（不支持临时邮箱）",
+        });
+      }
+
+      // ── IP 注册频率限制 ──
+      const clientIp = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || ctx.req.socket?.remoteAddress
+        || "unknown";
+      const now = Date.now();
+      const ipRecord = ipRegisterAttempts.get(clientIp);
+      if (ipRecord && now < ipRecord.resetAt) {
+        if (ipRecord.count >= IP_REGISTER_LIMIT) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `同一网络注册次数过多，请 24 小时后再试`,
+          });
+        }
+        ipRecord.count++;
+      } else {
+        ipRegisterAttempts.set(clientIp, { count: 1, resetAt: now + IP_REGISTER_WINDOW_MS });
+      }
+
+      // ── 方案2：Cloudflare Turnstile 人机验证 ──
+      if (input.turnstileToken) {
+        const turnstileOk = await verifyTurnstile(input.turnstileToken, clientIp);
+        if (!turnstileOk) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "人机验证失败，请刷新页面重试",
+          });
+        }
+      } else if (process.env.NODE_ENV === "production" && ENV.turnstileSecretKey && ENV.turnstileSecretKey !== "1x0000000000000000000000000000000AA") {
+        // In production with Turnstile configured, require the token
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "请完成人机验证后再注册",
+        });
+      }
 
       const normalizedEmail = input.email.toLowerCase().trim();
       const openId = emailOpenId(normalizedEmail);

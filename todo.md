@@ -520,3 +520,7 @@
 - [ ] 后端 checkVersion 接口按平台返回对应下载地址
 - [ ] 管理员版本发布面板支持配置各平台下载地址
 - [ ] UpdateBanner 和 AppUpdateDialog 按平台跳转对应下载地址
+
+## 防脚本批量注册（2026-03-06）
+- [x] 方案3：临时邮箱域名黑名单（封禁 mailinator、10minutemail 等）
+- [x] 方案2：Cloudflare Turnstile 人机验证集成到注册/登录页面
