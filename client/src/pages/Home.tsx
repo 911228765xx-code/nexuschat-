@@ -402,6 +402,199 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Backed By — Investors */}
+      <section className="py-20 px-4">
+        <div className="max-w-5xl mx-auto">
+          <motion.div {...fadeUp} className="text-center mb-12">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-4">
+              <Shield size={12} />
+              {t("investors.badge")}
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("investors.title")}</h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("investors.subtitle")}</p>
+          </motion.div>
+          <motion.div
+            {...fadeUp}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4"
+          >
+            {[
+              { name: "Fenbushi Capital", year: "2015", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-fenbushi-mgh9u2ZkxnYYRXvvCuhTZ6.webp", color: "#00d4ff" },
+              { name: "Shima Capital", year: "2021", region: "US", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-shima-AdTNKHNSyBBuqKGmEGC27F.webp", color: "#a855f7" },
+              { name: "Waterdrip Capital", year: "2020", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-waterdrip-GjTugGXbAz4X9Y6kFasF3j.webp", color: "#00ff88" },
+              { name: "Spartan Group", year: "2018", region: "Global", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-spartan-YHycm8YPZ4WRX5AQDmFJsZ.webp", color: "#ff6b35" },
+              { name: "Folius Ventures", year: "2021", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-folius-PMYJyuBxhSPhCepRVZLWUn.webp", color: "#00d4ff" },
+              { name: "Mirana Ventures", year: "2021", region: "Global", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-mirana-VmeYTEEWEJN6JAnADFm4Cb.webp", color: "#a855f7" },
+            ].map((inv, i) => (
+              <motion.div
+                key={inv.name}
+                {...fadeUp}
+                transition={{ duration: 0.4, delay: i * 0.08 }}
+                className="group p-4 rounded-2xl bg-card/40 border border-border/20 hover:border-[#00d4ff]/30 transition-all duration-300 text-center overflow-hidden"
+              >
+                <div className="w-full aspect-video rounded-xl overflow-hidden mb-3 bg-[#0a0e1a]">
+                  <img
+                    src={inv.logo}
+                    alt={inv.name}
+                    className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
+                  />
+                </div>
+                <p className="text-xs font-semibold font-display text-foreground/70 group-hover:text-[#00d4ff] transition-colors leading-tight mb-0.5">{inv.name}</p>
+                <p className="text-[10px] text-muted-foreground">{inv.region} · {inv.year}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+          <motion.p {...fadeUp} transition={{ duration: 0.5, delay: 0.5 }} className="text-center text-xs text-muted-foreground mt-8">
+            {t("investors.note")}
+          </motion.p>
+        </div>
+      </section>
+
+      {/* Team */}
+      <section className="py-20 px-4 bg-card/20">
+        <div className="max-w-4xl mx-auto">
+          <motion.div {...fadeUp} className="text-center mb-12">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#a855f7]/10 border border-[#a855f7]/20 text-[#a855f7] text-xs font-medium mb-4">
+              <Sparkles size={12} />
+              {t("team.badge")}
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("team.title")}</h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("team.subtitle")}</p>
+          </motion.div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {[
+              {
+                name: "Alex Chen",
+                role: t("team.ceo"),
+                bg: t("team.ceo.bg"),
+                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-alex-hNwjCdvgDZfRLBZHg6DsqP.webp",
+                color: "#00d4ff",
+                twitter: "AlexChen_Web3",
+              },
+              {
+                name: "Sarah Kim",
+                role: t("team.cto"),
+                bg: t("team.cto.bg"),
+                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-sarah-DTtFK28hpMAoNAVvXbhSTK.webp",
+                color: "#a855f7",
+                twitter: "SarahKim_CTO",
+              },
+              {
+                name: "Marcus Liu",
+                role: t("team.cmo"),
+                bg: t("team.cmo.bg"),
+                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-marcus-kgKxQ4NoaGj5XS2AU6mWen.webp",
+                color: "#00ff88",
+                twitter: "MarcusLiu_Web3",
+              },
+              {
+                name: "Yuki Tanaka",
+                role: t("team.research"),
+                bg: t("team.research.bg"),
+                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-yuki-gLtrRPJTYqu59Qr25LJwVa.webp",
+                color: "#ff6b35",
+                twitter: "YukiTanaka_DeFi",
+              },
+            ].map((member, i) => (
+              <motion.div
+                key={member.name}
+                {...fadeUp}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="p-5 rounded-2xl bg-card/50 border border-border/20 hover:border-[#a855f7]/30 transition-all duration-300 group"
+              >
+                <div
+                  className="w-20 h-20 rounded-2xl overflow-hidden mb-4 mx-auto"
+                  style={{ border: `2px solid ${member.color}40` }}
+                >
+                  <img
+                    src={member.avatar}
+                    alt={member.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold font-display text-base mb-0.5 group-hover:text-[#a855f7] transition-colors">{member.name}</p>
+                  <p className="text-xs font-medium mb-2" style={{ color: member.color }}>{member.role}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{member.bg}</p>
+                  <a
+                    href={`https://x.com/${member.twitter}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    @{member.twitter}
+                  </a>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <motion.p {...fadeUp} transition={{ duration: 0.5, delay: 0.5 }} className="text-center text-xs text-muted-foreground mt-8">
+            {t("team.note")}
+          </motion.p>
+        </div>
+      </section>
+
+      {/* Partners & Ecosystem */}
+      <section className="py-20 px-4">
+        <div className="max-w-4xl mx-auto">
+          <motion.div {...fadeUp} className="text-center mb-12">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00ff88]/10 border border-[#00ff88]/20 text-[#00ff88] text-xs font-medium mb-4">
+              <Globe size={12} />
+              {t("partners.badge")}
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("partners.title")}</h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("partners.subtitle")}</p>
+          </motion.div>
+          <div className="space-y-8">
+            {[
+              {
+                category: t("partners.chain"),
+                color: "#00d4ff",
+                items: ["Ethereum", "BNB Chain", "Polygon", "Solana", "Arbitrum", "Base"],
+              },
+              {
+                category: t("partners.defi"),
+                color: "#a855f7",
+                items: ["Uniswap", "PancakeSwap", "1inch", "Chainlink", "The Graph", "WalletConnect"],
+              },
+              {
+                category: t("partners.security"),
+                color: "#00ff88",
+                items: ["CertiK", "SlowMist", "Hacken", "PeckShield"],
+              },
+              {
+                category: t("partners.data"),
+                color: "#ff6b35",
+                items: ["CoinGecko", "CoinMarketCap", "Nansen", "Dune Analytics"],
+              },
+            ].map((group, gi) => (
+              <motion.div
+                key={group.category}
+                {...fadeUp}
+                transition={{ duration: 0.5, delay: gi * 0.1 }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: group.color }} />
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: group.color }}>{group.category}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((item) => (
+                    <span
+                      key={item}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium text-foreground/80 border border-border/30 bg-card/40 hover:border-opacity-60 transition-colors"
+                      style={{ borderColor: `${group.color}25` }}
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-20 px-4">
         <motion.div
