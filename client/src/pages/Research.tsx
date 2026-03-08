@@ -637,6 +637,22 @@ export default function Research() {
           </div>
         )}
 
+        {/* AI Consulting Center Entry */}
+        <div className="pb-2">
+          <button
+            onClick={() => setLocation("/app/consulting")}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#00d4ff]/10 to-[#a855f7]/10 border border-[#00d4ff]/20 hover:border-[#00d4ff]/40 transition-all group"
+          >
+            <span className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
+                <Sparkles size={12} className="text-white" />
+              </span>
+              <span className="text-sm font-medium text-white">AI 咨询中心</span>
+              <span className="text-xs text-gray-400">深度分析 · 10 USDT/次</span>
+            </span>
+            <span className="text-xs text-[#00d4ff] group-hover:translate-x-0.5 transition-transform">→</span>
+          </button>
+        </div>
         {/* Hot tokens */}
         <div className="flex gap-2 pb-3 overflow-x-auto scrollbar-hide">
           {hotTokens.map((token) => {

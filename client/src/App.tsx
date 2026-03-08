@@ -45,6 +45,10 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
 const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 const AppUpdateDialog = lazy(() => import("./components/AppUpdateDialog").then(m => ({ default: m.AppUpdateDialog })));
 const UpdateBanner = lazy(() => import("./components/UpdateBanner").then(m => ({ default: m.UpdateBanner })));
+// ─── AI Consulting Center pages ───────────────────────────────────────────────
+const Consulting = lazy(() => import("./pages/Consulting"));
+const ConsultingPayment = lazy(() => import("./pages/ConsultingPayment"));
+const ConsultingReport = lazy(() => import("./pages/ConsultingReport"));
 
 // ─── Route prefetch helpers (called on nav hover/touch to preload JS chunks) ──
 // Each function triggers the dynamic import so the chunk is fetched before navigation.
@@ -221,6 +225,23 @@ function RouteContent() {
                 <PostDetail />
               </AppLayout>
             </Route>
+            {/* ─── AI Consulting Center Routes ─────────────────────────── */}
+            <Route path="/app/consulting/report/:id">
+              <AppLayout hideNav>
+                <ConsultingReport />
+              </AppLayout>
+            </Route>
+            <Route path="/app/consulting/pay/:id">
+              <AppLayout hideNav>
+                <ConsultingPayment />
+              </AppLayout>
+            </Route>
+            <Route path="/app/consulting">
+              <AppLayout hideNav>
+                <Consulting />
+              </AppLayout>
+            </Route>
+            {/* ─────────────────────────────────────────────────────────── */}
             <Route path="/app/research/:token">
               <AppLayout hideNav requireAuth={false}>
                 <TokenDetail />

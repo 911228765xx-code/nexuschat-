@@ -169,6 +169,13 @@
       "when": 1772711111945,
       "tag": "0023_flashy_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1772983736034,
+      "tag": "0024_cloudy_smasher",
+      "breakpoints": true
     }
   ]
 }

@@ -683,3 +683,56 @@ export const groupAnnouncements = mysqlTable(
 );
 export type GroupAnnouncement = typeof groupAnnouncements.$inferSelect;
 export type InsertGroupAnnouncement = typeof groupAnnouncements.$inferInsert;
+
+// ─── AI Consulting Reports ────────────────────────────────────────────────────
+// Stores AI-generated consulting reports (paid content)
+export const consultingReports = mysqlTable(
+  "consulting_reports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    queryType: mysqlEnum("queryType", ["project", "security", "market"]).notNull().default("project"),
+    queryText: text("queryText").notNull(),
+    summary: text("summary"),
+    fullContent: text("fullContent"),
+    status: mysqlEnum("status", ["pending_payment", "generating", "completed", "failed"]).notNull().default("pending_payment"),
+    pricePaid: varchar("pricePaid", { length: 20 }).default("10"),
+    txHash: varchar("txHash", { length: 100 }),
+    cacheKey: varchar("cacheKey", { length: 200 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_consulting_user").on(t.userId),
+    index("idx_consulting_cache").on(t.cacheKey),
+    index("idx_consulting_tx").on(t.txHash),
+  ]
+);
+export type ConsultingReport = typeof consultingReports.$inferSelect;
+export type InsertConsultingReport = typeof consultingReports.$inferInsert;
+
+// ─── Consulting Payment Records ───────────────────────────────────────────────
+// Tracks BSC USDT payment records for consulting reports
+export const consultingPayments = mysqlTable(
+  "consulting_payments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    reportId: int("reportId").notNull(),
+    userId: int("userId").notNull(),
+    walletAddress: varchar("walletAddress", { length: 42 }).notNull(),
+    txHash: varchar("txHash", { length: 100 }),
+    amount: varchar("amount", { length: 20 }).notNull().default("10"),
+    chain: varchar("chain", { length: 20 }).notNull().default("BSC"),
+    status: mysqlEnum("status", ["pending", "confirmed", "failed"]).notNull().default("pending"),
+    confirmedAt: timestamp("confirmedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_cpay_report").on(t.reportId),
+    index("idx_cpay_user").on(t.userId),
+    index("idx_cpay_tx").on(t.txHash),
+  ]
+);
+export type ConsultingPayment = typeof consultingPayments.$inferSelect;
+export type InsertConsultingPayment = typeof consultingPayments.$inferInsert;

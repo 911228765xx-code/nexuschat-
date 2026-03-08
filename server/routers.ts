@@ -19,6 +19,7 @@ import { emailAuthRouter } from "./routers/emailAuth";
 import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
 import { appVersionRouter } from "./routers/appVersion";
+import { consultingRouter } from "./routers/consulting";
 
 export const appRouter = router({
   system: systemRouter,
@@ -53,6 +54,7 @@ export const appRouter = router({
   webPush: webPushRouter,
   voice: voiceRouter,
   appVersion: appVersionRouter,
+  consulting: consultingRouter,
 });
 
 export type AppRouter = typeof appRouter;
