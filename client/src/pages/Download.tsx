@@ -9,8 +9,9 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
+// EAS Build v2.0.0 — React Native 原生版（构建完成后更新此链接）
 const ANDROID_APK_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/NexusChat-v1.0.3-android_e63bb93b.zip";
+  "https://expo.dev/accounts/oven123/projects/nexuschat-app/builds/07074e3a-5512-4133-9d0f-cf49f59818ff";
 const QR_ANDROID =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-android-v103_dbe244cd.png";
 const QR_IOS =
@@ -28,10 +29,10 @@ export default function DownloadPage() {
   const [activeTab, setActiveTab] = useState<"android" | "ios">("android");
 
   const androidSteps = [
-    "点击下方「下载 Android APK」按钮，下载 zip 压缩包",
-    "解压 zip 文件，得到 NexusChat-v1.0.3.apk",
+    "点击下方「下载 Android APK」按钮，下载 APK 安装包",
     "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
     "点击 APK 文件，按提示完成安装",
+    "安装完成后在桌面找到 NexusChat 图标，点击启动",
   ];
 
   const iosSteps = [
@@ -147,7 +148,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.0.3-android.zip";
+                  link.download = "NexusChat-v2.0.0-android.apk";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -156,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK（2.4 MB）
+                下载 Android APK v2.0.0
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.0.3 · 需要 Android 5.0+
+                版本 v2.0.0 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 

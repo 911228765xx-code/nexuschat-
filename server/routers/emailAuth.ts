@@ -144,7 +144,8 @@ export const emailAuthRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      return { success: true, message: "注册成功" };
+      // Also return sessionToken in response body for mobile clients (React Native)
+      return { success: true, message: "注册成功", sessionToken };
     }),
 
   /** Login with email + password */
@@ -184,7 +185,8 @@ export const emailAuthRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      return { success: true, message: "登录成功" };
+      // Also return sessionToken in response body for mobile clients (React Native)
+      return { success: true, message: "登录成功", sessionToken };
     }),
 
   /**
