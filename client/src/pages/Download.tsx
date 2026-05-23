@@ -11,7 +11,7 @@ import { useI18n } from "@/contexts/I18nContext";
 
 // EAS Build v2.0.0 — React Native 原生版（构建完成后更新此链接）
 const ANDROID_APK_URL =
-  "https://expo.dev/artifacts/eas/wb2uJDfH7Eni5pppjkznhi.apk";
+  "https://expo.dev/artifacts/eas/kzAoL8ca6LVJANzpRQ26oY.apk";
 const QR_ANDROID =
   "/manus-storage/qr-android-v201_a03d38df.png";
 const QR_IOS =
