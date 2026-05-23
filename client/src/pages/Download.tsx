@@ -11,9 +11,9 @@ import { useI18n } from "@/contexts/I18nContext";
 
 // EAS Build v2.0.0 — React Native 原生版（构建完成后更新此链接）
 const ANDROID_APK_URL =
-  "https://expo.dev/accounts/oven123/projects/nexuschat-app/builds/07074e3a-5512-4133-9d0f-cf49f59818ff";
+  "https://expo.dev/artifacts/eas/b4GN5eeLLmzwxyCh7TniGb.apk";
 const QR_ANDROID =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-android-v103_dbe244cd.png";
+  "/manus-storage/qr-android-v200_37c72ca1.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
