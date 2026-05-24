@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// EAS Build v2.0.0 — React Native 原生版（构建 a1ef835f，2026-05-24）
+// EAS Build v3.0.0 — React Native 原生版（构建 3d848458，2026-05-24）含好友/社群功能
 const ANDROID_APK_URL =
-  "https://expo.dev/artifacts/eas/kZNdJbHikx7FaBZxdh8Qw6.apk";
+  "https://expo.dev/artifacts/eas/8AAuGuuieyqoJ78To3BUkh.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_new_5475e711.png";
+  "/manus-storage/qr_android_v3_c1957d5c.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
