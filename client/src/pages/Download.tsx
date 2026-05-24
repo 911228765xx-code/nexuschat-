@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// EAS Build v3.1.0 — React Native 原生版（构建 00ff5529，2026-05-24）修复 AutoFill 崩溃
+// EAS Build v3.2.0 — React Native 原生版（构建 f24ef3a3，2026-05-24）修复输入框无法输入
 const ANDROID_APK_URL =
-  "https://expo.dev/artifacts/eas/89jsttyY5aAFfcEQJJBfU.apk";
+  "https://expo.dev/artifacts/eas/vVraMu4hooq9xGYhjCHsvV.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_v4_668672d0.png";
+  "/manus-storage/qr_android_v5_88212836.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
