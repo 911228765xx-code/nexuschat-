@@ -96,20 +96,24 @@ export const emailAuthRouter = router({
       }
 
       // ── 方案2：Cloudflare Turnstile 人机验证 ──
-      if (input.turnstileToken) {
-        const turnstileOk = await verifyTurnstile(input.turnstileToken, clientIp);
-        if (!turnstileOk) {
+      // Mobile app clients send X-Client-Type: mobile-app header, skip Turnstile for them
+      const isMobileApp = ctx.req.headers["x-client-type"] === "mobile-app";
+      if (!isMobileApp) {
+        if (input.turnstileToken) {
+          const turnstileOk = await verifyTurnstile(input.turnstileToken, clientIp);
+          if (!turnstileOk) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "人机验证失败，请刷新页面重试",
+            });
+          }
+        } else if (process.env.NODE_ENV === "production" && ENV.turnstileSecretKey && ENV.turnstileSecretKey !== "1x0000000000000000000000000000000AA") {
+          // In production with Turnstile configured, require the token
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "人机验证失败，请刷新页面重试",
+            message: "请完成人机验证后再注册",
           });
         }
-      } else if (process.env.NODE_ENV === "production" && ENV.turnstileSecretKey && ENV.turnstileSecretKey !== "1x0000000000000000000000000000000AA") {
-        // In production with Turnstile configured, require the token
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "请完成人机验证后再注册",
-        });
       }
 
       const normalizedEmail = input.email.toLowerCase().trim();
