@@ -11,6 +11,7 @@ export interface SocketMessage {
   senderId: number;
   senderName: string;
   senderAvatar?: string | null;
+  senderRole?: "owner" | "admin" | "member";
   content: string;
   messageType: "text" | "image" | "file";
   mediaUrl?: string;

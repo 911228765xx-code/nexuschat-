@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatChatTimestamp } from "@/lib/timeFormat";
+import { compressImage } from "@/lib/imageCompress";
 import { useParams, useLocation } from "wouter";
 import { useSocket, SocketMessage } from "@/hooks/useSocket";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -572,7 +573,7 @@ export default function GroupChatRoom() {
           id: String(msg.id),
           sender: msg.senderName,
           senderAvatar: msg.senderAvatar ?? "👤",
-          senderRole: "member" as const,
+          senderRole: (msg.senderRole as "owner" | "admin" | "member") ?? "member",
           content: msg.content,
           time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
           isMine,
@@ -611,7 +612,7 @@ export default function GroupChatRoom() {
         id: String(m.id),
         sender: m.senderName ?? "Unknown",
         senderAvatar: m.senderAvatar ?? "👤",
-        senderRole: "member" as const,
+        senderRole: (m.senderRole as "owner" | "admin" | "member") ?? "member",
         content: m.content,
         time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
@@ -641,7 +642,7 @@ export default function GroupChatRoom() {
         id: String(m.id),
         sender: m.senderName ?? "Unknown",
         senderAvatar: m.senderAvatar ?? "👤",
-        senderRole: "member" as const,
+        senderRole: (m.senderRole as "owner" | "admin" | "member") ?? "member",
         content: m.content,
         time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
@@ -728,7 +729,7 @@ export default function GroupChatRoom() {
       id: Date.now().toString(),
       sender: senderName,
       senderAvatar,
-      senderRole: "member",
+      senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
       content: input,
       time: now,
       isMine: true,
@@ -757,34 +758,37 @@ export default function GroupChatRoom() {
     setIsUploading(true);
     try {
       const isImage = file.type.startsWith("image/");
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        if (isImage) {
-          const result = await uploadImageMutation.mutateAsync({ base64, mimeType: file.type });
-          const newMsg: GroupMessage = {
-            id: Date.now().toString(),
-            sender: user?.name ?? "User",
-            senderAvatar: user?.avatar ?? "🦊",
-            senderRole: "member",
-            content: `[Image: ${file.name}]`,
-            time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-            isMine: true,
-            messageType: "image",
-            mediaUrl: result.url,
-          };
-          setMessages(prev => [...prev, newMsg]);
-          if (isValidGroup && connected) socketSend({ groupId, content: `[Image: ${file.name}]`, mediaUrl: result.url, messageType: "image" });
-        } else {
-          // Non-image file: upload via image endpoint with generic content type
+      if (isImage) {
+        // Compress image before upload (auto-compress if > 5MB)
+        const { base64, mimeType } = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.8, maxSizeBytes: 5 * 1024 * 1024 });
+        const result = await uploadImageMutation.mutateAsync({ base64, mimeType });
+        const newMsg: GroupMessage = {
+          id: Date.now().toString(),
+          sender: user?.name ?? "User",
+          senderAvatar: user?.avatar ?? "🦊",
+          senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
+          content: `[Image: ${file.name}]`,
+          time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          isMine: true,
+          messageType: "image",
+          mediaUrl: result.url,
+        };
+        setMessages(prev => [...prev, newMsg]);
+        if (isValidGroup && connected) socketSend({ groupId, content: `[Image: ${file.name}]`, mediaUrl: result.url, messageType: "image" });
+        toast.success("Image sent!");
+      } else {
+        // Non-image file: read as base64 and upload
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
           const result = await uploadImageMutation.mutateAsync({ base64, mimeType: file.type });
           await saveGroupFileMutation.mutateAsync({ groupId, fileName: file.name, fileSize: file.size, mimeType: file.type, fileKey: result.url, url: result.url });
           const newMsg: GroupMessage = {
             id: Date.now().toString(),
             sender: user?.name ?? "User",
             senderAvatar: user?.avatar ?? "🦊",
-            senderRole: "member",
+            senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
             content: `[File: ${file.name}]`,
             time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
             isMine: true,
@@ -795,9 +799,9 @@ export default function GroupChatRoom() {
           };
           setMessages(prev => [...prev, newMsg]);
           if (isValidGroup && connected) socketSend({ groupId, content: `[File: ${file.name}]`, mediaUrl: result.url, messageType: "file" });
-        }
-        toast.success(isImage ? "Image sent!" : "File sent!");
-      };
+          toast.success("File sent!");
+        };
+      }
     } catch {
       toast.error("Upload failed");
     } finally {
@@ -831,7 +835,7 @@ export default function GroupChatRoom() {
           id: Date.now().toString(),
           sender: user?.name ?? "User",
           senderAvatar: user?.avatar ?? "🦊",
-          senderRole: "member",
+          senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
           content: `[Video: ${file.name}]`,
           time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
           isMine: true,
@@ -862,7 +866,7 @@ export default function GroupChatRoom() {
       id: Date.now().toString(),
       sender: user?.name ?? "User",
       senderAvatar: user?.avatar ?? "🦊",
-      senderRole: "member",
+      senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
       content: `[红包: ${rpAmount} ${rpToken}]`,
       time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
       isMine: true,
@@ -926,7 +930,7 @@ export default function GroupChatRoom() {
       id: Date.now().toString(),
       sender: user?.name ?? "User",
       senderAvatar: user?.avatar ?? "🦊",
-      senderRole: "member",
+      senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
       content: `[转账: ${tfAmount} ${tfToken}]`,
       time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
       isMine: true,

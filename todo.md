@@ -488,8 +488,8 @@
 - [x] 删除文件中重复的旧样式块，避免冲突
 
 ## v55 弹窗空白彻底修复
-- [ ] flex-1 在 maxHeight 容器内被撑满导致空白，改为内容区固定 max-h 滚动
-- [ ] 弹窗整体 h-auto，不再依赖 flex-1 撑高
+- [x] flex-1 在 maxHeight 容器内被撑满导致空白，改为内容区固定 max-h 滚动（已在第二轮修复中解决）
+- [x] 弹窗整体 h-auto，不再依赖 flex-1 撑高（已在第二轮修复中解决）
 
 ## v55 弹窗空白彻底修复
 - [x] 内容区 maxHeight 改为 calc(100dvh - 62px - 260px)，确保内容不超出屏幕
@@ -505,9 +505,9 @@
 
 ## 新功能（2026-03-05 第二批）
 
-- [ ] 红包抢包结果弹窗：抢到红包后弹出「恭喜抢到 X USDT！」动画弹窗，提升仪式感
-- [ ] 社群广场分类标签管理：创建群时选择分类标签，社群广场筛选真正有效
-- [ ] 群公告推送通知：群主更新公告时向所有群成员发送系统通知
+- [x] 红包抢包结果弹窗：抢到红包后弹出「恭喜抢到 X USDT！」动画弹窗，提升仪式感（已实现）
+- [x] 社群广场分类标签管理：创建群时选择分类标签，社群广场筛选真正有效（已实现）
+- [x] 群公告推送通知：群主更新公告时向所有群成员发送系统通知（已实现）
 
 ## 版本更新通知系统（2026-03-05）
 - [x] Settings 页面添加管理员版本发布面板（仅 admin 可见）
@@ -516,11 +516,24 @@
 - [x] App.tsx 集成 UpdateBanner 和 AppUpdateDialog
 
 ## 版本更新逻辑区分（2026-03-05 第二批）
-- [ ] 数据库 schema 添加 androidDownloadUrl、iosDownloadUrl、webDownloadUrl 字段
-- [ ] 后端 checkVersion 接口按平台返回对应下载地址
-- [ ] 管理员版本发布面板支持配置各平台下载地址
-- [ ] UpdateBanner 和 AppUpdateDialog 按平台跳转对应下载地址
+- [x] 数据库 schema 添加 androidDownloadUrl、iosDownloadUrl、webDownloadUrl 字段（已实现）
+- [x] 后端 checkVersion 接口按平台返回对应下载地址（已实现）
+- [x] 管理员版本发布面板支持配置各平台下载地址（已实现）
+- [x] UpdateBanner 和 AppUpdateDialog 按平台跳转对应下载地址（已实现）
 
 ## 防脚本批量注册（2026-03-06）
 - [x] 方案3：临时邮箱域名黑名单（封禁 mailinator、10minutemail 等）
 - [x] 方案2：Cloudflare Turnstile 人机验证集成到注册/登录页面
+
+## v67 群聊功能优化 + 图片上传修复（2026-05-25）
+
+- [x] 后端 getMessages 接口返回 senderRole（通过 left join groupMembers）
+- [x] Socket.IO 消息广播包含 senderRole 字段
+- [x] 前端 GroupChatRoom 使用后端返回的 senderRole 替代硬编码 "member"
+- [x] SocketMessage 类型添加 senderRole 字段
+- [x] ChatRoom（私聊）添加移动端长按触发 context menu（touch 事件）
+- [x] 图片上传 base64 限制从 5MB 增大到 22MB（支持约 16MB 原始文件）
+- [x] 前端图片压缩工具（compressImage）：大于 2MB 自动压缩到 1920px
+- [x] GroupChatRoom handleFileUpload 集成图片压缩
+- [x] CORS 中间件添加（允许移动 App 和 Expo Web 跨域访问）
+- [x] 164 个测试全部通过，TypeScript 0 错误

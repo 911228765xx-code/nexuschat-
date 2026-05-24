@@ -100,6 +100,7 @@ export default function ChatRoom() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -730,6 +731,9 @@ export default function ChatRoom() {
                 const y = Math.min(e.clientY, window.innerHeight - 200);
                 setContextMenu({ msgId: msg.id, x, y });
               }}
+              onTouchStart={(e) => { const t = e.touches[0]; longPressTimer.current = setTimeout(() => { setContextMenu({ msgId: msg.id, x: Math.min(t.clientX, window.innerWidth - 180), y: Math.min(t.clientY, window.innerHeight - 200) }); }, 500); }}
+              onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+              onTouchMove={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
             >
               <div className={`flex gap-2 max-w-[85%] ${msg.isMine ? "flex-row-reverse" : ""}`}>
                 {!msg.isMine && (

@@ -1,8 +1,8 @@
 import { Server as SocketIOServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { getDb } from "./db";
-import { messages, users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { messages, users, groupMembers } from "../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 import logger from "./utils/logger";
 import { sendPushToUser } from "./routers/webPush";
 import { triggerBotAutoReply } from "./botAutoReply";
@@ -126,12 +126,23 @@ export function initSocketIO(httpServer: HttpServer) {
         const messageId = (result as any).insertId;
         const timestamp = new Date();
 
+        // Lookup sender's role in this group
+        let senderRole: string = "member";
+        try {
+          const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+          const [memberRow] = await db.select({ role: groupMembers.role }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, data.groupId), eq(groupMembers.userId, senderIdNum)))
+            .limit(1);
+          if (memberRow) senderRole = memberRow.role;
+        } catch (_) { /* fallback to member */ }
+
         const outgoingMessage = {
           id: messageId,
           groupId: data.groupId,
           senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
           senderName: userName,
           senderAvatar: userAvatar ?? null,
+          senderRole,
           content: data.content,
           messageType: data.messageType || "text",
           mediaUrl: data.mediaUrl,

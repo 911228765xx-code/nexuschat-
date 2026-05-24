@@ -115,9 +115,11 @@ export const chatRouter = router({
           senderId: messages.senderId,
           senderName: users.name,
           senderAvatar: users.avatar,
+          senderRole: groupMembers.role,
         })
         .from(messages)
         .leftJoin(users, eq(messages.senderId, users.id))
+        .leftJoin(groupMembers, and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, messages.senderId)))
         .where(and(...conditions))
         .orderBy(desc(messages.createdAt))
         .limit(input.limit);
@@ -374,7 +376,7 @@ export const chatRouter = router({
   // Upload chat image to S3
   uploadChatImage: protectedProcedure
     .input(z.object({
-      base64: z.string().max(5_000_000), // ~3.7MB raw file
+      base64: z.string().max(22_000_000), // ~16MB raw file (base64 is ~33% larger)
       mimeType: z.string().default("image/jpeg"),
     }))
     .use(rateLimitWrite)
