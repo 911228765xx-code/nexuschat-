@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// EAS Build v3.3.0 — React Native 原生版（构建 9260874e，2026-05-24）修复深色模式下文字不可见
+// EAS Build v3.4.0 — React Native 原生版（构建 c81711f8，2026-05-24）新增「我的」页面全功能 + 修复登录
 const ANDROID_APK_URL =
-  "https://expo.dev/artifacts/eas/j5nbUwXqDKhxDRDQdamwjE.apk";
+  "https://expo.dev/artifacts/eas/qH4DxNUfAUBzYaaBt66jdz.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_v6_f32893d3.png";
+  "/manus-storage/qr_android_v7_2c753e14.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
@@ -157,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK v2.0.0
+                下载 Android APK v3.4.0
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v2.0.0 · 需要 Android 8.0+ · React Native 原生版
+                版本 v3.4.0 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 
