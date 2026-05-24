@@ -14,6 +14,7 @@ import { startBotScheduler } from "../botScheduler";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
+import cors from "cors";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -49,6 +50,14 @@ async function startServer() {
       return compressionMiddleware.filter(req, res);
     },
   }));
+  // CORS: allow cross-origin requests from mobile apps, Expo Web, and any trusted origin
+  app.use(cors({
+    origin: true, // reflect the request origin (allows all origins)
+    credentials: true, // allow cookies
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Client-Type'],
+  }));
+  app.options('*', cors({ origin: true, credentials: true }));
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
