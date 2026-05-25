@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v4.0.1 — 修复输入框无法输入 + Tab切换闪屏（构建 f121087，2026-05-25）
+// v4.0.2 — 禁用新架构 + 修复 TextInput 触摸问题（构建 faa5df4，2026-05-25）
 const ANDROID_APK_URL =
-  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/pZYBTcSVVhhiwkgK.apk";
+  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/BcDoARiuiwIVsDhH.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_v401_9e879069.png";
+  "/manus-storage/qr_android_v402_997c2cee.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
