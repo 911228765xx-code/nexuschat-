@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v1.5.1 — 修复 Clipboard 崩溃、重复导入、版本号统一（构建 bfc08de，2026-05-26）
+// v1.5.2 — 修复群聊输入框焦点丢失问题（构建 aa9eb51，2026-05-26）
 const ANDROID_APK_URL =
-  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/viAZQNGpqFsfDcMs.apk";
+  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/RRYJpEcOiBTCsHXN.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_v151_f56c3141.png";
+  "/manus-storage/qr_android_v152_5a027cb5.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
@@ -148,7 +148,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.5.1-android.apk";
+                  link.download = "NexusChat-v1.5.2-android.apk";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -157,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK v1.5.1
+                下载 Android APK v1.5.2
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.5.1 · 需要 Android 8.0+ · React Native 原生版
+                版本 v1.5.2 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 
