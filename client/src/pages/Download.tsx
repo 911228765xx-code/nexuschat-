@@ -9,11 +9,11 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v4.0.3 — 修复注册 Tab 输入框键盘不弹出问题（构建 d756515，2026-05-25）
+// v1.4.0 — 使用云电脑 EAS 验证版本代码，移除 expo-updates，修复键盘问题（构建 b3c449a，2026-05-26）
 const ANDROID_APK_URL =
-  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/YcKVythOnBjrIPvA.apk";
+  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/kufRChhPgxgtTCqE.apk";
 const QR_ANDROID =
-  "/manus-storage/qr_android_v403_c138f3f6.png";
+  "/manus-storage/qr_android_v140_2bc98723.png";
 const QR_IOS =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
@@ -148,7 +148,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v2.0.0-android.apk";
+                  link.download = "NexusChat-v1.4.0-android.apk";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -157,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK v3.4.0
+                下载 Android APK v1.4.0
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v3.4.0 · 需要 Android 8.0+ · React Native 原生版
+                版本 v1.4.0 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 
