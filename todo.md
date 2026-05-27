@@ -537,3 +537,14 @@
 - [x] GroupChatRoom handleFileUpload 集成图片压缩
 - [x] CORS 中间件添加（允许移动 App 和 Expo Web 跨域访问）
 - [x] 164 个测试全部通过，TypeScript 0 错误
+## v1.5.3 群聊键盘弹出后立刻消失修复（2026-05-27）
+- [x] AndroidManifest windowSoftInputMode 从 adjustResize 改为 adjustPan
+- [x] 移除 KeyboardAvoidingView（避免双重键盘避让冲突）
+- [x] keyboardShouldPersistTaps 改为 "always"
+- [x] keyboardDismissMode 改为 "none"
+- [x] 移除 onContentSizeChange 自动滚动（避免焦点丢失）
+- [x] 优化 loadMessages 只在真正有变化时更新 state
+- [x] 禁用 newArchEnabled 和 edgeToEdgeEnabled
+- [x] 只编译 arm64-v8a 架构（加速构建）
+- [x] 构建 APK v1.5.3 并上传 CDN
+- [x] 更新网站下载页面 APK 链接和版本号
