@@ -6,7 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.0.0";
+export const CURRENT_APP_VERSION = "1.5.4";
 
 /**
  * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
