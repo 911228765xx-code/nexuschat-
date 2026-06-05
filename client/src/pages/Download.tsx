@@ -9,9 +9,9 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v1.5.6 — 修复键盘消失：完全移除 onFocus/onBlur 回调（2026-05-27）
+// v1.5.6 — 同步最新代码更新（2026-06-06）
 const ANDROID_APK_URL =
-  "/manus-storage/nexuschat-v1.5.6_73c39a04.apk";
+  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/cHhLYJwXpwAEuTMB.apk";
 const QR_ANDROID =
   "/manus-storage/qr_android_v152_5a027cb5.png";
 const QR_IOS =
