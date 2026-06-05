@@ -5,6 +5,7 @@
  * Cyberpunk Noir风格
  */
 import { useState, useMemo } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { trpc } from "@/lib/trpc";
 import {
   Search, UserPlus, Star, Copy, Edit3, ArrowLeft, X, Check, MoreVertical,
@@ -585,7 +586,7 @@ export default function Contacts() {
                   </div>
                   {editingNote === selectedContact.id ? (
                     <input
-                      autoFocus
+                      ref={focusOnMount}
                       value={editNoteText}
                       onChange={(e) => setEditNoteText(e.target.value)}
                       placeholder="Add a note..."
@@ -846,7 +847,7 @@ export default function Contacts() {
                   <div className="relative">
                     <label className="text-[13px] text-muted-foreground font-medium mb-2 block">搜索用户名</label>
                     <input
-                      autoFocus
+                      ref={focusOnMount}
                       value={userSearchQuery}
                       onChange={(e) => { setUserSearchQuery(e.target.value); setSelectedUserId(null); setSelectedUserName(""); }}
                       placeholder="输入用户名或昵称..."
@@ -949,7 +950,7 @@ export default function Contacts() {
                 <div>
                   <label className="text-[13px] text-muted-foreground font-medium mb-2 block">{t("contacts.groupName") || "Name"}</label>
                   <input
-                    autoFocus
+                    ref={focusOnMount}
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder={t("contacts.groupNamePlaceholder") || "e.g. Whale Friends"}

@@ -5,6 +5,7 @@
  * v2: 接入 watchlist tRPC 接口，实现数据库持久化（跨设备同步）
  */
 import { useState, useMemo, useEffect } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -431,7 +432,7 @@ export default function Watchlist() {
                       <input type="number" value={alertInput} onChange={(e) => setAlertInput(e.target.value)}
                         placeholder={`${t("research.alertPrice")} (USD)`}
                         className="flex-1 h-7 px-2 rounded-lg bg-background/40 border border-border/20 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50"
-                        autoFocus />
+                        ref={focusOnMount} />
                       <button onClick={() => handleSetAlert(item.id)}
                         className="px-2.5 h-7 rounded-lg bg-neon-cyan/20 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors">
                         <Check size={12} />

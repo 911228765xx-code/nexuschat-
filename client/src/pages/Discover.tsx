@@ -5,6 +5,7 @@
  * Cyberpunk Noir风格
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles, LogIn } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -1518,7 +1519,7 @@ export default function Discover() {
                   <AvatarFallback className="bg-neon-cyan/15 text-neon-cyan text-sm">🦊</AvatarFallback>
                 </Avatar>
                 <textarea
-                  autoFocus
+                  ref={focusOnMount}
                   value={composeText}
                   onChange={(e) => setComposeText(e.target.value)}
                   placeholder={t("discover.whatsOnMind") || "What's on your mind?"}

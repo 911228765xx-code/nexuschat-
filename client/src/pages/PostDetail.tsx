@@ -4,6 +4,7 @@
  * Cyberpunk Noir: 深色背景 + 霓虹强调色
  */
 import { useState, useRef, useEffect, useMemo } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -134,7 +135,7 @@ function RepostModal({
                 <AvatarFallback className="bg-neon-cyan/15 text-neon-cyan text-xs">🦊</AvatarFallback>
               </Avatar>
               <textarea
-                autoFocus
+                ref={focusOnMount}
                 value={quoteText}
                 onChange={(e) => setQuoteText(e.target.value)}
                 placeholder="Add your commentary..."

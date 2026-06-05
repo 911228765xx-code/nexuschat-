@@ -4,6 +4,7 @@
  * v1.9: AppContext全局状态接入 + 全局消息搜索 + 对话置顶 + 长按上下文菜单
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { formatMessageTime } from "@/lib/timeFormat";
@@ -635,11 +636,13 @@ export default function Chat() {
                 <div className="flex-1 relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
+                    ref={focusOnMount}
                     type="text"
+                    inputMode="search"
+                    enterKeyHint="search"
                     placeholder={t("chat.globalSearch")}
                     value={globalSearch}
                     onChange={(e) => setGlobalSearch(e.target.value)}
-                    autoFocus
                     className="w-full h-10 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
                   />
                 </div>
@@ -810,12 +813,14 @@ export default function Chat() {
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   <input
+                    ref={focusOnMount}
                     type="text"
+                    inputMode="search"
+                    enterKeyHint="search"
                     placeholder="搜索群名称或描述..."
                     value={communitySearchQuery}
                     onChange={e => setCommunitySearchQuery(e.target.value)}
                     className="w-full h-9 pl-9 pr-4 rounded-xl bg-secondary/60 border border-border/30 text-sm focus:outline-none focus:border-neon-purple/50 transition-all"
-                    autoFocus
                   />
                 </div>
               </div>

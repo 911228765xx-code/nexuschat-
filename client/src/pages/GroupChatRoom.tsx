@@ -3,6 +3,7 @@
  * 新功能：表情反应持久化、邀请链接弹窗、文件上传、已读回执、群管理后台（踢人/禁言/转让群主）
  */
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { focusOnMount } from "@/lib/focusOnMount";
 import { trpc } from "@/lib/trpc";
 import { formatChatTimestamp } from "@/lib/timeFormat";
 import { compressImage } from "@/lib/imageCompress";
@@ -1631,7 +1632,7 @@ export default function GroupChatRoom() {
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-14 left-0 right-0 z-40 glass border-b border-border/30 px-3 py-2.5">
             <div className="flex items-center gap-2">
               <Search size={15} className="text-muted-foreground shrink-0" />
-              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="搜索消息..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
+              <input ref={focusOnMount} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="搜索消息..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
               {searchQuery && <span className="text-sm text-muted-foreground">{searchResults.length} 条</span>}
               <button onClick={() => { setShowSearch(false); setSearchQuery(""); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
                 <X size={14} />
