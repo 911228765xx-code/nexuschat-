@@ -139,8 +139,9 @@ export const walletRouter = router({
         return { bnbBalance: "0", bnbBalanceFormatted: "0.0000", usdValue: null };
       }
 
-      const bnbWei = parseInt(hexBalance, 16);
-      const bnb = bnbWei / 1e18;
+      // Use BigInt to parse wei — values exceed Number.MAX_SAFE_INTEGER and parseInt loses precision.
+      const bnbWei = BigInt(hexBalance);
+      const bnb = Number(bnbWei) / 1e18;
       const bnbFormatted = bnb.toFixed(4);
 
       // Fetch BNB price in USD from CoinGecko (cached)
@@ -175,9 +176,10 @@ export const walletRouter = router({
               "latest",
             ]);
             if (!hexBal || hexBal === "0x" || hexBal === "0x0") return null;
-            const rawBal = parseInt(hexBal, 16);
-            if (rawBal === 0) return null;
-            const formatted = (rawBal / Math.pow(10, token.decimals)).toFixed(6);
+            // BigInt avoids precision loss on token balances larger than 2^53.
+            const rawBal = BigInt(hexBal);
+            if (rawBal === BigInt(0)) return null;
+            const formatted = (Number(rawBal) / Math.pow(10, token.decimals)).toFixed(6);
             if (parseFloat(formatted) <= 0) return null;
             return { ...token, balanceFormatted: formatted, usdPrice: 0, usdValue: 0, change24h: 0 };
           } catch {

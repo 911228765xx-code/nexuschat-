@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, desc, count, sql } from "drizzle-orm";
+import { ensureInviteCode } from "../utils/inviteCode";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
 const REFERRER_REWARD = 500; // NP for inviter
@@ -18,16 +19,6 @@ const REWARD_TIERS = [
   { count: 100, reward: "Revenue Share", icon: "💎" },
 ];
 
-/**
- * Generate a deterministic invite code from user ID + name.
- * Format: NEXUS-XXXXXX-YYYY where X is from name, Y is user id hash.
- */
-function generateInviteCode(userId: number, name: string): string {
-  const namePart = (name || "USER").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6).padEnd(6, "X");
-  const idHash = ((userId * 2654435761) >>> 0).toString(36).toUpperCase().slice(0, 4);
-  return `NEXUS-${namePart}-${idHash}`;
-}
-
 export const referralRouter = router({
   // ─── Get invite stats + code ──────────────────────────────────────────────
   getStats: protectedProcedure.query(async ({ ctx }) => {
@@ -36,7 +27,9 @@ export const referralRouter = router({
 
     const userId = ctx.user!.id;
     const userName = ctx.user!.name ?? "USER";
-    const inviteCode = generateInviteCode(userId, userName);
+    // Persist the code so it can be reverse-looked-up in recordReferral, and so the
+    // displayed code always matches what's stored (e.g. after a rename).
+    const inviteCode = await ensureInviteCode(db, userId, userName);
 
     // Count referrals
     const [totalResult] = await db
@@ -128,36 +121,36 @@ export const referralRouter = router({
 
       if (existing) return { success: false, message: "Already referred" };
 
-      // Find referrer by invite code pattern: NEXUS-XXXXXX-YYYY
-      // We need to find the user whose generated code matches
-      const allUsers = await db.select({ id: users.id, name: users.name }).from(users).limit(10000);
-      const referrer = allUsers.find(
-        (u: { id: number; name: string | null }) => generateInviteCode(u.id, u.name ?? "USER") === input.inviteCode
-      );
+      // Direct indexed lookup by stored invite code (O(1), no full-table scan / 10k cap).
+      const [referrer] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.inviteCode, input.inviteCode))
+        .limit(1);
 
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
 
-      // Create referral record
-      await db!.insert(referrals).values({
-        referrerId: referrer.id,
-        inviteeId,
-        status: "active",
-        referrerReward: REFERRER_REWARD,
-        inviteeReward: INVITEE_REWARD,
-        activatedAt: new Date(),
+      // Create referral record + award NP to both atomically, so a partial failure
+      // can't leave a referral without its rewards (or one side rewarded but not the other).
+      await db.transaction(async (tx) => {
+        await tx.insert(referrals).values({
+          referrerId: referrer.id,
+          inviteeId,
+          status: "active",
+          referrerReward: REFERRER_REWARD,
+          inviteeReward: INVITEE_REWARD,
+          activatedAt: new Date(),
+        });
+        await tx
+          .update(users)
+          .set({ npPoints: sql`${users.npPoints} + ${REFERRER_REWARD}` })
+          .where(eq(users.id, referrer.id));
+        await tx
+          .update(users)
+          .set({ npPoints: sql`${users.npPoints} + ${INVITEE_REWARD}` })
+          .where(eq(users.id, inviteeId));
       });
-
-      // Award NP to both
-      await db!
-        .update(users)
-        .set({ npPoints: sql`${users.npPoints} + ${REFERRER_REWARD}` })
-        .where(eq(users.id, referrer.id));
-
-      await db!
-        .update(users)
-        .set({ npPoints: sql`${users.npPoints} + ${INVITEE_REWARD}` })
-        .where(eq(users.id, inviteeId));
 
       return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} NP` };
     }),

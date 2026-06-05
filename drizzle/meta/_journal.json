@@ -176,6 +176,13 @@
       "when": 1772983736034,
       "tag": "0024_cloudy_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1780670259525,
+      "tag": "0025_hard_marten_broadcloak",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,23 @@
 import type { Express } from "express";
 import { ENV } from "./env";
+import { sdk } from "./sdk";
 export function registerStorageProxy(app: Express) {
   app.get("/manus-storage/*", async (req, res) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");
       return;
+    }
+    // Root-level objects are public release assets (APK, QR codes). Foldered objects
+    // (e.g. chat-images/<userId>/..., voice-messages/...) are user content — require a
+    // valid session so the proxy can't be used to anonymously enumerate other users' files.
+    if (key.includes("/")) {
+      try {
+        await sdk.authenticateRequest(req as any);
+      } catch {
+        res.status(401).send("Unauthorized");
+        return;
+      }
     }
     if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
       res.status(500).send("Storage proxy not configured");

@@ -26,10 +26,12 @@ export const users = mysqlTable("users", {
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   isBot: boolean("isBot").default(false).notNull(),
+  // Deterministic referral code (see referral router). Indexed for O(1) reverse lookup.
+  inviteCode: varchar("inviteCode", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, (t) => [index("idx_users_invite_code").on(t.inviteCode)]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

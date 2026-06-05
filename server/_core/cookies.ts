@@ -39,10 +39,13 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const secure = isSecureRequest(req);
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    // SameSite=None requires Secure; over plain HTTP (local dev) browsers reject such
+    // cookies, so fall back to Lax there. Cross-site native-app auth still works over HTTPS.
+    sameSite: secure ? "none" : "lax",
+    secure,
   };
 }

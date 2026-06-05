@@ -1,11 +1,70 @@
-import { Server as SocketIOServer } from "socket.io";
+import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
+import { parse as parseCookie } from "cookie";
+import { COOKIE_NAME } from "@shared/const";
 import { getDb } from "./db";
 import { messages, users, groupMembers } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import logger from "./utils/logger";
+import { sdk } from "./_core/sdk";
+import { isAllowedOrigin } from "./_core/corsOrigin";
 import { sendPushToUser } from "./routers/webPush";
 import { triggerBotAutoReply } from "./botAutoReply";
+
+interface AuthedUser {
+  id: number;
+  name: string;
+  avatar: string | null;
+}
+
+/**
+ * Authenticate a Socket.IO connection from its handshake. Trusts only a verified
+ * session JWT — taken from the session cookie (web) or an explicit `auth.token`
+ * (native clients) — never the client-supplied userId.
+ */
+async function authenticateSocket(socket: Socket): Promise<AuthedUser | null> {
+  const authToken =
+    typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : undefined;
+  let token = authToken;
+  if (!token) {
+    const cookieHeader = socket.handshake.headers?.cookie;
+    if (cookieHeader) {
+      try {
+        token = parseCookie(cookieHeader)[COOKIE_NAME];
+      } catch {
+        /* malformed cookie header — treat as unauthenticated */
+      }
+    }
+  }
+  if (!token) return null;
+
+  const session = await sdk.verifySession(token);
+  if (!session) return null;
+
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select({ id: users.id, name: users.name, avatar: users.avatar })
+    .from(users)
+    .where(eq(users.openId, session.openId))
+    .limit(1);
+  if (!row) return null;
+  return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
+}
+
+/** Returns true if the user is a member of the group. */
+async function isGroupMember(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  groupId: number,
+  userId: number
+): Promise<boolean> {
+  const [row] = await db
+    .select({ role: groupMembers.role })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+    .limit(1);
+  return !!row;
+}
 
 interface ChatMessage {
   groupId: number;
@@ -36,7 +95,7 @@ export function emitToUser(userId: number, event: string, data: unknown): void {
 export function initSocketIO(httpServer: HttpServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: "*",
+      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -45,26 +104,21 @@ export function initSocketIO(httpServer: HttpServer) {
 
   _io = io;
 
-  // Auth middleware
+  // Auth middleware — derive identity from a verified session, never from client input.
   io.use(async (socket, next) => {
     try {
-      // Parse userId as number (client sends it as string)
-      const rawId = socket.handshake.auth?.userId;
-      const parsedId = rawId ? parseInt(String(rawId), 10) : undefined;
-      (socket as any).userId = parsedId;
-      (socket as any).userName = socket.handshake.auth?.userName;
-      // Fetch user avatar from DB so it can be included in outgoing messages
-      if (parsedId) {
-        try {
-          const db = await getDb();
-          if (db) {
-            const [userRow] = await db.select({ avatar: users.avatar }).from(users).where(eq(users.id, parsedId)).limit(1);
-            (socket as any).userAvatar = userRow?.avatar ?? null;
-          }
-        } catch (_) { /* non-fatal */ }
+      const authed = await authenticateSocket(socket);
+      if (authed) {
+        (socket as any).userId = authed.id;
+        (socket as any).userName = authed.name;
+        (socket as any).userAvatar = authed.avatar;
+      } else {
+        (socket as any).userId = undefined;
       }
+      // Allow the connection through; per-event handlers reject unauthenticated actions.
       next();
     } catch (err) {
+      logger.warn({ err }, "Socket.io: auth middleware error");
       next(new Error("Authentication failed"));
     }
   });
@@ -82,16 +136,23 @@ export function initSocketIO(httpServer: HttpServer) {
       userSockets.get(userId)!.add(socket.id);
     }
 
-    // Client can also register after connection (e.g., after auth resolves)
-    socket.on("register_user", (uid: number) => {
-      if (!uid || typeof uid !== "number") return;
-      if (!userSockets.has(uid)) userSockets.set(uid, new Set());
-      userSockets.get(uid)!.add(socket.id);
-      (socket as any).userId = uid;
+    // Client can re-register after connection (e.g., after auth resolves). The
+    // client-supplied id is ignored — only the authenticated userId is honored,
+    // otherwise a client could register to receive another user's notifications.
+    socket.on("register_user", () => {
+      if (!userId) return;
+      if (!userSockets.has(userId)) userSockets.set(userId, new Set());
+      userSockets.get(userId)!.add(socket.id);
     });
 
-    // Join a chat room
-    socket.on("join_group", (groupId: number) => {
+    // Join a chat room (only members may join and receive the group's messages)
+    socket.on("join_group", async (groupId: number) => {
+      if (!userId || typeof groupId !== "number") return;
+      const db = await getDb();
+      if (!db || !(await isGroupMember(db, groupId, userId))) {
+        socket.emit("error", { message: "Not a member of this group" });
+        return;
+      }
       socket.join(`group:${groupId}`);
       socket.to(`group:${groupId}`).emit("user_joined", {
         userId,
@@ -111,6 +172,12 @@ export function initSocketIO(httpServer: HttpServer) {
         const db = await getDb();
         if (!db || !userId) {
           socket.emit("error", { message: "Not authenticated" });
+          return;
+        }
+
+        // Authorization: sender must be a member of the target group.
+        if (!(await isGroupMember(db, data.groupId, userId))) {
+          socket.emit("error", { message: "Not a member of this group" });
           return;
         }
 

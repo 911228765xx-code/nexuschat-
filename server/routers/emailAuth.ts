@@ -17,6 +17,7 @@ import { ENV } from "../_core/env";
 import { notifyOwner } from "../_core/notification";
 import { sendPasswordResetEmail } from "../_core/email";
 import { isDisposableEmail } from "../utils/disposableEmailBlocklist";
+import { ensureInviteCode } from "../utils/inviteCode";
 
 /** Verify Cloudflare Turnstile token server-side */
 async function verifyTurnstile(token: string, remoteip?: string): Promise<boolean> {
@@ -48,6 +49,42 @@ const ipRegisterAttempts = new Map<string, { count: number; resetAt: number }>()
 const IP_REGISTER_LIMIT = 5; // max 5 registrations per IP per 24h
 const IP_REGISTER_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Brute-force protection: track failed login attempts per key (IP or email).
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_ATTEMPT_LIMIT = 10; // max 10 failed attempts per key per window
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+/** Returns true if the key is currently locked out due to too many failed logins. */
+function isLoginLocked(key: string, now: number): boolean {
+  const rec = loginAttempts.get(key);
+  if (!rec) return false;
+  if (now >= rec.resetAt) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return rec.count >= LOGIN_ATTEMPT_LIMIT;
+}
+
+/** Record a failed login attempt against a key. */
+function registerLoginFailure(key: string, now: number): void {
+  const rec = loginAttempts.get(key);
+  if (!rec || now >= rec.resetAt) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_ATTEMPT_WINDOW_MS });
+  } else {
+    rec.count++;
+  }
+}
+
+/** Clear failed-login counters for a key after a successful login. */
+function clearLoginFailures(...keys: string[]): void {
+  for (const key of keys) loginAttempts.delete(key);
+}
+
+/** Extract the trusted client IP (Express `trust proxy` must be configured). */
+function clientIpOf(req: { ip?: string; socket?: { remoteAddress?: string } }): string {
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
 /** Generate a unique openId for email-registered users */
 function emailOpenId(email: string): string {
   return `email:${email.toLowerCase().trim()}`;
@@ -78,9 +115,7 @@ export const emailAuthRouter = router({
       }
 
       // ── IP 注册频率限制 ──
-      const clientIp = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
-        || ctx.req.socket?.remoteAddress
-        || "unknown";
+      const clientIp = clientIpOf(ctx.req);
       const now = Date.now();
       const ipRecord = ipRegisterAttempts.get(clientIp);
       if (ipRecord && now < ipRecord.resetAt) {
@@ -130,7 +165,7 @@ export const emailAuthRouter = router({
       // Determine role: first user with owner openId gets admin
       const role = openId === ENV.ownerOpenId ? "admin" : "user";
 
-      await db.insert(users).values({
+      const [insertResult] = await db.insert(users).values({
         openId,
         email: normalizedEmail,
         name: input.name,
@@ -139,6 +174,12 @@ export const emailAuthRouter = router({
         role,
         lastSignedIn: new Date(),
       });
+
+      // Assign a referral invite code so this user can be referred by code immediately.
+      const newUserId = (insertResult as { insertId?: number }).insertId;
+      if (newUserId) {
+        await ensureInviteCode(db, newUserId, input.name).catch(() => {});
+      }
 
       // Create session and set cookie
       const sessionToken = await sdk.signSession(
@@ -167,16 +208,38 @@ export const emailAuthRouter = router({
       const normalizedEmail = input.email.toLowerCase().trim();
       const openId = emailOpenId(normalizedEmail);
 
+      // ── 登录暴力破解防护 (per-IP 与 per-email) ──
+      const now = Date.now();
+      const ipKey = `ip:${clientIpOf(ctx.req)}`;
+      const emailKey = `email:${normalizedEmail}`;
+      if (isLoginLocked(ipKey, now) || isLoginLocked(emailKey, now)) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "登录尝试过于频繁，请 15 分钟后再试",
+        });
+      }
+
       const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
       const user = result[0];
 
       // Generic error to prevent email enumeration
       const invalidError = new TRPCError({ code: "UNAUTHORIZED", message: "邮箱或密码错误" });
 
-      if (!user || !user.passwordHash) throw invalidError;
+      if (!user || !user.passwordHash) {
+        registerLoginFailure(ipKey, now);
+        registerLoginFailure(emailKey, now);
+        throw invalidError;
+      }
 
       const passwordMatch = await bcrypt.compare(input.password, user.passwordHash);
-      if (!passwordMatch) throw invalidError;
+      if (!passwordMatch) {
+        registerLoginFailure(ipKey, now);
+        registerLoginFailure(emailKey, now);
+        throw invalidError;
+      }
+
+      // Successful login — reset failure counters
+      clearLoginFailures(ipKey, emailKey);
 
       // Update lastSignedIn
       await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.openId, openId));

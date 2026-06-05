@@ -15,6 +15,10 @@ import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
 import cors from "cors";
+import { corsOriginDelegate } from "./corsOrigin";
+import { ENV } from "./env";
+import { getDb } from "../db";
+import { backfillInviteCodes } from "../utils/inviteCode";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,6 +41,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // Trust a fixed number of upstream proxies so req.ip reflects the real client IP
+  // (and cannot be spoofed via a client-supplied X-Forwarded-For header).
+  app.set("trust proxy", ENV.trustProxyHops);
   const server = createServer(app);
   // Enable gzip/deflate compression for all responses (production performance)
   // Skips already-compressed assets (JS/CSS with content hash) — they are served
@@ -50,14 +57,15 @@ async function startServer() {
       return compressionMiddleware.filter(req, res);
     },
   }));
-  // CORS: allow cross-origin requests from mobile apps, Expo Web, and any trusted origin
+  // CORS: reflect the origin only for allow-listed origins (native app + configured
+  // domains). Reflecting arbitrary origins with credentials is a CSRF risk.
   app.use(cors({
-    origin: true, // reflect the request origin (allows all origins)
+    origin: corsOriginDelegate,
     credentials: true, // allow cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Client-Type'],
   }));
-  app.options('*', cors({ origin: true, credentials: true }));
+  app.options('*', cors({ origin: corsOriginDelegate, credentials: true }));
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -101,6 +109,18 @@ async function startServer() {
   startPriceAlertChecker();
   // Start Bot scheduler (posts at 09:00 and 21:00 daily)
   startBotScheduler();
+
+  // Backfill referral invite codes for any users missing one (best-effort, non-blocking).
+  void (async () => {
+    try {
+      const db = await getDb();
+      if (!db) return;
+      const n = await backfillInviteCodes(db);
+      if (n > 0) console.log(`Backfilled invite codes for ${n} user(s)`);
+    } catch (err) {
+      console.error("Invite code backfill failed:", err);
+    }
+  })();
 }
 
 startServer().catch(console.error);

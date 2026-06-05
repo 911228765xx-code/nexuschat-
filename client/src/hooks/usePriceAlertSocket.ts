@@ -25,6 +25,8 @@ function getAlertSocket(): Socket {
   if (!_alertSocket) {
     _alertSocket = io(window.location.origin, {
       path: "/api/socket.io",
+      // Server derives identity from the session cookie; send it on the handshake.
+      withCredentials: true,
       transports: ["websocket", "polling"],
       autoConnect: false,
     });

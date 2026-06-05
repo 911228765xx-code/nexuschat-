@@ -4,7 +4,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { rateLimitStrict, rateLimitWrite } from "../rateLimit";
 import { getDb } from "../db";
 import { researchReports, priceAlerts, posts, users } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
@@ -356,10 +356,11 @@ export const researchRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return null;
+      // Scope to the owner — reports may contain private analysis and payment data.
       const result = await db
         .select()
         .from(researchReports)
-        .where(eq(researchReports.id, input.reportId))
+        .where(and(eq(researchReports.id, input.reportId), eq(researchReports.userId, ctx.user.id)))
         .limit(1);
       return result[0] ?? null;
     }),

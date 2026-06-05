@@ -9,4 +9,11 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
+  /** Comma-separated list of extra origins allowed to send credentialed cross-origin requests. */
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  /** Number of trusted reverse proxies/CDN hops in front of the app (for real client IP). */
+  trustProxyHops: Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10) || 0,
 };

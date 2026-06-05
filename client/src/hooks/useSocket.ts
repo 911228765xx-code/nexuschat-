@@ -32,6 +32,8 @@ export function useSocket({ userId, userName }: UseSocketOptions) {
 
     const socket = io(window.location.origin, {
       path: "/api/socket.io",
+      // Server derives identity from the session cookie; send it on the handshake.
+      withCredentials: true,
       auth: { userId: String(userId), userName: userName || "User" },
       transports: ["websocket", "polling"],
     });

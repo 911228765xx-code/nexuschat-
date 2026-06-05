@@ -274,7 +274,7 @@ export const postsRouter = router({
           fromUserName: commenter?.name ?? ctx.user.name ?? "Someone",
           fromUserAvatar: commenter?.avatar ?? "💬",
           type: "comment",
-          content: `commented: "${input.content.slice(0, 50)}${input.content.length > 50 ? '...' : ''}"`,
+          content: `commented: "${sanitizeInput(input.content, 50)}${input.content.length > 50 ? '...' : ''}"`,
           postId: input.postId,
         });
       }

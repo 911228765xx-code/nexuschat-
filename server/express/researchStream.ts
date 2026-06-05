@@ -280,16 +280,17 @@ function extractVizData(content: string, token: TokenData) {
 }
 
 export async function handleResearchStream(req: Request, res: Response) {
-  // Try to get user for saving reports (optional auth)
-  let user: any = null;
+  // Require authentication — this triggers paid LLM calls, so anonymous access is not allowed.
+  let user: any;
   try {
     user = await sdk.authenticateRequest(req as any);
   } catch {
-    // Not authenticated - allow anonymous access
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
-  // Rate limit by user ID if logged in, otherwise by IP
-  const rateLimitKey = user?.id ?? (req.ip ?? "anonymous");
+  // Rate limit per authenticated user
+  const rateLimitKey = String(user.id);
   if (!checkRateLimit(rateLimitKey)) {
     res.status(429).json({ error: "Rate limit exceeded. Please wait 60 seconds." });
     return;

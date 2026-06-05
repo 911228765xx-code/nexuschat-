@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
+import { rateLimitStrict } from "../rateLimit";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { storagePut } from "../storage";
 
@@ -32,6 +33,7 @@ export const voiceRouter = router({
    * Returns transcribed text to display in chat
    */
   transcribe: protectedProcedure
+    .use(rateLimitStrict)
     .input(z.object({
       audioUrl: z.string().url(),
       language: z.string().optional(),

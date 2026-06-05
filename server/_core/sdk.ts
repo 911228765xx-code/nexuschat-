@@ -6,6 +6,7 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
+import { ensureInviteCode } from "../utils/inviteCode";
 import { ENV } from "./env";
 import type {
   ExchangeTokenRequest,
@@ -282,6 +283,11 @@ class SDKServer {
           lastSignedIn: signedInAt,
         });
         user = await db.getUserByOpenId(userInfo.openId);
+        // Assign a referral invite code to the newly-synced user (best-effort).
+        if (user) {
+          const dbInstance = await db.getDb();
+          if (dbInstance) await ensureInviteCode(dbInstance, user.id, user.name).catch(() => {});
+        }
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
         throw ForbiddenError("Failed to sync user info");

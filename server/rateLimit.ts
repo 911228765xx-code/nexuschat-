@@ -48,13 +48,10 @@ function checkRate(key: string, windowMs: number, maxHits: number): boolean {
 }
 
 // ── helper to extract client IP ───────────────────────────────────────
+// Relies on Express `trust proxy` being configured so `req.ip` resolves the real
+// client IP from a trusted proxy and cannot be spoofed via a client X-Forwarded-For.
 function getClientIp(req: any): string {
-  return (
-    req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
-    req.headers["x-real-ip"]?.toString() ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
+  return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
 // ── tRPC middleware factories ─────────────────────────────────────────
@@ -80,8 +77,8 @@ export const rateLimitDefault = t.middleware(async ({ ctx, next }) => {
  * Strict rate limit: 10 requests per 60 seconds per user.
  * For expensive operations (LLM calls, AI report generation).
  */
-export const rateLimitStrict = t.middleware(async ({ ctx, next }) => {
-  const identifier = ctx.user?.id?.toString() || getClientIp(ctx.req);
+export const rateLimitStrict = t.middleware(async (opts) => {
+  const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `strict:${identifier}`;
   if (!checkRate(key, 60_000, 10)) {
     throw new TRPCError({
@@ -89,7 +86,8 @@ export const rateLimitStrict = t.middleware(async ({ ctx, next }) => {
       message: "Rate limit exceeded for AI operations. Please wait a moment.",
     });
   }
-  return next({ ctx });
+  // next() without a ctx override preserves upstream type narrowing (protectedProcedure's non-null user).
+  return opts.next();
 });
 
 /**
@@ -112,16 +110,17 @@ export const rateLimitWrite = t.middleware(async (opts) => {
 /**
  * Factory for custom rate limiters.
  */
-export function createRateLimiter(opts: { windowMs: number; maxRequests: number }) {
-  return t.middleware(async ({ ctx, next }) => {
-    const identifier = ctx.user?.id?.toString() || getClientIp(ctx.req);
-    const key = `custom:${opts.windowMs}:${opts.maxRequests}:${identifier}`;
-    if (!checkRate(key, opts.windowMs, opts.maxRequests)) {
+export function createRateLimiter(limits: { windowMs: number; maxRequests: number }) {
+  return t.middleware(async (opts) => {
+    const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
+    const key = `custom:${limits.windowMs}:${limits.maxRequests}:${identifier}`;
+    if (!checkRate(key, limits.windowMs, limits.maxRequests)) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: "Rate limit exceeded. Please try again later.",
       });
     }
-    return next({ ctx });
+    // next() without a ctx override preserves upstream type narrowing.
+    return opts.next();
   });
 }

@@ -17,6 +17,10 @@ import { getDb } from "../db";
 import { consultingReports, consultingPayments } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
+import { rateLimitStrict } from "../rateLimit";
+
+// BSCScan API key — payment verification fails without a real key configured.
+const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
 
 // BSC USDT contract address
 const USDT_CONTRACT_BSC = "0x55d398326f99059fF775485246999027B3197955";
@@ -32,8 +36,8 @@ async function verifyBscUsdtPayment(
 ): Promise<{ confirmed: boolean; amount?: string; error?: string }> {
   try {
     // Use BSCScan API to verify the transaction
-    const apiUrl = `https://api.bscscan.com/api?module=transaction&action=gettxreceiptstatus&txhash=${txHash}&apikey=YourApiKeyToken`;
-    const txUrl = `https://api.bscscan.com/api?module=proxy&action=eth_getTransactionByHash&txhash=${txHash}&apikey=YourApiKeyToken`;
+    const apiUrl = `https://api.bscscan.com/api?module=transaction&action=gettxreceiptstatus&txhash=${txHash}&apikey=${BSCSCAN_API_KEY}`;
+    const txUrl = `https://api.bscscan.com/api?module=proxy&action=eth_getTransactionByHash&txhash=${txHash}&apikey=${BSCSCAN_API_KEY}`;
 
     const [statusRes, txRes] = await Promise.all([
       fetch(apiUrl, { signal: AbortSignal.timeout(10000) }),
@@ -177,6 +181,7 @@ export const consultingRouter = router({
    * Returns: reportId, summary (free preview)
    */
   createReport: protectedProcedure
+    .use(rateLimitStrict)
     .input(
       z.object({
         queryType: z.enum(["project", "security", "market"]),

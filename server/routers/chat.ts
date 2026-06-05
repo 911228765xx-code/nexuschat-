@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, groupAnnouncements } from "../../drizzle/schema";
@@ -6,6 +7,18 @@ import { eq, and, desc, lt, sql, or, ne, gt } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+/** Throw FORBIDDEN if the user is not a member of the group. */
+async function assertGroupMember(db: Db, groupId: number, userId: number): Promise<void> {
+  const [m] = await db
+    .select({ id: groupMembers.id })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+    .limit(1);
+  if (!m) throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+}
 
 export const chatRouter = router({
   // List public groups
@@ -95,9 +108,17 @@ export const chatRouter = router({
       limit: z.number().default(50),
       before: z.number().optional(), // message id cursor
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      // Private groups: only members may read messages. Public groups are browsable.
+      const [grp] = await db
+        .select({ isPublic: chatGroups.isPublic })
+        .from(chatGroups)
+        .where(eq(chatGroups.id, input.groupId))
+        .limit(1);
+      if (!grp) return [];
+      if (!grp.isPublic) await assertGroupMember(db, input.groupId, ctx.user.id);
       const conditions = [
         eq(messages.groupId, input.groupId),
         eq(messages.isDeleted, false),
@@ -138,6 +159,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      await assertGroupMember(db, input.groupId, ctx.user.id);
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
         senderId: ctx.user.id,
@@ -169,12 +191,13 @@ export const chatRouter = router({
         mediaUrl: input.mediaUrl ?? undefined,
       });
       const messageId = (result as any).insertId as number;
-      // Push real-time notification to recipient via Socket.IO
+      // Push real-time notification to recipient via Socket.IO (use the sanitized content,
+      // matching what is persisted, so the pushed payload can't carry unsanitized markup).
       emitToUser(input.receiverId, "dm_message", {
         messageId,
         senderId: ctx.user.id,
         senderName: ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`,
-        content: input.content,
+        content: sanitizeInput(input.content, 5000),
         messageType: input.messageType,
         mediaUrl: input.mediaUrl ?? null,
         createdAt: new Date().toISOString(),
@@ -611,6 +634,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      await assertGroupMember(db, input.groupId, ctx.user.id);
       const [result] = await db.insert(groupFiles).values({ groupId: input.groupId, uploaderId: ctx.user.id, messageId: input.messageId, fileName: input.fileName, fileSize: input.fileSize, mimeType: input.mimeType, fileKey: input.fileKey, url: input.url });
       return { id: (result as { insertId: number }).insertId, url: input.url };
     }),
@@ -620,6 +644,7 @@ export const chatRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      await assertGroupMember(db, input.groupId, ctx.user.id);
       return db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name })
         .from(groupFiles)
         .leftJoin(users, eq(groupFiles.uploaderId, users.id))
@@ -634,6 +659,7 @@ export const chatRouter = router({
       if (input.messageIds.length === 0) return { ok: true };
       const db = await getDb();
       if (!db) return { ok: true };
+      await assertGroupMember(db, input.groupId, ctx.user.id);
       // Upsert: only insert if not already read
       const existing = await db.select({ messageId: messageReadReceipts.messageId })
         .from(messageReadReceipts)
@@ -738,8 +764,12 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
-      await db.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      // The new owner must already be a member, otherwise the group would be left with no owner.
+      const target = await db.select({ id: groupMembers.id }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId))).limit(1);
+      if (!target[0]) throw new Error("New owner must be a member of the group");
       await db.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
+      await db.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
       return { ok: true };
     }),
 
@@ -809,6 +839,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+      await assertGroupMember(db, input.groupId, ctx.user.id);
       // Check if already claimed by this user
       const existing = await db.select().from(redPacketClaims)
         .where(and(eq(redPacketClaims.messageId, input.messageId), eq(redPacketClaims.claimedBy, ctx.user.id)))
@@ -881,7 +912,8 @@ export const chatRouter = router({
       // Emit real-time notification to all members (except sender)
       const senderName = ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`;
       const groupName = groupInfo?.name ?? `Group #${input.groupId}`;
-      const preview = input.content.length > 60 ? input.content.slice(0, 60) + "..." : input.content;
+      const safeContent = sanitizeInput(input.content);
+      const preview = safeContent.length > 60 ? safeContent.slice(0, 60) + "..." : safeContent;
       for (const member of members) {
         if (member.userId === ctx.user.id) continue;
         emitToUser(member.userId, "group_announcement", {
