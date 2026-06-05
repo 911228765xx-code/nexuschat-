@@ -588,7 +588,7 @@ export default function Trading() {
       </div>
 
       {/* Header */}
-      <header className="glass sticky top-0 z-10 px-4 border-b border-border/30">
+      <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center justify-between h-12">
           <div className="flex items-center gap-2">
             <Zap size={18} className="text-neon-green" />

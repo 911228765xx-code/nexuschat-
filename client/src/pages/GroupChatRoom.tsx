@@ -1011,7 +1011,7 @@ export default function GroupChatRoom() {
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
-      <header className="glass sticky top-0 z-10 border-b border-border/30">
+      <header className="glass sticky top-0 z-10 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-3 px-3 h-14">
           <button onClick={() => setLocation("/app/chat")} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors">
             <ArrowLeft size={20} />

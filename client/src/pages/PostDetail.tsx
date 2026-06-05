@@ -343,7 +343,7 @@ export default function PostDetail() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="glass sticky top-0 z-10 border-b border-border/30 px-4">
+      <header className="glass sticky top-0 z-10 border-b border-border/30 px-4 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 h-14">
           <button
             onClick={() => setLocation("/app/discover")}
@@ -692,7 +692,7 @@ export default function PostDetail() {
           <button
             onClick={submitComment}
             disabled={!commentText.trim()}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
+            className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${
               commentText.trim() ? "bg-neon-cyan text-background hover:opacity-90" : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
             }`}
           >

@@ -276,13 +276,13 @@ export default function Settings() {
               </code>
               <button
                 onClick={() => setApiKeyVisible(!apiKeyVisible)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
+                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
               >
                 {apiKeyVisible ? <EyeOff size={14} className="text-muted-foreground" /> : <Eye size={14} className="text-muted-foreground" />}
               </button>
               <button
                 onClick={() => { navigator.clipboard.writeText(currentApiKey); toast.success(t("settings.apiKeyCopied")); }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
+                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary/60 transition-colors"
               >
                 <Copy size={14} className="text-muted-foreground" />
               </button>

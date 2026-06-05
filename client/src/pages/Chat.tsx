@@ -299,18 +299,18 @@ export default function Chat() {
             <button
               onClick={() => { setShowCommunitySquare(true); refetchPublicGroups(); }}
               title="发现社群"
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
             >
               <Globe size={18} className="text-neon-purple" />
             </button>
             <button
               onClick={() => setShowSearchPanel(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
             >
               <Search size={18} className="text-muted-foreground" />
             </button>
             <Link href="/app/notifications">
-              <button className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors">
+              <button className="relative w-10 h-10 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors">
                 <Bell size={18} className="text-muted-foreground" />
                 {unreadNotificationCount > 0 && (
                   <div className="absolute top-1 right-1 min-w-[10px] h-[10px] rounded-full bg-neon-red flex items-center justify-center" style={{ boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)" }}>
@@ -322,7 +322,7 @@ export default function Chat() {
               </button>
             </Link>
             <Link href="/app/create-group">
-              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
+              <button className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
                 <Plus size={18} className="text-neon-cyan" />
               </button>
             </Link>
@@ -628,7 +628,7 @@ export default function Chat() {
               <div className="flex items-center gap-3 h-14">
                 <button
                   onClick={() => { setShowSearchPanel(false); setGlobalSearch(""); }}
-                  className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-secondary/80 transition-colors"
                 >
                   <X size={20} />
                 </button>

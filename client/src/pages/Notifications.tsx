@@ -314,7 +314,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           acceptFriendRequest(notification);
                         }}
-                        className="px-3 py-1 rounded-lg bg-neon-cyan/15 text-neon-cyan text-[13px] font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-all"
+                        className="px-4 py-2 rounded-lg bg-neon-cyan/15 text-neon-cyan text-[13px] font-medium border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-all active:scale-95"
                       >
                         {t("notifications.accept")}
                       </button>
@@ -323,7 +323,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           declineFriendRequest(notification.id);
                         }}
-                        className="px-3 py-1 rounded-lg bg-secondary/40 text-muted-foreground text-[13px] font-medium border border-border/20 hover:bg-secondary/60 transition-all"
+                        className="px-4 py-2 rounded-lg bg-secondary/40 text-muted-foreground text-[13px] font-medium border border-border/20 hover:bg-secondary/60 transition-all active:scale-95"
                       >
                         {t("notifications.decline")}
                       </button>

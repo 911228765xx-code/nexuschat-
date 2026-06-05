@@ -199,7 +199,7 @@ export default function ConsultingPayment() {
   return (
     <div className="min-h-screen bg-[#0a0e27] text-white pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0a0e27]/95 backdrop-blur-sm border-b border-white/5 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-[#0a0e27]/95 backdrop-blur-sm border-b border-white/5 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="flex items-center gap-3 max-w-2xl mx-auto">
           <button
             onClick={() => setLocation("/app/consulting")}

@@ -141,7 +141,10 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
+    // `keyboard-aware`: when the native keyboard opens (Capacitor resize:'none'), the global
+    // --keyboard-height var shrinks this 100dvh shell so bottom-anchored inputs (chat composer,
+    // etc.) lift above the keyboard instead of being hidden behind it. No-op on web.
+    <div className="flex flex-col h-[100dvh] bg-background overflow-hidden keyboard-aware">
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
