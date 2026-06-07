@@ -61,8 +61,27 @@ export const userRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    // 显式选取安全字段：绝不返回 passwordHash 等敏感列
     const result = await db
-      .select()
+      .select({
+        id: users.id,
+        openId: users.openId,
+        name: users.name,
+        email: users.email,
+        loginMethod: users.loginMethod,
+        role: users.role,
+        walletAddress: users.walletAddress,
+        walletChain: users.walletChain,
+        avatar: users.avatar,
+        bio: users.bio,
+        username: users.username,
+        npPoints: users.npPoints,
+        isBot: users.isBot,
+        inviteCode: users.inviteCode,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        lastSignedIn: users.lastSignedIn,
+      })
       .from(users)
       .where(eq(users.id, ctx.user.id))
       .limit(1);
@@ -247,28 +266,49 @@ export const userRouter = router({
     }),
 
   // ─── Get user stats (posts count, tasks completed, rank) ───────────────────────────
-  // ─── Search users by name or username ──────────────────────────────────────
+  // ─── Search users ─────────────────────────────────────────────────────────
+  // 纯数字 query → 按唯一 ID 精确查找（移动端好友搜索走这条：用户名可重复，ID 唯一）
+  // 非数字 query → 按昵称/用户名模糊匹配（保留给 Web 端等按名字搜人的入口）
   searchUsers: protectedProcedure
     .input(z.object({ query: z.string().min(1).max(50) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      const q = `%${input.query.trim()}%`;
+      const raw = input.query.trim();
+      if (!raw) return [];
+
+      const cols = {
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+        bio: users.bio,
+      };
+
+      // 纯数字：按唯一 ID 精确查找
+      if (/^\d+$/.test(raw)) {
+        const idNum = Number(raw);
+        if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
+        const rows = await db
+          .select(cols)
+          .from(users)
+          .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum)))
+          .limit(1);
+        return rows.map(u => ({
+          id: u.id,
+          name: u.name ?? u.username ?? `User #${u.id}`,
+          username: u.username,
+          avatar: u.avatar,
+          bio: u.bio,
+        }));
+      }
+
+      // 非数字：按昵称/用户名模糊匹配
+      const q = `%${raw}%`;
       const rows = await db
-        .select({
-          id: users.id,
-          name: users.name,
-          username: users.username,
-          avatar: users.avatar,
-          bio: users.bio,
-        })
+        .select(cols)
         .from(users)
-        .where(
-          and(
-            ne(users.id, ctx.user.id),
-            or(like(users.name, q), like(users.username, q))
-          )
-        )
+        .where(and(ne(users.id, ctx.user.id), or(like(users.name, q), like(users.username, q))))
         .limit(20);
       return rows.map(u => ({
         id: u.id,

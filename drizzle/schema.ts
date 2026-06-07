@@ -85,11 +85,14 @@ export const messages = mysqlTable(
     mediaUrl: text("mediaUrl"),
     isEncrypted: boolean("isEncrypted").default(false).notNull(),
     isDeleted: boolean("isDeleted").default(false).notNull(),
+    // 私信已读标记（仅对 receiverId 一方有意义）
+    isRead: boolean("isRead").default(false).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (t) => [
     index("idx_group_messages").on(t.groupId, t.createdAt),
     index("idx_dm_messages").on(t.senderId, t.receiverId),
+    index("idx_dm_unread").on(t.receiverId, t.isRead),
   ]
 );
 

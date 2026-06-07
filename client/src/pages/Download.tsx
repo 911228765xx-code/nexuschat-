@@ -9,9 +9,9 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v1.5.7 — 同步最新代码更新（2026-06-06）
+// v1.5.8 — EAS Build 云端构建（2026-06-07）
 const ANDROID_APK_URL =
-  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/rfZaVjilDHISUwEG.apk";
+  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663385790517/zvBzOmyYhUIAoutM.apk";
 const QR_ANDROID =
   "/manus-storage/qr_android_v152_5a027cb5.png";
 const QR_IOS =

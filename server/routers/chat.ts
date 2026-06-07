@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, groupAnnouncements } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql, or, ne, gt } from "drizzle-orm";
+import { eq, and, desc, lt, sql, or, ne, gt, like } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
@@ -23,7 +23,16 @@ async function assertGroupMember(db: Db, groupId: number, userId: number): Promi
 export const chatRouter = router({
   // List public groups
   listGroups: publicProcedure
-    .input(z.object({ limit: z.number().default(20), category: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          limit: z.number().min(1).max(50).default(20),
+          offset: z.number().min(0).default(0),
+          category: z.string().optional(),
+          search: z.string().max(50).optional(),
+        })
+        .optional()
+    )
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
@@ -31,12 +40,19 @@ export const chatRouter = router({
       if (input?.category && input.category !== "all") {
         conditions.push(eq(chatGroups.category, input.category));
       }
+      const q = input?.search?.trim();
+      if (q) {
+        const term = `%${q}%`;
+        const match = or(like(chatGroups.name, term), like(chatGroups.description, term));
+        if (match) conditions.push(match);
+      }
       return db
         .select()
         .from(chatGroups)
         .where(and(...conditions))
         .orderBy(desc(chatGroups.memberCount))
-        .limit(input?.limit ?? 20);
+        .limit(input?.limit ?? 20)
+        .offset(input?.offset ?? 0);
     }),
 
   // Create a group
@@ -94,9 +110,12 @@ export const chatRouter = router({
         userId: ctx.user.id,
         role: "member",
       });
+      // 用真实成员数回写，避免并发重复加入导致 memberCount 自增漂移
       await db
         .update(chatGroups)
-        .set({ memberCount: sql`memberCount + 1` })
+        .set({
+          memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
+        })
         .where(eq(chatGroups.id, input.groupId));
       return { success: true, alreadyMember: false };
     }),
@@ -142,7 +161,8 @@ export const chatRouter = router({
         .leftJoin(users, eq(messages.senderId, users.id))
         .leftJoin(groupMembers, and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, messages.senderId)))
         .where(and(...conditions))
-        .orderBy(desc(messages.createdAt))
+        // 按 id 排序，与 before 游标(lt id)保持一致，避免同秒消息翻页丢/重
+        .orderBy(desc(messages.id))
         .limit(input.limit);
       return rows.reverse();
     }),
@@ -240,8 +260,20 @@ export const chatRouter = router({
         .from(messages)
         .leftJoin(users, eq(messages.senderId, users.id))
         .where(and(...conditions))
-        .orderBy(desc(messages.createdAt))
+        // 按 id 排序，与 before 游标(lt id)保持一致
+        .orderBy(desc(messages.id))
         .limit(input.limit);
+      // 打开会话即把对方发来的未读私信标记为已读
+      try {
+        await db.update(messages).set({ isRead: true }).where(
+          and(
+            eq(messages.senderId, otherId),
+            eq(messages.receiverId, myId),
+            eq(messages.isRead, false),
+            sql`${messages.groupId} IS NULL`,
+          )
+        );
+      } catch {}
       return rows.reverse();
     }),
 
@@ -286,6 +318,22 @@ export const chatRouter = router({
       .select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username })
       .from(users)
       .where(sql`${users.id} IN (${sql.join(partnerIds.map(id => sql`${id}`), sql`, `)})`);
+
+    // 各会话未读数（对方发来、未读、DM）
+    const unreadRows = await db
+      .select({ senderId: messages.senderId, cnt: sql<number>`COUNT(*)` })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.receiverId, myId),
+          eq(messages.isRead, false),
+          eq(messages.isDeleted, false),
+          sql`${messages.groupId} IS NULL`,
+        )
+      )
+      .groupBy(messages.senderId);
+    const unreadMap = new Map(unreadRows.map(r => [r.senderId, Number(r.cnt)]));
+
     return partnerUsers.map(u => ({
       userId: u.id,
       name: u.name ?? u.username ?? "User",
@@ -293,6 +341,7 @@ export const chatRouter = router({
       lastMessage: convMap.get(u.id)?.content ?? "",
       lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
       isMine: convMap.get(u.id)?.senderId === myId,
+      unreadCount: unreadMap.get(u.id) ?? 0,
     }));
   }),
 
@@ -801,7 +850,7 @@ export const chatRouter = router({
       await db.delete(groupMembers).where(
         and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))
       );
-      await db.update(chatGroups).set({ memberCount: sql`${chatGroups.memberCount} - 1` })
+      await db.update(chatGroups).set({ memberCount: sql`GREATEST(${chatGroups.memberCount} - 1, 0)` })
         .where(eq(chatGroups.id, input.groupId));
       return { ok: true };
     }),

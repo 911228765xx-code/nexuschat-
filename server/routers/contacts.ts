@@ -185,13 +185,21 @@ export const contactsRouter = router({
         and(eq(friendRequests.receiverId, ctx.user.id), eq(friendRequests.status, "accepted"))
       );
 
-    return [...sent, ...received].map((r) => ({
-      id: r.id,
-      userId: r.otherId,
-      displayName: r.otherName ?? r.otherUsername ?? `User #${r.otherId}`,
-      avatar: r.otherAvatar,
-      createdAt: r.createdAt,
-    }));
+    // 按对方 userId 去重（互发好友请求都被接受时会出现两条）
+    const seen = new Set<number>();
+    const result: Array<{ id: number; userId: number; displayName: string; avatar: string | null; createdAt: Date }> = [];
+    for (const r of [...sent, ...received]) {
+      if (r.otherId == null || seen.has(r.otherId)) continue;
+      seen.add(r.otherId);
+      result.push({
+        id: r.id,
+        userId: r.otherId,
+        displayName: r.otherName ?? r.otherUsername ?? `User #${r.otherId}`,
+        avatar: r.otherAvatar,
+        createdAt: r.createdAt,
+      });
+    }
+    return result;
   }),
 
   // ─── Get metadata for a contact ──────────────────────────────────────────
