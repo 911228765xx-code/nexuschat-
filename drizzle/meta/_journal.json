@@ -183,6 +183,13 @@
       "when": 1780670259525,
       "tag": "0025_hard_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1780832353618,
+      "tag": "0026_boring_forge",
+      "breakpoints": true
     }
   ]
 }

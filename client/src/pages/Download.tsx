@@ -148,7 +148,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.5.6-android.apk";
+                  link.download = "NexusChat-v1.5.8-android.apk";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -157,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK v1.5.6
+                下载 Android APK v1.5.8
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.5.6 · 需要 Android 8.0+ · React Native 原生版
+                版本 v1.5.8 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 
