@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { initSocketIO } from "../socket";
 import { startPriceAlertChecker } from "../priceAlertChecker";
 import { startBotScheduler } from "../botScheduler";
+import { startMessageCleanup } from "../messageCleanup";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
@@ -109,6 +110,8 @@ async function startServer() {
   startPriceAlertChecker();
   // Start Bot scheduler (posts at 09:00 and 21:00 daily)
   startBotScheduler();
+  // 定时清理已过期（阅后即焚）消息，每 10 分钟
+  startMessageCleanup();
 
   // Backfill referral invite codes for any users missing one (best-effort, non-blocking).
   void (async () => {

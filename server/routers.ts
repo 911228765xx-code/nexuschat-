@@ -20,9 +20,11 @@ import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
 import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
+import { aiRouter } from "./routers/ai";
 
 export const appRouter = router({
   system: systemRouter,
+  ai: aiRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       const user = opts.ctx.user;

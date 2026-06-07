@@ -26,6 +26,8 @@ export const users = mysqlTable("users", {
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   isBot: boolean("isBot").default(false).notNull(),
+  // 封禁标记（被封禁用户无法通过鉴权）
+  isBanned: boolean("isBanned").default(false).notNull(),
   // Deterministic referral code (see referral router). Indexed for O(1) reverse lookup.
   inviteCode: varchar("inviteCode", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -87,12 +89,15 @@ export const messages = mysqlTable(
     isDeleted: boolean("isDeleted").default(false).notNull(),
     // 私信已读标记（仅对 receiverId 一方有意义）
     isRead: boolean("isRead").default(false).notNull(),
+    // 定时销毁时间（null = 长期保留）；过期消息读取时被过滤
+    expiresAt: timestamp("expiresAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (t) => [
     index("idx_group_messages").on(t.groupId, t.createdAt),
     index("idx_dm_messages").on(t.senderId, t.receiverId),
     index("idx_dm_unread").on(t.receiverId, t.isRead),
+    index("idx_msg_expires").on(t.expiresAt),
   ]
 );
 
@@ -647,6 +652,10 @@ export const appConfig = mysqlTable("app_config", {
   downloadUrlWeb: text("downloadUrlWeb"),
   releaseNotes: text("releaseNotes"),
   isForceUpdate: boolean("isForceUpdate").default(false).notNull(),
+  // 与 AI 助手对话每次消耗的 NP 积分（可后台配置，无需改代码）
+  aiChatCost: int("aiChatCost").default(5).notNull(),
+  // 任务奖励覆盖（JSON: { [taskType]: npReward }），后台可改，无需改代码
+  taskRewards: text("taskRewards"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type AppConfig = typeof appConfig.$inferSelect;

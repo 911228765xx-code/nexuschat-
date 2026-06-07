@@ -18,6 +18,7 @@ import { consultingReports, consultingPayments } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { rateLimitStrict } from "../rateLimit";
+import logger from "../utils/logger";
 
 // BSCScan API key — payment verification fails without a real key configured.
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
@@ -93,7 +94,7 @@ async function verifyBscUsdtPayment(
       amount: (Number(amount) / 1e18).toFixed(2),
     };
   } catch (err) {
-    console.error("[BSC Verify] Error:", err);
+    logger.error({ err }, "[BSC Verify] Error");
     return { confirmed: false, error: "Network error during verification" };
   }
 }
@@ -216,7 +217,7 @@ export const consultingRouter = router({
       try {
         summary = await generateSummary(input.queryType, input.queryText);
       } catch (err) {
-        console.error("[Consulting] Summary generation failed:", err);
+        logger.error({ err }, "[Consulting] Summary generation failed");
         summary = `正在分析 ${input.queryText.slice(0, 50)}... 支付后将为您生成完整的专业报告。`;
       }
 
@@ -301,7 +302,7 @@ export const consultingRouter = router({
       // Trigger async verification and report generation
       // We don't await this - it runs in background
       verifyAndGenerateReport(input.reportId, input.txHash, input.walletAddress, ctx.user.id).catch(
-        (err) => console.error("[Consulting] Background generation failed:", err)
+        (err) => logger.error({ err }, "[Consulting] Background generation failed")
       );
 
       return { success: true, message: "支付已提交，正在验证交易..." };
@@ -430,7 +431,7 @@ export const consultingRouter = router({
 
       // Trigger background verification
       verifyAndGenerateReport(input.reportId, report.txHash, walletAddress, ctx.user.id).catch(
-        (err) => console.error("[Consulting] Retry verification failed:", err)
+        (err) => logger.error({ err }, "[Consulting] Retry verification failed")
       );
 
       return { success: true, message: "已重新提交验证，请等待..." };
@@ -481,9 +482,9 @@ async function verifyAndGenerateReport(
             .set({ status: "completed", fullContent, updatedAt: new Date() })
             .where(eq(consultingReports.id, reportId));
 
-          console.log(`[Consulting] Report ${reportId} completed for user ${userId}`);
+          logger.info({ reportId, userId }, "[Consulting] Report completed");
         } catch (aiErr) {
-          console.error(`[Consulting] AI generation failed for report ${reportId}:`, aiErr);
+          logger.error({ aiErr, reportId }, "[Consulting] AI generation failed");
           await db
             .update(consultingReports)
             .set({ status: "failed", updatedAt: new Date() })
@@ -492,16 +493,16 @@ async function verifyAndGenerateReport(
         return;
       }
 
-      console.log(`[Consulting] Payment not confirmed yet (attempt ${retries + 1}): ${result.error}`);
+      logger.info({ attempt: retries + 1, error: result.error }, "[Consulting] Payment not confirmed yet");
     } catch (err) {
-      console.error(`[Consulting] Verification error (attempt ${retries + 1}):`, err);
+      logger.error({ err, attempt: retries + 1 }, "[Consulting] Verification error");
     }
 
     retries++;
   }
 
   // After max retries, mark as failed
-  console.error(`[Consulting] Payment verification timed out for report ${reportId}`);
+  logger.error({ reportId }, "[Consulting] Payment verification timed out");
   await db
     .update(consultingReports)
     .set({ status: "failed", updatedAt: new Date() })

@@ -11,6 +11,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "cap:build": "pnpm build && npx cap sync",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",

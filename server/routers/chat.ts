@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, groupAnnouncements } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql, or, ne, gt, like } from "drizzle-orm";
+import { eq, and, desc, lt, sql, or, ne, gt, like, inArray } from "drizzle-orm";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
+import logger from "../utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -53,6 +54,37 @@ export const chatRouter = router({
         .orderBy(desc(chatGroups.memberCount))
         .limit(input?.limit ?? 20)
         .offset(input?.offset ?? 0);
+    }),
+
+  // ─── 管理员：列出所有群（含私有），用于平台管理 ─────────────────────────
+  adminListGroups: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).default(30), offset: z.number().min(0).default(0), search: z.string().max(50).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = [] as any[];
+      const q = input?.search?.trim();
+      if (q) conds.push(like(chatGroups.name, `%${q}%`));
+      return db
+        .select({ id: chatGroups.id, name: chatGroups.name, memberCount: chatGroups.memberCount, isPublic: chatGroups.isPublic, category: chatGroups.category, creatorId: chatGroups.creatorId, createdAt: chatGroups.createdAt })
+        .from(chatGroups)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(chatGroups.createdAt))
+        .limit(input?.limit ?? 30)
+        .offset(input?.offset ?? 0);
+    }),
+
+  // ─── 管理员：删除群（连带成员/消息/公告）─────────────────────────────
+  adminDeleteGroup: adminProcedure
+    .input(z.object({ groupId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      await db.delete(messages).where(eq(messages.groupId, input.groupId));
+      await db.delete(groupMembers).where(eq(groupMembers.groupId, input.groupId));
+      await db.delete(groupAnnouncements).where(eq(groupAnnouncements.groupId, input.groupId));
+      await db.delete(chatGroups).where(eq(chatGroups.id, input.groupId));
+      return { success: true };
     }),
 
   // Create a group
@@ -141,6 +173,7 @@ export const chatRouter = router({
       const conditions = [
         eq(messages.groupId, input.groupId),
         eq(messages.isDeleted, false),
+        sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
       ];
       if (input.before) {
         conditions.push(lt(messages.id, input.before));
@@ -152,6 +185,7 @@ export const chatRouter = router({
           messageType: messages.messageType,
           mediaUrl: messages.mediaUrl,
           createdAt: messages.createdAt,
+          expiresAt: messages.expiresAt,
           senderId: messages.senderId,
           senderName: users.name,
           senderAvatar: users.avatar,
@@ -174,18 +208,21 @@ export const chatRouter = router({
       content: z.string().min(1).max(4000),
       messageType: z.enum(["text", "image", "file"]).default("text"),
       mediaUrl: z.string().optional(),
+      ttlSeconds: z.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
     }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertGroupMember(db, input.groupId, ctx.user.id);
+      const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
         senderId: ctx.user.id,
         content: sanitizeInput(input.content, 5000),
         messageType: input.messageType as "text" | "image" | "file" | "system",
         mediaUrl: input.mediaUrl ?? undefined,
+        expiresAt,
       });
       return { messageId: (result as any).insertId };
     }),
@@ -197,11 +234,13 @@ export const chatRouter = router({
       content: z.string().min(1).max(4000),
       messageType: z.enum(["text", "image", "file"]).default("text"),
       mediaUrl: z.string().optional(),
+      ttlSeconds: z.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
     }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         senderId: ctx.user.id,
         receiverId: input.receiverId,
@@ -209,6 +248,7 @@ export const chatRouter = router({
         content: sanitizeInput(input.content, 5000),
         messageType: input.messageType as "text" | "image" | "file" | "system",
         mediaUrl: input.mediaUrl ?? undefined,
+        expiresAt,
       });
       const messageId = (result as any).insertId as number;
       // Push real-time notification to recipient via Socket.IO (use the sanitized content,
@@ -243,6 +283,7 @@ export const chatRouter = router({
           and(eq(messages.senderId, otherId), eq(messages.receiverId, myId))
         )!,
         eq(messages.isDeleted, false),
+        sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
       ];
       if (input.before) conditions.push(lt(messages.id, input.before));
       const rows = await db
@@ -252,6 +293,7 @@ export const chatRouter = router({
           messageType: messages.messageType,
           mediaUrl: messages.mediaUrl,
           createdAt: messages.createdAt,
+          expiresAt: messages.expiresAt,
           senderId: messages.senderId,
           receiverId: messages.receiverId,
           senderName: users.name,
@@ -273,7 +315,9 @@ export const chatRouter = router({
             sql`${messages.groupId} IS NULL`,
           )
         );
-      } catch {}
+      } catch (err) {
+        logger.warn({ err, otherId, myId }, "markDMsRead failed");
+      }
       return rows.reverse();
     }),
 
@@ -299,6 +343,7 @@ export const chatRouter = router({
             eq(messages.receiverId, myId)
           )!,
           eq(messages.isDeleted, false),
+          sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
           // DM messages have no groupId
           sql`${messages.groupId} IS NULL`,
         )
@@ -365,27 +410,44 @@ export const chatRouter = router({
       .where(eq(groupMembers.userId, ctx.user.id))
       .orderBy(desc(chatGroups.updatedAt));
 
-    // Fetch latest message for each group
-    const result = await Promise.all(groups.map(async (g) => {
-      const [latestMsg] = await db
+    // Fetch latest message for all groups in ONE pass (avoid N+1).
+    // 1) max(id) per group  2) join back to get its content/sender.
+    const groupIds = groups.map((g) => g.id);
+    const latestByGroup = new Map<number, { content: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
+    if (groupIds.length > 0) {
+      const latest = db
         .select({
+          groupId: messages.groupId,
+          maxId: sql<number>`MAX(${messages.id})`.as("max_id"),
+        })
+        .from(messages)
+        .where(and(inArray(messages.groupId, groupIds), eq(messages.isDeleted, false)))
+        .groupBy(messages.groupId)
+        .as("latest");
+      const latestRows = await db
+        .select({
+          groupId: messages.groupId,
           content: messages.content,
           createdAt: messages.createdAt,
           senderName: users.name,
           senderUsername: users.username,
         })
         .from(messages)
-        .leftJoin(users, eq(messages.senderId, users.id))
-        .where(and(eq(messages.groupId, g.id), eq(messages.isDeleted, false)))
-        .orderBy(desc(messages.createdAt))
-        .limit(1);
+        .innerJoin(latest, eq(messages.id, latest.maxId))
+        .leftJoin(users, eq(messages.senderId, users.id));
+      for (const r of latestRows) {
+        if (r.groupId != null) latestByGroup.set(r.groupId, r);
+      }
+    }
+    const result = groups.map((g) => {
+      const m = latestByGroup.get(g.id);
       return {
         ...g,
-        lastMessage: latestMsg?.content ?? g.description ?? '',
-        lastMessageAt: latestMsg?.createdAt ?? g.updatedAt,
-        lastSender: latestMsg?.senderName ?? latestMsg?.senderUsername ?? null,
+        lastMessage: m?.content ?? g.description ?? '',
+        lastMessageAt: m?.createdAt ?? g.updatedAt,
+        lastSender: m?.senderName ?? m?.senderUsername ?? null,
       };
-    }));
+    });
     // Sort by last message time
     return result.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }),
@@ -499,26 +561,33 @@ export const chatRouter = router({
       .where(eq(groupMembers.userId, ctx.user.id));
     if (joinedGroups.length === 0) return {};
 
+    // One aggregated query (avoid N+1): join messages to the user's per-group
+    // read cursor and count messages newer than it, grouped by group.
+    const groupIds = joinedGroups.map((g) => g.groupId);
     const result: Record<number, number> = {};
-    await Promise.all(joinedGroups.map(async ({ groupId }) => {
-      // Get user's lastReadMessageId for this group
-      const [unreadRow] = await db
-        .select({ lastReadMessageId: groupUnreadCounts.lastReadMessageId })
-        .from(groupUnreadCounts)
-        .where(and(eq(groupUnreadCounts.userId, ctx.user.id), eq(groupUnreadCounts.groupId, groupId)))
-        .limit(1);
-      const lastReadId = unreadRow?.lastReadMessageId ?? 0;
-      // Count messages after lastReadMessageId
-      const [countRow] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(messages)
-        .where(and(
-          eq(messages.groupId, groupId),
-          eq(messages.isDeleted, false),
-          gt(messages.id, lastReadId),
-        ));
-      result[groupId] = countRow?.count ?? 0;
-    }));
+    for (const id of groupIds) result[id] = 0;
+    const rows = await db
+      .select({
+        groupId: messages.groupId,
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .leftJoin(
+        groupUnreadCounts,
+        and(
+          eq(groupUnreadCounts.groupId, messages.groupId),
+          eq(groupUnreadCounts.userId, ctx.user.id),
+        ),
+      )
+      .where(and(
+        inArray(messages.groupId, groupIds),
+        eq(messages.isDeleted, false),
+        gt(messages.id, sql`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`),
+      ))
+      .groupBy(messages.groupId);
+    for (const r of rows) {
+      if (r.groupId != null) result[r.groupId] = Number(r.count);
+    }
     return result;
   }),
 

@@ -1,9 +1,26 @@
 import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+// 读取任务奖励覆盖（app_config.taskRewards JSON）
+async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
+  try {
+    const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq(appConfig.platform, "all")).limit(1);
+    if (row?.tr) {
+      const o = JSON.parse(row.tr);
+      if (o && typeof o === "object") return o as Record<string, number>;
+    }
+  } catch {
+    // 用默认
+  }
+  return {};
+}
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 
@@ -211,9 +228,67 @@ export const userRouter = router({
   }),
 
   // ─── Get task status for current user ─────────────────────────────────────
+  // ─── 管理员：用户封禁 ─────────────────────────────────────────────
+  adminGetUser: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [u] = await db
+        .select({ id: users.id, name: users.name, username: users.username, role: users.role, isBanned: users.isBanned, npPoints: users.npPoints })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      return u ?? null;
+    }),
+
+  setBanned: adminProcedure
+    .input(z.object({ userId: z.number(), banned: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能封禁自己" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      await db.update(users).set({ isBanned: input.banned }).where(eq(users.id, input.userId));
+      return { success: true, banned: input.banned };
+    }),
+
+  // ─── 管理员：任务奖励配置 ─────────────────────────────────────────
+  adminGetTaskRewards: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const overrides = await getTaskRewardOverrides(db);
+    return Object.entries(TASK_DEFINITIONS).map(([taskType, def]) => ({
+      taskType,
+      label: def.label,
+      npReward: Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward,
+      defaultReward: def.npReward,
+    }));
+  }),
+
+  setTaskRewards: adminProcedure
+    .input(z.object({ rewards: z.record(z.string(), z.number().int().min(0).max(100000)) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const clean: Record<string, number> = {};
+      for (const [k, v] of Object.entries(input.rewards)) {
+        if (TASK_DEFINITIONS[k] && Number.isFinite(v)) clean[k] = v;
+      }
+      const json = JSON.stringify(clean);
+      const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq(appConfig.platform, "all")).limit(1);
+      if (existing.length > 0) {
+        await db.update(appConfig).set({ taskRewards: json }).where(eq(appConfig.platform, "all"));
+      } else {
+        await db.insert(appConfig).values({ platform: "all", taskRewards: json });
+      }
+      return { success: true };
+    }),
+
   getTaskStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
+
+    const rewardOverrides = await getTaskRewardOverrides(db);
 
     const completedTasks = await db
       .select({
@@ -235,11 +310,12 @@ export const userRouter = router({
       const completed = completionCount[taskType] ?? 0;
       const isCompleted = completed >= def.maxCompletions;
       const lastCompleted = completedTasks.find((t) => t.taskType === taskType);
+      const npReward = Number.isFinite(rewardOverrides[taskType]) ? rewardOverrides[taskType] : def.npReward;
       return {
         taskType,
         label: def.label,
         description: def.description,
-        npReward: def.npReward,
+        npReward,
         maxCompletions: def.maxCompletions,
         completions: completed,
         isCompleted,
@@ -444,6 +520,9 @@ async function _completeTask(
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
 
+  const overrides = await getTaskRewardOverrides(db);
+  const reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
+
   // Check existing completions
   const existing = await db
     .select({ id: userTasks.id })
@@ -475,18 +554,19 @@ async function _completeTask(
     }
   }
 
-  // Record task completion
-  await db.insert(userTasks).values({
-    userId,
-    taskType,
-    npEarned: def.npReward,
+  // Record completion + credit points atomically (avoid recording a reward
+  // that never lands, or crediting twice if the process dies mid-way).
+  await db.transaction(async (tx) => {
+    await tx.insert(userTasks).values({
+      userId,
+      taskType,
+      npEarned: reward,
+    });
+    await tx
+      .update(users)
+      .set({ npPoints: sql`npPoints + ${reward}` })
+      .where(eq(users.id, userId));
   });
 
-  // Add NP points to user
-  await db
-    .update(users)
-    .set({ npPoints: sql`npPoints + ${def.npReward}` })
-    .where(eq(users.id, userId));
-
-  return { success: true, npEarned: def.npReward, alreadyCompleted: false };
+  return { success: true, npEarned: reward, alreadyCompleted: false };
 }

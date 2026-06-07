@@ -17,6 +17,11 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  // 封禁拦截：被封禁用户无法访问任何受保护接口
+  if ((ctx.user as { isBanned?: boolean }).isBanned) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "账号已被封禁，如有疑问请联系客服" });
+  }
+
   return next({
     ctx: {
       ...ctx,

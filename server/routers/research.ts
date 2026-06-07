@@ -12,7 +12,7 @@ import { sanitizeInput } from "../utils/sanitize";
 
 // ─── CoinGecko Data Fetching ─────────────────────────────────────────────────
 
-async function fetchTokenData(symbol: string) {
+export async function fetchTokenData(symbol: string) {
   const cacheKey = `token:search:${symbol.toLowerCase()}`;
   const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
 
