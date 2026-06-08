@@ -1283,9 +1283,10 @@ export const chatRouter = router({
   // ─── Red Packet: Send (扣 NP 积分发群红包) ───────────────────────────────
   sendRedPacket: protectedProcedure
     .input(z.object({
-      groupId: z.number(),
+      groupId: z.number().optional(),
+      receiverId: z.number().optional(), // 私信红包接收者（与 groupId 二选一）
       totalAmount: z.number().int().min(1).max(1_000_000),
-      totalShares: z.number().int().min(1).max(100),
+      totalShares: z.number().int().min(1).max(100).default(1),
       isRandom: z.boolean().default(true),
       blessing: z.string().max(100).optional(),
     }))
@@ -1293,8 +1294,15 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      await assertGroupMember(db, input.groupId, ctx.user.id);
-      if (input.totalShares > input.totalAmount) {
+      if (!input.groupId && !input.receiverId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "缺少红包目标" });
+      }
+      const isDM = !input.groupId && !!input.receiverId;
+      if (input.groupId) await assertGroupMember(db, input.groupId, ctx.user.id);
+      // 私信红包固定 1 个、不拼手气
+      const totalShares = isDM ? 1 : input.totalShares;
+      const isRandom = isDM ? false : input.isRandom;
+      if (totalShares > input.totalAmount) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 NP）" });
       }
       const blessing = (input.blessing?.trim() || "恭喜发财，大吉大利").slice(0, 100);
@@ -1308,7 +1316,8 @@ export const chatRouter = router({
         if (!affected) throw new TRPCError({ code: "BAD_REQUEST", message: "积分不足，无法发红包" });
         // 2) 红包消息
         const [msg] = await tx.insert(messages).values({
-          groupId: input.groupId,
+          groupId: input.groupId ?? null,
+          receiverId: isDM ? input.receiverId : undefined,
           senderId: ctx.user.id,
           content: blessing,
           messageType: "redpacket",
@@ -1317,29 +1326,38 @@ export const chatRouter = router({
         // 3) 红包本体
         await tx.insert(redPackets).values({
           messageId,
-          groupId: input.groupId,
+          groupId: input.groupId ?? null,
+          receiverId: isDM ? input.receiverId : null,
           senderId: ctx.user.id,
           totalAmount: input.totalAmount,
-          totalShares: input.totalShares,
+          totalShares,
           remainingAmount: input.totalAmount,
-          remainingShares: input.totalShares,
-          isRandom: input.isRandom,
+          remainingShares: totalShares,
+          isRandom,
           blessing,
         });
       });
-      return { messageId, totalAmount: input.totalAmount, totalShares: input.totalShares };
+      // 私信红包：实时推给接收者
+      if (isDM && input.receiverId) {
+        emitToUser(input.receiverId, "dm_message", {
+          messageId, senderId: ctx.user.id,
+          senderName: ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`,
+          content: blessing, messageType: "redpacket", mediaUrl: null,
+          durationSeconds: null, createdAt: new Date().toISOString(),
+        });
+      }
+      return { messageId, totalAmount: input.totalAmount, totalShares };
     }),
 
   // ─── Red Packet: Claim (抢红包，随机/均分发放并入账) ───────────────────────
   claimRedPacket: protectedProcedure
     .input(z.object({
       messageId: z.number(),
-      groupId: z.number(),
+      groupId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      await assertGroupMember(db, input.groupId, ctx.user.id);
       let result: { ok: boolean; reason: string; amount: number } = { ok: false, reason: "not_found", amount: 0 };
       await db.transaction(async (tx) => {
         // 锁定红包行，串行化所有抢包请求，避免超发
@@ -1348,6 +1366,14 @@ export const chatRouter = router({
           .for("update")
           .limit(1);
         if (!rp) { result = { ok: false, reason: "not_found", amount: 0 }; return; }
+        // 权限：群红包→须群成员；私信红包→只能接收者领
+        if (rp.groupId) {
+          const [m] = await tx.select({ id: groupMembers.id }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, rp.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+          if (!m) { result = { ok: false, reason: "not_member", amount: 0 }; return; }
+        } else if (rp.receiverId && rp.receiverId !== ctx.user.id) {
+          result = { ok: false, reason: "not_recipient", amount: 0 }; return;
+        }
         // 是否已抢过
         const existing = await tx.select({ amount: redPacketClaims.amount }).from(redPacketClaims)
           .where(and(eq(redPacketClaims.messageId, input.messageId), eq(redPacketClaims.claimedBy, ctx.user.id)))
@@ -1369,7 +1395,7 @@ export const chatRouter = router({
         }
         // 记录领取 + 扣减红包余额 + 给领取者加积分
         await tx.insert(redPacketClaims).values({
-          messageId: input.messageId, groupId: input.groupId, claimedBy: ctx.user.id, amount,
+          messageId: input.messageId, groupId: rp.groupId ?? null, claimedBy: ctx.user.id, amount,
         });
         await tx.update(redPackets)
           .set({ remainingAmount: sql`remainingAmount - ${amount}`, remainingShares: sql`remainingShares - 1` })

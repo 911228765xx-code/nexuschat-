@@ -211,6 +211,13 @@
       "when": 1780883202861,
       "tag": "0029_careful_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1780906096912,
+      "tag": "0030_stale_turbo",
+      "breakpoints": true
     }
   ]
 }

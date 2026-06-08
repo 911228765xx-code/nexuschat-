@@ -1,4 +1,4 @@
-// build:2026-06-08T08:05:16.408Z
+// build:2026-06-08T08:10:00.769Z
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
