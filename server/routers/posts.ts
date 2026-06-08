@@ -311,7 +311,8 @@ export const postsRouter = router({
       let mime = mimeType;
       let ext = fileName.split(".").pop() ?? "jpg";
       const stamp = Date.now();
-      const randomSuffix = Math.random().toString(36).slice(2, 8);
+      // 更长的随机串，降低同毫秒并发上传 key 撞车/覆盖的概率
+      const randomSuffix = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
       let thumbUrl: string | undefined;
       if (mimeType.startsWith("image/")) {
         const { downscaleImage } = await import("../utils/image");

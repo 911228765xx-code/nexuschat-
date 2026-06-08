@@ -1331,8 +1331,8 @@ export const chatRouter = router({
         if (rp.remainingShares === 1) {
           amount = rp.remainingAmount; // 最后一个拿走全部余额
         } else if (rp.isRandom) {
-          // 二倍均值法：保证后面每人至少 1 NP
-          const max = rp.remainingAmount - (rp.remainingShares - 1);
+          // 二倍均值法：保证后面每人至少 1 NP（max 兜底 ≥1，防极端不变量被破坏）
+          const max = Math.max(1, rp.remainingAmount - (rp.remainingShares - 1));
           const avg2 = Math.floor((rp.remainingAmount / rp.remainingShares) * 2);
           const hi = Math.max(1, Math.min(max, avg2));
           amount = Math.floor(Math.random() * hi) + 1;
