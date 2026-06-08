@@ -344,6 +344,7 @@ export const chatRouter = router({
           durationSeconds: messages.durationSeconds,
           replyToId: messages.replyToId,
           recalledAt: messages.recalledAt,
+          isRead: messages.isRead,
           createdAt: messages.createdAt,
           expiresAt: messages.expiresAt,
           senderId: messages.senderId,
