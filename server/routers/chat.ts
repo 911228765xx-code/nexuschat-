@@ -573,10 +573,13 @@ export const chatRouter = router({
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const { storagePut } = await import("../storage");
-      const buffer = Buffer.from(input.base64, "base64");
-      const ext = input.mimeType.split("/")[1] ?? "jpg";
+      const { downscaleImage } = await import("../utils/image");
+      const raw = Buffer.from(input.base64, "base64");
+      // 等比缩到最长边 ≤1600，避免存/发 4000px 原图
+      const { buffer, mime } = await downscaleImage(raw, 1600, 82, input.mimeType);
+      const ext = mime.split("/")[1] ?? "jpg";
       const key = `chat-images/${ctx.user.id}/${Date.now()}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
+      const { url } = await storagePut(key, buffer, mime);
       return { url };
     }),
 

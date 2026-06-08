@@ -150,14 +150,17 @@ export const userRouter = router({
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const { fileData, mimeType } = input;
-      const buffer = Buffer.from(fileData, "base64");
-      if (buffer.length > 4 * 1024 * 1024) {
+      const raw = Buffer.from(fileData, "base64");
+      if (raw.length > 4 * 1024 * 1024) {
         throw new Error("头像图片不能超过 4MB");
       }
-      const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+      // 头像缩到 ≤512，足够清晰且体积很小
+      const { downscaleImage } = await import("../utils/image");
+      const { buffer, mime } = await downscaleImage(raw, 512, 85, mimeType);
+      const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
       const randomSuffix = Math.random().toString(36).slice(2, 8);
       const key = `avatars/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, mimeType);
+      const { url } = await storagePut(key, buffer, mime);
 
       // Auto-update user avatar field
       const db = await getDb();

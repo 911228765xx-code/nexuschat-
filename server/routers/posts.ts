@@ -296,15 +296,23 @@ export const postsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { fileData, fileName, mimeType } = input;
       // Decode base64
-      const buffer = Buffer.from(fileData, "base64");
-      if (buffer.length > 8 * 1024 * 1024) {
+      const raw = Buffer.from(fileData, "base64");
+      if (raw.length > 8 * 1024 * 1024) {
         throw new Error("文件大小超过 8MB 限制");
       }
-      // Sanitize filename and add random suffix
-      const ext = fileName.split(".").pop() ?? "jpg";
+      // 图片等比缩到 ≤1600（非图片原样存）
+      let buffer: Buffer = raw;
+      let mime = mimeType;
+      let ext = fileName.split(".").pop() ?? "jpg";
+      if (mimeType.startsWith("image/")) {
+        const { downscaleImage } = await import("../utils/image");
+        const r = await downscaleImage(raw, 1600, 82, mimeType);
+        buffer = r.buffer; mime = r.mime;
+        ext = mime.split("/")[1] ?? ext;
+      }
       const randomSuffix = Math.random().toString(36).slice(2, 8);
       const key = `posts/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, mimeType);
+      const { url } = await storagePut(key, buffer, mime);
       return { url, key };
     }),
 
