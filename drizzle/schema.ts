@@ -52,6 +52,8 @@ export const chatGroups = mysqlTable("chat_groups", {
   memberCount: int("memberCount").default(0).notNull(),
   isPublic: boolean("isPublic").default(true).notNull(),
   category: varchar("category", { length: 30 }).default("community"),
+  // true=进群需群主/管理员审批
+  joinApproval: boolean("joinApproval").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -83,8 +85,18 @@ export const messages = mysqlTable(
     senderId: int("senderId").notNull(),
     receiverId: int("receiverId"),
     content: text("content").notNull(),
-    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer"]).default("text").notNull(),
+    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer", "voice", "video"]).default("text").notNull(),
     mediaUrl: text("mediaUrl"),
+    // 语音/视频时长（秒），仅 voice/video 类型使用
+    durationSeconds: int("durationSeconds"),
+    // 引用/回复的目标消息 id（null=非回复）
+    replyToId: bigint("replyToId", { mode: "number" }),
+    // 转发来源消息 id（null=非转发）
+    forwardFromId: bigint("forwardFromId", { mode: "number" }),
+    // 群内置顶
+    isPinned: boolean("isPinned").default(false).notNull(),
+    // 撤回时间（null=未撤回）
+    recalledAt: timestamp("recalledAt"),
     isEncrypted: boolean("isEncrypted").default(false).notNull(),
     isDeleted: boolean("isDeleted").default(false).notNull(),
     // 私信已读标记（仅对 receiverId 一方有意义）
@@ -98,11 +110,47 @@ export const messages = mysqlTable(
     index("idx_dm_messages").on(t.senderId, t.receiverId),
     index("idx_dm_unread").on(t.receiverId, t.isRead),
     index("idx_msg_expires").on(t.expiresAt),
+    index("idx_msg_pinned").on(t.groupId, t.isPinned),
   ]
 );
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
+
+// ─── Conversation Prefs ─────────────────────────────────────────────────────
+// 用户级会话偏好：免打扰 / 会话置顶 / 清除历史（隐藏 id <= clearedBeforeId 的消息）
+// convKey 形如 "group:{groupId}" 或 "dm:{otherUserId}"
+export const conversationPrefs = mysqlTable(
+  "conversation_prefs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    convKey: varchar("convKey", { length: 40 }).notNull(),
+    isMuted: boolean("isMuted").default(false).notNull(),
+    isPinned: boolean("isPinned").default(false).notNull(),
+    clearedBeforeId: bigint("clearedBeforeId", { mode: "number" }).default(0).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_convpref_user").on(t.userId, t.convKey)]
+);
+export type ConversationPref = typeof conversationPrefs.$inferSelect;
+export type InsertConversationPref = typeof conversationPrefs.$inferInsert;
+
+// ─── Group Join Requests ────────────────────────────────────────────────────
+// 进群审批：joinApproval 群的加入申请
+export const groupJoinRequests = mysqlTable(
+  "group_join_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    userId: int("userId").notNull(),
+    status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_gjr_group").on(t.groupId, t.status)]
+);
+export type GroupJoinRequest = typeof groupJoinRequests.$inferSelect;
+export type InsertGroupJoinRequest = typeof groupJoinRequests.$inferInsert;
 
 // ─── Message Reactions ───────────────────────────────────────────────────────
 export const messageReactions = mysqlTable(
@@ -129,6 +177,8 @@ export const posts = mysqlTable(
     authorId: int("authorId").notNull(),
     content: text("content").notNull(),
     mediaUrls: text("mediaUrls"),
+    // 与 mediaUrls 平行的缩略图 URL（JSON 数组）；列表用缩略图，详情用原图
+    mediaThumbs: text("mediaThumbs"),
     tags: text("tags"),
     likeCount: int("likeCount").default(0).notNull(),
     commentCount: int("commentCount").default(0).notNull(),
@@ -670,6 +720,8 @@ export const redPacketClaims = mysqlTable(
     messageId: bigint("messageId", { mode: "number" }).notNull(),
     groupId: int("groupId").notNull(),
     claimedBy: int("claimedBy").notNull(),
+    // 该次抢到的 NP 金额
+    amount: int("amount").default(0).notNull(),
     claimedAt: timestamp("claimedAt").defaultNow().notNull(),
   },
   (t) => [
@@ -679,6 +731,32 @@ export const redPacketClaims = mysqlTable(
 );
 export type RedPacketClaim = typeof redPacketClaims.$inferSelect;
 export type InsertRedPacketClaim = typeof redPacketClaims.$inferInsert;
+
+// ─── Red Packets ──────────────────────────────────────────────────────────────
+// 红包本体（NP 积分）：发包时扣发送者积分，抢包时按剩余随机/均分发放并入账。
+export const redPackets = mysqlTable(
+  "red_packets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    messageId: bigint("messageId", { mode: "number" }).notNull(),
+    groupId: int("groupId").notNull(),
+    senderId: int("senderId").notNull(),
+    totalAmount: int("totalAmount").notNull(),
+    totalShares: int("totalShares").notNull(),
+    remainingAmount: int("remainingAmount").notNull(),
+    remainingShares: int("remainingShares").notNull(),
+    // true=拼手气随机；false=普通均分
+    isRandom: boolean("isRandom").default(true).notNull(),
+    blessing: varchar("blessing", { length: 100 }).default("恭喜发财，大吉大利").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_rp_message").on(t.messageId),
+    index("idx_rp_group").on(t.groupId),
+  ]
+);
+export type RedPacket = typeof redPackets.$inferSelect;
+export type InsertRedPacket = typeof redPackets.$inferInsert;
 
 // ─── Group Announcements ──────────────────────────────────────────────────────
 // Stores pinned announcements for groups

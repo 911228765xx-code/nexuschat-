@@ -904,7 +904,6 @@ export default function GroupChatRoom() {
       const result = await claimRedPacketMutation.mutateAsync({
         messageId: Number(msgId),
         groupId: groupId,
-        totalShares: total,
       });
       if (!result.ok) {
         if (result.reason === "already_claimed") toast.info("你已经抢过这个红包了！");

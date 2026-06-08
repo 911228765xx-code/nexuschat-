@@ -3,7 +3,7 @@ import { Server as HttpServer } from "http";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { getDb } from "./db";
-import { messages, users, groupMembers } from "../drizzle/schema";
+import { messages, users, groupMembers, conversationPrefs } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import logger from "./utils/logger";
 import { sdk } from "./_core/sdk";
@@ -15,6 +15,22 @@ interface AuthedUser {
   id: number;
   name: string;
   avatar: string | null;
+}
+
+/** 该用户是否对某会话开启了免打扰（开启则不推送）。 */
+async function isConversationMuted(userId: number, convKey: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    const [p] = await db
+      .select({ isMuted: conversationPrefs.isMuted })
+      .from(conversationPrefs)
+      .where(and(eq(conversationPrefs.userId, userId), eq(conversationPrefs.convKey, convKey)))
+      .limit(1);
+    return !!p?.isMuted;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -259,14 +275,17 @@ export function initSocketIO(httpServer: HttpServer) {
         emitToUser(data.receiverId, "new_dm", outgoingMessage);
         // Echo back to sender
         socket.emit("dm_sent", outgoingMessage);
-        // Send Web Push if receiver is offline (not connected via socket)
+        // Send Web Push if receiver is offline (not connected via socket) 且未对该会话免打扰
         const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId)!.size > 0;
         if (!receiverOnline) {
-          sendPushToUser(data.receiverId, {
-            title: `${userName} 发来消息`,
-            body: data.content.length > 80 ? data.content.slice(0, 80) + "..." : data.content,
-            url: `/app/dm/${senderIdNum}`,
-          }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
+          const muted = await isConversationMuted(data.receiverId, `dm:${senderIdNum}`);
+          if (!muted) {
+            sendPushToUser(data.receiverId, {
+              title: `${userName} 发来消息`,
+              body: data.content.length > 80 ? data.content.slice(0, 80) + "..." : data.content,
+              url: `/app/dm/${senderIdNum}`,
+            }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
+          }
         }
       } catch (err) {
         logger.error({ err }, "Socket.io: Error saving DM");
