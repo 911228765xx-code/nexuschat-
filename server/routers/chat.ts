@@ -962,6 +962,33 @@ export const chatRouter = router({
         .orderBy(desc(groupFiles.createdAt)).limit(input.limit);
     }),
 
+  // ─── 群文件库：直接列出群内已发的 图片/视频/文件 消息 ──────────────────────
+  getGroupMedia: protectedProcedure
+    .input(z.object({ groupId: z.number(), limit: z.number().default(60) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      await assertGroupMember(db, input.groupId, ctx.user.id);
+      return db.select({
+        id: messages.id,
+        content: messages.content,
+        messageType: messages.messageType,
+        mediaUrl: messages.mediaUrl,
+        durationSeconds: messages.durationSeconds,
+        createdAt: messages.createdAt,
+        senderName: users.name,
+      }).from(messages)
+        .leftJoin(users, eq(messages.senderId, users.id))
+        .where(and(
+          eq(messages.groupId, input.groupId),
+          eq(messages.isDeleted, false),
+          sql`${messages.recalledAt} IS NULL`,
+          inArray(messages.messageType, ["image", "video", "file"]),
+        ))
+        .orderBy(desc(messages.id))
+        .limit(input.limit);
+    }),
+
   // ─── Read Receipts ────────────────────────────────────────────────────────
   markMessagesRead: protectedProcedure
     .input(z.object({ groupId: z.number(), messageIds: z.array(z.number()) }))
