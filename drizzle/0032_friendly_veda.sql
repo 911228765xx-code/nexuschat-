@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `nnBalance` bigint DEFAULT 0 NOT NULL;

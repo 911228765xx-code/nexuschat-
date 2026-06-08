@@ -3,12 +3,16 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql, or, ne, gt, like, inArray } from "drizzle-orm";
+import { eq, and, desc, lt, sql, or, ne, gt, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { emitToUser } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
+import { groupBots } from "../../drizzle/schema";
+import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward } from "../groupBots";
+import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
+import { nnNodeOrders } from "../../drizzle/schema";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -172,6 +176,9 @@ export const chatRouter = router({
           memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
         })
         .where(eq(chatGroups.id, input.groupId));
+      // 欢迎机器人（启用则自动发欢迎语；不阻塞入群）
+      void runWelcomeBot(db, input.groupId, (ctx.user as any).name || (ctx.user as any).username || "新朋友")
+        .catch((err) => logger.warn({ err }, "welcome bot failed"));
       return { success: true, alreadyMember: false };
     }),
 
@@ -264,6 +271,11 @@ export const chatRouter = router({
         replyToId: input.replyToId ?? undefined,
         expiresAt,
       });
+      // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
+      if (input.messageType === "text") {
+        void runManageBot(db, input.groupId, input.content)
+          .catch((err) => logger.warn({ err }, "manage bot failed"));
+      }
       return { messageId: (result as any).insertId };
     }),
 
@@ -923,6 +935,10 @@ export const chatRouter = router({
       await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
       await db.update(chatGroups).set({ memberCount: sql`memberCount + 1` }).where(eq(chatGroups.id, l.groupId));
       await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
+      const newMemberName = (ctx.user as any).name || (ctx.user as any).username || "新朋友";
+      // 添粉机器人：奖励邀请人 + 群内致谢；欢迎机器人：欢迎语（均不阻塞）
+      void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger.warn({ err }, "growth bot failed"));
+      void runWelcomeBot(db, l.groupId, newMemberName).catch((err) => logger.warn({ err }, "welcome bot failed"));
       return { groupId: l.groupId, alreadyMember: false };
     }),
 
@@ -1507,6 +1523,378 @@ export const chatRouter = router({
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
       await db.delete(groupAnnouncements)
         .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)));
+      return { ok: true };
+    }),
+
+  // ─── 群数据看板（群成员可看；数据机器人解锁周报，但实时数据对成员开放） ──────
+  getGroupStats: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await assertGroupMember(db, input.groupId, ctx.user.id);
+      const now = Date.now();
+      const dayAgo = new Date(now - 24 * 3600 * 1000);
+      const weekAgo = new Date(now - 7 * 24 * 3600 * 1000);
+      const prevWeekAgo = new Date(now - 14 * 24 * 3600 * 1000);
+
+      const [memberCount] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, input.groupId));
+      const [newWeek] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), gt(groupMembers.joinedAt, weekAgo)));
+      const [msgToday] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(messages)
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, dayAgo)));
+      const [msgWeek] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(messages)
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, weekAgo)));
+      const [msgPrevWeek] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(messages)
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, prevWeekAgo), lt(messages.createdAt, weekAgo)));
+      const [activeWeek] = await db
+        .select({ c: sql<number>`COUNT(DISTINCT ${messages.senderId})` })
+        .from(messages)
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, weekAgo)));
+
+      // 近 7 天每日发言量（用于折线/柱状图）
+      const daily = await db
+        .select({
+          day: sql<string>`DATE(${messages.createdAt})`,
+          c: sql<number>`COUNT(*)`,
+        })
+        .from(messages)
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, weekAgo)))
+        .groupBy(sql`DATE(${messages.createdAt})`)
+        .orderBy(sql`DATE(${messages.createdAt})`);
+
+      // 本周最活跃成员 Top5
+      const topRows = await db
+        .select({
+          userId: messages.senderId,
+          name: users.name,
+          avatar: users.avatar,
+          c: sql<number>`COUNT(*)`,
+        })
+        .from(messages)
+        .leftJoin(users, eq(users.id, messages.senderId))
+        .where(and(eq(messages.groupId, input.groupId), gt(messages.createdAt, weekAgo)))
+        .groupBy(messages.senderId, users.name, users.avatar)
+        .orderBy(desc(sql`COUNT(*)`))
+        .limit(5);
+
+      const total = Number(memberCount?.c ?? 0);
+      const active = Number(activeWeek?.c ?? 0);
+      const mw = Number(msgWeek?.c ?? 0);
+      const mpw = Number(msgPrevWeek?.c ?? 0);
+      const wow = mpw > 0 ? Math.round(((mw - mpw) / mpw) * 100) : (mw > 0 ? 100 : 0);
+      return {
+        memberCount: total,
+        newMembersWeek: Number(newWeek?.c ?? 0),
+        messagesToday: Number(msgToday?.c ?? 0),
+        messagesWeek: mw,
+        messagesPrevWeek: mpw,
+        messagesWoW: wow, // 周环比 %
+        activeMembersWeek: active,
+        activeRate: total > 0 ? Math.round((active / total) * 100) : 0, // 活跃率 %
+        daily: daily.map((d) => ({ day: String(d.day), count: Number(d.c) })),
+        topMembers: topRows.map((r) => ({
+          userId: r.userId, name: r.name ?? `用户#${r.userId}`, avatar: r.avatar ?? null, count: Number(r.c),
+        })),
+      };
+    }),
+
+  // ─── 群机器人：目录 + 套餐 + 本群状态 ──────────────────────────────────────
+  getGroupBots: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await assertGroupMember(db, input.groupId, ctx.user.id);
+      const [me] = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      const canManage = !!me && (me.role === "owner" || me.role === "admin");
+      const bots = await listGroupBots(db, input.groupId);
+      return { canManage, bots, packages: BOT_PACKAGES };
+    }),
+
+  // 开通/续费/关闭/改设置（owner/admin；开通按月扣 NP）
+  setGroupBot: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      botType: z.enum(["welcome", "manage", "price", "activity", "stats", "interact", "growth"]),
+      enabled: z.boolean().optional(),       // 开/关
+      months: z.number().int().min(0).max(12).optional(), // >0 表示订阅/续费月数（扣费）
+      config: z.record(z.string(), z.any()).optional(),   // 机器人设置
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [me] = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!me || (me.role !== "owner" && me.role !== "admin")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅群主/管理员可设置机器人" });
+      }
+      const meta = getBotMeta(input.botType);
+      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "未知机器人" });
+
+      const [existing] = await db.select().from(groupBots)
+        .where(and(eq(groupBots.groupId, input.groupId), eq(groupBots.botType, input.botType))).limit(1);
+
+      // 计算新到期时间（订阅/续费）
+      let expiresAt: Date | null | undefined = undefined; // undefined=不变
+      const months = input.months ?? 0;
+      if (months > 0 && meta.monthlyNN > 0) {
+        const cost = meta.monthlyNN * months;
+        // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
+        const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+        const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
+          ? existing.expiresAt.getTime() : Date.now();
+        expiresAt = new Date(base + months * 30 * 24 * 3600 * 1000);
+      } else if (months > 0 && meta.monthlyNN === 0) {
+        // 免费机器人，开通即永久
+        expiresAt = null;
+      }
+
+      const setFields: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.enabled !== undefined) setFields.enabled = input.enabled;
+      if (months > 0) setFields.enabled = true; // 订阅即开启
+      if (expiresAt !== undefined) setFields.expiresAt = expiresAt;
+      if (input.config !== undefined) {
+        const merged = { ...meta.defaultConfig, ...input.config };
+        setFields.config = JSON.stringify(merged);
+      }
+
+      if (existing) {
+        await db.update(groupBots).set(setFields)
+          .where(eq(groupBots.id, existing.id));
+      } else {
+        await db.insert(groupBots).values({
+          groupId: input.groupId,
+          botType: input.botType,
+          enabled: (setFields.enabled as boolean) ?? false,
+          expiresAt: (expiresAt ?? null) as Date | null,
+          config: (setFields.config as string) ?? JSON.stringify(meta.defaultConfig),
+        });
+      }
+      const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      return { ok: true, nnBalance: Number(bal?.nn ?? 0) };
+    }),
+
+  // 开通机器人套餐：按套餐折扣价一次性扣 NN，激活套餐内全部机器人
+  buyBotPackage: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      packageKey: z.string(),
+      months: z.number().int().min(1).max(12).default(1),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [me] = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!me || (me.role !== "owner" && me.role !== "admin")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅群主/管理员可开通套餐" });
+      }
+      const pkg = BOT_PACKAGES.find((p) => p.key === input.packageKey);
+      if (!pkg) throw new TRPCError({ code: "BAD_REQUEST", message: "未知套餐" });
+
+      // 一次性按套餐价扣 NN（折扣已含在 pkg.monthlyNN）
+      const cost = pkg.monthlyNN * input.months;
+      const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+
+      const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
+      for (const bt of pkg.bots) {
+        const meta = getBotMeta(bt);
+        if (!meta) continue;
+        const isFree = meta.monthlyNN === 0;
+        const [existing] = await db.select().from(groupBots)
+          .where(and(eq(groupBots.groupId, input.groupId), eq(groupBots.botType, bt))).limit(1);
+        // 付费机器人：在现有有效期上叠加；免费机器人：永久
+        let expiresAt: Date | null = isFree ? null : paidExpiry;
+        if (!isFree && existing?.expiresAt && existing.expiresAt.getTime() > Date.now()) {
+          expiresAt = new Date(existing.expiresAt.getTime() + input.months * 30 * 24 * 3600 * 1000);
+        }
+        if (existing) {
+          await db.update(groupBots).set({ enabled: true, expiresAt, updatedAt: new Date() })
+            .where(eq(groupBots.id, existing.id));
+        } else {
+          await db.insert(groupBots).values({
+            groupId: input.groupId, botType: bt, enabled: true, expiresAt,
+            config: JSON.stringify(meta.defaultConfig),
+          });
+        }
+      }
+      const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      return { ok: true, nnBalance: Number(bal?.nn ?? 0), bots: pkg.bots };
+    }),
+
+  // ─── NN 治理代币 ──────────────────────────────────────────────────────────
+  getTokenInfo: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return getTokenInfo(db, ctx.user.id);
+    }),
+
+  // 代币经济（总量 + 分配模型，公开）
+  getTokenomics: publicProcedure
+    .query(() => getTokenomics()),
+
+  // 发放 NN（空投/运营，管理员）。amount 上限受金库余额约束。
+  adminGrantNN: adminProcedure
+    .input(z.object({ userId: z.number(), amount: z.number().int().min(1).max(NN_TOTAL_SUPPLY) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const ok = await grantNN(db, input.userId, input.amount, { type: "grant", refType: "admin" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "金库余额不足或参数无效" });
+      return await getTokenInfo(db, input.userId);
+    }),
+
+  // 我的 NN 流水
+  getMyNNTransactions: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return getMyNNTransactions(db, ctx.user.id, 50);
+    }),
+
+  // 运营：机器人订阅统计 + NN 营收 + 节点订单概览
+  adminBotStats: adminProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const now = new Date();
+      // 各类型「生效中」机器人数（启用且未过期）
+      const active = await db
+        .select({ botType: groupBots.botType, c: sql<number>`COUNT(*)` })
+        .from(groupBots)
+        .where(and(eq(groupBots.enabled, true), or(isNull(groupBots.expiresAt), gt(groupBots.expiresAt, now))))
+        .groupBy(groupBots.botType);
+      // 7 天内即将到期
+      const soon = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+      const [expiring] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(groupBots)
+        .where(and(eq(groupBots.enabled, true), gt(groupBots.expiresAt, now), lt(groupBots.expiresAt, soon)));
+      const revenue = await getNNRevenue(db);
+      // 节点订单概览
+      const orderAgg = await db
+        .select({ status: nnNodeOrders.status, c: sql<number>`COUNT(*)` })
+        .from(nnNodeOrders)
+        .groupBy(nnNodeOrders.status);
+      const token = await getTokenInfo(db);
+      return {
+        activeBots: active.map((a) => ({ botType: a.botType, count: Number(a.c) })),
+        expiringSoon: Number(expiring?.c ?? 0),
+        revenue,
+        nodeOrders: orderAgg.map((o) => ({ status: o.status, count: Number(o.c) })),
+        token,
+      };
+    }),
+
+  // ─── 节点认购（USDT 私募） ─────────────────────────────────────────────────
+  // 节点等级 + 收款地址（公开）
+  getNodeTiers: publicProcedure
+    .query(() => ({ tiers: NN_NODE_TIERS, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN })),
+
+  // 下单认购：创建待支付订单，返回收款地址与应付金额
+  createNodeOrder: protectedProcedure
+    .input(z.object({ tier: z.enum(["genesis", "super", "standard"]) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const tier = getNodeTier(input.tier);
+      if (!tier) throw new TRPCError({ code: "BAD_REQUEST", message: "未知节点等级" });
+      const [res] = await db.insert(nnNodeOrders).values({
+        userId: ctx.user.id,
+        tier: tier.key,
+        usdtAmount: tier.usdtPrice,
+        nnAmount: tier.nnAmount,
+        payAddress: USDT_DEPOSIT_ADDRESS || null,
+      }).$returningId();
+      return {
+        orderId: (res as any).id,
+        tier: tier.key,
+        usdtAmount: tier.usdtPrice,
+        nnAmount: tier.nnAmount,
+        payAddress: USDT_DEPOSIT_ADDRESS,
+        chain: USDT_CHAIN,
+      };
+    }),
+
+  // 回填链上转账哈希（用户支付后提交，等待运营确认）
+  submitNodeTx: protectedProcedure
+    .input(z.object({ orderId: z.number(), txHash: z.string().min(6).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
+      if (!o || o.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "订单不存在" });
+      if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单状态不可修改" });
+      await db.update(nnNodeOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq(nnNodeOrders.id, input.orderId));
+      return { ok: true };
+    }),
+
+  // 我的节点订单
+  getMyNodeOrders: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(nnNodeOrders)
+        .where(eq(nnNodeOrders.userId, ctx.user.id))
+        .orderBy(desc(nnNodeOrders.createdAt)).limit(50);
+    }),
+
+  // 运营：列订单（可按状态）
+  adminListNodeOrders: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "confirmed", "cancelled"]).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = input?.status ? [eq(nnNodeOrders.status, input.status)] : [];
+      return db.select().from(nnNodeOrders)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(nnNodeOrders.createdAt)).limit(100);
+    }),
+
+  // 运营：确认到账 → 发放 NN（从金库/节点池），订单置为已确认
+  adminConfirmNodeOrder: adminProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
+      if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
+      const ok = await grantNN(db, o.userId, o.nnAmount, { type: "node", refType: "order", refId: o.id, memo: o.tier });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "金库余额不足，无法发放" });
+      await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnNodeOrders.id, o.id));
+      return { ok: true, nnGranted: o.nnAmount };
+    }),
+
+  // 运营：取消订单
+  adminCancelNodeOrder: adminProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
+      if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (o.status === "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "已确认订单不可取消" });
+      await db.update(nnNodeOrders).set({ status: "cancelled" }).where(eq(nnNodeOrders.id, o.id));
       return { ok: true };
     }),
 

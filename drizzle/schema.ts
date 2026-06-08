@@ -24,6 +24,8 @@ export const users = mysqlTable("users", {
   bio: text("bio"),
   username: varchar("username", { length: 50 }),
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
+  // NN 治理代币余额（与 NP 积分区分；NN 用于付费服务/治理，总量 2100 万枚）
+  nnBalance: bigint("nnBalance", { mode: "number" }).default(0).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   isBot: boolean("isBot").default(false).notNull(),
   // 封禁标记（被封禁用户无法通过鉴权）
@@ -779,6 +781,69 @@ export const groupAnnouncements = mysqlTable(
 );
 export type GroupAnnouncement = typeof groupAnnouncements.$inferSelect;
 export type InsertGroupAnnouncement = typeof groupAnnouncements.$inferInsert;
+
+// ─── Group Bots ───────────────────────────────────────────────────────────────
+// 群机器人服务套餐：每个群开了哪些机器人、配置、订阅到期。
+export const groupBots = mysqlTable(
+  "group_bots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    // manage(管理)/welcome(欢迎)/price(行情)/activity(活动)/stats(数据) 等
+    botType: varchar("botType", { length: 30 }).notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    // 各机器人的设置（JSON：关键词/欢迎语/币种/定时等）
+    config: text("config"),
+    // 订阅到期（null=免费/永久）
+    expiresAt: timestamp("expiresAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_groupbots").on(t.groupId, t.botType)]
+);
+export type GroupBot = typeof groupBots.$inferSelect;
+export type InsertGroupBot = typeof groupBots.$inferInsert;
+
+// ─── NN 节点认购订单 ────────────────────────────────────────────────────────────
+// DAO 私募：用户用 USDT 认购节点，链上转账后填哈希，运营确认到账即发放 NN（节点池）。
+export const nnNodeOrders = mysqlTable(
+  "nn_node_orders",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    tier: varchar("tier", { length: 20 }).notNull(), // genesis/super/standard
+    usdtAmount: int("usdtAmount").notNull(),         // 应付 USDT（整数）
+    nnAmount: int("nnAmount").notNull(),             // 认购获得 NN
+    // pending(待支付/待确认) / confirmed(已确认发放) / cancelled
+    status: mysqlEnum("status", ["pending", "confirmed", "cancelled"]).default("pending").notNull(),
+    txHash: varchar("txHash", { length: 120 }),      // 用户回填的链上转账哈希
+    payAddress: varchar("payAddress", { length: 120 }), // 下单时的收款地址快照
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    confirmedAt: timestamp("confirmedAt"),
+  },
+  (t) => [index("idx_nodeorder_user").on(t.userId), index("idx_nodeorder_status").on(t.status)]
+);
+export type NnNodeOrder = typeof nnNodeOrders.$inferSelect;
+export type InsertNnNodeOrder = typeof nnNodeOrders.$inferInsert;
+
+// ─── NN 交易流水（账本）─────────────────────────────────────────────────────────
+// 每笔 NN 流动都记一条：amount 负=支出(扣费)，正=收入(发放)。用于用户账单 + 运营对账。
+export const nnTransactions = mysqlTable(
+  "nn_transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    amount: int("amount").notNull(), // 有符号：负=支出，正=收入
+    type: varchar("type", { length: 30 }).notNull(), // bot_sub/package/node/grant/...
+    refType: varchar("refType", { length: 20 }),       // group/order/admin...
+    refId: int("refId"),
+    memo: varchar("memo", { length: 200 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_nntx_user").on(t.userId, t.createdAt), index("idx_nntx_type").on(t.type)]
+);
+export type NnTransaction = typeof nnTransactions.$inferSelect;
+export type InsertNnTransaction = typeof nnTransactions.$inferInsert;
 
 // ─── AI Consulting Reports ────────────────────────────────────────────────────
 // Stores AI-generated consulting reports (paid content)

@@ -10,6 +10,7 @@ import { sdk } from "./_core/sdk";
 import { isAllowedOrigin } from "./_core/corsOrigin";
 import { sendPushToUser } from "./routers/webPush";
 import { triggerBotAutoReply } from "./botAutoReply";
+import { runInteractBot } from "./groupBots";
 
 interface AuthedUser {
   id: number;
@@ -236,8 +237,14 @@ export function initSocketIO(httpServer: HttpServer) {
         io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
 
         // Trigger Bot auto-reply (non-blocking, fire-and-forget)
-        triggerBotAutoReply(data.groupId, typeof userId === "number" ? userId : parseInt(String(userId)), data.content)
+        const triggerUid = typeof userId === "number" ? userId : parseInt(String(userId));
+        triggerBotAutoReply(data.groupId, triggerUid, data.content)
           .catch((err: unknown) => logger.warn({ err }, "Socket: BotAutoReply trigger failed"));
+        // 互动机器人（订阅驱动的 AI 自由互动，仅文本）
+        if ((data.messageType || "text") === "text") {
+          runInteractBot(db, data.groupId, triggerUid, data.content)
+            .catch((err: unknown) => logger.warn({ err }, "Socket: interact bot failed"));
+        }
       } catch (err) {
         logger.error({ err }, "Socket.io: Error saving message");
         socket.emit("error", { message: "Failed to send message" });
