@@ -204,6 +204,13 @@
       "when": 1780877212320,
       "tag": "0028_fancy_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1780883202861,
+      "tag": "0029_careful_gladiator",
+      "breakpoints": true
     }
   ]
 }

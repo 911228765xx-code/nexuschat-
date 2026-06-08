@@ -177,6 +177,8 @@ export const posts = mysqlTable(
     authorId: int("authorId").notNull(),
     content: text("content").notNull(),
     mediaUrls: text("mediaUrls"),
+    // 与 mediaUrls 平行的缩略图 URL（JSON 数组）；列表用缩略图，详情用原图
+    mediaThumbs: text("mediaThumbs"),
     tags: text("tags"),
     likeCount: int("likeCount").default(0).notNull(),
     commentCount: int("commentCount").default(0).notNull(),

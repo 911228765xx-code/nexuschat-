@@ -30,6 +30,7 @@ export const postsRouter = router({
           id: posts.id,
           content: posts.content,
           mediaUrls: posts.mediaUrls,
+          mediaThumbs: posts.mediaThumbs,
           tags: posts.tags,
           likeCount: posts.likeCount,
           commentCount: posts.commentCount,
@@ -66,6 +67,7 @@ export const postsRouter = router({
         posts: data.map((p) => ({
           ...p,
           mediaUrls: p.mediaUrls ? (JSON.parse(p.mediaUrls) as string[]) : [],
+          mediaThumbs: p.mediaThumbs ? (JSON.parse(p.mediaThumbs) as string[]) : [],
           tags: p.tags ? (JSON.parse(p.tags) as string[]) : [],
           isLiked: likedPostIds.has(p.id),
         })),
@@ -79,6 +81,7 @@ export const postsRouter = router({
       z.object({
         content: z.string().min(1).max(2000),
         mediaUrls: z.array(z.string().url()).max(4).optional(),
+        mediaThumbs: z.array(z.string().url()).max(4).optional(),
         tags: z.array(z.string().max(30)).max(5).optional(),
       })
     )
@@ -91,6 +94,7 @@ export const postsRouter = router({
         authorId: ctx.user.id,
         content: sanitizeInput(input.content, 2000),
         mediaUrls: input.mediaUrls ? JSON.stringify(input.mediaUrls) : undefined,
+        mediaThumbs: input.mediaThumbs ? JSON.stringify(input.mediaThumbs) : undefined,
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
@@ -167,6 +171,7 @@ export const postsRouter = router({
           id: posts.id,
           content: posts.content,
           mediaUrls: posts.mediaUrls,
+          mediaThumbs: posts.mediaThumbs,
           tags: posts.tags,
           likeCount: posts.likeCount,
           commentCount: posts.commentCount,
@@ -201,6 +206,7 @@ export const postsRouter = router({
       return {
         ...row,
         mediaUrls: row.mediaUrls ? (JSON.parse(row.mediaUrls) as string[]) : [],
+        mediaThumbs: row.mediaThumbs ? (JSON.parse(row.mediaThumbs) as string[]) : [],
         tags: row.tags ? (JSON.parse(row.tags) as string[]) : [],
         isLiked,
       };
@@ -300,20 +306,27 @@ export const postsRouter = router({
       if (raw.length > 8 * 1024 * 1024) {
         throw new Error("文件大小超过 8MB 限制");
       }
-      // 图片等比缩到 ≤1600（非图片原样存）
+      // 图片：原图缩到 ≤1600 + 生成 ≤400 缩略图（非图片原样存，无缩略图）
       let buffer: Buffer = raw;
       let mime = mimeType;
       let ext = fileName.split(".").pop() ?? "jpg";
+      const stamp = Date.now();
+      const randomSuffix = Math.random().toString(36).slice(2, 8);
+      let thumbUrl: string | undefined;
       if (mimeType.startsWith("image/")) {
         const { downscaleImage } = await import("../utils/image");
-        const r = await downscaleImage(raw, 1600, 82, mimeType);
-        buffer = r.buffer; mime = r.mime;
+        const full = await downscaleImage(raw, 1600, 82, mimeType);
+        buffer = full.buffer; mime = full.mime;
         ext = mime.split("/")[1] ?? ext;
+        const thumb = await downscaleImage(raw, 400, 70, mimeType);
+        const thumbExt = thumb.mime.split("/")[1] ?? "jpg";
+        const thumbKey = `posts/${ctx.user.id}/${stamp}-${randomSuffix}_thumb.${thumbExt}`;
+        const t = await storagePut(thumbKey, thumb.buffer, thumb.mime);
+        thumbUrl = t.url;
       }
-      const randomSuffix = Math.random().toString(36).slice(2, 8);
-      const key = `posts/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
+      const key = `posts/${ctx.user.id}/${stamp}-${randomSuffix}.${ext}`;
       const { url } = await storagePut(key, buffer, mime);
-      return { url, key };
+      return { url, thumbUrl, key };
     }),
 
   // ─── Delete post ──────────────────────────────────────────────────────────
@@ -477,6 +490,7 @@ export const postsRouter = router({
           id: posts.id,
           content: posts.content,
           mediaUrls: posts.mediaUrls,
+          mediaThumbs: posts.mediaThumbs,
           tags: posts.tags,
           likeCount: posts.likeCount,
           commentCount: posts.commentCount,
@@ -509,6 +523,7 @@ export const postsRouter = router({
         posts: rows.map((p) => ({
           ...p,
           mediaUrls: p.mediaUrls ? (JSON.parse(p.mediaUrls) as string[]) : [],
+          mediaThumbs: p.mediaThumbs ? (JSON.parse(p.mediaThumbs) as string[]) : [],
           tags: p.tags ? (JSON.parse(p.tags) as string[]) : [],
           isLiked: likedPostIds.has(p.id),
         })),
