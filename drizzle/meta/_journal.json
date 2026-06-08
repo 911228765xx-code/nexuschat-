@@ -246,6 +246,27 @@
       "when": 1780931273992,
       "tag": "0034_glorious_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1780932437105,
+      "tag": "0035_yellow_krista_starr",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1780933560809,
+      "tag": "0036_married_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "5",
+      "when": 1780934185293,
+      "tag": "0037_chunky_jane_foster",
+      "breakpoints": true
     }
   ]
 }

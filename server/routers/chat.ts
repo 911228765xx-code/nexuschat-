@@ -11,8 +11,9 @@ import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
 import { groupBots } from "../../drizzle/schema";
 import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward } from "../groupBots";
-import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
-import { nnNodeOrders } from "../../drizzle/schema";
+import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
+import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
+import { getMembership, getBenefits, buyMembership } from "../membership";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -117,6 +118,15 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 会员限额：建群数 + 群人数上限
+      const benefits = await getBenefits(db, ctx.user.id);
+      const [owned] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(chatGroups)
+        .where(eq(chatGroups.creatorId, ctx.user.id));
+      if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
+        throw new TRPCError({ code: "FORBIDDEN", message: `当前会员最多可创建 ${benefits.maxGroups} 个群，升级会员可提升上限` });
+      }
       const [result] = await db.insert(chatGroups).values({
         name: input.name,
         description: input.description ?? undefined,
@@ -126,6 +136,7 @@ export const chatRouter = router({
         tokenGateAmount: input.tokenGateAmount ?? undefined,
         tokenGateContract: input.tokenGateContract ?? undefined,
         memberCount: 1,
+        maxMembers: benefits.maxGroupMembers,
         category: input.category ?? "community",
       });
       const groupId = (result as any).insertId as number;
@@ -152,9 +163,13 @@ export const chatRouter = router({
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
         .limit(1);
       if (existing.length > 0) return { success: true, alreadyMember: true };
-      // 审批群：不直接加入，转为提交加入申请
-      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval }).from(chatGroups)
+      // 群容量上限校验（满员不可加入）
+      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups)
         .where(eq(chatGroups.id, input.groupId)).limit(1);
+      if (grp && grp.maxMembers > 0 && grp.memberCount >= grp.maxMembers) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
+      }
+      // 审批群：不直接加入，转为提交加入申请
       if (grp?.joinApproval) {
         const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
           .where(and(eq(groupJoinRequests.groupId, input.groupId), eq(groupJoinRequests.userId, ctx.user.id), eq(groupJoinRequests.status, "pending")))
@@ -625,9 +640,12 @@ export const chatRouter = router({
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const { storagePut } = await import("../storage");
+      const db0 = await getDb();
       const buffer = Buffer.from(input.base64, "base64");
-      if (buffer.length > 15 * 1024 * 1024) {
-        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "文件不能超过 15MB" });
+      // 会员档位文件大小上限
+      const limitMB = db0 ? (await getBenefits(db0, ctx.user.id)).maxFileMB : 20;
+      if (buffer.length > limitMB * 1024 * 1024) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: `文件超出上限（当前会员 ${limitMB}MB），升级会员可上传更大文件` });
       }
       const safe = input.fileName.replace(/[^\w.\-]+/g, "_").slice(-80) || "file";
       const key = `chat-files/${ctx.user.id}/${Date.now()}_${safe}`;
@@ -932,6 +950,12 @@ export const chatRouter = router({
       const existing = await db.select({ id: groupMembers.id }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, l.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
+      // 群容量上限校验
+      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups)
+        .where(eq(chatGroups.id, l.groupId)).limit(1);
+      if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
+      }
       await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
       await db.update(chatGroups).set({ memberCount: sql`memberCount + 1` }).where(eq(chatGroups.id, l.groupId));
       await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
@@ -1762,6 +1786,29 @@ export const chatRouter = router({
       return await getTokenInfo(db, input.userId);
     }),
 
+  // ─── Pro 会员 ─────────────────────────────────────────────────────────────
+  getMembership: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return getMembership(db, ctx.user.id);
+    }),
+
+  buyMembership: protectedProcedure
+    .input(z.object({ tier: z.enum(["plus", "pro"]), months: z.number().int().min(1).max(12).default(1) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      try {
+        const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
+        return { ok: true, ...r };
+      } catch (e: any) {
+        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "开通失败" });
+      }
+    }),
+
   // 我的 NN 流水
   getMyNNTransactions: protectedProcedure
     .query(async ({ ctx }) => {
@@ -1895,6 +1942,87 @@ export const chatRouter = router({
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status === "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "已确认订单不可取消" });
       await db.update(nnNodeOrders).set({ status: "cancelled" }).where(eq(nnNodeOrders.id, o.id));
+      return { ok: true };
+    }),
+
+  // ─── NN 底池（用户从底池购买 NN，USDT 计价） ───────────────────────────────
+  getPoolInfo: publicProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const info = await getPoolInfo(db);
+      return { ...info, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN };
+    }),
+
+  // 下单购买：输入 USDT 金额，按底池单价折算 NN，建待支付订单
+  createPoolOrder: protectedProcedure
+    .input(z.object({ usdtAmount: z.number().int().min(5).max(100000) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const info = await getPoolInfo(db);
+      const nnAmount = input.usdtAmount * info.priceNnPerUsdt;
+      if (info.reserveNN < nnAmount) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备不足，请减少购买量" });
+      const [res] = await db.insert(nnPoolOrders).values({
+        userId: ctx.user.id, usdtAmount: input.usdtAmount, nnAmount, payAddress: USDT_DEPOSIT_ADDRESS || null,
+      }).$returningId();
+      return { orderId: (res as any).id, usdtAmount: input.usdtAmount, nnAmount, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN };
+    }),
+
+  submitPoolTx: protectedProcedure
+    .input(z.object({ orderId: z.number(), txHash: z.string().min(6).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
+      if (!o || o.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "订单不存在" });
+      if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单状态不可修改" });
+      await db.update(nnPoolOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq(nnPoolOrders.id, input.orderId));
+      return { ok: true };
+    }),
+
+  getMyPoolOrders: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(nnPoolOrders).where(eq(nnPoolOrders.userId, ctx.user.id))
+        .orderBy(desc(nnPoolOrders.createdAt)).limit(50);
+    }),
+
+  adminListPoolOrders: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "confirmed", "cancelled"]).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = input?.status ? [eq(nnPoolOrders.status, input.status)] : [];
+      return db.select().from(nnPoolOrders).where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(nnPoolOrders.createdAt)).limit(100);
+    }),
+
+  adminConfirmPoolOrder: adminProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
+      if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
+      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, o.nnAmount, o.id);
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备或金库不足，无法发放" });
+      await db.update(nnPoolOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnPoolOrders.id, o.id));
+      return { ok: true, nnGranted: o.nnAmount };
+    }),
+
+  adminCancelPoolOrder: adminProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
+      if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (o.status === "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "已确认订单不可取消" });
+      await db.update(nnPoolOrders).set({ status: "cancelled" }).where(eq(nnPoolOrders.id, o.id));
       return { ok: true };
     }),
 

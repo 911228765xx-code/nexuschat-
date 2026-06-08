@@ -13,7 +13,7 @@
  */
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
-import { users, nnTransactions } from "../drizzle/schema";
+import { users, nnTransactions, nnPool } from "../drizzle/schema";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -160,6 +160,49 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
   if (circulating + amount > NN_TOTAL_SUPPLY) return false; // 金库不足
   await db.update(users).set({ nnBalance: sql`${users.nnBalance} + ${amount}` }).where(eq(users.id, userId));
   await recordTx(db, userId, amount, meta ?? { type: "grant" });
+  return true;
+}
+
+// ─── NN 底池（流动性共建 · 用户从底池购买 NN） ──────────────────────────────────
+/** 底池初始储备 = 流动性共建桶 15% = 3,150,000 NN */
+export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 15) / 100);
+
+/** 读取底池（首次自动按播种值初始化单行 id=1） */
+export async function getPool(db: Db) {
+  let [p] = await db.select().from(nnPool).where(eq(nnPool.id, 1)).limit(1);
+  if (!p) {
+    try {
+      await db.insert(nnPool).values({ id: 1, reserveNN: NN_POOL_SEED, soldNN: 0, priceNnPerUsdt: 20, raisedUsdt: 0 });
+    } catch { /* 并发已建 */ }
+    [p] = await db.select().from(nnPool).where(eq(nnPool.id, 1)).limit(1);
+  }
+  return p!;
+}
+
+export async function getPoolInfo(db: Db) {
+  const p = await getPool(db);
+  return {
+    reserveNN: Number(p.reserveNN),
+    soldNN: Number(p.soldNN),
+    priceNnPerUsdt: p.priceNnPerUsdt,
+    raisedUsdt: Number(p.raisedUsdt),
+  };
+}
+
+/**
+ * 确认底池购买到账：发放 NN 给用户 + 更新底池（已售↑/储备↓/募集↑）。
+ * 返回是否成功（储备不足或金库不足则失败）。
+ */
+export async function confirmPoolPurchase(db: Db, userId: number, usdtAmount: number, nnAmount: number, orderId: number): Promise<boolean> {
+  const p = await getPool(db);
+  if (Number(p.reserveNN) < nnAmount) return false;
+  const ok = await grantNN(db, userId, nnAmount, { type: "pool_buy", refType: "pool_order", refId: orderId, memo: `${usdtAmount}USDT` });
+  if (!ok) return false;
+  await db.update(nnPool).set({
+    reserveNN: sql`${nnPool.reserveNN} - ${nnAmount}`,
+    soldNN: sql`${nnPool.soldNN} + ${nnAmount}`,
+    raisedUsdt: sql`${nnPool.raisedUsdt} + ${usdtAmount}`,
+  }).where(eq(nnPool.id, 1));
   return true;
 }
 

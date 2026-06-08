@@ -26,6 +26,9 @@ export const users = mysqlTable("users", {
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
   // NN 治理代币余额（与 NP 积分区分；NN 用于付费服务/治理，总量 2100 万枚）
   nnBalance: bigint("nnBalance", { mode: "number" }).default(0).notNull(),
+  // Pro 会员等级与到期（free/plus/pro；proUntil 过期则降级为 free）
+  proTier: varchar("proTier", { length: 20 }).default("free").notNull(),
+  proUntil: timestamp("proUntil"),
   passwordHash: varchar("passwordHash", { length: 255 }),
   isBot: boolean("isBot").default(false).notNull(),
   // 封禁标记（被封禁用户无法通过鉴权）
@@ -188,6 +191,8 @@ export const posts = mysqlTable(
     aiScore: int("aiScore").default(0),
     reportId: int("reportId"),
     isPinned: boolean("isPinned").default(false).notNull(),
+    // 广场推广：付费推广到期时间（> now 即在信息流置顶展示「推广」）
+    promotedUntil: timestamp("promotedUntil"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -844,6 +849,49 @@ export const nnTransactions = mysqlTable(
 );
 export type NnTransaction = typeof nnTransactions.$inferSelect;
 export type InsertNnTransaction = typeof nnTransactions.$inferInsert;
+
+// ─── NN 底池（流动性共建）────────────────────────────────────────────────────────
+// 单行配置：储备/已售/单价(每 1 USDT 兑多少 NN)/累计募集。普通用户从底池购买 NN。
+export const nnPool = mysqlTable("nn_pool", {
+  id: int("id").primaryKey(),                                  // 固定 1
+  reserveNN: bigint("reserveNN", { mode: "number" }).default(0).notNull(),    // 可售储备
+  soldNN: bigint("soldNN", { mode: "number" }).default(0).notNull(),          // 已售出
+  priceNnPerUsdt: int("priceNnPerUsdt").default(20).notNull(), // 1 USDT = N 个 NN
+  raisedUsdt: bigint("raisedUsdt", { mode: "number" }).default(0).notNull(),  // 累计募集 USDT
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type NnPool = typeof nnPool.$inferSelect;
+
+// 底池购买订单（USDT 支付，运营确认到账发 NN）
+export const nnPoolOrders = mysqlTable(
+  "nn_pool_orders",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    usdtAmount: int("usdtAmount").notNull(),
+    nnAmount: int("nnAmount").notNull(),
+    status: mysqlEnum("status", ["pending", "confirmed", "cancelled"]).default("pending").notNull(),
+    txHash: varchar("txHash", { length: 120 }),
+    payAddress: varchar("payAddress", { length: 120 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    confirmedAt: timestamp("confirmedAt"),
+  },
+  (t) => [index("idx_poolorder_user").on(t.userId), index("idx_poolorder_status").on(t.status)]
+);
+export type NnPoolOrder = typeof nnPoolOrders.$inferSelect;
+
+// ─── AI 每日用量（会员每日免费额度计数）────────────────────────────────────────
+export const aiDailyUsage = mysqlTable(
+  "ai_daily_usage",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    day: varchar("day", { length: 10 }).notNull(), // YYYY-MM-DD
+    count: int("count").default(0).notNull(),
+  },
+  (t) => [index("idx_aiusage_user_day").on(t.userId, t.day)]
+);
+export type AiDailyUsage = typeof aiDailyUsage.$inferSelect;
 
 // ─── AI Consulting Reports ────────────────────────────────────────────────────
 // Stores AI-generated consulting reports (paid content)
