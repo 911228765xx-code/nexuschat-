@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, name, open_id, role, created_at FROM users ORDER BY created_at ASC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, name, open_id, role, created_at FROM users ORDER BY created_at ASC;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'open_id' in 'field list'"
+  ]
+}

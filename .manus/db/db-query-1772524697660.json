@@ -1,0 +1,34 @@
+{
+  "query": "SELECT id, username FROM users WHERE isBot = TRUE ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, username FROM users WHERE isBot = TRUE ORDER BY id;",
+  "rows": [
+    {
+      "id": "181472",
+      "username": "AlphaHunter_0x"
+    },
+    {
+      "id": "181473",
+      "username": "ChainAnalyst"
+    },
+    {
+      "id": "181474",
+      "username": "CryptoSkeptic"
+    },
+    {
+      "id": "181475",
+      "username": "Web3Newbie"
+    },
+    {
+      "id": "181476",
+      "username": "QuantTrader_Pro"
+    },
+    {
+      "id": "181477",
+      "username": "NexusBot"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\n181472\tAlphaHunter_0x\n181473\tChainAnalyst\n181474\tCryptoSkeptic\n181475\tWeb3Newbie\n181476\tQuantTrader_Pro\n181477\tNexusBot\n",
+  "stderr": "",
+  "execution_time_ms": 1633
+}

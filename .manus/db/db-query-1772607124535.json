@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO app_config (platform, latestVersion, minVersion, downloadUrlAndroid, downloadUrlIos, releaseNotes, isForceUpdate) VALUES ('all', '2.0.0', '1.5.0', 'https://nexuschat.best/download/nexuschat-2.0.0.apk', 'https://apps.apple.com/app/nexuschat', '• 全新 AI 投研引擎，分析速度提升 3x\\n• 新增跟单策略回测功能\\n• 修复若干已知问题', true);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute INSERT INTO app_config (platform, latestVersion, minVersion, downloadUrlAndroid, downloadUrlIos, releaseNotes, isForceUpdate) VALUES ('all', '2.0.0', '1.5.0', 'https://nexuschat.best/download/nexuschat-2.0.0.apk', 'https://apps.apple.com/app/nexuschat', '• 全新 AI 投研引擎，分析速度提升 3x\\n• 新增跟单策略回测功能\\n• 修复若干已知问题', true);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1640
+}

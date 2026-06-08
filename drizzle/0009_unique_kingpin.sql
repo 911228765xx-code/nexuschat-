@@ -1,0 +1,1 @@
+-- referrals table already exists, created by partial migration run

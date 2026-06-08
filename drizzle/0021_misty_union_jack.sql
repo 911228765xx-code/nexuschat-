@@ -1,0 +1,1 @@
+ALTER TABLE `messages` MODIFY COLUMN `messageType` enum('text','image','file','system','redpacket','transfer') NOT NULL DEFAULT 'text';

@@ -1,0 +1,9 @@
+{
+  "query": "\nDELETE FROM message_reactions;\nDELETE FROM messages;\nDELETE FROM group_members;\nDELETE FROM chat_groups;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute \nDELETE FROM message_reactions;\nDELETE FROM messages;\nDELETE FROM group_members;\nDELETE FROM chat_groups;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2453
+}

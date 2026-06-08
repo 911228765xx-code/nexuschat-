@@ -1,0 +1,60 @@
+{
+  "query": "SELECT id, username, avatar FROM users WHERE isBot = 1 ORDER BY id LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, username, avatar FROM users WHERE isBot = 1 ORDER BY id LIMIT 10;",
+  "rows": [
+    {
+      "id": "181472",
+      "username": "AlphaHunter_0x",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_alpha_hunter-ivCHThbjvwergxRpRUSkQa.webp"
+    },
+    {
+      "id": "181473",
+      "username": "ChainAnalyst",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_chain_analyst-gp9BPCse9gmpjfWHX9qEqL.webp"
+    },
+    {
+      "id": "181474",
+      "username": "CryptoSkeptic",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_crypto_skeptic-RxEByDQ9TWhi2LJNiaxAVQ.webp"
+    },
+    {
+      "id": "181475",
+      "username": "Web3Newbie",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_web3_newbie-NWXvi7HhdYk5Zo7p2kBFF5.webp"
+    },
+    {
+      "id": "181476",
+      "username": "QuantTrader_Pro",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_quant_trader-hsMdS2qSicCGgWdp7Q9hLT.webp"
+    },
+    {
+      "id": "181477",
+      "username": "NexusBot",
+      "avatar": "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_nexus_bot-a6Tg9F9sxqv4WG54p8S5Xp.webp"
+    },
+    {
+      "id": "181478",
+      "username": "0xWhale_0qpf",
+      "avatar": "NULL"
+    },
+    {
+      "id": "181479",
+      "username": "CryptoWhale_hl9j",
+      "avatar": "NULL"
+    },
+    {
+      "id": "181480",
+      "username": "Web3Whale_e4yr",
+      "avatar": "NULL"
+    },
+    {
+      "id": "181481",
+      "username": "DeFiWhale_gbvy",
+      "avatar": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tavatar\n181472\tAlphaHunter_0x\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_alpha_hunter-ivCHThbjvwergxRpRUSkQa.webp\n181473\tChainAnalyst\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_chain_analyst-gp9BPCse9gmpjfWHX9qEqL.webp\n181474\tCryptoSkeptic\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_crypto_skeptic-RxEByDQ9TWhi2LJNiaxAVQ.webp\n181475\tWeb3Newbie\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_web3_newbie-NWXvi7HhdYk5Zo7p2kBFF5.webp\n181476\tQuantTrader_Pro\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_quant_trader-hsMdS2qSicCGgWdp7Q9hLT.webp\n181477\tNexusBot\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/bot_nexus_bot-a6Tg9F9sxqv4WG54p8S5Xp.webp\n181478\t0xWhale_0qpf\tNULL\n181479\tCryptoWhale_hl9j\tNULL\n181480\tWeb3Whale_e4yr\tNULL\n181481\tDeFiWhale_gbvy\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1603
+}

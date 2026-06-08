@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, openId, name, role, createdAt FROM users ORDER BY createdAt ASC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2emRsTcaoMfEH1d.6d532d2d6212 --database fYL7bQEV8tj27K63dbYKsc --execute SELECT id, openId, name, role, createdAt FROM users ORDER BY createdAt ASC LIMIT 5;",
+  "rows": [
+    {
+      "id": "181477",
+      "openId": "bot_nexus_bot",
+      "name": "NexusBot 🤖",
+      "role": "user",
+      "createdAt": "2026-02-01 07:58:04"
+    },
+    {
+      "id": "181550",
+      "openId": "silent_Web3Farmer_r0v2_1772524781351_72",
+      "name": "Web3Farmer_r0v2",
+      "role": "user",
+      "createdAt": "2026-02-12 02:59:41"
+    },
+    {
+      "id": "181479",
+      "openId": "silent_CryptoWhale_hl9j_1772524765407_1",
+      "name": "CryptoWhale_hl9j",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:25"
+    },
+    {
+      "id": "181486",
+      "openId": "silent_EthWhale_4iyh_1772524766981_8",
+      "name": "EthWhale_4iyh",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:27"
+    },
+    {
+      "id": "181490",
+      "openId": "silent_Web3Degen_sxby_1772524767877_12",
+      "name": "Web3Degen_sxby",
+      "role": "user",
+      "createdAt": "2026-02-13 02:59:28"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\trole\tcreatedAt\n181477\tbot_nexus_bot\tNexusBot 🤖\tuser\t2026-02-01 07:58:04\n181550\tsilent_Web3Farmer_r0v2_1772524781351_72\tWeb3Farmer_r0v2\tuser\t2026-02-12 02:59:41\n181479\tsilent_CryptoWhale_hl9j_1772524765407_1\tCryptoWhale_hl9j\tuser\t2026-02-13 02:59:25\n181486\tsilent_EthWhale_4iyh_1772524766981_8\tEthWhale_4iyh\tuser\t2026-02-13 02:59:27\n181490\tsilent_Web3Degen_sxby_1772524767877_12\tWeb3Degen_sxby\tuser\t2026-02-13 02:59:28\n",
+  "stderr": "",
+  "execution_time_ms": 1519
+}
