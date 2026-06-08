@@ -718,7 +718,8 @@ export const redPacketClaims = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     messageId: bigint("messageId", { mode: "number" }).notNull(),
-    groupId: int("groupId").notNull(),
+    // 群红包为群 id；私信红包为 null
+    groupId: int("groupId"),
     claimedBy: int("claimedBy").notNull(),
     // 该次抢到的 NP 金额
     amount: int("amount").default(0).notNull(),
@@ -739,7 +740,10 @@ export const redPackets = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     messageId: bigint("messageId", { mode: "number" }).notNull(),
-    groupId: int("groupId").notNull(),
+    // 群红包为群 id；私信红包为 null
+    groupId: int("groupId"),
+    // 私信红包的接收者（群红包为 null）
+    receiverId: int("receiverId"),
     senderId: int("senderId").notNull(),
     totalAmount: int("totalAmount").notNull(),
     totalShares: int("totalShares").notNull(),

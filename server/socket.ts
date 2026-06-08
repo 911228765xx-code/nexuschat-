@@ -293,11 +293,19 @@ export function initSocketIO(httpServer: HttpServer) {
       }
     });
 
-    // Typing indicator
+    // Typing indicator（群聊）
     socket.on("typing", (data: { groupId: number; isTyping: boolean }) => {
       socket.to(`group:${data.groupId}`).emit("user_typing", {
         userId,
         userName,
+        isTyping: data.isTyping,
+      });
+    });
+
+    // Typing indicator（私信）：直接推给接收者
+    socket.on("dm_typing", (data: { receiverId: number; isTyping: boolean }) => {
+      emitToUser(data.receiverId, "dm_typing", {
+        fromUserId: userId,
         isTyping: data.isTyping,
       });
     });
