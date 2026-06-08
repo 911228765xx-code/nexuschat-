@@ -211,6 +211,13 @@
       "when": 1780909574104,
       "tag": "0029_clever_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1780936055792,
+      "tag": "0030_simple_boomerang",
+      "breakpoints": true
     }
   ]
 }

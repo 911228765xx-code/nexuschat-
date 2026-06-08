@@ -3,10 +3,19 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { posts, postLikes, postComments, users } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { createNotification } from "./notificationsRouter";
 import { sanitizeInput } from "../utils/sanitize";
+import { spendNN } from "../token";
+import { TRPCError } from "@trpc/server";
+
+// 广场推广档位（NN 计价，按天）
+export const PROMOTE_PLANS = [
+  { key: "day1", days: 1, priceNN: 30, label: "1 天" },
+  { key: "day3", days: 3, priceNN: 75, label: "3 天" },
+  { key: "day7", days: 7, priceNN: 150, label: "7 天" },
+];
 
 export const postsRouter = router({
   // ─── List posts (public feed) ──────────────────────────────────────────────
@@ -36,6 +45,7 @@ export const postsRouter = router({
           commentCount: posts.commentCount,
           shareCount: posts.shareCount,
           isPinned: posts.isPinned,
+          promotedUntil: posts.promotedUntil,
           reportId: posts.reportId,
           createdAt: posts.createdAt,
           authorId: posts.authorId,
@@ -43,10 +53,17 @@ export const postsRouter = router({
           authorAvatar: users.avatar,
           authorUsername: users.username,
           authorWallet: users.walletAddress,
+          authorProTier: users.proTier,
+          authorProUntil: users.proUntil,
         })
         .from(posts)
         .leftJoin(users, eq(posts.authorId, users.id))
-        .orderBy(desc(posts.isPinned), desc(posts.createdAt))
+        // 推广中(promotedUntil > now)优先置顶，其次置顶贴，再按时间倒序
+        .orderBy(
+          desc(sql`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
+          desc(posts.isPinned),
+          desc(posts.createdAt),
+        )
         .limit(limit + 1)
         .offset(offset);
 
@@ -70,9 +87,34 @@ export const postsRouter = router({
           mediaThumbs: p.mediaThumbs ? (JSON.parse(p.mediaThumbs) as string[]) : [],
           tags: p.tags ? (JSON.parse(p.tags) as string[]) : [],
           isLiked: likedPostIds.has(p.id),
+          isPromoted: !!p.promotedUntil && p.promotedUntil.getTime() > Date.now(),
+          authorBadge: (p.authorProTier && p.authorProTier !== "free" && (!p.authorProUntil || p.authorProUntil.getTime() > Date.now()))
+            ? (p.authorProTier === "pro" ? "Pro" : "Plus") : null,
         })),
         hasMore,
       };
+    }),
+
+  // ─── 广场推广位（付费置顶，NN 计价） ──────────────────────────────────────
+  promotePlans: publicProcedure.query(() => ({ plans: PROMOTE_PLANS })),
+
+  promotePost: protectedProcedure
+    .input(z.object({ postId: z.number(), planKey: z.string() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const [post] = await db.select({ authorId: posts.authorId, promotedUntil: posts.promotedUntil })
+        .from(posts).where(eq(posts.id, input.postId)).limit(1);
+      if (!post || post.authorId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只能推广自己的动态" });
+      const plan = PROMOTE_PLANS.find((p) => p.key === input.planKey);
+      if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "未知推广档位" });
+      const ok = await spendNN(db, ctx.user.id, plan.priceNN, { type: "promote", refType: "post", refId: input.postId, memo: plan.key });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+      const base = post.promotedUntil && post.promotedUntil.getTime() > Date.now() ? post.promotedUntil.getTime() : Date.now();
+      const until = new Date(base + plan.days * 24 * 3600 * 1000);
+      await db.update(posts).set({ promotedUntil: until }).where(eq(posts.id, input.postId));
+      return { ok: true, promotedUntil: until.toISOString() };
     }),
 
   // ─── Create post ───────────────────────────────────────────────────────────

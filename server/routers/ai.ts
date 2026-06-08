@@ -5,8 +5,57 @@ import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { invokeLLM, type Tool, type Message } from "../_core/llm";
 import { rateLimitWrite } from "../rateLimit";
 import { getDb } from "../db";
-import { userWatchlist, priceAlerts, users, appConfig } from "../../drizzle/schema";
+import { userWatchlist, priceAlerts, users, appConfig, consultingReports, aiDailyUsage } from "../../drizzle/schema";
 import { fetchTokenData } from "./research";
+import { spendNN, grantNN } from "../token";
+import { getBenefits } from "../membership";
+
+type AiDb = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+function todayStr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+async function getAiUsedToday(db: AiDb, userId: number): Promise<number> {
+  const [r] = await db.select({ c: aiDailyUsage.count }).from(aiDailyUsage)
+    .where(and(eq(aiDailyUsage.userId, userId), eq(aiDailyUsage.day, todayStr()))).limit(1);
+  return Number(r?.c ?? 0);
+}
+async function incrAiUsedToday(db: AiDb, userId: number): Promise<void> {
+  const day = todayStr();
+  const res: any = await db.update(aiDailyUsage).set({ count: sql`${aiDailyUsage.count} + 1` })
+    .where(and(eq(aiDailyUsage.userId, userId), eq(aiDailyUsage.day, day)));
+  const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
+  if (!affected) { try { await db.insert(aiDailyUsage).values({ userId, day, count: 1 }); } catch { /* race */ } }
+}
+
+// AI 付费研报类型目录（NN 计价）
+const REPORT_TYPES = [
+  { key: "project" as const, name: "项目尽调报告", icon: "cube", priceNN: 50, desc: "对 Web3 项目做基本面 / 团队 / 代币 / 风险尽调", placeholder: "输入项目名称或官网 / 合约，如 Arbitrum" },
+  { key: "security" as const, name: "合约安全速评", icon: "shield-checkmark", priceNN: 80, desc: "对智能合约 / 代币做安全风险速评（非正式审计）", placeholder: "输入合约地址或项目名" },
+  { key: "market" as const, name: "赛道行情研判", icon: "trending-up", priceNN: 60, desc: "对某个赛道 / 币种做行情与趋势研判", placeholder: "输入赛道或币种，如 RWA、Solana 生态" },
+];
+function getReportType(key: string) { return REPORT_TYPES.find((t) => t.key === key); }
+
+function buildReportPrompt(queryType: string, queryText: string): Message[] {
+  const role = queryType === "security"
+    ? "你是资深智能合约安全研究员"
+    : queryType === "market"
+    ? "你是资深加密市场分析师"
+    : "你是资深 Web3 项目尽调分析师";
+  const ask = queryType === "security"
+    ? "围绕：合约/代币概况、常见风险点(权限/增发/蜜罐/可暂停等)、可疑信号、风险等级、给散户的注意事项"
+    : queryType === "market"
+    ? "围绕：赛道/标的概况、当前市场情绪与资金面、主要叙事与催化、风险、关注要点"
+    : "围绕：项目概况、团队与背景、代币经济、产品与进展、竞品、亮点与风险、结论";
+  return [
+    {
+      role: "system",
+      content: `${role}。请基于公开认知生成一份中文研究报告，结构清晰、客观专业，使用 Markdown 小标题。${ask}。不得编造精确数字或承诺收益。报告末尾必须加一行风险提示：本报告由 AI 生成，仅供参考，不构成任何投资建议。\n\n输出格式严格为：\n【摘要】用一句话(40字内)概括结论\n【正文】\n(Markdown 正文)`,
+    },
+    { role: "user", content: `请针对「${queryText}」生成${getReportType(queryType)?.name ?? "研究报告"}。` },
+  ];
+}
 
 // 与 AI 助手对话每次消耗的 NP 积分（默认值，可在 app_config 后台配置覆盖）
 const DEFAULT_AI_CHAT_COST = 5;
@@ -154,16 +203,24 @@ export const aiRouter = router({
 
       const cost = await getAiChatCost();
 
-      // 积分门槛：余额不足则友好提示（作为正常回复返回，前端直接展示）
+      // 会员每日免费额度：用完才按 NP 扣费
+      const benefits = await getBenefits(db, ctx.user.id);
+      const usedToday = await getAiUsedToday(db, ctx.user.id);
+      const freeQuota = benefits.aiDailyFree;
+      const isFree = usedToday < freeQuota;
+      const freeRemaining = Math.max(0, freeQuota - usedToday);
+
       const [row] = await db.select({ np: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
       const balance = Number(row?.np ?? 0);
-      if (balance < cost) {
+      // 非免费且余额不足 → 友好提示
+      if (!isFree && balance < cost) {
         return {
-          reply: `你的积分不足啦 💡\n\n与 AI 投研助手对话每次消耗 **${cost} NP**，你当前余额 **${balance} NP**。\n前往「我的 → 任务中心」完成任务即可获取积分。`,
+          reply: `今日免费额度已用完 💡\n\n你的会员每日 **${freeQuota} 次**免费 AI，已用完；超出每次消耗 **${cost} NP**，当前余额 **${balance} NP**。\n升级会员可提升免费额度，或前往「任务中心」获取积分。`,
           actions: [],
           insufficient: true,
-          cost: cost,
+          cost,
           npRemaining: balance,
+          freeRemaining: 0,
         };
       }
 
@@ -212,7 +269,15 @@ export const aiRouter = router({
         return { reply: "AI 服务暂时不可用，请稍后再试。", actions, insufficient: false, cost: cost, npRemaining: balance };
       }
 
-      // 成功 → 扣除积分（条件更新，防并发扣成负数）
+      // 计入今日用量（无论免费或付费）
+      await incrAiUsedToday(db, ctx.user.id);
+
+      // 免费额度内 → 不扣 NP
+      if (isFree) {
+        return { reply: finalReply, actions, insufficient: false, cost: 0, npRemaining: balance, freeRemaining: Math.max(0, freeRemaining - 1) };
+      }
+
+      // 超出免费 → 扣除积分（条件更新，防并发扣成负数）
       await db.update(users)
         .set({ npPoints: sql`npPoints - ${cost}` })
         .where(and(eq(users.id, ctx.user.id), sql`npPoints >= ${cost}`));
@@ -221,7 +286,7 @@ export const aiRouter = router({
       const [after] = await db.select({ np: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
       const npRemaining = Number(after?.np ?? Math.max(0, balance - cost));
 
-      return { reply: finalReply, actions, insufficient: false, cost: cost, npRemaining };
+      return { reply: finalReply, actions, insufficient: false, cost, npRemaining, freeRemaining: 0 };
     }),
 
   // 当前 AI 单价（供前端展示）
@@ -243,5 +308,86 @@ export const aiRouter = router({
       }
       _costCache = null; // 清缓存，立即生效
       return { success: true, cost: input.cost };
+    }),
+
+  // ─── AI 付费研报（NN 计价） ────────────────────────────────────────────────
+  reportTypes: protectedProcedure.query(() => ({ types: REPORT_TYPES })),
+
+  // 我的研报列表（不含全文）
+  myReports: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select({
+      id: consultingReports.id,
+      queryType: consultingReports.queryType,
+      queryText: consultingReports.queryText,
+      summary: consultingReports.summary,
+      status: consultingReports.status,
+      pricePaid: consultingReports.pricePaid,
+      createdAt: consultingReports.createdAt,
+    }).from(consultingReports)
+      .where(eq(consultingReports.userId, ctx.user.id))
+      .orderBy(desc(consultingReports.createdAt)).limit(50);
+  }),
+
+  // 研报详情（仅本人可看全文）
+  getReport: protectedProcedure
+    .input(z.object({ reportId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const [r] = await db.select().from(consultingReports).where(eq(consultingReports.id, input.reportId)).limit(1);
+      if (!r || r.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "报告不存在" });
+      return r;
+    }),
+
+  // 下单生成研报：扣 NN → 调 LLM 生成 → 完成；失败退款
+  createReport: protectedProcedure
+    .input(z.object({
+      queryType: z.enum(["project", "security", "market"]),
+      queryText: z.string().min(2).max(200),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const type = getReportType(input.queryType);
+      if (!type) throw new TRPCError({ code: "BAD_REQUEST", message: "未知报告类型" });
+
+      // 扣 NN
+      const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+
+      // 建记录（生成中）
+      const [ins] = await db.insert(consultingReports).values({
+        userId: ctx.user.id,
+        queryType: input.queryType,
+        queryText: input.queryText,
+        status: "generating",
+        pricePaid: String(type.priceNN),
+      });
+      const reportId = (ins as any).insertId as number;
+
+      try {
+        const resp = await invokeLLM({ messages: buildReportPrompt(input.queryType, input.queryText) });
+        const raw = resp.choices?.[0]?.message?.content;
+        const text = typeof raw === "string" ? raw.trim() : "";
+        if (!text || text.length < 30) throw new Error("empty");
+        // 解析 摘要/正文
+        let summary = "";
+        let content = text;
+        const m = text.match(/【摘要】([\s\S]*?)【正文】([\s\S]*)/);
+        if (m) { summary = m[1].trim(); content = m[2].trim(); }
+        else { summary = text.replace(/\s+/g, " ").slice(0, 60); }
+        await db.update(consultingReports)
+          .set({ summary: summary.slice(0, 300), fullContent: content, status: "completed" })
+          .where(eq(consultingReports.id, reportId));
+        return { reportId, status: "completed" as const, summary: summary.slice(0, 300), fullContent: content };
+      } catch (err) {
+        // 生成失败：标记失败 + 退还 NN
+        await db.update(consultingReports).set({ status: "failed" }).where(eq(consultingReports.id, reportId));
+        await grantNN(db, ctx.user.id, type.priceNN, { type: "report_refund", refType: "report", refId: reportId, memo: "生成失败退款" });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "报告生成失败，已退还 NN" });
+      }
     }),
 });

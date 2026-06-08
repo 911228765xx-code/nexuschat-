@@ -7,6 +7,7 @@ import { messages, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { emitToUser, getSocketIO } from "./socket";
+import { runDueGroupBots } from "./groupBots";
 import pino from "pino";
 
 const logger = pino({ level: "info" });
@@ -200,6 +201,11 @@ let lastEveningPost = 0;
 async function checkAndPost() {
   const now = Date.now();
   const oneDay = 24 * 60 * 60 * 1000;
+
+  // 付费机器人：到点的行情/活动播报（按各群配置的整点）
+  const d = new Date();
+  runDueGroupBots(d.getHours(), d.getMinutes()).catch((err) =>
+    logger.error({ err }, "BotScheduler: 群机器人定时任务失败"));
 
   if (shouldPostMorning() && now - lastMorningPost > oneDay - 60000) {
     logger.info("BotScheduler: 触发早报任务");
