@@ -11,7 +11,7 @@ import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
 import { groupBots } from "../../drizzle/schema";
 import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward } from "../groupBots";
-import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
+import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
 
@@ -1809,6 +1809,26 @@ export const chatRouter = router({
       }
     }),
 
+  // 我的归属计划（节点等线性释放）
+  getMyVesting: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return getMyVesting(db, ctx.user.id);
+    }),
+
+  // 领取当前可解锁的 NN
+  claimVesting: protectedProcedure
+    .input(z.object({ vestingId: z.number() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const r = await claimVesting(db, ctx.user.id, input.vestingId);
+      if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: "暂无可领取的额度" });
+      return r;
+    }),
+
   // 我的 NN 流水
   getMyNNTransactions: protectedProcedure
     .query(async ({ ctx }) => {
@@ -1926,10 +1946,13 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      const ok = await grantNN(db, o.userId, o.nnAmount, { type: "node", refType: "order", refId: o.id, memo: o.tier });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "金库余额不足，无法发放" });
+      // 节点 NN 走线性归属（按等级锁仓 + 释放），不再一次性发放
+      const tier = getNodeTier(o.tier);
+      const cliff = tier?.cliffMonths ?? 0;
+      const duration = tier?.durationMonths ?? 6;
+      await createVesting(db, o.userId, "node", o.id, o.nnAmount, cliff, duration);
       await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnNodeOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount };
+      return { ok: true, nnGranted: o.nnAmount, vesting: true };
     }),
 
   // 运营：取消订单

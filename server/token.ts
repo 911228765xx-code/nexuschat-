@@ -13,7 +13,7 @@
  */
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
-import { users, nnTransactions, nnPool } from "../drizzle/schema";
+import { users, nnTransactions, nnPool, nnVesting } from "../drizzle/schema";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -80,21 +80,26 @@ export interface NodeTier {
   usdtPrice: number;        // 认购价（USDT）
   nnAmount: number;         // 获得 NN
   governanceWeight: number; // 治理投票权重
+  cliffMonths: number;      // 锁仓期（满后才开始解锁）
+  durationMonths: number;   // 线性释放总时长
   benefits: string[];
 }
 
 export const NN_NODE_TIERS: NodeTier[] = [
   {
     key: "genesis", name: "创世节点", badge: "创世", usdtPrice: 1000, nnAmount: 50000, governanceWeight: 3,
-    benefits: ["治理权重 ×3", "新代币/空投优先", "专属创世标识", "节点分红优先级最高"],
+    cliffMonths: 1, durationMonths: 12,
+    benefits: ["治理权重 ×3", "新代币/空投优先", "专属创世标识", "节点分红优先级最高", "1 月锁仓 + 12 月线性释放"],
   },
   {
     key: "super", name: "超级节点", badge: "超级", usdtPrice: 500, nnAmount: 22000, governanceWeight: 2,
-    benefits: ["治理权重 ×2", "空投优先", "超级节点标识", "节点分红"],
+    cliffMonths: 1, durationMonths: 9,
+    benefits: ["治理权重 ×2", "空投优先", "超级节点标识", "节点分红", "1 月锁仓 + 9 月线性释放"],
   },
   {
     key: "standard", name: "普通节点", badge: "普通", usdtPrice: 100, nnAmount: 4000, governanceWeight: 1,
-    benefits: ["治理权重 ×1", "节点标识", "参与节点分红"],
+    cliffMonths: 0, durationMonths: 6,
+    benefits: ["治理权重 ×1", "节点标识", "参与节点分红", "6 月线性释放"],
   },
 ];
 
@@ -167,6 +172,33 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
 /** 底池初始储备 = 流动性共建桶 15% = 3,150,000 NN */
 export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 15) / 100);
 
+/**
+ * 联合曲线（分档 bonding curve）：随累计售出量上涨，越早买每 USDT 得到的 NN 越多。
+ * rate = 每 1 USDT 兑换的 NN 数量（越往后越少 = 价格越高）。
+ */
+export interface PoolTier { round: number; untilSold: number; rate: number; }
+export const NN_POOL_TIERS: PoolTier[] = [
+  { round: 1, untilSold: 500_000, rate: 25 },     // 早鸟：1 USDT = 25 NN
+  { round: 2, untilSold: 1_500_000, rate: 20 },
+  { round: 3, untilSold: 2_500_000, rate: 16 },
+  { round: 4, untilSold: NN_POOL_SEED, rate: 12 }, // 末轮：1 USDT = 12 NN
+];
+
+/** 按当前累计售出量取所在档（含下一档信息，用于前端展示涨价进度） */
+export function poolRateInfo(soldNN: number) {
+  const idx = NN_POOL_TIERS.findIndex((t) => soldNN < t.untilSold);
+  const i = idx === -1 ? NN_POOL_TIERS.length - 1 : idx;
+  const cur = NN_POOL_TIERS[i];
+  const next = NN_POOL_TIERS[i + 1] ?? null;
+  return {
+    round: cur.round,
+    rate: cur.rate,
+    soldToNextTier: next ? Math.max(0, cur.untilSold - soldNN) : null, // 还差多少售出量进入下一档
+    nextRate: next ? next.rate : null,
+    tiers: NN_POOL_TIERS,
+  };
+}
+
 /** 读取底池（首次自动按播种值初始化单行 id=1） */
 export async function getPool(db: Db) {
   let [p] = await db.select().from(nnPool).where(eq(nnPool.id, 1)).limit(1);
@@ -181,11 +213,17 @@ export async function getPool(db: Db) {
 
 export async function getPoolInfo(db: Db) {
   const p = await getPool(db);
+  const soldNN = Number(p.soldNN);
+  const info = poolRateInfo(soldNN);
   return {
     reserveNN: Number(p.reserveNN),
-    soldNN: Number(p.soldNN),
-    priceNnPerUsdt: p.priceNnPerUsdt,
+    soldNN,
+    priceNnPerUsdt: info.rate,        // 当前档汇率（联合曲线）
     raisedUsdt: Number(p.raisedUsdt),
+    round: info.round,                // 当前轮次
+    nextRate: info.nextRate,          // 下一档汇率（null=末轮）
+    soldToNextTier: info.soldToNextTier,
+    tiers: info.tiers,
   };
 }
 
@@ -204,6 +242,54 @@ export async function confirmPoolPurchase(db: Db, userId: number, usdtAmount: nu
     raisedUsdt: sql`${nnPool.raisedUsdt} + ${usdtAmount}`,
   }).where(eq(nnPool.id, 1));
   return true;
+}
+
+// ─── NN 线性归属（vesting）──────────────────────────────────────────────────────
+const MONTH_MS = 30 * 24 * 3600 * 1000;
+
+/** 截至 now 已归属（解锁）数量：cliff 内为 0，之后按时长线性到满 */
+export function vestedAmount(v: { totalNN: number; startAt: Date; cliffMonths: number; durationMonths: number }, now = Date.now()): number {
+  const elapsedMonths = (now - v.startAt.getTime()) / MONTH_MS;
+  if (elapsedMonths < v.cliffMonths) return 0;
+  if (elapsedMonths >= v.durationMonths) return v.totalNN;
+  return Math.floor((v.totalNN * elapsedMonths) / v.durationMonths);
+}
+
+/** 建立归属计划（不立即发币，按计划逐步 claim） */
+export async function createVesting(db: Db, userId: number, source: string, refId: number | null, totalNN: number, cliffMonths: number, durationMonths: number): Promise<void> {
+  await db.insert(nnVesting).values({
+    userId, source, refId: refId ?? null, totalNN, claimedNN: 0,
+    startAt: new Date(), cliffMonths, durationMonths,
+  });
+}
+
+/** 我的归属计划（含已解锁/可领） */
+export async function getMyVesting(db: Db, userId: number) {
+  const rows = await db.select().from(nnVesting).where(eq(nnVesting.userId, userId)).orderBy(desc(nnVesting.createdAt));
+  return rows.map((v) => {
+    const vested = vestedAmount(v);
+    const claimable = Math.max(0, vested - v.claimedNN);
+    return {
+      id: v.id, source: v.source,
+      totalNN: v.totalNN, claimedNN: v.claimedNN,
+      vestedNN: vested, claimableNN: claimable,
+      startAt: v.startAt.toISOString(), cliffMonths: v.cliffMonths, durationMonths: v.durationMonths,
+      done: v.claimedNN >= v.totalNN,
+    };
+  });
+}
+
+/** 领取某计划当前可解锁部分 → 发 NN，更新 claimed */
+export async function claimVesting(db: Db, userId: number, vestingId: number): Promise<{ ok: boolean; claimed: number }> {
+  const [v] = await db.select().from(nnVesting).where(eq(nnVesting.id, vestingId)).limit(1);
+  if (!v || v.userId !== userId) return { ok: false, claimed: 0 };
+  const vested = vestedAmount(v);
+  const claimable = Math.max(0, vested - v.claimedNN);
+  if (claimable <= 0) return { ok: false, claimed: 0 };
+  const ok = await grantNN(db, userId, claimable, { type: "vesting_claim", refType: "vesting", refId: v.id, memo: v.source });
+  if (!ok) return { ok: false, claimed: 0 };
+  await db.update(nnVesting).set({ claimedNN: sql`${nnVesting.claimedNN} + ${claimable}` }).where(eq(nnVesting.id, v.id));
+  return { ok: true, claimed: claimable };
 }
 
 /** 用户 NN 流水（最近 N 条） */
