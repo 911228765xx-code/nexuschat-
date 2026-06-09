@@ -5,13 +5,13 @@ import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { emitToUser } from "../socket";
+import { emitToUser, getSocketIO } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
 import { groupBots } from "../../drizzle/schema";
 import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward } from "../groupBots";
-import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
+import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
 
@@ -286,12 +286,29 @@ export const chatRouter = router({
         replyToId: input.replyToId ?? undefined,
         expiresAt,
       });
+      const messageId = (result as any).insertId;
+      // 实时广播给群内在线成员（客户端 5s 轮询作为兜底）
+      try {
+        getSocketIO()?.to(`group:${input.groupId}`).emit("new_message", {
+          id: messageId,
+          groupId: input.groupId,
+          senderId: ctx.user.id,
+          senderName: (ctx.user as any).name ?? (ctx.user as any).username ?? null,
+          senderAvatar: (ctx.user as any).avatar ?? null,
+          content: sanitizeInput(input.content, 5000),
+          messageType: input.messageType,
+          mediaUrl: input.mediaUrl ?? null,
+          durationSeconds: input.durationSeconds ?? null,
+          replyToId: input.replyToId ?? null,
+          createdAt: new Date().toISOString(),
+        });
+      } catch { /* 广播失败不影响落库 */ }
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
       }
-      return { messageId: (result as any).insertId };
+      return { messageId };
     }),
 
   // ─── DM: Send a direct message ─────────────────────────────────────────────
@@ -540,9 +557,14 @@ export const chatRouter = router({
   // Get members of a group
   getGroupMembers: protectedProcedure
     .input(z.object({ groupId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      // 隐私：仅本群成员可查看成员名单，避免非成员窥探"某人加入了哪些群"
+      const [me] = await db.select({ id: groupMembers.id }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!me) return [];
       return db
         .select({
           id: users.id,
@@ -1809,6 +1831,26 @@ export const chatRouter = router({
       }
     }),
 
+  // 我的归属计划（节点等线性释放）
+  getMyVesting: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return getMyVesting(db, ctx.user.id);
+    }),
+
+  // 领取当前可解锁的 NN
+  claimVesting: protectedProcedure
+    .input(z.object({ vestingId: z.number() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const r = await claimVesting(db, ctx.user.id, input.vestingId);
+      if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: "暂无可领取的额度" });
+      return r;
+    }),
+
   // 我的 NN 流水
   getMyNNTransactions: protectedProcedure
     .query(async ({ ctx }) => {
@@ -1926,10 +1968,13 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      const ok = await grantNN(db, o.userId, o.nnAmount, { type: "node", refType: "order", refId: o.id, memo: o.tier });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "金库余额不足，无法发放" });
+      // 节点 NN 走线性归属（按等级锁仓 + 释放），不再一次性发放
+      const tier = getNodeTier(o.tier);
+      const cliff = tier?.cliffMonths ?? 0;
+      const duration = tier?.durationMonths ?? 6;
+      await createVesting(db, o.userId, "node", o.id, o.nnAmount, cliff, duration);
       await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnNodeOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount };
+      return { ok: true, nnGranted: o.nnAmount, vesting: true };
     }),
 
   // 运营：取消订单

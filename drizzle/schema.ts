@@ -893,6 +893,25 @@ export const aiDailyUsage = mysqlTable(
 );
 export type AiDailyUsage = typeof aiDailyUsage.$inferSelect;
 
+// ─── NN 线性归属（节点认购等按周期解锁，用户自助 claim）────────────────────────────
+export const nnVesting = mysqlTable(
+  "nn_vesting",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    source: varchar("source", { length: 20 }).notNull(), // node/team/...
+    refId: int("refId"),                                 // 关联订单 id
+    totalNN: int("totalNN").notNull(),
+    claimedNN: int("claimedNN").default(0).notNull(),
+    startAt: timestamp("startAt").notNull(),
+    cliffMonths: int("cliffMonths").default(0).notNull(),
+    durationMonths: int("durationMonths").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_vesting_user").on(t.userId)]
+);
+export type NnVesting = typeof nnVesting.$inferSelect;
+
 // ─── AI Consulting Reports ────────────────────────────────────────────────────
 // Stores AI-generated consulting reports (paid content)
 export const consultingReports = mysqlTable(

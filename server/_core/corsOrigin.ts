@@ -26,6 +26,8 @@ export function isAllowedOrigin(origin: string | undefined | null): boolean {
   try {
     const host = new URL(origin).hostname;
     if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+    // 主域及其全部子域（含备用直连源站子域，如 api-hk.nexuschat.best）
+    if (host === "nexuschat.best" || host.endsWith(".nexuschat.best")) return true;
   } catch {
     return false;
   }
