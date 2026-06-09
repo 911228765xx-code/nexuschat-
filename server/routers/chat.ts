@@ -557,9 +557,14 @@ export const chatRouter = router({
   // Get members of a group
   getGroupMembers: protectedProcedure
     .input(z.object({ groupId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      // 隐私：仅本群成员可查看成员名单，避免非成员窥探"某人加入了哪些群"
+      const [me] = await db.select({ id: groupMembers.id }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!me) return [];
       return db
         .select({
           id: users.id,
