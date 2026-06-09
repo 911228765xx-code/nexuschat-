@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { emitToUser } from "../socket";
+import { emitToUser, getSocketIO } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
@@ -286,12 +286,29 @@ export const chatRouter = router({
         replyToId: input.replyToId ?? undefined,
         expiresAt,
       });
+      const messageId = (result as any).insertId;
+      // 实时广播给群内在线成员（客户端 5s 轮询作为兜底）
+      try {
+        getSocketIO()?.to(`group:${input.groupId}`).emit("new_message", {
+          id: messageId,
+          groupId: input.groupId,
+          senderId: ctx.user.id,
+          senderName: (ctx.user as any).name ?? (ctx.user as any).username ?? null,
+          senderAvatar: (ctx.user as any).avatar ?? null,
+          content: sanitizeInput(input.content, 5000),
+          messageType: input.messageType,
+          mediaUrl: input.mediaUrl ?? null,
+          durationSeconds: input.durationSeconds ?? null,
+          replyToId: input.replyToId ?? null,
+          createdAt: new Date().toISOString(),
+        });
+      } catch { /* 广播失败不影响落库 */ }
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
       }
-      return { messageId: (result as any).insertId };
+      return { messageId };
     }),
 
   // ─── DM: Send a direct message ─────────────────────────────────────────────
