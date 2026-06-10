@@ -14,6 +14,7 @@ import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, r
 import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
+import { enforceContent, reviewMessageAsync } from "../moderation";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -275,6 +276,8 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertGroupMember(db, input.groupId, ctx.user.id);
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
+      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
@@ -307,6 +310,8 @@ export const chatRouter = router({
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
+        // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
+        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       }
       return { messageId };
     }),
@@ -326,6 +331,8 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
+      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         senderId: ctx.user.id,
@@ -351,6 +358,10 @@ export const chatRouter = router({
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
+      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
+      if (input.messageType === "text") {
+        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+      }
       return { messageId };
     }),
 

@@ -916,6 +916,21 @@ export const nnVesting = mysqlTable(
 );
 export type NnVesting = typeof nnVesting.$inferSelect;
 
+// ─── 内容违规记录（毒品/赌博/贩卖等违禁内容拦截 + 累犯封禁）──────────────────────
+export const contentViolations = mysqlTable(
+  "content_violations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    category: varchar("category", { length: 20 }).notNull(), // drugs/gambling/trafficking/...
+    source: varchar("source", { length: 20 }).notNull(),     // group/dm/post
+    snippet: varchar("snippet", { length: 200 }),            // 命中内容片段（截断）
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_violation_user").on(t.userId, t.createdAt)]
+);
+export type ContentViolation = typeof contentViolations.$inferSelect;
+
 // ─── AI Consulting Reports ────────────────────────────────────────────────────
 // Stores AI-generated consulting reports (paid content)
 export const consultingReports = mysqlTable(

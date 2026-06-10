@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions, appConfig } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -253,6 +253,31 @@ export const userRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
       await db.update(users).set({ isBanned: input.banned }).where(eq(users.id, input.userId));
       return { success: true, banned: input.banned };
+    }),
+
+  // ─── 管理员：内容违规记录（毒品/赌博/贩卖 等拦截记录，供审查封号）──────────
+  adminListViolations: adminProcedure
+    .input(z.object({ userId: z.number().optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: contentViolations.id,
+          userId: contentViolations.userId,
+          category: contentViolations.category,
+          source: contentViolations.source,
+          snippet: contentViolations.snippet,
+          createdAt: contentViolations.createdAt,
+          userName: users.name,
+          isBanned: users.isBanned,
+        })
+        .from(contentViolations)
+        .leftJoin(users, eq(users.id, contentViolations.userId))
+        .where(input?.userId ? eq(contentViolations.userId, input.userId) : undefined)
+        .orderBy(desc(contentViolations.createdAt))
+        .limit(100);
+      return rows;
     }),
 
   // ─── 管理员：任务奖励配置 ─────────────────────────────────────────

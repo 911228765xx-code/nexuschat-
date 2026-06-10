@@ -288,6 +288,13 @@
       "when": 1781058244990,
       "tag": "0040_sharp_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1781058860416,
+      "tag": "0041_cynical_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }
