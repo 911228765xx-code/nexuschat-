@@ -103,6 +103,20 @@ export const referralRouter = router({
     }));
   }),
 
+  // ─── 我的绑定状态（是否已被邀请 + 邀请人是谁）────────────────────────────────
+  bindStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { bound: false };
+    const [r] = await db
+      .select({ referrerId: referrals.referrerId })
+      .from(referrals).where(eq(referrals.inviteeId, ctx.user!.id)).limit(1);
+    if (!r) return { bound: false };
+    const [ref] = await db
+      .select({ name: users.name, username: users.username })
+      .from(users).where(eq(users.id, r.referrerId)).limit(1);
+    return { bound: true, referrerName: ref?.name ?? ref?.username ?? `用户 #${r.referrerId}` };
+  }),
+
   // ─── Record a referral (called when invitee signs up with code) ───────────
   recordReferral: protectedProcedure
     .input(z.object({ inviteCode: z.string().max(30) }))
