@@ -452,6 +452,7 @@ export const chatRouter = router({
       .select({
         id: messages.id,
         content: messages.content,
+        messageType: messages.messageType,
         createdAt: messages.createdAt,
         senderId: messages.senderId,
         receiverId: messages.receiverId,
@@ -516,6 +517,7 @@ export const chatRouter = router({
         name: u.name ?? u.username ?? "User",
         avatar: u.avatar,
         lastMessage: convMap.get(u.id)?.content ?? "",
+        lastMessageType: convMap.get(u.id)?.messageType ?? "text",
         lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
         isMine: convMap.get(u.id)?.senderId === myId,
         unreadCount: unreadMap.get(u.id) ?? 0,
@@ -545,7 +547,7 @@ export const chatRouter = router({
     // Fetch latest message for all groups in ONE pass (avoid N+1).
     // 1) max(id) per group  2) join back to get its content/sender.
     const groupIds = groups.map((g) => g.id);
-    const latestByGroup = new Map<number, { content: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
+    const latestByGroup = new Map<number, { content: string; messageType: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
     if (groupIds.length > 0) {
       const latest = db
         .select({
@@ -560,6 +562,7 @@ export const chatRouter = router({
         .select({
           groupId: messages.groupId,
           content: messages.content,
+          messageType: messages.messageType,
           createdAt: messages.createdAt,
           senderName: users.name,
           senderUsername: users.username,
@@ -576,6 +579,7 @@ export const chatRouter = router({
       return {
         ...g,
         lastMessage: m?.content ?? g.description ?? '',
+        lastMessageType: m?.messageType ?? "text",
         lastMessageAt: m?.createdAt ?? g.updatedAt,
         lastSender: m?.senderName ?? m?.senderUsername ?? null,
       };
