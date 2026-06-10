@@ -112,6 +112,25 @@ export const curationStakes = mysqlTable("curation_stakes", {
 ]);
 export type CurationStake = typeof curationStakes.$inferSelect;
 
+// ─── TGE：NP→NN 单向兑换（默认关闭，临近发币由管理员快照+开启）────────────────────
+// 单例配置（id=1）：nnPool=分给 NP 兑换的 NN 总量；按 NP 持有量快照 pro-rata 兑换。
+export const tgeConfig = mysqlTable("tge_config", {
+  id: int("id").primaryKey(),               // 固定 1
+  enabled: boolean("enabled").default(false).notNull(),
+  nnPool: bigint("nnPool", { mode: "number" }).default(0).notNull(),
+  totalNpSnapshot: bigint("totalNpSnapshot", { mode: "number" }).default(0).notNull(),
+  snapshotAt: timestamp("snapshotAt"),
+});
+// 每用户快照 + 领取记录
+export const tgeClaims = mysqlTable("tge_claims", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  npSnapshot: bigint("npSnapshot", { mode: "number" }).notNull(),
+  nnAmount: bigint("nnAmount", { mode: "number" }).default(0).notNull(),
+  claimed: boolean("claimed").default(false).notNull(),
+  claimedAt: timestamp("claimedAt"),
+}, (t) => [uniqueIndex("uniq_tge_user").on(t.userId)]);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
