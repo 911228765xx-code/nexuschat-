@@ -8,6 +8,7 @@ import {
   timestamp,
   varchar,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -35,10 +36,25 @@ export const users = mysqlTable("users", {
   isBanned: boolean("isBanned").default(false).notNull(),
   // Deterministic referral code (see referral router). Indexed for O(1) reverse lookup.
   inviteCode: varchar("inviteCode", { length: 32 }),
+  // 声誉/Alpha 分（NP 模型：来自他人认可，参与产出加成、治灌水；Phase 2/3 聚合填充）
+  reputation: bigint("reputation", { mode: "number" }).default(0).notNull(),
+  // 连续签到：连签天数 + 最近签到日（YYYY-MM-DD, UTC），用于阶梯签到奖励
+  signinStreak: int("signinStreak").default(0).notNull(),
+  lastSigninYmd: varchar("lastSigninYmd", { length: 10 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 }, (t) => [index("idx_users_invite_code").on(t.inviteCode)]);
+
+// ─── NP 每日产出台账（防刷：按号龄分级的每日 NP 产出上限）────────────────────
+// 每天每用户一行，记录当天已发放的 NP 总额；creditNp() 据此封顶。
+export const userDailyNp = mysqlTable("user_daily_np", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  ymd: varchar("ymd", { length: 10 }).notNull(), // YYYY-MM-DD (UTC)
+  earned: bigint("earned", { mode: "number" }).default(0).notNull(),
+}, (t) => [uniqueIndex("uniq_daily_np_user_ymd").on(t.userId, t.ymd)]);
+export type UserDailyNp = typeof userDailyNp.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

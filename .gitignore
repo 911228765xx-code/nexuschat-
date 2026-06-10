@@ -113,3 +113,6 @@ temp/
 # large archives / build artifacts
 *.zip
 nexuschat.zip
+
+# NP 积分模型设计文档（含合规讨论，勿入公开仓库）
+NP积分模型_*.md

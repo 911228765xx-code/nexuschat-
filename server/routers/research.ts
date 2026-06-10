@@ -9,6 +9,7 @@ import { invokeLLM } from "../_core/llm";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { sanitizeInput } from "../utils/sanitize";
+import { awardTaskEvent } from "./user";
 
 // ─── CoinGecko Data Fetching ─────────────────────────────────────────────────
 
@@ -325,6 +326,9 @@ export const researchRouter = router({
         riskLevel: riskLevel,
         nxcCost: input.mode === "quick" ? 5 : 10,
       });
+
+      // NP 产出：生成 AI 投研报告（每日上限内）
+      void awardTaskEvent(db, ctx.user.id, "research_daily");
 
       return {
         reportId: (result as any).insertId,

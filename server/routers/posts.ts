@@ -6,6 +6,7 @@ import { posts, postLikes, postComments, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { createNotification } from "./notificationsRouter";
+import { awardTaskEvent } from "./user";
 import { sanitizeInput } from "../utils/sanitize";
 import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
@@ -143,6 +144,9 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
+      // NP 产出：发布动态（每日上限内）
+      void awardTaskEvent(db, ctx.user.id, "post_daily");
+
       return { postId: (result as any).insertId as number };
     }),
 
@@ -184,6 +188,10 @@ export const postsRouter = router({
           .where(eq(posts.id, input.postId))
           .limit(1);
         if (post) {
+          // NP 产出：内容获赞奖励给作者（不含给自己点赞）
+          if (post.authorId !== ctx.user.id) {
+            void awardTaskEvent(db, post.authorId, "like_received");
+          }
           const [liker] = await db
             .select({ name: users.name, avatar: users.avatar })
             .from(users)
@@ -299,6 +307,9 @@ export const postsRouter = router({
         authorId: ctx.user.id,
         content: sanitizeInput(input.content, 1000),
       });
+
+      // NP 产出：有效评论（每日上限内）
+      void awardTaskEvent(db, ctx.user.id, "comment_made");
 
       // Increment comment count
       await db

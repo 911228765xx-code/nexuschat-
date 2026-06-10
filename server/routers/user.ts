@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -24,10 +24,58 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 
+// ─── NP 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
+/** UTC 日期 YYYY-MM-DD */
+function ymdUtc(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+/** 当天 UTC 00:00 的 Date */
+function startOfUtcDay(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
+/** 每日 NP 产出上限（号龄分级，防刷）：新号 <7 天 200/天，否则 2000/天 */
+function dailyNpCap(createdAt: Date | string): number {
+  const ageDays = (Date.now() - new Date(createdAt).getTime()) / 86_400_000;
+  return ageDays < 7 ? 200 : 2000;
+}
+/** 连续签到奖励：第 1 天 10，逐日递增，约连签 7 天封顶 80 */
+function signinStreakReward(streak: number): number {
+  return Math.min(80, 10 + Math.max(0, streak - 1) * 12);
+}
+/**
+ * 在事务内发放 NP，capped=true 时受每日产出上限约束（按号龄分级，封顶削减）。
+ * 返回实际发放额（可能小于 amount）。一次性里程碑任务用 capped=false 不受限。
+ */
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+async function creditNp(
+  tx: Tx, userId: number, amount: number, capped: boolean,
+): Promise<number> {
+  if (amount <= 0) return 0;
+  let grant = amount;
+  if (capped) {
+    const [u] = await tx.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!u) return 0;
+    const cap = dailyNpCap(u.createdAt);
+    const ymd = ymdUtc();
+    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp)
+      .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd))).limit(1);
+    const earned = row?.earned ?? 0;
+    grant = Math.min(amount, Math.max(0, cap - earned));
+    if (grant <= 0) return 0;
+    await tx.insert(userDailyNp).values({ userId, ymd, earned: grant })
+      .onDuplicateKeyUpdate({ set: { earned: sql`earned + ${grant}` } });
+  }
+  await tx.update(users).set({ npPoints: sql`npPoints + ${grant}` }).where(eq(users.id, userId));
+  return grant;
+}
+
 // ─── Task definitions ─────────────────────────────────────────────────────────
+// daily?: 每日可完成次数（设置后为"每日可重复任务"，发放受每日产出上限约束）。
+// 不设 daily 的为一次性里程碑任务，受 maxCompletions 限制、不受每日上限约束。
+// eventOnly: 仅服务端事件触发（真实发帖/获赞等），禁止客户端 completeTask 认领，防白嫖。
 export const TASK_DEFINITIONS: Record<
   string,
-  { label: string; description: string; npReward: number; maxCompletions: number }
+  { label: string; description: string; npReward: number; maxCompletions: number; daily?: number; eventOnly?: boolean }
 > = {
   connect_wallet: {
     label: "连接钱包",
@@ -60,16 +108,50 @@ export const TASK_DEFINITIONS: Record<
     maxCompletions: 1,
   },
   daily_login: {
-    label: "每日登录",
-    description: "每天登录 NexusChat",
+    label: "每日签到",
+    description: "每天签到，连续签到奖励递增（封顶 80 NP）",
     npReward: 10,
-    maxCompletions: 999,
+    maxCompletions: 999999,
+    daily: 1,
   },
   invite_friend: {
     label: "邀请好友",
     description: "邀请一位好友加入 NexusChat",
     npReward: 150,
     maxCompletions: 10,
+  },
+  // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
+  post_daily: {
+    label: "发布动态",
+    description: "在广场发布优质动态（每日 3 次）",
+    npReward: 30,
+    maxCompletions: 999999,
+    daily: 3,
+    eventOnly: true,
+  },
+  like_received: {
+    label: "内容获赞",
+    description: "你的内容被点赞（每日 20 次）",
+    npReward: 5,
+    maxCompletions: 999999,
+    daily: 20,
+    eventOnly: true,
+  },
+  comment_made: {
+    label: "有效评论",
+    description: "发表有价值的评论（每日 10 次）",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 10,
+    eventOnly: true,
+  },
+  research_daily: {
+    label: "AI 投研报告",
+    description: "生成 AI 投研报告（每日 3 次）",
+    npReward: 50,
+    maxCompletions: 999999,
+    daily: 3,
+    eventOnly: true,
   },
 };
 
@@ -328,15 +410,23 @@ export const userRouter = router({
       .where(eq(userTasks.userId, ctx.user.id))
       .orderBy(desc(userTasks.completedAt));
 
-    // Count completions per task type
+    // Count completions per task type (lifetime + today, UTC)
     const completionCount: Record<string, number> = {};
+    const todayCount: Record<string, number> = {};
+    const todayStart = startOfUtcDay(ymdUtc());
     completedTasks.forEach((t) => {
       completionCount[t.taskType] = (completionCount[t.taskType] ?? 0) + 1;
+      if (t.completedAt && new Date(t.completedAt) >= todayStart) {
+        todayCount[t.taskType] = (todayCount[t.taskType] ?? 0) + 1;
+      }
     });
 
     return Object.entries(TASK_DEFINITIONS).map(([taskType, def]) => {
       const completed = completionCount[taskType] ?? 0;
-      const isCompleted = completed >= def.maxCompletions;
+      const todayDone = todayCount[taskType] ?? 0;
+      const isDaily = typeof def.daily === "number";
+      // 每日任务：今日次数用尽即"已完成"（次日重置）；一次性任务：看 maxCompletions
+      const isCompleted = isDaily ? todayDone >= (def.daily as number) : completed >= def.maxCompletions;
       const lastCompleted = completedTasks.find((t) => t.taskType === taskType);
       const npReward = Number.isFinite(rewardOverrides[taskType]) ? rewardOverrides[taskType] : def.npReward;
       return {
@@ -347,6 +437,10 @@ export const userRouter = router({
         maxCompletions: def.maxCompletions,
         completions: completed,
         isCompleted,
+        // 前端用：每日任务次数 + 今日进度；事件型任务不显示"领取"按钮（系统自动发放）
+        daily: def.daily ?? null,
+        eventOnly: def.eventOnly ?? false,
+        todayCompletions: todayDone,
         lastCompletedAt: lastCompleted?.completedAt ?? null,
         totalEarned: completedTasks
           .filter((t) => t.taskType === taskType)
@@ -365,6 +459,8 @@ export const userRouter = router({
 
       const def = TASK_DEFINITIONS[input.taskType];
       if (!def) throw new Error("Unknown task type");
+      // 事件型任务（发帖/获赞等）只能由服务端真实事件触发，禁止客户端认领
+      if (def.eventOnly) throw new TRPCError({ code: "FORBIDDEN", message: "该任务由系统自动发放" });
 
       return _completeTask(ctx.user.id, input.taskType, db);
     }),
@@ -549,52 +645,63 @@ async function _completeTask(
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
 
   const overrides = await getTaskRewardOverrides(db);
-  const reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
+  let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
 
-  // Check existing completions
-  const existing = await db
-    .select({ id: userTasks.id })
-    .from(userTasks)
-    .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType)));
-
-  if (existing.length >= def.maxCompletions) {
-    return { success: false, npEarned: 0, alreadyCompleted: true };
-  }
-
-  // For daily_login, check if already completed today
-  if (taskType === "daily_login") {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayCompletion = await db
+  // 每日可重复任务（def.daily）：按"当天完成次数"限频；一次性任务：按 maxCompletions 限频
+  const isDaily = typeof def.daily === "number";
+  if (isDaily) {
+    const todayStart = startOfUtcDay(ymdUtc());
+    const [{ c: todayCount } = { c: 0 }] = await db
+      .select({ c: count() })
+      .from(userTasks)
+      .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType), gte(userTasks.completedAt, todayStart)));
+    if (Number(todayCount) >= (def.daily as number)) {
+      return { success: false, npEarned: 0, alreadyCompleted: true };
+    }
+  } else {
+    const existing = await db
       .select({ id: userTasks.id })
       .from(userTasks)
-      .where(
-        and(
-          eq(userTasks.userId, userId),
-          eq(userTasks.taskType, taskType),
-          gte(userTasks.completedAt, today)
-        )
-      )
-      .limit(1);
-
-    if (todayCompletion.length > 0) {
+      .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType)));
+    if (existing.length >= def.maxCompletions) {
       return { success: false, npEarned: 0, alreadyCompleted: true };
     }
   }
 
-  // Record completion + credit points atomically (avoid recording a reward
-  // that never lands, or crediting twice if the process dies mid-way).
+  // 连续签到：按 lastSigninYmd 计算连签天数，奖励递增封顶
+  let newStreak = 0;
+  if (taskType === "daily_login") {
+    const [u] = await db
+      .select({ streak: users.signinStreak, last: users.lastSigninYmd })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    const today = ymdUtc();
+    const yesterday = ymdUtc(new Date(Date.now() - 86_400_000));
+    newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
+    reward = signinStreakReward(newStreak);
+  }
+
+  // 发放：每日可重复任务 + 签到受每日产出上限约束；一次性里程碑不受限。
+  const capped = isDaily;
+  let granted = 0;
   await db.transaction(async (tx) => {
-    await tx.insert(userTasks).values({
-      userId,
-      taskType,
-      npEarned: reward,
-    });
-    await tx
-      .update(users)
-      .set({ npPoints: sql`npPoints + ${reward}` })
-      .where(eq(users.id, userId));
+    if (taskType === "daily_login") {
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
+    }
+    granted = await creditNp(tx, userId, reward, capped);
+    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
 
-  return { success: true, npEarned: reward, alreadyCompleted: false };
+  return { success: true, npEarned: granted, alreadyCompleted: false };
+}
+
+/**
+ * 服务端事件触发任务发放（供 posts / ai 等 router 调用）。
+ * fire-and-forget 用：失败不影响主流程。eventOnly 任务的唯一合法入口。
+ */
+export async function awardTaskEvent(db: Db, userId: number, taskType: string): Promise<void> {
+  try {
+    await _completeTask(userId, taskType, db);
+  } catch {
+    // 任务发放失败不阻断主流程
+  }
 }
