@@ -500,15 +500,26 @@ export const chatRouter = router({
       .groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map(r => [r.senderId, Number(r.cnt)]));
 
-    return partnerUsers.map(u => ({
-      userId: u.id,
-      name: u.name ?? u.username ?? "User",
-      avatar: u.avatar,
-      lastMessage: convMap.get(u.id)?.content ?? "",
-      lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
-      isMine: convMap.get(u.id)?.senderId === myId,
-      unreadCount: unreadMap.get(u.id) ?? 0,
-    }));
+    // 已"删除"的会话过滤：clearedBeforeId >= 最新消息 id 的 dm 会话不显示（有新消息会重新出现）
+    const prefRows = await db
+      .select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId })
+      .from(conversationPrefs).where(eq(conversationPrefs.userId, myId));
+    const clearedMap = new Map<number, number>();
+    for (const p of prefRows) {
+      if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+    }
+
+    return partnerUsers
+      .filter(u => (convMap.get(u.id)?.id ?? 0) > (clearedMap.get(u.id) ?? 0))
+      .map(u => ({
+        userId: u.id,
+        name: u.name ?? u.username ?? "User",
+        avatar: u.avatar,
+        lastMessage: convMap.get(u.id)?.content ?? "",
+        lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
+        isMine: convMap.get(u.id)?.senderId === myId,
+        unreadCount: unreadMap.get(u.id) ?? 0,
+      }));
   }),
 
   // Get user's joined groups with latest message preview
