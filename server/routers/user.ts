@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte, count, like, or, ne } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, like, or, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -512,7 +512,7 @@ export const userRouter = router({
       return { ok: true };
     }),
 
-  // ─── 段位状态（累积价值分 / 当前段位 / 加成 / 日俸 / 下一段进度）────────────────
+  // ─── 段位状态（累积价值分 / 当前段位 / 加成 / 日俸 / 下一段进度 / 我的网体）──────
   getRankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
@@ -522,6 +522,41 @@ export const userRouter = router({
     const score = u?.score ?? 0;
     const tier = u?.tier ?? 0;
     const next = tier < RANK_TIERS.length ? RANK_TIERS[tier] : null; // 下一段（tier 为 0..10）
+
+    // 我的网体：沿 active 邀请关系向下 BFS（无限层级，安全上限 5 万节点）
+    const refRows = await db
+      .select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId })
+      .from(referrals).where(eq(referrals.status, "active"));
+    const children = new Map<number, number[]>();
+    for (const r of refRows) {
+      if (!children.has(r.referrerId)) children.set(r.referrerId, []);
+      children.get(r.referrerId)!.push(r.inviteeId);
+    }
+    const team: number[] = [];
+    const seen = new Set<number>([ctx.user.id]);
+    let frontier = children.get(ctx.user.id) ?? [];
+    let directCount = frontier.length;
+    while (frontier.length > 0 && team.length < 50_000) {
+      const nextFrontier: number[] = [];
+      for (const id of frontier) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        team.push(id);
+        for (const c of children.get(id) ?? []) nextFrontier.push(c);
+      }
+      frontier = nextFrontier;
+    }
+    // 网体今日活跃数（今天有任务产出的成员）
+    let teamActiveToday = 0;
+    if (team.length > 0) {
+      const todayStart = startOfUtcDay(ymdUtc());
+      const batch = team.slice(0, 10_000); // 安全上限
+      const [{ c: activeC = 0 } = { c: 0 }] = await db
+        .select({ c: sql<number>`COUNT(DISTINCT ${userTasks.userId})` })
+        .from(userTasks)
+        .where(and(inArray(userTasks.userId, batch), gte(userTasks.completedAt, todayStart)));
+      teamActiveToday = Number(activeC);
+    }
     return {
       score,
       tier,
@@ -531,6 +566,10 @@ export const userRouter = router({
       dailyBonus: tierDaily(tier),
       nextTierName: next?.name ?? null,
       nextTierAt: next?.min ?? null,
+      // 我的网体仪表盘
+      teamSize: team.length,
+      teamDirect: directCount,
+      teamActiveToday,
       tiers: RANK_TIERS.map((t, i) => ({ idx: i + 1, name: t.name, min: t.min, bonusPct: Math.round(t.bonus * 100), daily: t.daily })),
     };
   }),
