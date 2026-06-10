@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { spendNN } from "./token";
+import { awardMembershipShare, awardReferrerMilestone } from "./referralRewards";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -105,5 +106,10 @@ export async function buyMembership(db: Db, userId: number, tierKey: ProTier, mo
   const base = sameActiveTier ? u!.proUntil!.getTime() : Date.now();
   const proUntil = new Date(base + months * 30 * 24 * 3600 * 1000);
   await db.update(users).set({ proTier: tierKey, proUntil }).where(eq(users.id, userId));
+
+  // 裂变奖励：消费分成（每次续费）+ 首次开会员里程碑奖（一次性），给直接邀请人
+  void awardMembershipShare(db, userId, tierKey);
+  void awardReferrerMilestone(db, userId, `membership_${tierKey}`, tierKey === "pro" ? 2000 : 800);
+
   return { tier: tierKey, proUntil: proUntil.toISOString() };
 }

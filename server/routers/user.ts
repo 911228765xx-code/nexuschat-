@@ -23,6 +23,7 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 }
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
+import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 
 // ─── NP 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
 /** UTC 日期 YYYY-MM-DD */
@@ -47,26 +48,40 @@ function signinStreakReward(streak: number): number {
  * 返回实际发放额（可能小于 amount）。一次性里程碑任务用 capped=false 不受限。
  */
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+/**
+ * 在事务内发放 NP。capped=true（每日可重复任务）时：
+ *  - base 受每日产出上限约束（号龄分级），仅 base 计入每日台账；
+ *  - 段位加成 + 声誉加成只乘 base，额外部分一并入账（不再计入上限，体现"加成另算"）。
+ * capped=false（一次性里程碑）：原额发放，不受上限、不加段位倍率。
+ * 返回最终入账的 NP 总额。
+ */
 async function creditNp(
   tx: Tx, userId: number, amount: number, capped: boolean,
 ): Promise<number> {
   if (amount <= 0) return 0;
-  let grant = amount;
+  let base = amount;
+  let total = amount;
   if (capped) {
-    const [u] = await tx.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId)).limit(1);
+    const [u] = await tx
+      .select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation })
+      .from(users).where(eq(users.id, userId)).limit(1);
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
     const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp)
       .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd))).limit(1);
     const earned = row?.earned ?? 0;
-    grant = Math.min(amount, Math.max(0, cap - earned));
-    if (grant <= 0) return 0;
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: grant })
-      .onDuplicateKeyUpdate({ set: { earned: sql`earned + ${grant}` } });
+    base = Math.min(amount, Math.max(0, cap - earned));
+    if (base <= 0) return 0;
+    // 仅 base 计入每日上限台账
+    await tx.insert(userDailyNp).values({ userId, ymd, earned: base })
+      .onDuplicateKeyUpdate({ set: { earned: sql`earned + ${base}` } });
+    // 段位加成 + 声誉加成，只乘 base
+    const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
+    total = Math.round(base * mult);
   }
-  await tx.update(users).set({ npPoints: sql`npPoints + ${grant}` }).where(eq(users.id, userId));
-  return grant;
+  await tx.update(users).set({ npPoints: sql`npPoints + ${total}` }).where(eq(users.id, userId));
+  return total;
 }
 
 // ─── Task definitions ─────────────────────────────────────────────────────────
@@ -463,6 +478,38 @@ export const userRouter = router({
       if (def.eventOnly) throw new TRPCError({ code: "FORBIDDEN", message: "该任务由系统自动发放" });
 
       return _completeTask(ctx.user.id, input.taskType, db);
+    }),
+
+  // ─── 段位状态（累积价值分 / 当前段位 / 加成 / 日俸 / 下一段进度）────────────────
+  getRankStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+    const [u] = await db
+      .select({ score: users.rankScore, tier: users.rankTier, reputation: users.reputation })
+      .from(users).where(eq(users.id, ctx.user.id)).limit(1);
+    const score = u?.score ?? 0;
+    const tier = u?.tier ?? 0;
+    const next = tier < RANK_TIERS.length ? RANK_TIERS[tier] : null; // 下一段（tier 为 0..10）
+    return {
+      score,
+      tier,
+      tierName: tier >= 1 ? RANK_TIERS[tier - 1].name : "无段位",
+      bonusPct: Math.round(tierBonus(tier) * 100),
+      reputationBonusPct: Math.round(reputationBonus(u?.reputation ?? 0) * 100),
+      dailyBonus: tierDaily(tier),
+      nextTierName: next?.name ?? null,
+      nextTierAt: next?.min ?? null,
+      tiers: RANK_TIERS.map((t, i) => ({ idx: i + 1, name: t.name, min: t.min, bonusPct: Math.round(t.bonus * 100), daily: t.daily })),
+    };
+  }),
+
+  // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
+  adminRunRankAgg: adminProcedure
+    .input(z.object({ ymd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return runRankAggregation(db, input.ymd);
     }),
 
   // ─── Get user stats (posts count, tasks completed, rank) ───────────────────────────

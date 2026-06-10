@@ -14,6 +14,7 @@ import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, r
 import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
+import { awardReferrerMilestone } from "../referralRewards";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -147,6 +148,8 @@ export const chatRouter = router({
         userId: ctx.user.id,
         role: "owner",
       });
+      // 裂变：被邀请人首次建群 → 邀请人里程碑奖（一次性）
+      void awardReferrerMilestone(db, ctx.user.id, "first_group", 500);
       return { groupId };
     }),
 

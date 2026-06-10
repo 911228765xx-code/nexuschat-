@@ -38,6 +38,9 @@ export const users = mysqlTable("users", {
   inviteCode: varchar("inviteCode", { length: 32 }),
   // 声誉/Alpha 分（NP 模型：来自他人认可，参与产出加成、治灌水；Phase 2/3 聚合填充）
   reputation: bigint("reputation", { mode: "number" }).default(0).notNull(),
+  // 段位：累积价值分（全网体每日累积，只增不减）+ 当前段位（0=无 1..10=青铜..传奇，永久不降）
+  rankScore: bigint("rankScore", { mode: "number" }).default(0).notNull(),
+  rankTier: int("rankTier").default(0).notNull(),
   // 连续签到：连签天数 + 最近签到日（YYYY-MM-DD, UTC），用于阶梯签到奖励
   signinStreak: int("signinStreak").default(0).notNull(),
   lastSigninYmd: varchar("lastSigninYmd", { length: 10 }),
@@ -55,6 +58,21 @@ export const userDailyNp = mysqlTable("user_daily_np", {
   earned: bigint("earned", { mode: "number" }).default(0).notNull(),
 }, (t) => [uniqueIndex("uniq_daily_np_user_ymd").on(t.userId, t.ymd)]);
 export type UserDailyNp = typeof userDailyNp.$inferSelect;
+
+// ─── 段位每日聚合幂等记录（每个 UTC 日只聚合一次，防重复累加价值分）──────────────
+export const rankAggRun = mysqlTable("rank_agg_run", {
+  id: int("id").autoincrement().primaryKey(),
+  ymd: varchar("ymd", { length: 10 }).notNull(),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uniq_rank_agg_ymd").on(t.ymd)]);
+
+// ─── 邀请里程碑（被邀请人首次达成某高价值动作 → 邀请人一次性奖；每人每里程碑一次）──
+export const referralMilestones = mysqlTable("referral_milestones", {
+  id: int("id").autoincrement().primaryKey(),
+  inviteeId: int("inviteeId").notNull(),
+  milestone: varchar("milestone", { length: 40 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uniq_ref_milestone").on(t.inviteeId, t.milestone)]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
