@@ -5,10 +5,11 @@ import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { ensureInviteCode } from "../utils/inviteCode";
-import { awardTaskEvent } from "./user";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
-const REFERRER_REWARD = 500; // NP for inviter
+// 按 NP 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
+// 高价值里程碑(开会员+800/+2000、建群+500 等，见 referralRewards.ts)，降低小号互绑套利动力。
+const REFERRER_REWARD = 100; // NP for inviter
 const INVITEE_REWARD = 200;  // NP for invitee
 
 // ─── Milestone tiers ─────────────────────────────────────────────────────────
@@ -181,9 +182,6 @@ export const referralRouter = router({
           .set({ npPoints: sql`${users.npPoints} + ${INVITEE_REWARD}` })
           .where(eq(users.id, inviteeId));
       });
-
-      // NP 产出：邀请好友任务（真实激活才发，最多 10 次）→ 邀请人
-      void awardTaskEvent(db, referrer.id, "invite_friend");
 
       return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} NP` };
     }),

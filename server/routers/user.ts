@@ -141,13 +141,8 @@ export const TASK_DEFINITIONS: Record<
     maxCompletions: 999999,
     daily: 1,
   },
-  invite_friend: {
-    label: "邀请好友",
-    description: "邀请一位好友加入 NexusChat",
-    npReward: 150,
-    maxCompletions: 10,
-    eventOnly: true,
-  },
+  // 邀请好友奖励不走任务中心：绑定时邀请人 +100(referral.ts)，
+  // 高价值里程碑(开会员/建群等)另发(referralRewards.ts)，避免与任务奖叠加。
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "发布动态",
