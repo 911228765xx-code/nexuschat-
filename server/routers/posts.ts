@@ -2,10 +2,11 @@ import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { posts, postLikes, postComments, users } from "../../drizzle/schema";
+import { posts, postLikes, postComments, users, notifications } from "../../drizzle/schema";
 import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { createNotification } from "./notificationsRouter";
+import { awardTaskEvent } from "./user";
 import { sanitizeInput } from "../utils/sanitize";
 import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
@@ -143,6 +144,25 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
+      // NP 产出：首次发帖里程碑 + 每日发帖（每日上限内）。
+      // 质量门槛（防灌水刷分）：内容 ≥15 字，且当天没发过相同内容，才计每日发帖分。
+      void awardTaskEvent(db, ctx.user.id, "first_post");
+      const trimmed = input.content.trim();
+      if (trimmed.length >= 15) {
+        const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+        const [dup] = await db
+          .select({ id: posts.id })
+          .from(posts)
+          .where(and(
+            eq(posts.authorId, ctx.user.id),
+            eq(posts.content, sanitizeInput(input.content, 2000)),
+            gt(posts.createdAt, todayStart),
+            sql`${posts.id} != ${(result as any).insertId}`,
+          ))
+          .limit(1);
+        if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
+      }
+
       return { postId: (result as any).insertId as number };
     }),
 
@@ -183,22 +203,37 @@ export const postsRouter = router({
           .from(posts)
           .where(eq(posts.id, input.postId))
           .limit(1);
-        if (post) {
-          const [liker] = await db
-            .select({ name: users.name, avatar: users.avatar })
-            .from(users)
-            .where(eq(users.id, ctx.user.id))
+        if (post && post.authorId !== ctx.user.id) {
+          // 防刷：同一人对同一帖只发一次奖/通知（取消再点赞不重复）。用历史 like 通知做去重。
+          const [seen] = await db
+            .select({ id: notifications.id })
+            .from(notifications)
+            .where(and(
+              eq(notifications.userId, post.authorId),
+              eq(notifications.fromUserId, ctx.user.id),
+              eq(notifications.postId, input.postId),
+              eq(notifications.type, "like"),
+            ))
             .limit(1);
-          await createNotification({
-            db,
-            targetUserId: post.authorId,
-            fromUserId: ctx.user.id,
-            fromUserName: liker?.name ?? ctx.user.name ?? "Someone",
-            fromUserAvatar: liker?.avatar ?? "👍",
-            type: "like",
-            content: "liked your post",
-            postId: input.postId,
-          });
+          if (!seen) {
+            // NP 产出：内容获赞奖励给作者（仅首次）
+            void awardTaskEvent(db, post.authorId, "like_received");
+            const [liker] = await db
+              .select({ name: users.name, avatar: users.avatar })
+              .from(users)
+              .where(eq(users.id, ctx.user.id))
+              .limit(1);
+            await createNotification({
+              db,
+              targetUserId: post.authorId,
+              fromUserId: ctx.user.id,
+              fromUserName: liker?.name ?? ctx.user.name ?? "Someone",
+              fromUserAvatar: liker?.avatar ?? "👍",
+              type: "like",
+              content: "liked your post",
+              postId: input.postId,
+            });
+          }
         }
         return { liked: true };
       }
@@ -299,6 +334,11 @@ export const postsRouter = router({
         authorId: ctx.user.id,
         content: sanitizeInput(input.content, 1000),
       });
+
+      // NP 产出：有效评论（每日上限内）。质量门槛：≥5 字才计分（"好""赞"类水评不计）。
+      if (input.content.trim().length >= 5) {
+        void awardTaskEvent(db, ctx.user.id, "comment_made");
+      }
 
       // Increment comment count
       await db

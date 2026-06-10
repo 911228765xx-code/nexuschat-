@@ -4,7 +4,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
-import { eq, and, gt, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { users, passwordResetTokens } from "../../drizzle/schema";
@@ -100,6 +100,8 @@ export const emailAuthRouter = router({
         name: z.string().min(1, "请输入昵称").max(50),
         /** Cloudflare Turnstile token — required in production */
         turnstileToken: z.string().optional(),
+        /** 设备指纹（防多号撸NP）：同设备最多注册 3 个账号 */
+        deviceId: z.string().max(64).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -151,6 +153,16 @@ export const emailAuthRouter = router({
         }
       }
 
+      // ── 设备维度限制：同一设备最多注册 3 个账号（防脚本/多号撸NP）──
+      const deviceId = input.deviceId?.trim() || null;
+      if (deviceId) {
+        const [{ c: devCount = 0 } = { c: 0 }] = await db
+          .select({ c: sql<number>`COUNT(*)` }).from(users).where(eq(users.deviceId, deviceId));
+        if (Number(devCount) >= 3) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "该设备注册账号数已达上限" });
+        }
+      }
+
       const normalizedEmail = input.email.toLowerCase().trim();
       const openId = emailOpenId(normalizedEmail);
 
@@ -172,6 +184,7 @@ export const emailAuthRouter = router({
         loginMethod: "email",
         passwordHash,
         role,
+        deviceId,
         lastSignedIn: new Date(),
       });
 

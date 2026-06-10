@@ -21,6 +21,9 @@ import { voiceRouter } from "./routers/voice";
 import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
 import { aiRouter } from "./routers/ai";
+import { callsRouter } from "./routers/calls";
+import { npStoreRouter } from "./routers/npStore";
+import { tgeRouter } from "./routers/tge";
 
 export const appRouter = router({
   system: systemRouter,
@@ -44,6 +47,9 @@ export const appRouter = router({
   research: researchRouter,
   posts: postsRouter,
   user: userRouter,
+  calls: callsRouter,
+  npStore: npStoreRouter,
+  tge: tgeRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,

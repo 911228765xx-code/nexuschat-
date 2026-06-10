@@ -299,8 +299,50 @@
     {
       "idx": 42,
       "version": "5",
-      "when": 1781061116121,
-      "tag": "0042_heavy_mindworm",
+      "when": 1781084571361,
+      "tag": "0042_condemned_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1781085576265,
+      "tag": "0043_slimy_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1781085898430,
+      "tag": "0044_organic_shockwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1781086504315,
+      "tag": "0045_last_black_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1781087222047,
+      "tag": "0046_brainy_nitro",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1781088052744,
+      "tag": "0047_overjoyed_jetstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1781109691480,
+      "tag": "0048_curvy_firelord",
       "breakpoints": true
     }
   ]

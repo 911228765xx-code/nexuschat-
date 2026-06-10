@@ -8,6 +8,7 @@ import {
   timestamp,
   varchar,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -35,10 +36,102 @@ export const users = mysqlTable("users", {
   isBanned: boolean("isBanned").default(false).notNull(),
   // Deterministic referral code (see referral router). Indexed for O(1) reverse lookup.
   inviteCode: varchar("inviteCode", { length: 32 }),
+  // 声誉/Alpha 分（NP 模型：来自他人认可，参与产出加成、治灌水；Phase 2/3 聚合填充）
+  reputation: bigint("reputation", { mode: "number" }).default(0).notNull(),
+  // 段位：累积价值分（全网体每日累积，只增不减）+ 当前段位（0=无 1..10=青铜..传奇，永久不降）
+  rankScore: bigint("rankScore", { mode: "number" }).default(0).notNull(),
+  rankTier: int("rankTier").default(0).notNull(),
+  // 连续签到：连签天数 + 最近签到日（YYYY-MM-DD, UTC），用于阶梯签到奖励
+  signinStreak: int("signinStreak").default(0).notNull(),
+  lastSigninYmd: varchar("lastSigninYmd", { length: 10 }),
+  // 设备指纹（防女巫/多号撸NP）：注册/登录时上报；同设备限注册数、限每日NP、禁互绑
+  deviceId: varchar("deviceId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-}, (t) => [index("idx_users_invite_code").on(t.inviteCode)]);
+}, (t) => [index("idx_users_invite_code").on(t.inviteCode), index("idx_users_device").on(t.deviceId)]);
+
+// ─── NP 每日产出台账（防刷：按号龄分级的每日 NP 产出上限）────────────────────
+// 每天每用户一行，记录当天已发放的 NP 总额；creditNp() 据此封顶。
+export const userDailyNp = mysqlTable("user_daily_np", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  ymd: varchar("ymd", { length: 10 }).notNull(), // YYYY-MM-DD (UTC)
+  earned: bigint("earned", { mode: "number" }).default(0).notNull(),
+}, (t) => [uniqueIndex("uniq_daily_np_user_ymd").on(t.userId, t.ymd)]);
+export type UserDailyNp = typeof userDailyNp.$inferSelect;
+
+// ─── 段位每日聚合幂等记录（每个 UTC 日只聚合一次，防重复累加价值分）──────────────
+export const rankAggRun = mysqlTable("rank_agg_run", {
+  id: int("id").autoincrement().primaryKey(),
+  ymd: varchar("ymd", { length: 10 }).notNull(),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uniq_rank_agg_ymd").on(t.ymd)]);
+
+// ─── 邀请里程碑（被邀请人首次达成某高价值动作 → 邀请人一次性奖；每人每里程碑一次）──
+export const referralMilestones = mysqlTable("referral_milestones", {
+  id: int("id").autoincrement().primaryKey(),
+  inviteeId: int("inviteeId").notNull(),
+  milestone: varchar("milestone", { length: 40 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uniq_ref_milestone").on(t.inviteeId, t.milestone)]);
+
+// ─── Alpha 战绩（结构化投资观点/喊单，系统按行情自动判定对错）─────────────────────
+export const calls = mysqlTable("calls", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenSymbol: varchar("tokenSymbol", { length: 20 }).notNull(),
+  direction: mysqlEnum("direction", ["long", "short"]).notNull(), // 看涨/看跌
+  horizonHours: int("horizonHours").notNull(),                    // 时间窗（小时）
+  entryPrice: varchar("entryPrice", { length: 40 }).notNull(),    // 建仓价（字符串存，保精度）
+  resolvedPrice: varchar("resolvedPrice", { length: 40 }),
+  changeBp: int("changeBp"),                                      // 结算涨跌（基点 = 万分比）
+  status: mysqlEnum("status", ["pending", "win", "lose", "void"]).default("pending").notNull(),
+  note: varchar("note", { length: 280 }),
+  createdYmd: varchar("createdYmd", { length: 10 }).notNull(),    // 当日 Call 限频用
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolveAt: timestamp("resolveAt").notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+}, (t) => [
+  index("idx_calls_user").on(t.userId),
+  index("idx_calls_pending").on(t.status, t.resolveAt),
+]);
+export type Call = typeof calls.$inferSelect;
+
+// ─── 策展质押（押某条 Call 会命中；命中分奖励，未中质押销毁 → NP 出口）──────────────
+export const curationStakes = mysqlTable("curation_stakes", {
+  id: int("id").autoincrement().primaryKey(),
+  stakerId: int("stakerId").notNull(),
+  callId: int("callId").notNull(),
+  amount: int("amount").notNull(),       // 质押 NP
+  status: mysqlEnum("status", ["active", "won", "lost", "void"]).default("active").notNull(),
+  payout: int("payout").default(0).notNull(), // 结算返还（含奖励）
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  settledAt: timestamp("settledAt"),
+}, (t) => [
+  uniqueIndex("uniq_stake_user_call").on(t.stakerId, t.callId),
+  index("idx_stake_call").on(t.callId),
+]);
+export type CurationStake = typeof curationStakes.$inferSelect;
+
+// ─── TGE：NP→NN 单向兑换（默认关闭，临近发币由管理员快照+开启）────────────────────
+// 单例配置（id=1）：nnPool=分给 NP 兑换的 NN 总量；按 NP 持有量快照 pro-rata 兑换。
+export const tgeConfig = mysqlTable("tge_config", {
+  id: int("id").primaryKey(),               // 固定 1
+  enabled: boolean("enabled").default(false).notNull(),
+  nnPool: bigint("nnPool", { mode: "number" }).default(0).notNull(),
+  totalNpSnapshot: bigint("totalNpSnapshot", { mode: "number" }).default(0).notNull(),
+  snapshotAt: timestamp("snapshotAt"),
+});
+// 每用户快照 + 领取记录
+export const tgeClaims = mysqlTable("tge_claims", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  npSnapshot: bigint("npSnapshot", { mode: "number" }).notNull(),
+  nnAmount: bigint("nnAmount", { mode: "number" }).default(0).notNull(),
+  claimed: boolean("claimed").default(false).notNull(),
+  claimedAt: timestamp("claimedAt"),
+}, (t) => [uniqueIndex("uniq_tge_user").on(t.userId)]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

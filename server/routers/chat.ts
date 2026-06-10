@@ -14,6 +14,8 @@ import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, r
 import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
+import { awardReferrerMilestone } from "../referralRewards";
+import { awardTaskEvent } from "./user";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -147,6 +149,8 @@ export const chatRouter = router({
         userId: ctx.user.id,
         role: "owner",
       });
+      // 裂变：被邀请人首次建群 → 邀请人里程碑奖（一次性）
+      void awardReferrerMilestone(db, ctx.user.id, "first_group", 500);
       return { groupId };
     }),
 
@@ -312,6 +316,8 @@ export const chatRouter = router({
           .catch((err) => logger.warn({ err }, "manage bot failed"));
         // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
+        // NP 产出：首次发消息里程碑
+        void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
     }),
@@ -361,6 +367,8 @@ export const chatRouter = router({
       // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
       if (input.messageType === "text") {
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+        // NP 产出：首次发消息里程碑
+        void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
     }),
@@ -444,6 +452,7 @@ export const chatRouter = router({
       .select({
         id: messages.id,
         content: messages.content,
+        messageType: messages.messageType,
         createdAt: messages.createdAt,
         senderId: messages.senderId,
         receiverId: messages.receiverId,
@@ -492,15 +501,27 @@ export const chatRouter = router({
       .groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map(r => [r.senderId, Number(r.cnt)]));
 
-    return partnerUsers.map(u => ({
-      userId: u.id,
-      name: u.name ?? u.username ?? "User",
-      avatar: u.avatar,
-      lastMessage: convMap.get(u.id)?.content ?? "",
-      lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
-      isMine: convMap.get(u.id)?.senderId === myId,
-      unreadCount: unreadMap.get(u.id) ?? 0,
-    }));
+    // 已"删除"的会话过滤：clearedBeforeId >= 最新消息 id 的 dm 会话不显示（有新消息会重新出现）
+    const prefRows = await db
+      .select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId })
+      .from(conversationPrefs).where(eq(conversationPrefs.userId, myId));
+    const clearedMap = new Map<number, number>();
+    for (const p of prefRows) {
+      if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+    }
+
+    return partnerUsers
+      .filter(u => (convMap.get(u.id)?.id ?? 0) > (clearedMap.get(u.id) ?? 0))
+      .map(u => ({
+        userId: u.id,
+        name: u.name ?? u.username ?? "User",
+        avatar: u.avatar,
+        lastMessage: convMap.get(u.id)?.content ?? "",
+        lastMessageType: convMap.get(u.id)?.messageType ?? "text",
+        lastMessageAt: convMap.get(u.id)?.createdAt ?? new Date(),
+        isMine: convMap.get(u.id)?.senderId === myId,
+        unreadCount: unreadMap.get(u.id) ?? 0,
+      }));
   }),
 
   // Get user's joined groups with latest message preview
@@ -526,7 +547,7 @@ export const chatRouter = router({
     // Fetch latest message for all groups in ONE pass (avoid N+1).
     // 1) max(id) per group  2) join back to get its content/sender.
     const groupIds = groups.map((g) => g.id);
-    const latestByGroup = new Map<number, { content: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
+    const latestByGroup = new Map<number, { content: string; messageType: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
     if (groupIds.length > 0) {
       const latest = db
         .select({
@@ -541,6 +562,7 @@ export const chatRouter = router({
         .select({
           groupId: messages.groupId,
           content: messages.content,
+          messageType: messages.messageType,
           createdAt: messages.createdAt,
           senderName: users.name,
           senderUsername: users.username,
@@ -557,6 +579,7 @@ export const chatRouter = router({
       return {
         ...g,
         lastMessage: m?.content ?? g.description ?? '',
+        lastMessageType: m?.messageType ?? "text",
         lastMessageAt: m?.createdAt ?? g.updatedAt,
         lastSender: m?.senderName ?? m?.senderUsername ?? null,
       };

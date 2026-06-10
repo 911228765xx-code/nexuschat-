@@ -7,7 +7,9 @@ import { eq, and, desc, count, sql } from "drizzle-orm";
 import { ensureInviteCode } from "../utils/inviteCode";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
-const REFERRER_REWARD = 500; // NP for inviter
+// 按 NP 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
+// 高价值里程碑(开会员+800/+2000、建群+500 等，见 referralRewards.ts)，降低小号互绑套利动力。
+const REFERRER_REWARD = 100; // NP for inviter
 const INVITEE_REWARD = 200;  // NP for invitee
 
 // ─── Milestone tiers ─────────────────────────────────────────────────────────
@@ -102,6 +104,20 @@ export const referralRouter = router({
     }));
   }),
 
+  // ─── 我的绑定状态（是否已被邀请 + 邀请人是谁）────────────────────────────────
+  bindStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { bound: false };
+    const [r] = await db
+      .select({ referrerId: referrals.referrerId })
+      .from(referrals).where(eq(referrals.inviteeId, ctx.user!.id)).limit(1);
+    if (!r) return { bound: false };
+    const [ref] = await db
+      .select({ name: users.name, username: users.username })
+      .from(users).where(eq(users.id, r.referrerId)).limit(1);
+    return { bound: true, referrerName: ref?.name ?? ref?.username ?? `用户 #${r.referrerId}` };
+  }),
+
   // ─── Record a referral (called when invitee signs up with code) ───────────
   recordReferral: protectedProcedure
     .input(z.object({ inviteCode: z.string().max(30) }))
@@ -130,6 +146,46 @@ export const referralRouter = router({
 
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
+
+      // 防多号撸NP（设备维度两条规则）：
+      // 1) 同设备的两个账号禁止互绑（自己小号绑自己）；
+      // 2) 同一设备最多 3 个账号能建立邀请关系（防一台设备换号无限绑）。
+      {
+        const [pair] = await db
+          .select({ a: users.deviceId })
+          .from(users).where(eq(users.id, inviteeId)).limit(1);
+        const [refDev] = await db
+          .select({ b: users.deviceId })
+          .from(users).where(eq(users.id, referrer.id)).limit(1);
+        if (pair?.a && refDev?.b && pair.a === refDev.b) {
+          return { success: false, message: "Cannot bind same-device account" };
+        }
+        if (pair?.a) {
+          const [{ c: boundCount = 0 } = { c: 0 }] = await db
+            .select({ c: count() })
+            .from(referrals)
+            .innerJoin(users, eq(referrals.inviteeId, users.id))
+            .where(and(eq(users.deviceId, pair.a), eq(referrals.status, "active")));
+          if (Number(boundCount) >= 3) {
+            return { success: false, message: "Device referral limit reached" };
+          }
+        }
+      }
+
+      // 防成环：沿"邀请人"的祖先链上溯（≤100 层），若发现自己 → A↔B 互绑或更深的环，拒绝。
+      // 成环会让环内成员互相累积价值分刷段位。
+      {
+        const refRows = await db
+          .select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId })
+          .from(referrals).where(eq(referrals.status, "active"));
+        const parentOf = new Map<number, number>();
+        for (const r of refRows) if (!parentOf.has(r.inviteeId)) parentOf.set(r.inviteeId, r.referrerId);
+        let cur: number | undefined = referrer.id;
+        for (let depth = 0; cur !== undefined && depth < 100; depth++) {
+          if (cur === inviteeId) return { success: false, message: "Cannot bind your own downline" };
+          cur = parentOf.get(cur);
+        }
+      }
 
       // Create referral record + award NP to both atomically, so a partial failure
       // can't leave a referral without its rewards (or one side rewarded but not the other).

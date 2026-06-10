@@ -53,6 +53,34 @@ export const contactsRouter = router({
       return { success: true };
     }),
 
+  // ─── 删除好友（删除两人间已接受的好友关系，任一方向）──────────────────────────
+  removeFriend: protectedProcedure
+    .input(z.object({ friendId: z.number().int().positive() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.delete(friendRequests).where(
+        and(
+          eq(friendRequests.status, "accepted"),
+          or(
+            and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.friendId)),
+            and(eq(friendRequests.senderId, input.friendId), eq(friendRequests.receiverId, ctx.user.id)),
+          )!,
+        ),
+      );
+      // 一并清理好友备注（双向）
+      try {
+        await db.delete(contactMetadata).where(
+          or(
+            and(eq(contactMetadata.userId, ctx.user.id), eq(contactMetadata.contactId, input.friendId)),
+            and(eq(contactMetadata.userId, input.friendId), eq(contactMetadata.contactId, ctx.user.id)),
+          )!,
+        );
+      } catch { /* 备注清理失败不影响删好友 */ }
+      return { success: true };
+    }),
+
   // ─── Accept friend request ──────────────────────────────────────────────────
   acceptRequest: protectedProcedure
     .input(z.object({ requestId: z.number().int().positive() }))
