@@ -144,7 +144,8 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
-      // NP 产出：发布动态（每日上限内）
+      // NP 产出：首次发帖里程碑 + 每日发帖（每日上限内）
+      void awardTaskEvent(db, ctx.user.id, "first_post");
       void awardTaskEvent(db, ctx.user.id, "post_daily");
 
       return { postId: (result as any).insertId as number };

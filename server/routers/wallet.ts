@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { users, swapHistory } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
+import { awardTaskEvent } from "./user";
 
 // BSC public RPC endpoints (no API key required)
 const BSC_RPC_ENDPOINTS = [
@@ -103,6 +104,8 @@ export const walletRouter = router({
         .update(users)
         .set({ walletAddress: input.address, walletChain: input.chain })
         .where(eq(users.id, ctx.user.id));
+      // NP 产出：首次连接钱包里程碑（真实绑定才发）
+      void awardTaskEvent(db, ctx.user.id, "connect_wallet");
       return { success: true };
     }),
 

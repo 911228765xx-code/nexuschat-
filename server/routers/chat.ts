@@ -15,6 +15,7 @@ import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, get
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
 import { awardReferrerMilestone } from "../referralRewards";
+import { awardTaskEvent } from "./user";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -315,6 +316,8 @@ export const chatRouter = router({
           .catch((err) => logger.warn({ err }, "manage bot failed"));
         // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
+        // NP 产出：首次发消息里程碑
+        void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
     }),
@@ -364,6 +367,8 @@ export const chatRouter = router({
       // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
       if (input.messageType === "text") {
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+        // NP 产出：首次发消息里程碑
+        void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
     }),

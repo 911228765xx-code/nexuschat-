@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { ensureInviteCode } from "../utils/inviteCode";
+import { awardTaskEvent } from "./user";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
 const REFERRER_REWARD = 500; // NP for inviter
@@ -151,6 +152,9 @@ export const referralRouter = router({
           .set({ npPoints: sql`${users.npPoints} + ${INVITEE_REWARD}` })
           .where(eq(users.id, inviteeId));
       });
+
+      // NP 产出：邀请好友任务（真实激活才发，最多 10 次）→ 邀请人
+      void awardTaskEvent(db, referrer.id, "invite_friend");
 
       return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} NP` };
     }),

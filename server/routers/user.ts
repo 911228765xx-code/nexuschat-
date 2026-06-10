@@ -97,30 +97,35 @@ export const TASK_DEFINITIONS: Record<
     description: "首次连接 BSC 钱包",
     npReward: 50,
     maxCompletions: 1,
+    eventOnly: true,
   },
   complete_profile: {
     label: "完善资料",
     description: "填写头像、昵称和 Bio",
     npReward: 100,
     maxCompletions: 1,
+    eventOnly: true,
   },
   first_post: {
     label: "发布第一条动态",
     description: "在 Discover 发布你的第一条动态",
     npReward: 100,
     maxCompletions: 1,
+    eventOnly: true,
   },
   first_message: {
     label: "发送第一条消息",
     description: "在 Chat 发送你的第一条消息",
     npReward: 50,
     maxCompletions: 1,
+    eventOnly: true,
   },
   first_research: {
     label: "生成 AI 投研报告",
     description: "使用 AI 生成一份代币投研报告",
     npReward: 200,
     maxCompletions: 1,
+    eventOnly: true,
   },
   daily_login: {
     label: "每日签到",
@@ -134,6 +139,7 @@ export const TASK_DEFINITIONS: Record<
     description: "邀请一位好友加入 NexusChat",
     npReward: 150,
     maxCompletions: 10,
+    eventOnly: true,
   },
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
