@@ -72,14 +72,17 @@ async function creditNp(
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
+    // 先确保当日台账行存在，再 FOR UPDATE 加行锁 → 串行化并发，严格不超每日上限
+    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 })
+      .onDuplicateKeyUpdate({ set: { earned: sql`earned` } });
     const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp)
-      .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd))).limit(1);
+      .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd))).for("update").limit(1);
     const earned = row?.earned ?? 0;
     base = Math.min(amount, Math.max(0, cap - earned));
     if (base <= 0) return 0;
-    // 仅 base 计入每日上限台账
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: base })
-      .onDuplicateKeyUpdate({ set: { earned: sql`earned + ${base}` } });
+    // 仅 base 计入每日上限台账（行锁内更新，确定值不会超 cap）
+    await tx.update(userDailyNp).set({ earned: earned + base })
+      .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd)));
     // 段位加成 + 声誉加成，只乘 base
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
