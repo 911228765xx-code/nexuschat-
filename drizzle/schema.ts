@@ -96,6 +96,22 @@ export const calls = mysqlTable("calls", {
 ]);
 export type Call = typeof calls.$inferSelect;
 
+// ─── 策展质押（押某条 Call 会命中；命中分奖励，未中质押销毁 → NP 出口）──────────────
+export const curationStakes = mysqlTable("curation_stakes", {
+  id: int("id").autoincrement().primaryKey(),
+  stakerId: int("stakerId").notNull(),
+  callId: int("callId").notNull(),
+  amount: int("amount").notNull(),       // 质押 NP
+  status: mysqlEnum("status", ["active", "won", "lost", "void"]).default("active").notNull(),
+  payout: int("payout").default(0).notNull(), // 结算返还（含奖励）
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  settledAt: timestamp("settledAt"),
+}, (t) => [
+  uniqueIndex("uniq_stake_user_call").on(t.stakerId, t.callId),
+  index("idx_stake_call").on(t.callId),
+]);
+export type CurationStake = typeof curationStakes.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 

@@ -6,7 +6,7 @@
  */
 import { eq, and, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { calls, users } from "../drizzle/schema";
+import { calls, users, curationStakes } from "../drizzle/schema";
 import { fetchTokenData } from "./routers/research";
 import logger from "./utils/logger";
 
@@ -16,6 +16,29 @@ const DEADBAND_BP = 100;        // ±1% 死区（基点）
 const WIN_NP = 150;             // 判对 NP 奖励
 const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
+const STAKE_WIN_BONUS = 0.3;    // 策展质押命中奖励比例（押对 +30%，押错销毁 → 净 NP 出口）
+
+/**
+ * 结算某条 Call 上的策展质押。
+ * Call 判对 → 质押者拿回本金 + 30% 奖励；判错 → 质押销毁；void → 退本金。
+ */
+async function settleStakesForCall(db: Db, callId: number, callStatus: "win" | "lose" | "void"): Promise<void> {
+  const stakes = await db.select().from(curationStakes)
+    .where(and(eq(curationStakes.callId, callId), eq(curationStakes.status, "active")));
+  for (const s of stakes) {
+    let payout = 0;
+    let status: "won" | "lost" | "void" = "lost";
+    if (callStatus === "win") { payout = s.amount + Math.round(s.amount * STAKE_WIN_BONUS); status = "won"; }
+    else if (callStatus === "void") { payout = s.amount; status = "void"; }
+    // callStatus === 'lose' → payout 0, status lost（质押销毁）
+    await db.update(curationStakes)
+      .set({ status, payout, settledAt: new Date() })
+      .where(eq(curationStakes.id, s.id));
+    if (payout > 0) {
+      await db.update(users).set({ npPoints: sql`npPoints + ${payout}` }).where(eq(users.id, s.stakerId));
+    }
+  }
+}
 
 /** 结算所有到期未判定的 Call。返回处理条数。 */
 export async function resolveDueCalls(db: Db): Promise<number> {
@@ -67,6 +90,8 @@ export async function resolveDueCalls(db: Db): Promise<number> {
           .set({ reputation: sql`GREATEST(0, reputation - ${LOSE_REP})` })
           .where(eq(users.id, c.userId));
       }
+      // 结算这条 Call 上的策展质押
+      await settleStakesForCall(db, c.id, status);
       processed++;
     } catch (err) {
       logger.warn({ err, callId: c.id }, "callResolver: 单条结算失败");

@@ -22,6 +22,7 @@ import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
 import { aiRouter } from "./routers/ai";
 import { callsRouter } from "./routers/calls";
+import { npStoreRouter } from "./routers/npStore";
 
 export const appRouter = router({
   system: systemRouter,
@@ -46,6 +47,7 @@ export const appRouter = router({
   posts: postsRouter,
   user: userRouter,
   calls: callsRouter,
+  npStore: npStoreRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
