@@ -72,10 +72,10 @@ async function creditNp(
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
-    // 防多号撸NP：同一设备每天只有第一个赚 NP 的账号正常发放，其余账号当日不发
+    // 防多号撸NP：同一设备每天最多 3 个账号正常发放 NP，第 4 个起当日不发
     if (u.deviceId) {
-      const [other] = await tx
-        .select({ id: userDailyNp.id })
+      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx
+        .select({ c: sql<number>`COUNT(DISTINCT ${userDailyNp.userId})` })
         .from(userDailyNp)
         .innerJoin(users, eq(userDailyNp.userId, users.id))
         .where(and(
@@ -83,9 +83,8 @@ async function creditNp(
           eq(userDailyNp.ymd, ymd),
           gte(userDailyNp.earned, 1),
           sql`${userDailyNp.userId} != ${userId}`,
-        ))
-        .limit(1);
-      if (other) return 0;
+        ));
+      if (Number(otherEarners) >= 3) return 0;
     }
     // 先确保当日台账行存在，再 FOR UPDATE 加行锁 → 串行化并发，严格不超每日上限
     await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 })
