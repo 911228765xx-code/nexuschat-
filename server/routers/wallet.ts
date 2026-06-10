@@ -117,6 +117,16 @@ export const walletRouter = router({
       return { success: true };
     }),
 
+  // 解绑钱包（清空地址；TGE/空投领取需有效绑定，届时再校验所有权）
+  unbindAddress: protectedProcedure
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(users).set({ walletAddress: null }).where(eq(users.id, ctx.user.id));
+      return { success: true };
+    }),
+
   //
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
