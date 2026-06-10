@@ -114,10 +114,10 @@ async function startServer() {
   startBotScheduler();
   // 定时清理已过期（阅后即焚）消息，每 10 分钟
   startMessageCleanup();
-  // NP 段位：每日全网体价值分聚合（每 6h 检查，每个 UTC 日只跑一次）
-  startRankAggregation();
-  // Alpha 战绩：每 30 分钟结算到期 Call
-  startCallResolver();
+  // NP 段位：每日全网体价值分聚合（每 6h 检查，每个 UTC 日只跑一次）— 暂停
+  // startRankAggregation();
+  // Alpha 战绩：每 30 分钟结算到期 Call — 暂停
+  // startCallResolver();
 
   // Backfill referral invite codes for any users missing one (best-effort, non-blocking).
   void (async () => {
