@@ -44,10 +44,12 @@ export const users = mysqlTable("users", {
   // 连续签到：连签天数 + 最近签到日（YYYY-MM-DD, UTC），用于阶梯签到奖励
   signinStreak: int("signinStreak").default(0).notNull(),
   lastSigninYmd: varchar("lastSigninYmd", { length: 10 }),
+  // 设备指纹（防女巫/多号撸NP）：注册/登录时上报；同设备限注册数、限每日NP、禁互绑
+  deviceId: varchar("deviceId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-}, (t) => [index("idx_users_invite_code").on(t.inviteCode)]);
+}, (t) => [index("idx_users_invite_code").on(t.inviteCode), index("idx_users_device").on(t.deviceId)]);
 
 // ─── NP 每日产出台账（防刷：按号龄分级的每日 NP 产出上限）────────────────────
 // 每天每用户一行，记录当天已发放的 NP 总额；creditNp() 据此封顶。

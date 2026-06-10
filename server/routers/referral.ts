@@ -147,6 +147,19 @@ export const referralRouter = router({
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
 
+      // 防多号撸NP：同设备的两个账号禁止建立邀请关系（自己小号绑自己）
+      {
+        const [pair] = await db
+          .select({ a: users.deviceId })
+          .from(users).where(eq(users.id, inviteeId)).limit(1);
+        const [refDev] = await db
+          .select({ b: users.deviceId })
+          .from(users).where(eq(users.id, referrer.id)).limit(1);
+        if (pair?.a && refDev?.b && pair.a === refDev.b) {
+          return { success: false, message: "Cannot bind same-device account" };
+        }
+      }
+
       // 防成环：沿"邀请人"的祖先链上溯（≤100 层），若发现自己 → A↔B 互绑或更深的环，拒绝。
       // 成环会让环内成员互相累积价值分刷段位。
       {

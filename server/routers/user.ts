@@ -67,11 +67,26 @@ async function creditNp(
   let total = amount;
   if (capped) {
     const [u] = await tx
-      .select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation })
+      .select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId })
       .from(users).where(eq(users.id, userId)).limit(1);
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
+    // 防多号撸NP：同一设备每天只有第一个赚 NP 的账号正常发放，其余账号当日不发
+    if (u.deviceId) {
+      const [other] = await tx
+        .select({ id: userDailyNp.id })
+        .from(userDailyNp)
+        .innerJoin(users, eq(userDailyNp.userId, users.id))
+        .where(and(
+          eq(users.deviceId, u.deviceId),
+          eq(userDailyNp.ymd, ymd),
+          gte(userDailyNp.earned, 1),
+          sql`${userDailyNp.userId} != ${userId}`,
+        ))
+        .limit(1);
+      if (other) return 0;
+    }
     // 先确保当日台账行存在，再 FOR UPDATE 加行锁 → 串行化并发，严格不超每日上限
     await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 })
       .onDuplicateKeyUpdate({ set: { earned: sql`earned` } });
@@ -486,6 +501,16 @@ export const userRouter = router({
       if (def.eventOnly) throw new TRPCError({ code: "FORBIDDEN", message: "该任务由系统自动发放" });
 
       return _completeTask(ctx.user.id, input.taskType, db);
+    }),
+
+  // ─── 上报设备指纹（防多号撸NP；App 启动后调用）────────────────────────────────
+  reportDevice: protectedProcedure
+    .input(z.object({ deviceId: z.string().min(8).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { ok: false };
+      await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq(users.id, ctx.user.id));
+      return { ok: true };
     }),
 
   // ─── 段位状态（累积价值分 / 当前段位 / 加成 / 日俸 / 下一段进度）────────────────
