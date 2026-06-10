@@ -274,6 +274,20 @@
       "when": 1780975371558,
       "tag": "0038_misty_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1781057731254,
+      "tag": "0039_familiar_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1781058244990,
+      "tag": "0040_sharp_sage",
+      "breakpoints": true
     }
   ]
 }

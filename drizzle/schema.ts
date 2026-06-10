@@ -59,6 +59,8 @@ export const chatGroups = mysqlTable("chat_groups", {
   category: varchar("category", { length: 30 }).default("community"),
   // true=进群需群主/管理员审批
   joinApproval: boolean("joinApproval").default(false).notNull(),
+  // true=禁止群成员互相添加好友（群主/管理员可设）
+  forbidAddFriend: boolean("forbidAddFriend").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -355,6 +357,8 @@ export const contactMetadata = mysqlTable(
     userId: int("userId").notNull(),
     contactId: int("contactId").notNull(),
     isFavorite: boolean("isFavorite").default(false).notNull(),
+    // 好友备注名（显示时替代对方昵称；与 note 描述区分）
+    remarkName: varchar("remarkName", { length: 50 }),
     note: text("note"),
     tags: text("tags"), // JSON array of strings
     createdAt: timestamp("createdAt").defaultNow().notNull(),

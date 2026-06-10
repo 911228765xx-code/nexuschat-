@@ -1,0 +1,1 @@
+ALTER TABLE `chat_groups` ADD `forbidAddFriend` boolean DEFAULT false NOT NULL;

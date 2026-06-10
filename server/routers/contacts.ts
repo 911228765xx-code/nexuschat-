@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { friendRequests, users, contactMetadata } from "../../drizzle/schema";
 import { and, eq, or, desc } from "drizzle-orm";
+import { createNotification } from "./notificationsRouter";
 
 export const contactsRouter = router({
   // ─── Send friend request ────────────────────────────────────────────────────
@@ -37,6 +38,18 @@ export const contactsRouter = router({
         receiverId: input.receiverId,
         status: "pending",
       });
+      // 通知对方：有人请求加你为好友（进通知中心 + 未读计数提醒）
+      try {
+        await createNotification({
+          db,
+          targetUserId: input.receiverId,
+          fromUserId: ctx.user.id,
+          fromUserName: (ctx.user as any).name ?? (ctx.user as any).username ?? "有人",
+          fromUserAvatar: (ctx.user as any).avatar ?? "",
+          type: "follow",
+          content: "请求添加你为好友",
+        });
+      } catch { /* 通知失败不影响请求 */ }
       return { success: true };
     }),
 
@@ -187,7 +200,7 @@ export const contactsRouter = router({
 
     // 按对方 userId 去重（互发好友请求都被接受时会出现两条）
     const seen = new Set<number>();
-    const result: Array<{ id: number; userId: number; displayName: string; avatar: string | null; createdAt: Date }> = [];
+    const result: Array<{ id: number; userId: number; displayName: string; remarkName: string | null; avatar: string | null; createdAt: Date }> = [];
     for (const r of [...sent, ...received]) {
       if (r.otherId == null || seen.has(r.otherId)) continue;
       seen.add(r.otherId);
@@ -195,12 +208,41 @@ export const contactsRouter = router({
         id: r.id,
         userId: r.otherId,
         displayName: r.otherName ?? r.otherUsername ?? `User #${r.otherId}`,
+        remarkName: null,
         avatar: r.otherAvatar,
         createdAt: r.createdAt,
       });
     }
+    // 合并好友备注名（我对每个好友设置的 remarkName）
+    if (result.length > 0) {
+      const metas = await db
+        .select({ contactId: contactMetadata.contactId, remarkName: contactMetadata.remarkName })
+        .from(contactMetadata)
+        .where(eq(contactMetadata.userId, ctx.user.id));
+      const remarkMap = new Map(metas.filter((m) => m.remarkName).map((m) => [m.contactId, m.remarkName!]));
+      for (const f of result) f.remarkName = remarkMap.get(f.userId) ?? null;
+    }
     return result;
   }),
+
+  // ─── Set friend remark name ──────────────────────────────────────────────
+  setRemark: protectedProcedure
+    .input(z.object({ contactId: z.number().int().positive(), remarkName: z.string().max(50) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      const remark = input.remarkName.trim() || null;
+      const existing = await db.select({ id: contactMetadata.id }).from(contactMetadata)
+        .where(and(eq(contactMetadata.userId, ctx.user.id), eq(contactMetadata.contactId, input.contactId)))
+        .limit(1);
+      if (existing.length > 0) {
+        await db.update(contactMetadata).set({ remarkName: remark }).where(eq(contactMetadata.id, existing[0].id));
+      } else {
+        await db.insert(contactMetadata).values({ userId: ctx.user.id, contactId: input.contactId, remarkName: remark });
+      }
+      return { success: true, remarkName: remark };
+    }),
 
   // ─── Get metadata for a contact ──────────────────────────────────────────
   getContactMeta: protectedProcedure
