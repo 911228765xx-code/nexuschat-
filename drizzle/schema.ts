@@ -74,6 +74,28 @@ export const referralMilestones = mysqlTable("referral_milestones", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => [uniqueIndex("uniq_ref_milestone").on(t.inviteeId, t.milestone)]);
 
+// ─── Alpha 战绩（结构化投资观点/喊单，系统按行情自动判定对错）─────────────────────
+export const calls = mysqlTable("calls", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenSymbol: varchar("tokenSymbol", { length: 20 }).notNull(),
+  direction: mysqlEnum("direction", ["long", "short"]).notNull(), // 看涨/看跌
+  horizonHours: int("horizonHours").notNull(),                    // 时间窗（小时）
+  entryPrice: varchar("entryPrice", { length: 40 }).notNull(),    // 建仓价（字符串存，保精度）
+  resolvedPrice: varchar("resolvedPrice", { length: 40 }),
+  changeBp: int("changeBp"),                                      // 结算涨跌（基点 = 万分比）
+  status: mysqlEnum("status", ["pending", "win", "lose", "void"]).default("pending").notNull(),
+  note: varchar("note", { length: 280 }),
+  createdYmd: varchar("createdYmd", { length: 10 }).notNull(),    // 当日 Call 限频用
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolveAt: timestamp("resolveAt").notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+}, (t) => [
+  index("idx_calls_user").on(t.userId),
+  index("idx_calls_pending").on(t.status, t.resolveAt),
+]);
+export type Call = typeof calls.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 

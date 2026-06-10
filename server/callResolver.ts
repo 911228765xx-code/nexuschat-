@@ -1,0 +1,91 @@
+/**
+ * Alpha 战绩判定（NP 模型 Phase 3）：定时结算到期的 Call。
+ *  - 取当前行情，与建仓价比较；±1% 死区内视为 void（波动太小不计）。
+ *  - 方向判对 → +NP（直接入账，不farmable：受 5/天发 Call 限频且需真命中）+ 声誉。
+ *  - 判错 → 扣声誉（不为负）。声誉抬高个人产出加成，形成正循环。
+ */
+import { eq, and, lte, sql } from "drizzle-orm";
+import { getDb } from "./db";
+import { calls, users } from "../drizzle/schema";
+import { fetchTokenData } from "./routers/research";
+import logger from "./utils/logger";
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+const DEADBAND_BP = 100;        // ±1% 死区（基点）
+const WIN_NP = 150;             // 判对 NP 奖励
+const WIN_REP = 100;            // 判对 声誉 +
+const LOSE_REP = 40;            // 判错 声誉 -
+
+/** 结算所有到期未判定的 Call。返回处理条数。 */
+export async function resolveDueCalls(db: Db): Promise<number> {
+  const due = await db
+    .select()
+    .from(calls)
+    .where(and(eq(calls.status, "pending"), lte(calls.resolveAt, new Date())))
+    .limit(200);
+  if (due.length === 0) return 0;
+
+  // 同标的的现价取一次（fetchTokenData 自带缓存）
+  const priceCache = new Map<string, number | null>();
+  let processed = 0;
+
+  for (const c of due) {
+    try {
+      let cur: number | null;
+      const cached = priceCache.get(c.tokenSymbol);
+      if (cached !== undefined) {
+        cur = cached;
+      } else {
+        const token = await fetchTokenData(c.tokenSymbol);
+        cur = token?.price ?? null;
+        priceCache.set(c.tokenSymbol, cur);
+      }
+      const entry = Number(c.entryPrice);
+      if (!cur || !entry || entry <= 0) {
+        // 拿不到现价：本轮跳过，下次再试（不改状态）
+        continue;
+      }
+      const changeBp = Math.round(((cur - entry) / entry) * 10_000);
+      let status: "win" | "lose" | "void";
+      if (Math.abs(changeBp) < DEADBAND_BP) status = "void";
+      else {
+        const up = changeBp > 0;
+        status = (c.direction === "long" && up) || (c.direction === "short" && !up) ? "win" : "lose";
+      }
+
+      await db.update(calls)
+        .set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: new Date() })
+        .where(eq(calls.id, c.id));
+
+      if (status === "win") {
+        await db.update(users)
+          .set({ npPoints: sql`npPoints + ${WIN_NP}`, reputation: sql`reputation + ${WIN_REP}` })
+          .where(eq(users.id, c.userId));
+      } else if (status === "lose") {
+        await db.update(users)
+          .set({ reputation: sql`GREATEST(0, reputation - ${LOSE_REP})` })
+          .where(eq(users.id, c.userId));
+      }
+      processed++;
+    } catch (err) {
+      logger.warn({ err, callId: c.id }, "callResolver: 单条结算失败");
+    }
+  }
+  if (processed > 0) logger.info({ processed }, "callResolver: 战绩结算完成");
+  return processed;
+}
+
+/** 注册战绩结算定时任务（每 30 分钟）。 */
+export function startCallResolver(): void {
+  const tick = async () => {
+    try {
+      const db = await getDb();
+      if (db) await resolveDueCalls(db);
+    } catch (err) {
+      logger.warn({ err }, "callResolver: 结算任务异常");
+    }
+  };
+  setInterval(() => { void tick(); }, 30 * 60 * 1000);
+  void tick();
+}
