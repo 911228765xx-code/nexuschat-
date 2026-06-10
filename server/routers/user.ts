@@ -24,6 +24,10 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
+import { isReferralBound } from "../referralRewards";
+
+/** C 折中：这些"高价值任务"需先绑定邀请人才发 NP（基础任务不受限）。 */
+const REQUIRES_BINDING = new Set(["first_research", "research_daily"]);
 
 // ─── NP 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
 /** UTC 日期 YYYY-MM-DD */
@@ -696,6 +700,11 @@ async function _completeTask(
 ): Promise<{ success: boolean; npEarned: number; alreadyCompleted: boolean }> {
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
+
+  // C 折中：高价值任务需先绑定邀请人才发 NP（基础任务不受限；报告等功能仍可正常使用）
+  if (REQUIRES_BINDING.has(taskType) && !(await isReferralBound(db, userId))) {
+    return { success: false, npEarned: 0, alreadyCompleted: false };
+  }
 
   const overrides = await getTaskRewardOverrides(db);
   let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;

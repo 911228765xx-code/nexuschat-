@@ -13,6 +13,14 @@ import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
+/** 该用户是否已绑定邀请人（active 关系）。用于"高价值任务/出口需绑定"的门槛。 */
+export async function isReferralBound(db: Db, userId: number): Promise<boolean> {
+  const [r] = await db
+    .select({ id: referrals.id }).from(referrals)
+    .where(and(eq(referrals.inviteeId, userId), eq(referrals.status, "active"))).limit(1);
+  return !!r;
+}
+
 /** 找 inviteeId 的直接邀请人（active 关系）；无则 null */
 async function directReferrer(db: Db, inviteeId: number): Promise<number | null> {
   const [r] = await db

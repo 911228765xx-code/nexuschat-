@@ -13,6 +13,7 @@ import { calls, users, curationStakes } from "../../drizzle/schema";
 import { eq, and, desc, sql, count } from "drizzle-orm";
 import { fetchTokenData } from "./research";
 import { sanitizeInput } from "../utils/sanitize";
+import { isReferralBound } from "../referralRewards";
 
 /** 允许的时间窗（小时）：1天 / 3天 / 7天 / 30天 */
 const HORIZONS = [24, 72, 168, 720] as const;
@@ -36,6 +37,11 @@ export const callsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // C 折中：发 Call 是高价值玩法，需先绑定邀请人
+      if (!(await isReferralBound(db, ctx.user.id))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再发 Call" });
+      }
 
       // 当日限频
       const ymd = ymdUtc();
@@ -169,6 +175,11 @@ export const callsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // C 折中：策展质押需先绑定邀请人
+      if (!(await isReferralBound(db, ctx.user.id))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与质押" });
+      }
 
       const [c] = await db.select({ userId: calls.userId, status: calls.status }).from(calls).where(eq(calls.id, input.callId)).limit(1);
       if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Call 不存在" });
