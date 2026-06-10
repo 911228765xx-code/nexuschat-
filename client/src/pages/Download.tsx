@@ -9,9 +9,9 @@ import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCo
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 
-// v1.5.13 — 新增 NN 线性归属（vesting）、联合曲线定价、群消息实时广播、nexuschat.best 子域 CORS（2026-06-10）
+// v1.5.14 — AI 内容审核分层、content_violations 表、好友备注名、群禁止互加好友（2026-06-10）
 const ANDROID_APK_URL =
-  "/manus-storage/NexusChat-v1.5.13-android_393d8dec.apk";
+  "/manus-storage/NexusChat-v1.5.14-android_f937a8bb.apk";
 const QR_ANDROID =
   "/manus-storage/qr_android_v152_5a027cb5.png";
 const QR_IOS =
@@ -148,7 +148,7 @@ export default function DownloadPage() {
                 onClick={() => {
                   const link = document.createElement("a");
                   link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.5.13-android.apk";
+                  link.download = "NexusChat-v1.5.14-android.apk";
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
@@ -157,10 +157,10 @@ export default function DownloadPage() {
                 variant="outline"
               >
                 <Download size={15} className="mr-2" />
-                下载 Android APK v1.5.13
+                下载 Android APK v1.5.14
               </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.5.13 · 需要 Android 8.0+ · React Native 原生版
+                版本 v1.5.14 · 需要 Android 8.0+ · React Native 原生版
               </p>
             </div>
 
