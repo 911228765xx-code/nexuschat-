@@ -169,8 +169,12 @@ export const chatRouter = router({
         .limit(1);
       if (existing.length > 0) return { success: true, alreadyMember: true };
       // 群容量上限校验（满员不可加入）
-      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups)
+      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, isPublic: chatGroups.isPublic }).from(chatGroups)
         .where(eq(chatGroups.id, input.groupId)).limit(1);
+      // 私密群不可凭 groupId 直接加入，只能通过邀请链接/群二维码（useInviteLink）
+      if (grp && !grp.isPublic) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "该群为私密群，需通过群成员邀请或二维码加入" });
+      }
       if (grp && grp.maxMembers > 0 && grp.memberCount >= grp.maxMembers) {
         throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
       }
