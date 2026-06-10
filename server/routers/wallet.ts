@@ -3,7 +3,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, swapHistory } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { awardTaskEvent } from "./user";
 
@@ -100,6 +100,14 @@ export const walletRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 防抢绑：一个地址只能被一个账号绑定（大小写不敏感比较）。
+      // 注：地址所有权签名验证留到 TGE/空投领取时强制，绑定阶段先做唯一性。
+      const [taken] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`)
+        .limit(1);
+      if (taken) throw new Error("该钱包地址已被其他账号绑定");
       await db
         .update(users)
         .set({ walletAddress: input.address, walletChain: input.chain })
