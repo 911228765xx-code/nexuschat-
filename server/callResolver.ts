@@ -66,7 +66,13 @@ export async function resolveDueCalls(db: Db): Promise<number> {
       }
       const entry = Number(c.entryPrice);
       if (!cur || !entry || entry <= 0) {
-        // 拿不到现价：本轮跳过，下次再试（不改状态）
+        // 拿不到现价：超期 3 天兜底 void（退还质押，避免 Call/质押永久卡死）；否则下轮再试
+        const overdueMs = Date.now() - new Date(c.resolveAt).getTime();
+        if (overdueMs > 3 * 86_400_000) {
+          await db.update(calls).set({ status: "void", resolvedAt: new Date() }).where(eq(calls.id, c.id));
+          await settleStakesForCall(db, c.id, "void");
+          processed++;
+        }
         continue;
       }
       const changeBp = Math.round(((cur - entry) / entry) * 10_000);

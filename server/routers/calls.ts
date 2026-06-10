@@ -10,7 +10,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { rateLimitWrite } from "../rateLimit";
 import { getDb } from "../db";
 import { calls, users, curationStakes } from "../../drizzle/schema";
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { eq, and, desc, sql, count, gte } from "drizzle-orm";
 import { fetchTokenData } from "./research";
 import { sanitizeInput } from "../utils/sanitize";
 import { isReferralBound } from "../referralRewards";
@@ -190,11 +190,13 @@ export const callsRouter = router({
         .where(and(eq(curationStakes.stakerId, ctx.user.id), eq(curationStakes.callId, input.callId))).limit(1);
       if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "你已质押过这条 Call" });
 
-      const [u] = await db.select({ np: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
-      if (!u || u.np < input.amount) throw new TRPCError({ code: "BAD_REQUEST", message: "NP 余额不足" });
-
       await db.transaction(async (tx) => {
-        await tx.update(users).set({ npPoints: sql`npPoints - ${input.amount}` }).where(eq(users.id, ctx.user.id));
+        // 原子条件扣减：余额不足则 affectedRows=0，防并发双花扣成负数
+        const res = await tx.update(users)
+          .set({ npPoints: sql`npPoints - ${input.amount}` })
+          .where(and(eq(users.id, ctx.user.id), gte(users.npPoints, input.amount)));
+        const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "NP 余额不足" });
         await tx.insert(curationStakes).values({ stakerId: ctx.user.id, callId: input.callId, amount: input.amount });
       });
       return { ok: true };

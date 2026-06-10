@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { tgeConfig, tgeClaims, users } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -54,7 +54,12 @@ export const tgeRouter = router({
 
     const nn = estimateNn(cfg.nnPool, claim.npSnapshot, cfg.totalNpSnapshot);
     await db.transaction(async (tx) => {
-      await tx.update(tgeClaims).set({ claimed: true, nnAmount: nn, claimedAt: new Date() }).where(eq(tgeClaims.id, claim.id));
+      // 原子条件：仅当仍未领取时置为已领，防并发双领白嫖 NN
+      const res = await tx.update(tgeClaims)
+        .set({ claimed: true, nnAmount: nn, claimedAt: new Date() })
+        .where(and(eq(tgeClaims.id, claim.id), eq(tgeClaims.claimed, false)));
+      const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
+      if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "已领取过" });
       await tx.update(users)
         .set({ nnBalance: sql`nnBalance + ${nn}`, npPoints: sql`GREATEST(0, npPoints - ${claim.npSnapshot})` })
         .where(eq(users.id, ctx.user.id));
