@@ -147,7 +147,9 @@ export const referralRouter = router({
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
 
-      // 防多号撸NP：同设备的两个账号禁止建立邀请关系（自己小号绑自己）
+      // 防多号撸NP（设备维度两条规则）：
+      // 1) 同设备的两个账号禁止互绑（自己小号绑自己）；
+      // 2) 同一设备最多 3 个账号能建立邀请关系（防一台设备换号无限绑）。
       {
         const [pair] = await db
           .select({ a: users.deviceId })
@@ -157,6 +159,16 @@ export const referralRouter = router({
           .from(users).where(eq(users.id, referrer.id)).limit(1);
         if (pair?.a && refDev?.b && pair.a === refDev.b) {
           return { success: false, message: "Cannot bind same-device account" };
+        }
+        if (pair?.a) {
+          const [{ c: boundCount = 0 } = { c: 0 }] = await db
+            .select({ c: count() })
+            .from(referrals)
+            .innerJoin(users, eq(referrals.inviteeId, users.id))
+            .where(and(eq(users.deviceId, pair.a), eq(referrals.status, "active")));
+          if (Number(boundCount) >= 3) {
+            return { success: false, message: "Device referral limit reached" };
+          }
         }
       }
 
