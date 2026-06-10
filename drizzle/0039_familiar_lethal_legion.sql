@@ -1,0 +1,1 @@
+ALTER TABLE `contact_metadata` ADD `remarkName` varchar(50);

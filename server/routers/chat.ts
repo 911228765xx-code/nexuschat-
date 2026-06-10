@@ -14,6 +14,7 @@ import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, r
 import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, getPoolInfo, confirmPoolPurchase, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders, nnPoolOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
+import { enforceContent, reviewMessageAsync } from "../moderation";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -275,6 +276,8 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertGroupMember(db, input.groupId, ctx.user.id);
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
+      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
@@ -307,6 +310,8 @@ export const chatRouter = router({
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
+        // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
+        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       }
       return { messageId };
     }),
@@ -326,6 +331,8 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
+      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         senderId: ctx.user.id,
@@ -351,6 +358,10 @@ export const chatRouter = router({
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
+      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
+      if (input.messageType === "text") {
+        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+      }
       return { messageId };
     }),
 
@@ -1173,6 +1184,25 @@ export const chatRouter = router({
       return { ok: true };
     }),
 
+  // 群主设置/取消管理员
+  setMemberRole: protectedProcedure
+    .input(z.object({ groupId: z.number(), userId: z.number(), makeAdmin: z.boolean() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || actor[0].role !== "owner") throw new TRPCError({ code: "FORBIDDEN", message: "仅群主可设置管理员" });
+      const [target] = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.userId))).limit(1);
+      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "该用户不在群里" });
+      if (target.role === "owner") throw new TRPCError({ code: "BAD_REQUEST", message: "不能修改群主角色" });
+      await db.update(groupMembers).set({ role: input.makeAdmin ? "admin" : "member" })
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.userId)));
+      return { ok: true, role: input.makeAdmin ? "admin" : "member" };
+    }),
+
   getMutedMembers: protectedProcedure
     .input(z.object({ groupId: z.number() }))
     .query(async ({ ctx, input }) => {
@@ -1215,6 +1245,7 @@ export const chatRouter = router({
       avatar: z.string().max(500).optional(),
       isPublic: z.boolean().optional(),
       joinApproval: z.boolean().optional(),
+      forbidAddFriend: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -1222,12 +1253,13 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
-      const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean }> = {};
+      const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean; forbidAddFriend: boolean }> = {};
       if (input.name !== undefined) updates.name = sanitizeInput(input.name);
       if (input.description !== undefined) updates.description = sanitizeInput(input.description);
       if (input.avatar !== undefined) updates.avatar = input.avatar;
       if (input.isPublic !== undefined) updates.isPublic = input.isPublic;
       if (input.joinApproval !== undefined) updates.joinApproval = input.joinApproval;
+      if (input.forbidAddFriend !== undefined) updates.forbidAddFriend = input.forbidAddFriend;
       if (Object.keys(updates).length === 0) return { ok: true };
       await db.update(chatGroups).set(updates).where(eq(chatGroups.id, input.groupId));
       return { ok: true };

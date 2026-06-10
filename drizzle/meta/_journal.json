@@ -274,6 +274,34 @@
       "when": 1749000000038,
       "tag": "0038_misty_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1749520000000,
+      "tag": "0039_familiar_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1749520001000,
+      "tag": "0040_sharp_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1749520002000,
+      "tag": "0041_cynical_shinobi_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1781061116121,
+      "tag": "0042_heavy_mindworm",
+      "breakpoints": true
     }
   ]
 }

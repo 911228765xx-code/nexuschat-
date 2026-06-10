@@ -9,6 +9,7 @@ import { createNotification } from "./notificationsRouter";
 import { sanitizeInput } from "../utils/sanitize";
 import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
+import { enforceContent } from "../moderation";
 
 // 广场推广档位（NN 计价，按天）
 export const PROMOTE_PLANS = [
@@ -131,6 +132,8 @@ export const postsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
+      await enforceContent(db, ctx.user.id, input.content, "post", { useAI: true });
 
       const [result] = await db.insert(posts).values({
         authorId: ctx.user.id,

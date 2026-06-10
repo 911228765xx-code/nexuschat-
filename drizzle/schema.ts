@@ -59,6 +59,8 @@ export const chatGroups = mysqlTable("chat_groups", {
   category: varchar("category", { length: 30 }).default("community"),
   // true=进群需群主/管理员审批
   joinApproval: boolean("joinApproval").default(false).notNull(),
+  // true=禁止群成员互相添加好友（群主/管理员可设）
+  forbidAddFriend: boolean("forbidAddFriend").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -355,6 +357,8 @@ export const contactMetadata = mysqlTable(
     userId: int("userId").notNull(),
     contactId: int("contactId").notNull(),
     isFavorite: boolean("isFavorite").default(false).notNull(),
+    // 好友备注名（显示时替代对方昵称；与 note 描述区分）
+    remarkName: varchar("remarkName", { length: 50 }),
     note: text("note"),
     tags: text("tags"), // JSON array of strings
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -911,6 +915,21 @@ export const nnVesting = mysqlTable(
   (t) => [index("idx_vesting_user").on(t.userId)]
 );
 export type NnVesting = typeof nnVesting.$inferSelect;
+
+// ─── 内容违规记录（毒品/赌博/贩卖等违禁内容拦截 + 累犯封禁）──────────────────────
+export const contentViolations = mysqlTable(
+  "content_violations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    category: varchar("category", { length: 20 }).notNull(), // drugs/gambling/trafficking/...
+    source: varchar("source", { length: 20 }).notNull(),     // group/dm/post
+    snippet: varchar("snippet", { length: 200 }),            // 命中内容片段（截断）
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_violation_user").on(t.userId, t.createdAt)]
+);
+export type ContentViolation = typeof contentViolations.$inferSelect;
 
 // ─── AI Consulting Reports ────────────────────────────────────────────────────
 // Stores AI-generated consulting reports (paid content)
