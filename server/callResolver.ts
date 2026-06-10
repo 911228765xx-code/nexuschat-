@@ -18,6 +18,13 @@ const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
 const STAKE_WIN_BONUS = 0.3;    // 策展质押命中奖励比例（押对 +30%，押错销毁 → 净 NP 出口）
 
+/** 策展质押结算返还额：押对=本金+30%，void=退本金，押错=0（销毁）。 */
+export function stakePayout(amount: number, callStatus: "win" | "lose" | "void"): number {
+  if (callStatus === "win") return amount + Math.round(amount * STAKE_WIN_BONUS);
+  if (callStatus === "void") return amount;
+  return 0;
+}
+
 /**
  * 结算某条 Call 上的策展质押。
  * Call 判对 → 质押者拿回本金 + 30% 奖励；判错 → 质押销毁；void → 退本金。
@@ -26,10 +33,8 @@ async function settleStakesForCall(db: Db, callId: number, callStatus: "win" | "
   const stakes = await db.select().from(curationStakes)
     .where(and(eq(curationStakes.callId, callId), eq(curationStakes.status, "active")));
   for (const s of stakes) {
-    let payout = 0;
-    let status: "won" | "lost" | "void" = "lost";
-    if (callStatus === "win") { payout = s.amount + Math.round(s.amount * STAKE_WIN_BONUS); status = "won"; }
-    else if (callStatus === "void") { payout = s.amount; status = "void"; }
+    const payout = stakePayout(s.amount, callStatus);
+    const status: "won" | "lost" | "void" = callStatus === "win" ? "won" : callStatus === "void" ? "void" : "lost";
     // callStatus === 'lose' → payout 0, status lost（质押销毁）
     await db.update(curationStakes)
       .set({ status, payout, settledAt: new Date() })

@@ -39,12 +39,12 @@ function startOfUtcDay(ymd: string): Date {
   return new Date(`${ymd}T00:00:00.000Z`);
 }
 /** 每日 NP 产出上限（号龄分级，防刷）：新号 <7 天 200/天，否则 2000/天 */
-function dailyNpCap(createdAt: Date | string): number {
+export function dailyNpCap(createdAt: Date | string): number {
   const ageDays = (Date.now() - new Date(createdAt).getTime()) / 86_400_000;
   return ageDays < 7 ? 200 : 2000;
 }
 /** 连续签到奖励：第 1 天 10，逐日递增，约连签 7 天封顶 80 */
-function signinStreakReward(streak: number): number {
+export function signinStreakReward(streak: number): number {
   return Math.min(80, 10 + Math.max(0, streak - 1) * 12);
 }
 /**

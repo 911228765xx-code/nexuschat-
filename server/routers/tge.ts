@@ -17,7 +17,7 @@ async function loadConfig(db: Db) {
   const [c] = await db.select().from(tgeConfig).where(eq(tgeConfig.id, 1)).limit(1);
   return c ?? null;
 }
-function estimateNn(nnPool: number, npSnapshot: number, totalNp: number): number {
+export function estimateNn(nnPool: number, npSnapshot: number, totalNp: number): number {
   if (totalNp <= 0 || npSnapshot <= 0) return 0;
   return Math.floor((nnPool * npSnapshot) / totalNp);
 }
