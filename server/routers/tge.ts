@@ -73,6 +73,11 @@ export const tgeRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      // 安全护栏：TGE 开启中、或已有人领取过 → 禁止重拍（否则清掉领取记录会导致 NN 双发）
+      const cfg = await loadConfig(db);
+      if (cfg?.enabled) throw new TRPCError({ code: "BAD_REQUEST", message: "TGE 进行中，请先关闭再重拍快照" });
+      const [claimed] = await db.select({ id: tgeClaims.id }).from(tgeClaims).where(eq(tgeClaims.claimed, true)).limit(1);
+      if (claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已有用户领取过 NN，禁止重拍快照（会导致重复发放）" });
       const [{ total = 0 } = { total: 0 }] = await db
         .select({ total: sql<number>`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
       // 重建快照

@@ -91,7 +91,9 @@ export async function runRankAggregation(
   const memberRows = await db
     .select({ id: users.id, proTier: users.proTier, proUntil: users.proUntil })
     .from(users).where(inArray(users.id, activeIds));
-  const ownerRows = await db.selectDistinct({ creatorId: chatGroups.creatorId }).from(chatGroups);
+  // 群主权重门槛：仅"活跃群"（成员 ≥10）的群主算 3 分，防建 1 人死群刷权重
+  const ownerRows = await db.selectDistinct({ creatorId: chatGroups.creatorId })
+    .from(chatGroups).where(gte(chatGroups.memberCount, 10));
   const owners = new Set(ownerRows.map((r) => r.creatorId));
   const weightOf = new Map<number, number>();
   for (const m of memberRows) {

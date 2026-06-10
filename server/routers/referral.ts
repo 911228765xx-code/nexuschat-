@@ -146,6 +146,21 @@ export const referralRouter = router({
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
 
+      // 防成环：沿"邀请人"的祖先链上溯（≤100 层），若发现自己 → A↔B 互绑或更深的环，拒绝。
+      // 成环会让环内成员互相累积价值分刷段位。
+      {
+        const refRows = await db
+          .select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId })
+          .from(referrals).where(eq(referrals.status, "active"));
+        const parentOf = new Map<number, number>();
+        for (const r of refRows) if (!parentOf.has(r.inviteeId)) parentOf.set(r.inviteeId, r.referrerId);
+        let cur: number | undefined = referrer.id;
+        for (let depth = 0; cur !== undefined && depth < 100; depth++) {
+          if (cur === inviteeId) return { success: false, message: "Cannot bind your own downline" };
+          cur = parentOf.get(cur);
+        }
+      }
+
       // Create referral record + award NP to both atomically, so a partial failure
       // can't leave a referral without its rewards (or one side rewarded but not the other).
       await db.transaction(async (tx) => {
