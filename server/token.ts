@@ -43,7 +43,7 @@ export const NN_NAME = "NexusNation 治理代币";
 
 /**
  * 代币分配模型（DAO 私募认购）。比例可调，需合计 100%。
- * 三大主轴：节点认购 / 质押挖矿 / 流动性共建，外加 DAO 金库、团队(锁仓)、社区。
+ * 三大主轴：合伙人认购 / 质押挖矿 / 流动性共建，外加 DAO 金库、团队(锁仓)、社区。
  */
 export interface AllocationBucket {
   key: string;
@@ -55,7 +55,7 @@ export interface AllocationBucket {
 }
 
 const ALLOCATION_PCT: Omit<AllocationBucket, "amount">[] = [
-  { key: "node",      name: "节点认购",     pct: 25, desc: "DAO 私募：节点认购席位，认购即获 NN 配额", vesting: "按节点等级线性释放" },
+  { key: "node",      name: "合伙人认购",   pct: 25, desc: "平台共建：合伙人席位认购，认购即获 NN 配额", vesting: "按合伙人档位线性释放" },
   { key: "staking",   name: "质押挖矿",     pct: 30, desc: "质押 NN/参与生态挖矿产出，长期激励持有者", vesting: "随挖矿逐步产出" },
   { key: "liquidity", name: "流动性共建",   pct: 15, desc: "DEX/做市流动性池，社区共建交易深度", vesting: "随流动性投放释放" },
   { key: "treasury",  name: "DAO 金库",     pct: 15, desc: "生态建设、治理提案、运营储备", vesting: "DAO 治理解锁" },
@@ -72,7 +72,7 @@ export const NN_ALLOCATION: AllocationBucket[] = ALLOCATION_PCT.map((b) => ({
 export const USDT_DEPOSIT_ADDRESS = process.env.USDT_DEPOSIT_ADDRESS || "";
 export const USDT_CHAIN = process.env.USDT_CHAIN || "TRC20";
 
-/** 节点认购等级（DAO 私募；USDT 支付，配额从「节点认购」池 525 万出） */
+/** 旧版节点等级（已停售，仅保留给历史订单展示/确认；新认购走 server/partner.ts 合伙人档位） */
 export interface NodeTier {
   key: string;
   name: string;

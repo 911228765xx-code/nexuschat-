@@ -24,6 +24,7 @@ import { aiRouter } from "./routers/ai";
 import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
 import { tgeRouter } from "./routers/tge";
+import { partnerRouter } from "./routers/partner";
 
 export const appRouter = router({
   system: systemRouter,
@@ -50,6 +51,7 @@ export const appRouter = router({
   calls: callsRouter,
   npStore: npStoreRouter,
   tge: tgeRouter,
+  partner: partnerRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
