@@ -56,8 +56,9 @@ export async function handleVideoUpload(req: Request, res: Response): Promise<vo
   try {
     const { storagePut } = await import("../storage");
     const key = `chat-videos/${user.id}/${Date.now()}.${ext}`;
-    const { url } = await storagePut(key, body, mime);
-    res.json({ url, maxMB });
+    await storagePut(key, body, mime);
+    const publicUrl = `${req.protocol}://${req.get("host")}/manus-storage/${key}`;
+    res.json({ url: publicUrl, maxMB });
   } catch (err) {
     res.status(500).json({ error: "上传失败，请重试" });
   }

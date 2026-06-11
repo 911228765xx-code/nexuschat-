@@ -134,9 +134,11 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
       const safe = s.name.replace(/[^\w.\-一-龥]+/g, "_").slice(-100) || "file";
       key = `chat-files/${user.id}/${Date.now()}_${safe}`;
     }
-    const { url } = await storagePut(key, body, s.mime);
+    await storagePut(key, body, s.mime);
     cleanup();
-    res.json({ url });
+    // 返回本域名代理地址（流式中转）：大陆网络直连海外 CDN 不稳，经 API 域名稳定可达
+    const publicUrl = `${req.protocol}://${req.get("host")}/manus-storage/${key}`;
+    res.json({ url: publicUrl });
   } catch {
     cleanup();
     res.status(500).json({ error: "上传失败，请重试" });
