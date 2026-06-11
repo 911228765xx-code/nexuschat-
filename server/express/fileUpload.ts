@@ -51,8 +51,9 @@ export async function handleFileUpload(req: Request, res: Response): Promise<voi
   try {
     const { storagePut } = await import("../storage");
     const key = `chat-files/${user.id}/${Date.now()}_${safe}`;
-    const { url } = await storagePut(key, body, mime);
-    res.json({ url, maxMB });
+    await storagePut(key, body, mime);
+    const publicUrl = `${req.protocol}://${req.get("host")}/manus-storage/${key}`;
+    res.json({ url: publicUrl, maxMB });
   } catch {
     res.status(500).json({ error: "上传失败，请重试" });
   }
