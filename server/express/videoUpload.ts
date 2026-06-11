@@ -1,7 +1,7 @@
 /**
  * 聊天视频直传端点（raw body，绕开 base64-JSON 通道的体积限制）。
  * App 用 FileSystem.uploadAsync(BINARY_CONTENT) 从磁盘流式上传，客户端零内存压力；
- * 体积上限按会员档位：free 30MB / Plus 100MB / Pro 200MB（getBenefits.maxVideoMB）。
+ * 体积上限按会员档位：free 60MB / Plus 120MB / Pro 250MB（getBenefits.maxVideoMB）。
  * 鉴权：与 tRPC 相同的会话 Cookie（sdk.authenticateRequest）。
  */
 import type { Request, Response } from "express";
@@ -40,7 +40,7 @@ export async function handleVideoUpload(req: Request, res: Response): Promise<vo
 
   // 会员档位体积上限
   const db = await getDb();
-  const maxMB = db ? (await getBenefits(db, user.id)).maxVideoMB : 30;
+  const maxMB = db ? (await getBenefits(db, user.id)).maxVideoMB : 60;
   if (body.length > maxMB * 1024 * 1024) {
     res.status(413).json({ error: `视频不能超过 ${maxMB}MB（当前会员档位），升级会员可上传更大视频` });
     return;

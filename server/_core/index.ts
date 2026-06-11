@@ -79,7 +79,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // SSE streaming endpoints (must be before tRPC middleware)
   // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
-  app.post("/api/upload/video", express.raw({ type: () => true, limit: "210mb" }), handleVideoUpload);
+  app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
   app.post("/api/token-chat/stream", handleTokenChatStream);
   app.post("/api/research/stream", handleResearchStream);
   // tRPC API
