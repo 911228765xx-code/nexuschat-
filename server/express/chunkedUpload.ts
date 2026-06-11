@@ -107,6 +107,13 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
 
   const cleanup = () => { try { fs.unlinkSync(s.filePath); } catch { /* ignore */ } };
   try {
+    // 完整性校验：客户端报告的原始大小必须与服务端累计字节一致，防分片丢失产生坏文件
+    const expected = parseInt(String(req.query.size ?? "0"), 10);
+    if (expected > 0 && expected !== s.bytes) {
+      cleanup();
+      res.status(400).json({ error: "上传不完整（网络中断），请重试" });
+      return;
+    }
     const db = await getDb();
     const benefits = db ? await getBenefits(db, user.id) : null;
     const maxMB = s.kind === "video" ? (benefits?.maxVideoMB ?? 60) : (benefits?.maxFileMB ?? 60);
