@@ -1,6 +1,6 @@
 /**
  * 聊天文件直传端点（raw body）：PPT/PDF/压缩包等任意文件。
- * 体积上限按会员档位（getBenefits.maxFileMB：free 20MB / Plus 100MB / Pro 500MB）。
+ * 体积上限按会员档位（getBenefits.maxFileMB：free 60MB / Plus 100MB / Pro 500MB）。
  * 文件名经 ?name= 传入（保留扩展名 → 接收方系统面板能用 WPS/Office 等正确打开）。
  * 鉴权：会话 Cookie（sdk.authenticateRequest）。
  */
@@ -38,7 +38,7 @@ export async function handleFileUpload(req: Request, res: Response): Promise<voi
   }
 
   const db = await getDb();
-  const maxMB = db ? (await getBenefits(db, user.id)).maxFileMB : 20;
+  const maxMB = db ? (await getBenefits(db, user.id)).maxFileMB : 60;
   if (body.length > maxMB * 1024 * 1024) {
     res.status(413).json({ error: `文件不能超过 ${maxMB}MB（当前会员档位），升级会员可上传更大文件` });
     return;

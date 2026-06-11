@@ -38,8 +38,8 @@ export interface MembershipTier {
 export const MEMBERSHIP_TIERS: MembershipTier[] = [
   {
     key: "free", name: "免费用户", monthlyNN: 0, color: "#94A3B8", tagline: "基础社交体验",
-    benefits: { maxGroups: 3, maxGroupMembers: 200, aiDailyFree: 3, maxFileMB: 20, maxVideoMB: 60, adFree: false, badge: null },
-    perks: ["建群上限 3 个", "群人数上限 200", "每日 3 次免费 AI", "文件 ≤ 20MB", "视频 ≤ 60MB"],
+    benefits: { maxGroups: 3, maxGroupMembers: 200, aiDailyFree: 3, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null },
+    perks: ["建群上限 3 个", "群人数上限 200", "每日 3 次免费 AI", "文件 ≤ 60MB", "视频 ≤ 60MB"],
   },
   {
     key: "plus", name: "会员 Plus", monthlyNN: 99, color: "#6366F1", tagline: "进阶社群运营",
