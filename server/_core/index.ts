@@ -16,6 +16,7 @@ import { startRankAggregation } from "../rankEngine";
 import { startCallResolver } from "../callResolver";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleResearchStream } from "../express/researchStream";
+import { handleChunkStart, handleChunkPart, handleChunkFinish } from "../express/chunkedUpload";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
 import compressionMiddleware from "compression";
@@ -78,6 +79,10 @@ async function startServer() {
   registerStorageProxy(app);
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // 分片上传（每片 ≤16MB，穿透任何前置代理的体积限制；视频/文件通用）
+  app.post("/api/upload/chunked/start", express.json({ limit: "1mb" }), handleChunkStart);
+  app.post("/api/upload/chunked/part", express.text({ type: () => true, limit: "16mb" }), handleChunkPart);
+  app.post("/api/upload/chunked/finish", handleChunkFinish);
   // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
   app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
   // 文件直传（PPT/PDF 等，按会员档位限体积，Pro 最高 500MB）
