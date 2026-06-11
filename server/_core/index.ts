@@ -15,6 +15,7 @@ import { startMessageCleanup } from "../messageCleanup";
 import { startRankAggregation } from "../rankEngine";
 import { startCallResolver } from "../callResolver";
 import { handleTokenChatStream } from "../express/tokenChatStream";
+import { handleVideoUpload } from "../express/videoUpload";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
 import cors from "cors";
@@ -77,6 +78,8 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // SSE streaming endpoints (must be before tRPC middleware)
+  // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
+  app.post("/api/upload/video", express.raw({ type: () => true, limit: "210mb" }), handleVideoUpload);
   app.post("/api/token-chat/stream", handleTokenChatStream);
   app.post("/api/research/stream", handleResearchStream);
   // tRPC API
