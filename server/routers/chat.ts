@@ -1961,26 +1961,9 @@ export const chatRouter = router({
   createNodeOrder: protectedProcedure
     .input(z.object({ tier: z.enum(["genesis", "super", "standard"]) }))
     .use(rateLimitWrite)
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("DB unavailable");
-      const tier = getNodeTier(input.tier);
-      if (!tier) throw new TRPCError({ code: "BAD_REQUEST", message: "未知节点等级" });
-      const [res] = await db.insert(nnNodeOrders).values({
-        userId: ctx.user.id,
-        tier: tier.key,
-        usdtAmount: tier.usdtPrice,
-        nnAmount: tier.nnAmount,
-        payAddress: USDT_DEPOSIT_ADDRESS || null,
-      }).$returningId();
-      return {
-        orderId: (res as any).id,
-        tier: tier.key,
-        usdtAmount: tier.usdtPrice,
-        nnAmount: tier.nnAmount,
-        payAddress: USDT_DEPOSIT_ADDRESS,
-        chain: USDT_CHAIN,
-      };
+    .mutation(async () => {
+      // 节点认购已升级为合伙人计划：停止旧档位下单（历史订单的确认/取消入口保留在下方 admin 接口）
+      throw new TRPCError({ code: "BAD_REQUEST", message: "节点认购已升级为「合伙人招募」，请前往代币页 → 合伙人招募认购" });
     }),
 
   // 回填链上转账哈希（用户支付后提交，等待运营确认）
