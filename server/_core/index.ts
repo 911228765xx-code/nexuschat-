@@ -17,6 +17,7 @@ import { startCallResolver } from "../callResolver";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
+import { handleChunkStart, handleChunkPart, handleChunkFinish } from "../express/chunkedUpload";
 import { handleResearchStream } from "../express/researchStream";
 import compressionMiddleware from "compression";
 import cors from "cors";
@@ -83,6 +84,10 @@ async function startServer() {
   app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
   // 文件直传（PPT/PDF 等，按会员档位限体积，Pro 最高 500MB）
   app.post("/api/upload/file", express.raw({ type: () => true, limit: "510mb" }), handleFileUpload);
+  // 分片上传（每片 ≤16MB，穿透任何前置代理的体积限制；视频/文件通用）
+  app.post("/api/upload/chunked/start", express.json({ limit: "1mb" }), handleChunkStart);
+  app.post("/api/upload/chunked/part", express.text({ type: () => true, limit: "16mb" }), handleChunkPart);
+  app.post("/api/upload/chunked/finish", handleChunkFinish);
   app.post("/api/token-chat/stream", handleTokenChatStream);
   app.post("/api/research/stream", handleResearchStream);
   // tRPC API
