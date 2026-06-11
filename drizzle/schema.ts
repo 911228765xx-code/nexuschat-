@@ -46,6 +46,9 @@ export const users = mysqlTable("users", {
   lastSigninYmd: varchar("lastSigninYmd", { length: 10 }),
   // 设备指纹（防女巫/多号撸NP）：注册/登录时上报；同设备限注册数、限每日NP、禁互绑
   deviceId: varchar("deviceId", { length: 64 }),
+  // 合伙人计划：身份档位（partner/super/founder，null=非合伙人）+ 累计已确认认购额（USDT）
+  partnerTier: varchar("partnerTier", { length: 20 }),
+  partnerStakeUsdt: int("partnerStakeUsdt").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -1008,6 +1011,90 @@ export const nnVesting = mysqlTable(
   (t) => [index("idx_vesting_user").on(t.userId)]
 );
 export type NnVesting = typeof nnVesting.$inferSelect;
+
+// ─── 合伙人计划（平台共建 · USDT 认购 + 双池分红 + USDT 认购奖励）────────────────
+// 认购奖励（USDT）：确认到账后按档位比例（5%/8%/10%）生成，分 6 期按月解锁领取
+export const partnerBonuses = mysqlTable(
+  "partner_bonuses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    orderId: int("orderId").notNull(),               // 关联 nn_node_orders.id
+    totalUsdt: int("totalUsdt").notNull(),           // 奖励总额（USDT 整数）
+    periods: int("periods").default(6).notNull(),    // 解锁期数（月）
+    claimedPeriods: int("claimedPeriods").default(0).notNull(),
+    claimedUsdt: int("claimedUsdt").default(0).notNull(),
+    startAt: timestamp("startAt").notNull(),         // 解锁起算时间（确认到账时刻）
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_pbonus_user").on(t.userId)]
+);
+export type PartnerBonus = typeof partnerBonuses.$inferSelect;
+
+// USDT 奖励提取申请（链上打款在 App 外，运营核验后标记已支付）
+export const partnerPayouts = mysqlTable(
+  "partner_payouts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    bonusId: int("bonusId").notNull(),
+    period: int("period").notNull(),                 // 第几期（1..periods）
+    amountUsdt: int("amountUsdt").notNull(),
+    address: varchar("address", { length: 120 }).notNull(), // 收款地址
+    status: mysqlEnum("status", ["pending", "paid", "rejected"]).default("pending").notNull(),
+    txHash: varchar("txHash", { length: 120 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    paidAt: timestamp("paidAt"),
+  },
+  (t) => [
+    index("idx_ppayout_user").on(t.userId),
+    index("idx_ppayout_status").on(t.status),
+    uniqueIndex("uniq_ppayout_bonus_period").on(t.bonusId, t.period), // 防同期重复申请
+  ]
+);
+export type PartnerPayout = typeof partnerPayouts.$inferSelect;
+
+// NN 分红台账（每日结算逐人记账：kind=fee 手续费池 / revenue 收益池）
+export const partnerEarnings = mysqlTable(
+  "partner_earnings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    kind: mysqlEnum("kind", ["fee", "revenue"]).notNull(),
+    amountNN: int("amountNN").notNull(),
+    ymd: varchar("ymd", { length: 10 }).notNull(),   // 结算自然日（UTC）
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_pearn_user").on(t.userId, t.createdAt), index("idx_pearn_ymd").on(t.ymd)]
+);
+export type PartnerEarning = typeof partnerEarnings.$inferSelect;
+
+// 分红结算执行记录（幂等闸：每天每池只结一次）
+export const partnerSettleRuns = mysqlTable(
+  "partner_settle_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ymd: varchar("ymd", { length: 10 }).notNull(),
+    kind: varchar("kind", { length: 10 }).notNull(), // fee / revenue
+    poolNN: int("poolNN").default(0).notNull(),      // 当次入池总额（审计）
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_psettle_ymd_kind").on(t.ymd, t.kind)]
+);
+
+// 平台手续费台账（生态内收 5% 手续费的交易逐笔记账；其中 3.7% 注入手续费分红池）
+export const platformFeeLedger = mysqlTable(
+  "platform_fee_ledger",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baseNN: int("baseNN").notNull(),                 // 交易基数（NN）
+    poolNN: int("poolNN").notNull(),                 // 入池额 = baseNN × 3.7%
+    source: varchar("source", { length: 30 }).notNull(), // 手续费来源（redpacket/transfer/trade/...）
+    settled: boolean("settled").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_pfee_settled").on(t.settled)]
+);
 
 // ─── 内容违规记录（毒品/赌博/贩卖等违禁内容拦截 + 累犯封禁）──────────────────────
 export const contentViolations = mysqlTable(

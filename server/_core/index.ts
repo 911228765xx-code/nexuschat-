@@ -14,6 +14,7 @@ import { startBotScheduler } from "../botScheduler";
 import { startMessageCleanup } from "../messageCleanup";
 import { startRankAggregation } from "../rankEngine";
 import { startCallResolver } from "../callResolver";
+import { startPartnerSettlement } from "../partner";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
@@ -129,6 +130,8 @@ async function startServer() {
   startRankAggregation();
   // Alpha 战绩：每 30 分钟结算到期 Call
   startCallResolver();
+  // 合伙人双池分红：每日结算（幂等）
+  startPartnerSettlement();
 
   // Backfill referral invite codes for any users missing one (best-effort, non-blocking).
   void (async () => {
