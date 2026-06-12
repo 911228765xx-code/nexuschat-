@@ -414,7 +414,7 @@ export default function PosterGenerator({
                             {totalRewards.toLocaleString()}
                           </p>
                           <p className="text-sm" style={{ color: template.subtitleColor }}>
-                            NP {t("poster.earned")}
+                            AC {t("poster.earned")}
                           </p>
                         </div>
                         <div className="w-px" style={{ background: template.cardBorder }} />
@@ -426,7 +426,7 @@ export default function PosterGenerator({
                             +500
                           </p>
                           <p className="text-sm" style={{ color: template.subtitleColor }}>
-                            NP {t("poster.bonus")}
+                            AC {t("poster.bonus")}
                           </p>
                         </div>
                       </div>

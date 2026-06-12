@@ -1,9 +1,9 @@
 /**
- * Pro 会员体系（订阅制，NN 计价）
+ * Pro 会员体系（订阅制，AI 计价）
  *
  * - 三档：free / plus / pro。特权：建群数、群人数上限、AI 每日免费额度、免广告、文件大小、徽章。
  * - 过期降级：proUntil 早于现在即视为 free。
- * - 会员费用 NN 扣减（回流金库），记入 NN 流水。
+ * - 会员费用 AI 扣减（回流金库），记入 AI 流水。
  */
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
@@ -30,7 +30,7 @@ export interface TierBenefits {
 export interface MembershipTier {
   key: ProTier;
   name: string;
-  monthlyNN: number;        // 月费（NN），free=0
+  monthlyNN: number;        // 月费（AI），free=0
   color: string;
   tagline: string;
   benefits: TierBenefits;
@@ -41,17 +41,17 @@ export const MEMBERSHIP_TIERS: MembershipTier[] = [
   {
     key: "free", name: "免费用户", monthlyNN: 0, color: "#94A3B8", tagline: "基础社交体验",
     benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 0, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false },
-    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "AI 按次付费 10 NN/次", "文件 ≤ 60MB", "视频 ≤ 60MB"],
+    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "AI 按次付费 10 AI/次", "文件 ≤ 60MB", "视频 ≤ 60MB"],
   },
   {
     key: "plus", name: "会员 Plus", monthlyNN: 80, color: "#6366F1", tagline: "进阶社群运营",
     benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false },
-    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 NN/次）", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
+    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 AI/次）", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
   },
   {
     key: "pro", name: "高级会员 Pro", monthlyNN: 200, color: "#F59E0B", tagline: "专业玩家 / KOL",
     benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true },
-    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 NN/次）", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
+    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 AI/次）", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
   },
 ];
 
@@ -107,7 +107,7 @@ export async function getBenefits(db: Db, userId: number): Promise<TierBenefits>
   return getTier(effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null)).benefits;
 }
 
-/** 开通/续费会员：扣 NN，叠加有效期。返回新状态。 */
+/** 开通/续费会员：扣 AI，叠加有效期。返回新状态。 */
 export async function buyMembership(db: Db, userId: number, tierKey: ProTier, months: number) {
   const tier = getTier(tierKey);
   if (tier.key === "free" || tier.monthlyNN <= 0) throw new Error("invalid tier");

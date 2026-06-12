@@ -6,7 +6,7 @@
  * - 读写每个群开了哪些机器人 + 配置（group_bots 表）。
  * - 执行：欢迎机器人（入群自动欢迎）已接入 joinGroup；管理机器人关键词检测在发消息时调用。
  *
- * 计费用 NN 治理代币（红包/积分仍用 NP），订阅到期 expiresAt 控制是否生效。
+ * 计费用 AI 治理代币（红包/积分仍用 AC），订阅到期 expiresAt 控制是否生效。
  */
 import { eq, and, gt, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -34,7 +34,7 @@ export interface BotCatalogItem {
   tagline: string; // 一句话卖点
   desc: string;
   monthlyNN: number; // 月订阅价（按 currency 计价），0=免费
-  currency: "NP" | "NN"; // 计价货币：基础四件套用 NP（积分出口），其余用 NN
+  currency: "AC" | "AI"; // 计价货币：基础四件套用 AC（积分出口），其余用 AI
   interactive: boolean; // 是否会主动/被动发消息（互动机器人）
   configFields: BotConfigField[];
   defaultConfig: Record<string, unknown>;
@@ -49,7 +49,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "新成员入群自动欢迎",
     desc: "有人加入群聊时，自动发送一条欢迎语，可带群规与暗号。",
     monthlyNN: 10000,
-    currency: "NP",
+    currency: "AC",
     interactive: true,
     configFields: [
       { key: "message", label: "欢迎语", type: "textarea", placeholder: "欢迎 {name} 加入本群！进群先看群公告~", hint: "可用 {name} 代表新成员昵称" },
@@ -63,7 +63,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "关键词检测 · 自动提醒",
     desc: "检测到设定的违禁关键词时自动发出提醒，减轻群主管理负担。",
     monthlyNN: 30000,
-    currency: "NP",
+    currency: "AC",
     interactive: true,
     configFields: [
       { key: "keywords", label: "违禁关键词", type: "tags", hint: "命中任一关键词即提醒，回车添加" },
@@ -78,7 +78,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "定时播报币价行情",
     desc: "每天定时在群里播报关注币种的价格与涨跌（需后端调度开启）。",
     monthlyNN: 80000,
-    currency: "NP",
+    currency: "AC",
     interactive: true,
     configFields: [
       { key: "tokens", label: "关注币种", type: "tags", hint: "如 BTC、ETH、SOL，回车添加" },
@@ -93,7 +93,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "签到 · 定时活动提醒",
     desc: "定时提醒群成员签到/参与活动，活跃群氛围（需后端调度开启）。",
     monthlyNN: 150000,
-    currency: "NP",
+    currency: "AC",
     interactive: true,
     configFields: [
       { key: "message", label: "活动提醒语", type: "textarea", placeholder: "今日签到开始啦，回复「签到」参与～" },
@@ -108,7 +108,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "AI 在群里自由聊天互动",
     desc: "一个有人设的 AI 成员，会根据群里聊天内容自然地参与讨论、答疑、活跃气氛（可设人设/回复频率/仅被@时回复）。",
     monthlyNN: 49,
-    currency: "NN",
+    currency: "AI",
     interactive: true,
     configFields: [
       { key: "persona", label: "机器人人设/风格", type: "textarea", placeholder: "你是本群的 AI 助手，友好、专业又幽默，擅长 Web3 话题", hint: "决定它的说话风格" },
@@ -122,12 +122,12 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     name: "添粉机器人",
     icon: "rocket",
     tagline: "拉新增长 · 邀请奖励",
-    desc: "成员通过邀请链接拉来新人时，自动奖励邀请人 NP 并在群里致谢，激励大家拉新涨粉。",
+    desc: "成员通过邀请链接拉来新人时，自动奖励邀请人 AC 并在群里致谢，激励大家拉新涨粉。",
     monthlyNN: 35,
-    currency: "NN",
+    currency: "AI",
     interactive: true,
     configFields: [
-      { key: "inviteReward", label: "每邀请1人奖励(NP)", type: "number", placeholder: "5", hint: "上限 100/人" },
+      { key: "inviteReward", label: "每邀请1人奖励(AC)", type: "number", placeholder: "5", hint: "上限 100/人" },
       { key: "announceInvite", label: "群内致谢邀请人", type: "switch", hint: "新人加入时自动发感谢消息" },
       { key: "promoText", label: "推广文案(选填)", type: "textarea", placeholder: "本群专注 Web3 alpha，欢迎邀请好友一起来！", hint: "用于分享/未来定时推广到广场" },
     ],
@@ -140,7 +140,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "群数据周报",
     desc: "解锁「群数据看板」并每周生成增长/活跃周报。",
     monthlyNN: 25,
-    currency: "NN",
+    currency: "AI",
     interactive: false,
     configFields: [],
     defaultConfig: {},
@@ -154,8 +154,8 @@ export const BOT_PACKAGES = [
     name: "新群启动包",
     desc: "欢迎 + 活动，零门槛把群带活。",
     bots: ["welcome", "activity"] as BotType[],
-    monthlyNN: 135000, // 原价 10000+150000=160000，套餐价（NP）
-    currency: "NP" as const,
+    monthlyNN: 135000, // 原价 10000+150000=160000，套餐价（AC）
+    currency: "AC" as const,
     badge: "入门",
   },
   {
@@ -163,8 +163,8 @@ export const BOT_PACKAGES = [
     name: "群管四件套",
     desc: "欢迎 + 管理 + 行情 + 活动，群运营一步到位。",
     bots: ["welcome", "manage", "price", "activity"] as BotType[],
-    monthlyNN: 225000, // 原价 10000+30000+80000+150000=270000，套餐价（NP）
-    currency: "NP" as const,
+    monthlyNN: 225000, // 原价 10000+30000+80000+150000=270000，套餐价（AC）
+    currency: "AC" as const,
     badge: "热门",
   },
   {
@@ -172,8 +172,8 @@ export const BOT_PACKAGES = [
     name: "AI 增长包",
     desc: "互动 + 添粉 + 数据，AI 互动与拉新一条龙。",
     bots: ["interact", "growth", "stats"] as BotType[],
-    monthlyNN: 89, // 原价 49+35+25=109，套餐价（NN）
-    currency: "NN" as const,
+    monthlyNN: 89, // 原价 49+35+25=109，套餐价（AI）
+    currency: "AI" as const,
     badge: "涨粉",
   },
 ];
@@ -411,7 +411,7 @@ export async function runGrowthReward(db: Db, groupId: number, inviterId: number
     const invName = inv?.name ?? inv?.username ?? "群友";
     await sendGroupBotMessage(
       db, groupId,
-      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} NP` : ""}`,
+      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} AC` : ""}`,
     );
   }
 }

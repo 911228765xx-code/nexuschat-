@@ -239,7 +239,7 @@ export default function Discover() {
       id: String(u.id),
       name: u.displayName,
       avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
-      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
+      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} AC` : `${u.npPoints ?? 0} AC`,
       followers: u.npPoints ?? 0,
       isVerified: (u.npPoints ?? 0) >= 1000,
     }));

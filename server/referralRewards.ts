@@ -1,10 +1,10 @@
 /**
- * 裂变层奖励（NP 模型 Phase 2b）：
- *  - 邀请里程碑奖：被邀请人首次达成高价值动作（开会员/建群/…）→ 直接邀请人一次性 NP（幂等）。
- *  - 会员消费分成：被邀请人每次续费会员 → 直接邀请人持续 NP（仅 1 级，合法分销）。
+ * 裂变层奖励（AC 模型 Phase 2b）：
+ *  - 邀请里程碑奖：被邀请人首次达成高价值动作（开会员/建群/…）→ 直接邀请人一次性 AC（幂等）。
+ *  - 会员消费分成：被邀请人每次续费会员 → 直接邀请人持续 AC（仅 1 级，合法分销）。
  *
- * 合规：均只奖【直接邀请人】（1 级），不向上多级分润；奖励为不可提现 NP；
- *       里程碑奖一次性、消费分成挂真实付费，不与段位加成叠加（独立 NP 流）。
+ * 合规：均只奖【直接邀请人】（1 级），不向上多级分润；奖励为不可提现 AC；
+ *       里程碑奖一次性、消费分成挂真实付费，不与段位加成叠加（独立 AC 流）。
  */
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "./db";
@@ -32,7 +32,7 @@ async function directReferrer(db: Db, inviteeId: number): Promise<number | null>
 }
 
 /**
- * 一次性里程碑奖：被邀请人首次达成某里程碑 → 邀请人得 NP（每人每里程碑仅一次）。
+ * 一次性里程碑奖：被邀请人首次达成某里程碑 → 邀请人得 AC（每人每里程碑仅一次）。
  * fire-and-forget 调用，失败不影响主流程。
  */
 export async function awardReferrerMilestone(
@@ -56,7 +56,7 @@ export async function awardReferrerMilestone(
 }
 
 /**
- * 会员消费分成（1 级，每次续费都发）：Plus +200 / Pro +500 NP 给直接邀请人。
+ * 会员消费分成（1 级，每次续费都发）：Plus +200 / Pro +500 AC 给直接邀请人。
  * fire-and-forget 调用。
  */
 export async function awardMembershipShare(

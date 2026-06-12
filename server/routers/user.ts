@@ -26,10 +26,10 @@ import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 import { isReferralBound } from "../referralRewards";
 
-/** C 折中：这些"高价值任务"需先绑定邀请人才发 NP（基础任务不受限）。 */
+/** C 折中：这些"高价值任务"需先绑定邀请人才发 AC（基础任务不受限）。 */
 const REQUIRES_BINDING = new Set(["first_research", "research_daily"]);
 
-// ─── NP 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
+// ─── AC 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
 /** UTC 日期 YYYY-MM-DD */
 function ymdUtc(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
@@ -38,7 +38,7 @@ function ymdUtc(d: Date = new Date()): string {
 function startOfUtcDay(ymd: string): Date {
   return new Date(`${ymd}T00:00:00.000Z`);
 }
-/** 每日 NP 产出上限（号龄分级，防刷）：新号 <7 天 200/天，否则 2000/天 */
+/** 每日 AC 产出上限（号龄分级，防刷）：新号 <7 天 200/天，否则 2000/天 */
 export function dailyNpCap(createdAt: Date | string): number {
   const ageDays = (Date.now() - new Date(createdAt).getTime()) / 86_400_000;
   return ageDays < 7 ? 200 : 2000;
@@ -48,16 +48,16 @@ export function signinStreakReward(streak: number): number {
   return Math.min(80, 10 + Math.max(0, streak - 1) * 12);
 }
 /**
- * 在事务内发放 NP，capped=true 时受每日产出上限约束（按号龄分级，封顶削减）。
+ * 在事务内发放 AC，capped=true 时受每日产出上限约束（按号龄分级，封顶削减）。
  * 返回实际发放额（可能小于 amount）。一次性里程碑任务用 capped=false 不受限。
  */
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /**
- * 在事务内发放 NP。capped=true（每日可重复任务）时：
+ * 在事务内发放 AC。capped=true（每日可重复任务）时：
  *  - base 受每日产出上限约束（号龄分级），仅 base 计入每日台账；
  *  - 段位加成 + 声誉加成只乘 base，额外部分一并入账（不再计入上限，体现"加成另算"）。
  * capped=false（一次性里程碑）：原额发放，不受上限、不加段位倍率。
- * 返回最终入账的 NP 总额。
+ * 返回最终入账的 AC 总额。
  */
 async function creditNp(
   tx: Tx, userId: number, amount: number, capped: boolean,
@@ -72,7 +72,7 @@ async function creditNp(
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
-    // 防多号撸NP：同一设备每天最多 3 个账号正常发放 NP，第 4 个起当日不发
+    // 防多号撸AC：同一设备每天最多 3 个账号正常发放 AC，第 4 个起当日不发
     if (u.deviceId) {
       const [{ c: otherEarners = 0 } = { c: 0 }] = await tx
         .select({ c: sql<number>`COUNT(DISTINCT ${userDailyNp.userId})` })
@@ -150,7 +150,7 @@ export const TASK_DEFINITIONS: Record<
   },
   daily_login: {
     label: "每日签到",
-    description: "每天签到，连续签到奖励递增（封顶 80 NP）",
+    description: "每天签到，连续签到奖励递增（封顶 80 AC）",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1,
@@ -502,7 +502,7 @@ export const userRouter = router({
       return _completeTask(ctx.user.id, input.taskType, db);
     }),
 
-  // ─── 上报设备指纹（防多号撸NP；App 启动后调用）────────────────────────────────
+  // ─── 上报设备指纹（防多号撸AC；App 启动后调用）────────────────────────────────
   reportDevice: protectedProcedure
     .input(z.object({ deviceId: z.string().min(8).max(64) }))
     .mutation(async ({ ctx, input }) => {
@@ -715,14 +715,14 @@ export const userRouter = router({
       .from(userTasks)
       .where(eq(userTasks.userId, ctx.user.id));
 
-    // Get user's NP points
+    // Get user's AC points
     const [userRow] = await db
       .select({ npPoints: users.npPoints })
       .from(users)
       .where(eq(users.id, ctx.user.id))
       .limit(1);
 
-    // Calculate rank (users with more NP points + 1)
+    // Calculate rank (users with more AC points + 1)
     const [rankRow] = await db
       .select({ count: count() })
       .from(users)
@@ -746,7 +746,7 @@ async function _completeTask(
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
 
-  // C 折中：高价值任务需先绑定邀请人才发 NP（基础任务不受限；报告等功能仍可正常使用）
+  // C 折中：高价值任务需先绑定邀请人才发 AC（基础任务不受限；报告等功能仍可正常使用）
   if (REQUIRES_BINDING.has(taskType) && !(await isReferralBound(db, userId))) {
     return { success: false, npEarned: 0, alreadyCompleted: false };
   }

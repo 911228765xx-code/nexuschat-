@@ -192,7 +192,7 @@ export const partnerRouter = router({
       return { ok: true, amountUsdt: amount };
     }),
 
-  // ─── 运营：确认到账（发 NN 配额 + 身份 + USDT 奖励 + 赠 Pro） ────────────────
+  // ─── 运营：确认到账（发 AI 配额 + 身份 + USDT 奖励 + 赠 Pro） ────────────────
   adminConfirmOrder: adminProcedure
     .input(z.object({ orderId: z.number() }))
     .mutation(async ({ input }) => {
@@ -211,7 +211,7 @@ export const partnerRouter = router({
       const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
       if (!affected) throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
 
-      // 2) NN 配额走线性归属（按"当前"档位汇率重算，防旧汇率挂单按旧价铸币）
+      // 2) AI 配额走线性归属（按"当前"档位汇率重算，防旧汇率挂单按旧价铸币）
       const nnNow = o.usdtAmount * tier.nnPerUsdt;
       if (nnNow !== o.nnAmount) {
         await db.update(nnNodeOrders).set({ nnAmount: nnNow }).where(eq(nnNodeOrders.id, o.id));

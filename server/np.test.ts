@@ -1,5 +1,5 @@
 /**
- * NP 积分模型逻辑测试：验证段位/加成/升段奖/日俸/连签/每日上限/价值分/质押/TGE
+ * AC 积分模型逻辑测试：验证段位/加成/升段奖/日俸/连签/每日上限/价值分/质押/TGE
  * 算出来的数与设计文档一致。打的都是真实实现函数。
  */
 import { describe, it, expect } from "vitest";
@@ -83,7 +83,7 @@ describe("reputationBonus（封顶 0.3）", () => {
 });
 
 // ─── 结算公式：实得 = base×(1+段位+声誉) + 日俸 ──────────────────────────────────
-describe("NP 结算公式（用真实 tierBonus/reputationBonus 组合）", () => {
+describe("AC 结算公式（用真实 tierBonus/reputationBonus 组合）", () => {
   const settle = (base: number, tier: number, rep: number) =>
     Math.round(base * (1 + tierBonus(tier) + reputationBonus(rep))) + tierDaily(tier);
 
@@ -139,7 +139,7 @@ describe("stakePayout（押对+30% / 押错销毁 / void退本）", () => {
   it("押对：100 → 130", () => expect(stakePayout(100, "win")).toBe(130));
   it("押错：100 → 0（销毁）", () => expect(stakePayout(100, "lose")).toBe(0));
   it("void：100 → 100（退本）", () => expect(stakePayout(100, "void")).toBe(100));
-  it("净 NP 出口：胜率40%时平均返还 < 本金（净销毁）", () => {
+  it("净 AC 出口：胜率40%时平均返还 < 本金（净销毁）", () => {
     const winRate = 0.4;
     const avg = winRate * stakePayout(100, "win") + (1 - winRate) * stakePayout(100, "lose");
     expect(avg).toBeLessThan(100); // 0.4*130 + 0.6*0 = 52 < 100
@@ -148,7 +148,7 @@ describe("stakePayout（押对+30% / 押错销毁 / void退本）", () => {
 
 // ─── TGE 兑换 ────────────────────────────────────────────────────────────────────
 describe("estimateNn（TGE pro-rata：nnPool×个人/全站）", () => {
-  it("普通用户：池1.05M NN / 全站60亿NP / 持7.5万NP ≈ 13 NN", () => {
+  it("普通用户：池1.05M AI / 全站60亿AC / 持7.5万AC ≈ 13 AI", () => {
     expect(estimateNn(1_050_000, 75_000, 6_000_000_000)).toBe(13);
   });
   it("持有越多兑越多（单调）", () => {

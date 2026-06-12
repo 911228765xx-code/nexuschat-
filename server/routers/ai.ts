@@ -29,7 +29,7 @@ async function incrAiUsedToday(db: AiDb, userId: number): Promise<void> {
   if (!affected) { try { await db.insert(aiDailyUsage).values({ userId, day, count: 1 }); } catch { /* race */ } }
 }
 
-// AI 付费研报类型目录（NN 计价）
+// AI 付费研报类型目录（AI 计价）
 const REPORT_TYPES = [
   { key: "project" as const, name: "项目尽调报告", icon: "cube", priceNN: 50, desc: "对 Web3 项目做基本面 / 团队 / 代币 / 风险尽调", placeholder: "输入项目名称或官网 / 合约，如 Arbitrum" },
   { key: "security" as const, name: "合约安全速评", icon: "shield-checkmark", priceNN: 80, desc: "对智能合约 / 代币做安全风险速评（非正式审计）", placeholder: "输入合约地址或项目名" },
@@ -57,8 +57,8 @@ function buildReportPrompt(queryType: string, queryText: string): Message[] {
   ];
 }
 
-// 与 AI 助手对话每次消耗的 NP 积分（默认值，可在 app_config 后台配置覆盖）
-const DEFAULT_AI_CHAT_COST = 10; // NN/次（免费额度用完后）
+// 与 AI 助手对话每次消耗的 AC 积分（默认值，可在 app_config 后台配置覆盖）
+const DEFAULT_AI_CHAT_COST = 10; // AI/次（免费额度用完后）
 let _costCache: { value: number; at: number } | null = null;
 
 // 读取当前 AI 单价（app_config.aiChatCost），带 60s 内存缓存
@@ -203,7 +203,7 @@ export const aiRouter = router({
 
       const cost = await getAiChatCost();
 
-      // 会员每日免费额度（free 0 / Plus 3 / Pro 10）：用完按 NN 单次计费
+      // 会员每日免费额度（free 0 / Plus 3 / Pro 10）：用完按 AI 单次计费
       const benefits = await getBenefits(db, ctx.user.id);
       const usedToday = await getAiUsedToday(db, ctx.user.id);
       const freeQuota = benefits.aiDailyFree;
@@ -218,7 +218,7 @@ export const aiRouter = router({
           ? `你的会员每日 **${freeQuota} 次**免费 AI，已用完；`
           : `免费用户 AI 按次计费；`;
         return {
-          reply: `${freeQuota > 0 ? "今日免费额度已用完" : "AI 按次计费"} 💡\n\n${quotaLine}每次消耗 **${cost} NN**，当前余额 **${balance} NN**。\n开通会员可享每日免费额度（Plus 3 次 / Pro 10 次），或先获取 NN。`,
+          reply: `${freeQuota > 0 ? "今日免费额度已用完" : "AI 按次计费"} 💡\n\n${quotaLine}每次消耗 **${cost} AI**，当前余额 **${balance} AI**。\n开通会员可享每日免费额度（Plus 3 次 / Pro 10 次），或先获取 AI。`,
           actions: [],
           insufficient: true,
           cost,
@@ -228,7 +228,7 @@ export const aiRouter = router({
         };
       }
 
-      // 先扣后退：付费请求先原子扣 NN，LLM 失败再退款（防并发请求白嫖大模型）
+      // 先扣后退：付费请求先原子扣 AI，LLM 失败再退款（防并发请求白嫖大模型）
       let charged = false;
       if (!isFree) {
         charged = await spendNN(db, ctx.user.id, cost, { type: "ai_chat", refType: "user", refId: ctx.user.id, memo: "AI对话" });
@@ -236,7 +236,7 @@ export const aiRouter = router({
           const [b2] = await db.select({ nn: users.nnBalance }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
           const bal2 = Number(b2?.nn ?? 0);
           return {
-            reply: `余额不足 💡\n\n每次消耗 **${cost} NN**，当前余额 **${bal2} NN**。开通会员可享每日免费额度（Plus 3 次 / Pro 10 次）。`,
+            reply: `余额不足 💡\n\n每次消耗 **${cost} AI**，当前余额 **${bal2} AI**。开通会员可享每日免费额度（Plus 3 次 / Pro 10 次）。`,
             actions: [], insufficient: true, cost, npRemaining: bal2, nnRemaining: bal2, freeRemaining: 0,
           };
         }
@@ -326,7 +326,7 @@ export const aiRouter = router({
       return { success: true, cost: input.cost };
     }),
 
-  // ─── AI 付费研报（NN 计价） ────────────────────────────────────────────────
+  // ─── AI 付费研报（AI 计价） ────────────────────────────────────────────────
   reportTypes: protectedProcedure.query(() => ({ types: REPORT_TYPES })),
 
   // 我的研报列表（不含全文）
@@ -357,7 +357,7 @@ export const aiRouter = router({
       return r;
     }),
 
-  // 下单生成研报：扣 NN → 调 LLM 生成 → 完成；失败退款
+  // 下单生成研报：扣 AI → 调 LLM 生成 → 完成；失败退款
   createReport: protectedProcedure
     .input(z.object({
       queryType: z.enum(["project", "security", "market"]),
@@ -370,9 +370,9 @@ export const aiRouter = router({
       const type = getReportType(input.queryType);
       if (!type) throw new TRPCError({ code: "BAD_REQUEST", message: "未知报告类型" });
 
-      // 扣 NN
+      // 扣 AI
       const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
 
       // 建记录（生成中）
       const [ins] = await db.insert(consultingReports).values({
@@ -400,10 +400,10 @@ export const aiRouter = router({
           .where(eq(consultingReports.id, reportId));
         return { reportId, status: "completed" as const, summary: summary.slice(0, 300), fullContent: content };
       } catch (err) {
-        // 生成失败：标记失败 + 退还 NN
+        // 生成失败：标记失败 + 退还 AI
         await db.update(consultingReports).set({ status: "failed" }).where(eq(consultingReports.id, reportId));
         await grantNN(db, ctx.user.id, type.priceNN, { type: "report_refund", refType: "report", refId: reportId, memo: "生成失败退款" });
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "报告生成失败，已退还 NN" });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "报告生成失败，已退还 AI" });
       }
     }),
 });

@@ -1,7 +1,7 @@
 /**
- * Alpha 战绩系统（NP 模型 Phase 3）：
+ * Alpha 战绩系统（AC 模型 Phase 3）：
  *  - 用户发结构化 Call（标的 + 方向 + 时间窗）；系统在窗口到期后按行情自动判定对错。
- *  - 判对 → NP + 声誉 + 上战绩榜；判错 → 扣声誉。沉淀可验证的公开战绩。
+ *  - 判对 → AC + 声誉 + 上战绩榜；判错 → 扣声誉。沉淀可验证的公开战绩。
  *  - 声誉反过来抬高个人产出加成（见 rankEngine.reputationBonus），形成正循环。
  */
 import { z } from "zod";
@@ -196,7 +196,7 @@ export const callsRouter = router({
           .set({ npPoints: sql`npPoints - ${input.amount}` })
           .where(and(eq(users.id, ctx.user.id), gte(users.npPoints, input.amount)));
         const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
-        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "NP 余额不足" });
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "AC 余额不足" });
         await tx.insert(curationStakes).values({ stakerId: ctx.user.id, callId: input.callId, amount: input.amount });
       });
       return { ok: true };

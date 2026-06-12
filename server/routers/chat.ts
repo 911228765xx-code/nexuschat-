@@ -41,7 +41,7 @@ async function getClearedBeforeId(db: Db, userId: number, convKey: string): Prom
 }
 
 
-/** 原子扣 NP 积分（余额足够才扣）；NP 只进不出生态内消耗 */
+/** 原子扣 AC 积分（余额足够才扣）；AC 只进不出生态内消耗 */
 async function spendNP(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number, cost: number): Promise<boolean> {
   if (cost <= 0) return true;
   const res: any = await db.update(users)
@@ -335,7 +335,7 @@ export const chatRouter = router({
           .catch((err) => logger.warn({ err }, "manage bot failed"));
         // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
-        // NP 产出：首次发消息里程碑
+        // AC 产出：首次发消息里程碑
         void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
@@ -386,7 +386,7 @@ export const chatRouter = router({
       // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
       if (input.messageType === "text") {
         void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-        // NP 产出：首次发消息里程碑
+        // AC 产出：首次发消息里程碑
         void awardTaskEvent(db, ctx.user.id, "first_message");
       }
       return { messageId };
@@ -1424,7 +1424,7 @@ export const chatRouter = router({
       return { ok: true };
     }),
 
-  // ─── Red Packet: Send (扣 NP 积分发群红包) ───────────────────────────────
+  // ─── Red Packet: Send (扣 AC 积分发群红包) ───────────────────────────────
   sendRedPacket: protectedProcedure
     .input(z.object({
       groupId: z.number().optional(),
@@ -1447,7 +1447,7 @@ export const chatRouter = router({
       const totalShares = isDM ? 1 : input.totalShares;
       const isRandom = isDM ? false : input.isRandom;
       if (totalShares > input.totalAmount) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 NP）" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 AC）" });
       }
       const blessing = (input.blessing?.trim() || "恭喜发财，大吉大利").slice(0, 100);
       let messageId = 0;
@@ -1529,7 +1529,7 @@ export const chatRouter = router({
         if (rp.remainingShares === 1) {
           amount = rp.remainingAmount; // 最后一个拿走全部余额
         } else if (rp.isRandom) {
-          // 二倍均值法：保证后面每人至少 1 NP（max 兜底 ≥1，防极端不变量被破坏）
+          // 二倍均值法：保证后面每人至少 1 AC（max 兜底 ≥1，防极端不变量被破坏）
           const max = Math.max(1, rp.remainingAmount - (rp.remainingShares - 1));
           const avg2 = Math.floor((rp.remainingAmount / rp.remainingShares) * 2);
           const hi = Math.max(1, Math.min(max, avg2));
@@ -1752,7 +1752,7 @@ export const chatRouter = router({
       return { canManage, bots, packages: BOT_PACKAGES };
     }),
 
-  // 开通/续费/关闭/改设置（owner/admin；开通按月扣 NP）
+  // 开通/续费/关闭/改设置（owner/admin；开通按月扣 AC）
   setGroupBot: protectedProcedure
     .input(z.object({
       groupId: z.number(),
@@ -1781,14 +1781,14 @@ export const chatRouter = router({
       const months = input.months ?? 0;
       if (months > 0 && meta.monthlyNN > 0) {
         const cost = meta.monthlyNN * months;
-        if (meta.currency === "NP") {
-          // 基础机器人按 NP 计价（任务积分的消耗出口）
+        if (meta.currency === "AC") {
+          // 基础机器人按 AC 计价（任务积分的消耗出口）
           const ok = await spendNP(db, ctx.user.id, cost);
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
         } else {
-          // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
+          // 原子扣 AI 治理代币（余额足够才扣，AI 回流金库）
           const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通" });
         }
         const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
           ? existing.expiresAt.getTime() : Date.now();
@@ -1823,7 +1823,7 @@ export const chatRouter = router({
       return { ok: true, nnBalance: Number(bal?.nn ?? 0) };
     }),
 
-  // 开通机器人套餐：按套餐折扣价一次性扣 NN，激活套餐内全部机器人
+  // 开通机器人套餐：按套餐折扣价一次性扣 AI，激活套餐内全部机器人
   buyBotPackage: protectedProcedure
     .input(z.object({
       groupId: z.number(),
@@ -1844,12 +1844,12 @@ export const chatRouter = router({
 
       // 一次性按套餐价扣费（折扣已含在 pkg.monthlyNN；币种见 pkg.currency）
       const cost = pkg.monthlyNN * input.months;
-      if (pkg.currency === "NP") {
+      if (pkg.currency === "AC") {
         const ok = await spendNP(db, ctx.user.id, cost);
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通套餐" });
       }
 
       const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
@@ -1878,7 +1878,7 @@ export const chatRouter = router({
       return { ok: true, nnBalance: Number(bal?.nn ?? 0), bots: pkg.bots };
     }),
 
-  // ─── NN 治理代币 ──────────────────────────────────────────────────────────
+  // ─── AI 治理代币 ──────────────────────────────────────────────────────────
   getTokenInfo: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
@@ -1890,7 +1890,7 @@ export const chatRouter = router({
   getTokenomics: publicProcedure
     .query(() => getTokenomics()),
 
-  // 发放 NN（空投/运营，管理员）。amount 上限受金库余额约束。
+  // 发放 AI（空投/运营，管理员）。amount 上限受金库余额约束。
   adminGrantNN: adminProcedure
     .input(z.object({ userId: z.number(), amount: z.number().int().min(1).max(NN_TOTAL_SUPPLY) }))
     .mutation(async ({ input }) => {
@@ -1919,7 +1919,7 @@ export const chatRouter = router({
         const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
         return { ok: true, ...r };
       } catch (e: any) {
-        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
         throw new TRPCError({ code: "BAD_REQUEST", message: "开通失败" });
       }
     }),
@@ -1932,7 +1932,7 @@ export const chatRouter = router({
       return getMyVesting(db, ctx.user.id);
     }),
 
-  // 领取当前可解锁的 NN
+  // 领取当前可解锁的 AI
   claimVesting: protectedProcedure
     .input(z.object({ vestingId: z.number() }))
     .use(rateLimitWrite)
@@ -1944,7 +1944,7 @@ export const chatRouter = router({
       return r;
     }),
 
-  // 我的 NN 流水
+  // 我的 AI 流水
   getMyNNTransactions: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
@@ -1952,7 +1952,7 @@ export const chatRouter = router({
       return getMyNNTransactions(db, ctx.user.id, 50);
     }),
 
-  // 运营：机器人订阅统计 + NN 营收 + 节点订单概览
+  // 运营：机器人订阅统计 + AI 营收 + 节点订单概览
   adminBotStats: adminProcedure
     .query(async () => {
       const db = await getDb();
@@ -2035,7 +2035,7 @@ export const chatRouter = router({
         .orderBy(desc(nnNodeOrders.createdAt)).limit(100);
     }),
 
-  // 运营：确认到账 → 发放 NN（从金库/节点池），订单置为已确认
+  // 运营：确认到账 → 发放 AI（从金库/节点池），订单置为已确认
   adminConfirmNodeOrder: adminProcedure
     .input(z.object({ orderId: z.number() }))
     .mutation(async ({ input }) => {
@@ -2044,7 +2044,7 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      // 旧节点档位（genesis/super/standard）按旧汇率定的 NN 配额与现行 1:1 锚定冲突：
+      // 旧节点档位（genesis/super/standard）按旧汇率定的 AI 配额与现行 1:1 锚定冲突：
       // 停止确认发放，请取消订单并引导用户走合伙人计划重新认购
       if (getNodeTier(o.tier)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "旧节点订单已停用（汇率已调整为 1:1），请取消该订单并引导用户通过「合伙人招募」重新认购" });
@@ -2066,7 +2066,7 @@ export const chatRouter = router({
       return { ok: true };
     }),
 
-  // ─── NN 底池（用户从底池购买 NN，USDT 计价） ───────────────────────────────
+  // ─── AI 底池（用户从底池购买 AI，USDT 计价） ───────────────────────────────
   getPoolInfo: publicProcedure
     .query(async () => {
       const db = await getDb();
@@ -2075,7 +2075,7 @@ export const chatRouter = router({
       return { ...info, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN };
     }),
 
-  // 下单购买：输入 USDT 金额，按底池单价折算 NN，建待支付订单
+  // 下单购买：输入 USDT 金额，按底池单价折算 AI，建待支付订单
   createPoolOrder: protectedProcedure
     .input(z.object({ usdtAmount: z.number().int().min(5).max(100000) }))
     .use(rateLimitWrite)

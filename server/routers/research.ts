@@ -327,7 +327,7 @@ export const researchRouter = router({
         nxcCost: input.mode === "quick" ? 5 : 10,
       });
 
-      // NP 产出：首次投研里程碑 + 每日投研（每日上限内）
+      // AC 产出：首次投研里程碑 + 每日投研（每日上限内）
       void awardTaskEvent(db, ctx.user.id, "first_research");
       void awardTaskEvent(db, ctx.user.id, "research_daily");
 

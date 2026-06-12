@@ -112,7 +112,7 @@ export const walletRouter = router({
         .update(users)
         .set({ walletAddress: input.address, walletChain: input.chain })
         .where(eq(users.id, ctx.user.id));
-      // NP 产出：首次连接钱包里程碑（真实绑定才发）
+      // AC 产出：首次连接钱包里程碑（真实绑定才发）
       void awardTaskEvent(db, ctx.user.id, "connect_wallet");
       return { success: true };
     }),
