@@ -40,6 +40,17 @@ async function getClearedBeforeId(db: Db, userId: number, convKey: string): Prom
   return p?.c ?? 0;
 }
 
+
+/** 原子扣 NP 积分（余额足够才扣）；NP 只进不出生态内消耗 */
+async function spendNP(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number, cost: number): Promise<boolean> {
+  if (cost <= 0) return true;
+  const res: any = await db.update(users)
+    .set({ npPoints: sql`${users.npPoints} - ${cost}` })
+    .where(and(eq(users.id, userId), sql`${users.npPoints} >= ${cost}`));
+  const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+  return affected > 0;
+}
+
 export const chatRouter = router({
   // List public groups
   listGroups: publicProcedure
@@ -1770,9 +1781,15 @@ export const chatRouter = router({
       const months = input.months ?? 0;
       if (months > 0 && meta.monthlyNN > 0) {
         const cost = meta.monthlyNN * months;
-        // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
-        const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+        if (meta.currency === "NP") {
+          // 基础机器人按 NP 计价（任务积分的消耗出口）
+          const ok = await spendNP(db, ctx.user.id, cost);
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+        } else {
+          // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
+          const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+        }
         const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
           ? existing.expiresAt.getTime() : Date.now();
         expiresAt = new Date(base + months * 30 * 24 * 3600 * 1000);
@@ -1825,10 +1842,15 @@ export const chatRouter = router({
       const pkg = BOT_PACKAGES.find((p) => p.key === input.packageKey);
       if (!pkg) throw new TRPCError({ code: "BAD_REQUEST", message: "未知套餐" });
 
-      // 一次性按套餐价扣 NN（折扣已含在 pkg.monthlyNN）
+      // 一次性按套餐价扣费（折扣已含在 pkg.monthlyNN；币种见 pkg.currency）
       const cost = pkg.monthlyNN * input.months;
-      const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+      if (pkg.currency === "NP") {
+        const ok = await spendNP(db, ctx.user.id, cost);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+      } else {
+        const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+      }
 
       const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
       for (const bt of pkg.bots) {
