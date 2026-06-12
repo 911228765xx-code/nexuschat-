@@ -206,7 +206,7 @@ function buildPrompt(token: TokenData, market: MarketData, mode: string): string
 
   return `${baseContext}
 
-请对 ${token.symbol} 进行深度投研分析（600-800字），包含以下章节：
+请对 ${token.symbol} 进行深度 AI 分析（600-800字），包含以下章节：
 
 ## 市场概况
 引用具体数据描述当前价格位置、趋势和市场情绪

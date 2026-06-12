@@ -82,7 +82,7 @@ export default function DownloadPage() {
             下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">NexusChat</span>
           </h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            支持 Android 和 iOS，随时随地掌控 Web3 资产、AI 投研与加密社交
+            支持 Android 和 iOS，随时随地掌控 Web3 资产、AI 智能体与加密社交
           </p>
         </motion.div>
       </section>

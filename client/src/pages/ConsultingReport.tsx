@@ -82,7 +82,7 @@ export default function ConsultingReport() {
   };
 
   const handleShare = async () => {
-    const text = `我刚刚使用 NexusChat AI 咨询中心获取了一份专业的加密分析报告！\n\n问题：${report?.queryText?.slice(0, 100)}...\n\n#NexusChat #加密投研 #Web3`;
+    const text = `我刚刚使用 NexusChat AI 咨询中心获取了一份专业的加密分析报告！\n\n问题：${report?.queryText?.slice(0, 100)}...\n\n#NexusChat #AI分析 #Web3`;
     if (navigator.share) {
       await navigator.share({ text });
     } else {

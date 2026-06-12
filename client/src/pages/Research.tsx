@@ -1,5 +1,5 @@
 /*
- * Research — AI投研机器人页面
+ * Research — AI 分析机器人页面
  * 全面增强版：更多代币 + 时间周期切换 + 搜索交互 + 风险指标 + 市场情绪 + 链上数据
  * Design: Cyberpunk dark theme with neon accents, Space Grotesk headings
  */
@@ -353,7 +353,7 @@ export default function Research() {
         body: JSON.stringify({ tokenSymbol: sym, mode: "quick" }),
       });
       if (!res.ok || !res.body) {
-        if (res.status === 401) { toast.error("AI 投研服务暂时不可用"); setShowAiReport(false); setIsSearching(false); return; }
+        if (res.status === 401) { toast.error("AI 分析服务暂时不可用"); setShowAiReport(false); setIsSearching(false); return; }
         if (res.status === 429) { toast.error("请求过于频繁，请稍后再试"); setShowAiReport(false); setIsSearching(false); return; }
         throw new Error(`HTTP ${res.status}`);
       }
@@ -833,7 +833,7 @@ export default function Research() {
                         <span className="text-lg font-black text-white font-['Space_Grotesk'] tracking-wide">{aiReportToken}</span>
                         <span className="text-xs text-[#a855f7]/70 font-mono bg-[#a855f7]/10 px-2 py-0.5 rounded-full border border-[#a855f7]/20 leading-5">AI REPORT</span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5">深度投研分析 · 仅供参考，不构成投资建议</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">深度 AI 分析 · 仅供参考，不构成投资建议</p>
                     </div>
                   </div>
 
@@ -1015,7 +1015,7 @@ export default function Research() {
                   </span>
                 </div>
                 <p className="text-[13px] text-gray-400 line-clamp-2">
-                  {(aiReportContent ?? "").split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("|")).find(l => l.length > 20)?.replace(/\*\*/g, "").slice(0, 100) ?? "AI 投研报告"}
+                  {(aiReportContent ?? "").split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("|")).find(l => l.length > 20)?.replace(/\*\*/g, "").slice(0, 100) ?? "AI 分析报告"}
                 </p>
               </div>
             </div>
@@ -1075,12 +1075,12 @@ export default function Research() {
                     const sentimentEmoji = aiReportSentiment === "bullish" ? "🟢" : aiReportSentiment === "bearish" ? "🔴" : "🟡";
                     const sentimentLabel = aiReportSentiment === "bullish" ? "看多" : aiReportSentiment === "bearish" ? "看空" : "中性";
                     const riskLabel = aiReportRisk === "low" ? "低风险" : aiReportRisk === "high" ? "高风险" : "中风险";
-                    const summary = (aiReportContent ?? "").split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("|")).find(l => l.length > 20)?.replace(/\*\*/g, "").slice(0, 150) ?? "AI 投研报告";
+                    const summary = (aiReportContent ?? "").split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("|")).find(l => l.length > 20)?.replace(/\*\*/g, "").slice(0, 150) ?? "AI 分析报告";
                     const userComment = shareComment.trim() ? `${shareComment.trim()}\n\n` : "";
-                    const content = `${userComment}📊 AI 投研报告 | ${aiReportToken} ${sentimentEmoji} ${sentimentLabel}\n\n${summary}${summary.length >= 150 ? "..." : ""}\n\n⚠️ ${riskLabel}${aiScore ? ` | 🎯 评分: ${aiScore}/10` : ""}`;
+                    const content = `${userComment}📊 AI 分析报告 | ${aiReportToken} ${sentimentEmoji} ${sentimentLabel}\n\n${summary}${summary.length >= 150 ? "..." : ""}\n\n⚠️ ${riskLabel}${aiScore ? ` | 🎯 评分: ${aiScore}/10` : ""}`;
                     createPost.mutate({
                       content,
-                      tags: ["投研报告", aiReportToken, sentimentLabel],
+                      tags: ["AI 分析报告", aiReportToken, sentimentLabel],
                     });
                   }}
                   disabled={createPost.isPending}
@@ -1975,9 +1975,9 @@ export default function Research() {
                   <span className="text-2xl">🔐</span>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-foreground mb-2">登录后解锁投研功能</h3>
+                  <h3 className="text-base font-bold text-foreground mb-2">登录后解锁 AI 分析功能</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    登录 Manus 账号，收藏代币、设置价格预警、分享投研报告
+                    登录 Manus 账号，收藏代币、设置价格预警、分享 AI 分析报告
                   </p>
                 </div>
               </div>
@@ -1985,7 +1985,7 @@ export default function Research() {
                 {[
                   { icon: "⭐", text: "收藏代币到自定义自选股" },
                   { icon: "🔔", text: "设置价格预警，行情到位第一时间知道" },
-                  { icon: "📊", text: "分享 AI 投研报告到社区动态" },
+                  { icon: "📊", text: "分享 AI 分析报告到社区动态" },
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/40 border border-border/20">
                     <span className="text-base">{item.icon}</span>

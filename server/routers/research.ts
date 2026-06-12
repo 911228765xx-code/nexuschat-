@@ -133,7 +133,7 @@ function fmtPct(n: number | null | undefined): string {
 function buildQuickPrompt(symbol: string, marketContext: string): string {
   return `你是一位经验丰富的加密货币交易员和分析师，拥有 10 年以上的市场经验。你以敢于表达明确观点著称，不会给出模棱两可的分析。
 
-请基于以下实时数据，对 ${symbol} 进行快速投研分析。
+请基于以下实时数据，对 ${symbol} 进行快速分析。
 
 ${marketContext}
 
@@ -150,7 +150,7 @@ ${marketContext}
 | 指标 | 数值 | 解读 |
 |------|------|------|
 
-### 🧭 投研思路
+### 🧭 分析思路
 给出明确的操作思路：
 - **短线（1-7天）**：具体的方向判断和关键价位
 - **中线（1-3月）**：趋势判断和关注的催化剂
@@ -166,13 +166,13 @@ ${marketContext}
 function buildDeepPrompt(symbol: string, marketContext: string): string {
   return `你是一位顶级加密货币研究机构的首席分析师，以深度、独立、有观点的研究报告著称。你的报告风格类似 Messari、Delphi Digital 的专业研报——数据驱动、逻辑严密、观点鲜明。
 
-请基于以下实时数据，对 ${symbol} 进行全面深度研究，生成一份机构级投研报告。
+请基于以下实时数据，对 ${symbol} 进行全面深度研究，生成一份机构级 AI 分析报告。
 
 ${marketContext}
 
 **输出要求（Markdown 格式，约 1000-1200 字）：**
 
-## 📋 ${symbol} 深度投研报告
+## 📋 ${symbol} 深度分析报告
 
 ### 🎯 投资论点（Investment Thesis）
 用 2-3 句话概括你的**核心投资论点**。明确表态：当前阶段你对该代币是看多、看空还是观望，以及最核心的理由。给出一个 1-10 的**综合评分**（1=强烈看空，5=中性，10=强烈看多）。
@@ -192,7 +192,7 @@ ${marketContext}
 - **筹码分布推断**：基于供应量数据推断大户持仓情况
 - **催化剂追踪**：近期可能影响价格的事件或升级
 
-### 🧭 投研策略
+### 🧭 分析策略
 
 **明确给出以下操作建议：**
 
@@ -327,7 +327,7 @@ export const researchRouter = router({
         nxcCost: input.mode === "quick" ? 5 : 10,
       });
 
-      // AC 产出：首次投研里程碑 + 每日投研（每日上限内）
+      // AC 产出：首次分析里程碑 + 每日分析（每日上限内）
       void awardTaskEvent(db, ctx.user.id, "first_research");
       void awardTaskEvent(db, ctx.user.id, "research_daily");
 
