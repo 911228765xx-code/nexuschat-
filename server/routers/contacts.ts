@@ -1,5 +1,6 @@
 import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { friendRequests, users, contactMetadata } from "../../drizzle/schema";
@@ -14,7 +15,7 @@ export const contactsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      if (input.receiverId === ctx.user.id) throw new Error("Cannot send request to yourself");
+      if (input.receiverId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能添加自己为好友" });
 
       // Check if request already exists
       const existing = await db
@@ -29,8 +30,8 @@ export const contactsRouter = router({
         .limit(1);
 
       if (existing.length > 0) {
-        if (existing[0].status === "pending") throw new Error("Request already pending");
-        if (existing[0].status === "accepted") throw new Error("Already friends");
+        if (existing[0].status === "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "已发送过好友申请，等待对方处理" });
+        if (existing[0].status === "accepted") throw new TRPCError({ code: "BAD_REQUEST", message: "你们已经是好友了" });
       }
 
       await db.insert(friendRequests).values({
