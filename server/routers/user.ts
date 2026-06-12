@@ -603,15 +603,19 @@ export const userRouter = router({
         bio: users.bio,
       };
 
-      // 纯数字：按唯一 ID 精确查找
+      // 纯数字：ID 精确命中排最前，同时也按用户名/昵称模糊匹配（数字用户名也能被搜到）
       if (/^\d+$/.test(raw)) {
         const idNum = Number(raw);
-        if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
-        const rows = await db
-          .select(cols)
-          .from(users)
-          .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum)))
-          .limit(1);
+        const byId = Number.isSafeInteger(idNum) && idNum > 0
+          ? await db.select(cols).from(users)
+              .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum))).limit(1)
+          : [];
+        const qNum = `%${raw}%`;
+        const byName = await db.select(cols).from(users)
+          .where(and(ne(users.id, ctx.user.id), or(like(users.name, qNum), like(users.username, qNum))))
+          .limit(20);
+        const seen = new Set(byId.map(u => u.id));
+        const rows = [...byId, ...byName.filter(u => !seen.has(u.id))].slice(0, 20);
         return rows.map(u => ({
           id: u.id,
           name: u.name ?? u.username ?? `User #${u.id}`,

@@ -2,8 +2,9 @@ import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { posts, postLikes, postComments, users, notifications } from "../../drizzle/schema";
+import { posts, postLikes, postComments, users, notifications, promoBanners, chatGroups } from "../../drizzle/schema";
 import { eq, and, desc, sql, gt } from "drizzle-orm";
+import { getBenefits } from "../membership";
 import { storagePut } from "../storage";
 import { createNotification } from "./notificationsRouter";
 import { awardTaskEvent } from "./user";
@@ -117,6 +118,89 @@ export const postsRouter = router({
       const until = new Date(base + plan.days * 24 * 3600 * 1000);
       await db.update(posts).set({ promotedUntil: until }).where(eq(posts.id, input.postId));
       return { ok: true, promotedUntil: until.toISOString() };
+    }),
+
+  // ─── 发现页滚动广告位（Pro 专属，7 天有效，每人同时 1 条） ───────────────────
+  promoBannerList: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select({
+        id: promoBanners.id, text: promoBanners.text,
+        targetType: promoBanners.targetType, targetId: promoBanners.targetId,
+        userId: promoBanners.userId, name: users.name, username: users.username, avatar: users.avatar,
+      })
+      .from(promoBanners)
+      .leftJoin(users, eq(promoBanners.userId, users.id))
+      .where(and(eq(promoBanners.status, "active"), gt(promoBanners.expiresAt, new Date())))
+      .orderBy(desc(promoBanners.createdAt))
+      .limit(12);
+    return rows.map((r) => ({
+      id: r.id, text: r.text, targetType: r.targetType, targetId: r.targetId,
+      authorName: r.name ?? r.username ?? `用户#${r.userId}`, authorAvatar: r.avatar,
+    }));
+  }),
+
+  promoBannerMine: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+    const [b] = await db.select().from(promoBanners)
+      .where(and(eq(promoBanners.userId, ctx.user.id), eq(promoBanners.status, "active"), gt(promoBanners.expiresAt, new Date())))
+      .orderBy(desc(promoBanners.createdAt)).limit(1);
+    return b ? { id: b.id, text: b.text, targetType: b.targetType, targetId: b.targetId, expiresAt: b.expiresAt.toISOString() } : null;
+  }),
+
+  promoBannerSubmit: protectedProcedure
+    .input(z.object({
+      text: z.string().min(4).max(80),
+      targetType: z.enum(["group", "post", "none"]).default("none"),
+      targetId: z.number().optional(),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const benefits = await getBenefits(db, ctx.user.id);
+      if (!benefits.bannerSlot) throw new TRPCError({ code: "FORBIDDEN", message: "滚动广告位为 Pro 会员专属权益，升级后即可投放" });
+      // 内容审核（违禁词 + AI 复审通道与发帖一致）
+      await enforceContent(db, ctx.user.id, input.text, "post", { useAI: true });
+      // 跳转目标校验：只能挂自己的公开群 / 自己的动态
+      if (input.targetType === "group") {
+        if (!input.targetId) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择要推广的群" });
+        const [g] = await db.select({ creatorId: chatGroups.creatorId, isPublic: chatGroups.isPublic })
+          .from(chatGroups).where(eq(chatGroups.id, input.targetId)).limit(1);
+        if (!g || g.creatorId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只能推广自己创建的群" });
+        if (!g.isPublic) throw new TRPCError({ code: "BAD_REQUEST", message: "仅公开群可投放广告位" });
+      } else if (input.targetType === "post") {
+        if (!input.targetId) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择要推广的动态" });
+        const [po] = await db.select({ authorId: posts.authorId }).from(posts).where(eq(posts.id, input.targetId)).limit(1);
+        if (!po || po.authorId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只能推广自己的动态" });
+      }
+      // 每人同时 1 条：旧的自动下线
+      await db.update(promoBanners).set({ status: "removed" })
+        .where(and(eq(promoBanners.userId, ctx.user.id), eq(promoBanners.status, "active")));
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      await db.insert(promoBanners).values({
+        userId: ctx.user.id,
+        text: sanitizeInput(input.text, 80),
+        targetType: input.targetType,
+        targetId: input.targetId ?? null,
+        expiresAt,
+      });
+      return { ok: true, expiresAt: expiresAt.toISOString() };
+    }),
+
+  promoBannerRemove: protectedProcedure
+    .input(z.object({ bannerId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const [b] = await db.select().from(promoBanners).where(eq(promoBanners.id, input.bannerId)).limit(1);
+      if (!b) throw new TRPCError({ code: "NOT_FOUND", message: "广告不存在" });
+      const isAdmin = (ctx.user as any).role === "admin";
+      if (b.userId !== ctx.user.id && !isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+      await db.update(promoBanners).set({ status: "removed" }).where(eq(promoBanners.id, input.bannerId));
+      return { ok: true };
     }),
 
   // ─── Create post ───────────────────────────────────────────────────────────

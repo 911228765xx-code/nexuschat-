@@ -130,6 +130,10 @@ export const chatRouter = router({
       if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
         throw new TRPCError({ code: "FORBIDDEN", message: `当前会员最多可创建 ${benefits.maxGroups} 个群，升级会员可提升上限` });
       }
+      // 公开群为会员专属：免费用户仅可创建私密群
+      if (input.isPublic && !benefits.publicGroups) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可创建；你仍可创建私密群" });
+      }
       const [result] = await db.insert(chatGroups).values({
         name: input.name,
         description: input.description ?? undefined,
