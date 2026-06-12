@@ -62,7 +62,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "shield-checkmark",
     tagline: "关键词检测 · 自动提醒",
     desc: "检测到设定的违禁关键词时自动发出提醒，减轻群主管理负担。",
-    monthlyNN: 15000,
+    monthlyNN: 30000,
     currency: "NP",
     interactive: true,
     configFields: [
@@ -77,7 +77,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "trending-up",
     tagline: "定时播报币价行情",
     desc: "每天定时在群里播报关注币种的价格与涨跌（需后端调度开启）。",
-    monthlyNN: 20000,
+    monthlyNN: 80000,
     currency: "NP",
     interactive: true,
     configFields: [
@@ -92,7 +92,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "sparkles",
     tagline: "签到 · 定时活动提醒",
     desc: "定时提醒群成员签到/参与活动，活跃群氛围（需后端调度开启）。",
-    monthlyNN: 25000,
+    monthlyNN: 150000,
     currency: "NP",
     interactive: true,
     configFields: [
@@ -154,7 +154,7 @@ export const BOT_PACKAGES = [
     name: "新群启动包",
     desc: "欢迎 + 活动，零门槛把群带活。",
     bots: ["welcome", "activity"] as BotType[],
-    monthlyNN: 29800, // 原价 10000+25000=35000，套餐价（NP）
+    monthlyNN: 135000, // 原价 10000+150000=160000，套餐价（NP）
     currency: "NP" as const,
     badge: "入门",
   },
@@ -163,7 +163,7 @@ export const BOT_PACKAGES = [
     name: "群管四件套",
     desc: "欢迎 + 管理 + 行情 + 活动，群运营一步到位。",
     bots: ["welcome", "manage", "price", "activity"] as BotType[],
-    monthlyNN: 58000, // 原价 70000，套餐价（NP）
+    monthlyNN: 225000, // 原价 10000+30000+80000+150000=270000，套餐价（NP）
     currency: "NP" as const,
     badge: "热门",
   },
