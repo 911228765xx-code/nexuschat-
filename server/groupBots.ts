@@ -209,6 +209,7 @@ export async function listGroupBots(db: Db, groupId: number) {
       tagline: meta.tagline,
       desc: meta.desc,
       monthlyNN: meta.monthlyNN,
+      currency: meta.currency,
       interactive: meta.interactive,
       configFields: meta.configFields,
       enabled: !!row?.enabled,
