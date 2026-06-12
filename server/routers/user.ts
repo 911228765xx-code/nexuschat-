@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte, count, like, or, ne, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 

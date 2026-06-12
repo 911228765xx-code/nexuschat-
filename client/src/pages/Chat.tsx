@@ -200,7 +200,7 @@ export default function Chat() {
 
   const { data: userSearchData, isFetching: isUserSearching } = trpc.user.searchUsers.useQuery(
     { query: debouncedGlobalSearch },
-    { enabled: debouncedGlobalSearch.trim().length >= 2, staleTime: 15_000 }
+    { enabled: /^\d+$/.test(debouncedGlobalSearch.trim()), staleTime: 15_000 }
   );
 
   // Convert user search results to SearchResult format

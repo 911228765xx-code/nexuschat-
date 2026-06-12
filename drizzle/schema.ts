@@ -810,7 +810,7 @@ export const appConfig = mysqlTable("app_config", {
   releaseNotes: text("releaseNotes"),
   isForceUpdate: boolean("isForceUpdate").default(false).notNull(),
   // 与 AI 助手对话每次消耗的 NP 积分（可后台配置，无需改代码）
-  aiChatCost: int("aiChatCost").default(5).notNull(),
+  aiChatCost: int("aiChatCost").default(10).notNull(),
   // 任务奖励覆盖（JSON: { [taskType]: npReward }），后台可改，无需改代码
   taskRewards: text("taskRewards"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

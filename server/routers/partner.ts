@@ -211,8 +211,12 @@ export const partnerRouter = router({
       const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
       if (!affected) throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
 
-      // 2) NN 配额走线性归属
-      await createVesting(db, o.userId, "partner", o.id, o.nnAmount, tier.cliffMonths, tier.durationMonths);
+      // 2) NN 配额走线性归属（按"当前"档位汇率重算，防旧汇率挂单按旧价铸币）
+      const nnNow = o.usdtAmount * tier.nnPerUsdt;
+      if (nnNow !== o.nnAmount) {
+        await db.update(nnNodeOrders).set({ nnAmount: nnNow }).where(eq(nnNodeOrders.id, o.id));
+      }
+      await createVesting(db, o.userId, "partner", o.id, nnNow, tier.cliffMonths, tier.durationMonths);
 
       // 3) 累计认购额 + 身份判定（只升不降）
       await db.update(users)
@@ -245,7 +249,7 @@ export const partnerRouter = router({
           .where(eq(users.id, o.userId));
       }
 
-      return { ok: true, nnVesting: o.nnAmount, bonusUsdt, tier: bonusTier.key };
+      return { ok: true, nnVesting: nnNow, bonusUsdt, tier: bonusTier.key };
     }),
 
   // 运营：取消订单

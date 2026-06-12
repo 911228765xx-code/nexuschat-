@@ -228,6 +228,20 @@ export const aiRouter = router({
         };
       }
 
+      // 先扣后退：付费请求先原子扣 NN，LLM 失败再退款（防并发请求白嫖大模型）
+      let charged = false;
+      if (!isFree) {
+        charged = await spendNN(db, ctx.user.id, cost, { type: "ai_chat", refType: "user", refId: ctx.user.id, memo: "AI对话" });
+        if (!charged) {
+          const [b2] = await db.select({ nn: users.nnBalance }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+          const bal2 = Number(b2?.nn ?? 0);
+          return {
+            reply: `余额不足 💡\n\n每次消耗 **${cost} NN**，当前余额 **${bal2} NN**。开通会员可享每日免费额度（Plus 3 次 / Pro 10 次）。`,
+            actions: [], insufficient: true, cost, npRemaining: bal2, nnRemaining: bal2, freeRemaining: 0,
+          };
+        }
+      }
+
       const baseMessages: Message[] = [
         { role: "system", content: SYSTEM_PROMPT },
         ...(input.history ?? []).map((m) => ({ role: m.role, content: m.content })),
@@ -269,7 +283,10 @@ export const aiRouter = router({
           finalReply = extractText(second.choices[0]?.message?.content).trim() || "已为你处理完成。";
         }
       } catch {
-        // 失败不扣分
+        // 失败退款（与研报接口同模式）
+        if (charged) {
+          await grantNN(db, ctx.user.id, cost, { type: "ai_chat_refund", refType: "user", refId: ctx.user.id, memo: "生成失败退款" });
+        }
         return { reply: "AI 服务暂时不可用，请稍后再试。", actions, insufficient: false, cost: cost, npRemaining: balance, nnRemaining: balance };
       }
 
@@ -281,12 +298,7 @@ export const aiRouter = router({
         return { reply: finalReply, actions, insufficient: false, cost: 0, npRemaining: balance, nnRemaining: balance, freeRemaining: Math.max(0, freeRemaining - 1) };
       }
 
-      // 超出免费 → 扣 NN（原子扣减 + 流水入账，计入平台收入 → 合伙人收益池）
-      const paid = await spendNN(db, ctx.user.id, cost, { type: "ai_chat", refType: "user", refId: ctx.user.id, memo: "AI对话" });
-      if (!paid) {
-        return { reply: finalReply, actions, insufficient: false, cost: 0, npRemaining: balance, nnRemaining: balance, freeRemaining: 0 };
-      }
-
+      // 付费路径已在调用前扣费（charged=true），此处仅回查余额
       const [after] = await db.select({ nn: users.nnBalance }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
       const nnRemaining = Number(after?.nn ?? Math.max(0, balance - cost));
 

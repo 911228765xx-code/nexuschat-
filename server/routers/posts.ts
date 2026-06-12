@@ -2,7 +2,7 @@ import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { posts, postLikes, postComments, users, notifications, promoBanners, chatGroups } from "../../drizzle/schema";
+import { posts, postLikes, postComments, users, notifications, promoBanners, chatGroups, groupMembers } from "../../drizzle/schema";
 import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { getBenefits } from "../membership";
 import { storagePut } from "../storage";
@@ -167,9 +167,13 @@ export const postsRouter = router({
       // 跳转目标校验：只能挂自己的公开群 / 自己的动态
       if (input.targetType === "group") {
         if (!input.targetId) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择要推广的群" });
-        const [g] = await db.select({ creatorId: chatGroups.creatorId, isPublic: chatGroups.isPublic })
+        const [g] = await db.select({ isPublic: chatGroups.isPublic })
           .from(chatGroups).where(eq(chatGroups.id, input.targetId)).limit(1);
-        if (!g || g.creatorId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只能推广自己创建的群" });
+        if (!g) throw new TRPCError({ code: "NOT_FOUND", message: "群不存在" });
+        // 校验现任群主（支持转让后的群主，而非仅创建者）
+        const [m] = await db.select({ role: groupMembers.role }).from(groupMembers)
+          .where(and(eq(groupMembers.groupId, input.targetId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+        if (m?.role !== "owner") throw new TRPCError({ code: "FORBIDDEN", message: "只能推广自己担任群主的群" });
         if (!g.isPublic) throw new TRPCError({ code: "BAD_REQUEST", message: "仅公开群可投放广告位" });
       } else if (input.targetType === "post") {
         if (!input.targetId) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择要推广的动态" });

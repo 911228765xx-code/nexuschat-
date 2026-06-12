@@ -544,6 +544,7 @@ export const chatRouter = router({
         avatar: chatGroups.avatar,
         memberCount: chatGroups.memberCount,
         isTokenGated: chatGroups.isTokenGated,
+        isPublic: chatGroups.isPublic,
         role: groupMembers.role,
         updatedAt: chatGroups.updatedAt,
       })
@@ -1284,6 +1285,13 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
+      if (input.isPublic === true) {
+        const benefits = await getBenefits(db, ctx.user.id);
+        if (!benefits.publicGroups) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可将群设为公开" });
+        }
+      }
       const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean; forbidAddFriend: boolean }> = {};
       if (input.name !== undefined) updates.name = sanitizeInput(input.name);
       if (input.description !== undefined) updates.description = sanitizeInput(input.description);
@@ -2014,13 +2022,13 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      // 节点 NN 走线性归属（按等级锁仓 + 释放），不再一次性发放
-      const tier = getNodeTier(o.tier);
-      const cliff = tier?.cliffMonths ?? 0;
-      const duration = tier?.durationMonths ?? 6;
-      await createVesting(db, o.userId, "node", o.id, o.nnAmount, cliff, duration);
-      await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnNodeOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount, vesting: true };
+      // 旧节点档位（genesis/super/standard）按旧汇率定的 NN 配额与现行 1:1 锚定冲突：
+      // 停止确认发放，请取消订单并引导用户走合伙人计划重新认购
+      if (getNodeTier(o.tier)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "旧节点订单已停用（汇率已调整为 1:1），请取消该订单并引导用户通过「合伙人招募」重新认购" });
+      }
+      // 合伙人订单请走 partner.adminConfirmOrder
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请使用合伙人确认入口处理该订单" });
     }),
 
   // 运营：取消订单
@@ -2099,10 +2107,16 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, o.nnAmount, o.id);
+      // 汇率保护：按"当前"底池汇率重算发放量，防止旧汇率挂单在改价后按旧价铸币
+      const curInfo = await getPoolInfo(db);
+      const nnNow = o.usdtAmount * curInfo.priceNnPerUsdt;
+      if (nnNow !== o.nnAmount) {
+        await db.update(nnPoolOrders).set({ nnAmount: nnNow }).where(eq(nnPoolOrders.id, o.id));
+      }
+      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, nnNow, o.id);
       if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备或金库不足，无法发放" });
       await db.update(nnPoolOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnPoolOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount };
+      return { ok: true, nnGranted: nnNow };
     }),
 
   adminCancelPoolOrder: adminProcedure
