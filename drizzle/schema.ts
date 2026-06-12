@@ -810,7 +810,7 @@ export const appConfig = mysqlTable("app_config", {
   releaseNotes: text("releaseNotes"),
   isForceUpdate: boolean("isForceUpdate").default(false).notNull(),
   // 与 AI 助手对话每次消耗的 NP 积分（可后台配置，无需改代码）
-  aiChatCost: int("aiChatCost").default(5).notNull(),
+  aiChatCost: int("aiChatCost").default(10).notNull(),
   // 任务奖励覆盖（JSON: { [taskType]: npReward }），后台可改，无需改代码
   taskRewards: text("taskRewards"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -1081,6 +1081,23 @@ export const partnerSettleRuns = mysqlTable(
   },
   (t) => [uniqueIndex("uniq_psettle_ymd_kind").on(t.ymd, t.kind)]
 );
+
+// ─── 发现页滚动广告位（Pro 会员专属投放，7 天有效，每人同时 1 条）──────────────
+export const promoBanners = mysqlTable(
+  "promo_banners",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    text: varchar("text", { length: 80 }).notNull(),        // 广告文案（经内容审核）
+    targetType: mysqlEnum("targetType", ["group", "post", "none"]).default("none").notNull(),
+    targetId: int("targetId"),                               // 跳转目标（自己的公开群/动态）
+    status: mysqlEnum("status", ["active", "removed"]).default("active").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_pbanner_status").on(t.status, t.expiresAt), index("idx_pbanner_user").on(t.userId)]
+);
+export type PromoBanner = typeof promoBanners.$inferSelect;
 
 // 平台手续费台账（生态内收 5% 手续费的交易逐笔记账；其中 3.7% 注入手续费分红池）
 export const platformFeeLedger = mysqlTable(

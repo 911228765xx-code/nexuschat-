@@ -40,6 +40,17 @@ async function getClearedBeforeId(db: Db, userId: number, convKey: string): Prom
   return p?.c ?? 0;
 }
 
+
+/** 原子扣 NP 积分（余额足够才扣）；NP 只进不出生态内消耗 */
+async function spendNP(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number, cost: number): Promise<boolean> {
+  if (cost <= 0) return true;
+  const res: any = await db.update(users)
+    .set({ npPoints: sql`${users.npPoints} - ${cost}` })
+    .where(and(eq(users.id, userId), sql`${users.npPoints} >= ${cost}`));
+  const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+  return affected > 0;
+}
+
 export const chatRouter = router({
   // List public groups
   listGroups: publicProcedure
@@ -129,6 +140,10 @@ export const chatRouter = router({
         .where(eq(chatGroups.creatorId, ctx.user.id));
       if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
         throw new TRPCError({ code: "FORBIDDEN", message: `当前会员最多可创建 ${benefits.maxGroups} 个群，升级会员可提升上限` });
+      }
+      // 公开群为会员专属：免费用户仅可创建私密群
+      if (input.isPublic && !benefits.publicGroups) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可创建；你仍可创建私密群" });
       }
       const [result] = await db.insert(chatGroups).values({
         name: input.name,
@@ -540,6 +555,7 @@ export const chatRouter = router({
         avatar: chatGroups.avatar,
         memberCount: chatGroups.memberCount,
         isTokenGated: chatGroups.isTokenGated,
+        isPublic: chatGroups.isPublic,
         role: groupMembers.role,
         updatedAt: chatGroups.updatedAt,
       })
@@ -1280,6 +1296,13 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
+      if (input.isPublic === true) {
+        const benefits = await getBenefits(db, ctx.user.id);
+        if (!benefits.publicGroups) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可将群设为公开" });
+        }
+      }
       const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean; forbidAddFriend: boolean }> = {};
       if (input.name !== undefined) updates.name = sanitizeInput(input.name);
       if (input.description !== undefined) updates.description = sanitizeInput(input.description);
@@ -1758,9 +1781,15 @@ export const chatRouter = router({
       const months = input.months ?? 0;
       if (months > 0 && meta.monthlyNN > 0) {
         const cost = meta.monthlyNN * months;
-        // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
-        const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+        if (meta.currency === "NP") {
+          // 基础机器人按 NP 计价（任务积分的消耗出口）
+          const ok = await spendNP(db, ctx.user.id, cost);
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+        } else {
+          // 原子扣 NN 治理代币（余额足够才扣，NN 回流金库）
+          const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通" });
+        }
         const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
           ? existing.expiresAt.getTime() : Date.now();
         expiresAt = new Date(base + months * 30 * 24 * 3600 * 1000);
@@ -1813,10 +1842,15 @@ export const chatRouter = router({
       const pkg = BOT_PACKAGES.find((p) => p.key === input.packageKey);
       if (!pkg) throw new TRPCError({ code: "BAD_REQUEST", message: "未知套餐" });
 
-      // 一次性按套餐价扣 NN（折扣已含在 pkg.monthlyNN）
+      // 一次性按套餐价扣费（折扣已含在 pkg.monthlyNN；币种见 pkg.currency）
       const cost = pkg.monthlyNN * input.months;
-      const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+      if (pkg.currency === "NP") {
+        const ok = await spendNP(db, ctx.user.id, cost);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `NP 余额不足（需 ${cost.toLocaleString()} NP），完成任务可获取 NP` });
+      } else {
+        const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足，无法开通套餐" });
+      }
 
       const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
       for (const bt of pkg.bots) {
@@ -2010,13 +2044,13 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnNodeOrders).where(eq(nnNodeOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      // 节点 NN 走线性归属（按等级锁仓 + 释放），不再一次性发放
-      const tier = getNodeTier(o.tier);
-      const cliff = tier?.cliffMonths ?? 0;
-      const duration = tier?.durationMonths ?? 6;
-      await createVesting(db, o.userId, "node", o.id, o.nnAmount, cliff, duration);
-      await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnNodeOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount, vesting: true };
+      // 旧节点档位（genesis/super/standard）按旧汇率定的 NN 配额与现行 1:1 锚定冲突：
+      // 停止确认发放，请取消订单并引导用户走合伙人计划重新认购
+      if (getNodeTier(o.tier)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "旧节点订单已停用（汇率已调整为 1:1），请取消该订单并引导用户通过「合伙人招募」重新认购" });
+      }
+      // 合伙人订单请走 partner.adminConfirmOrder
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请使用合伙人确认入口处理该订单" });
     }),
 
   // 运营：取消订单
@@ -2095,10 +2129,16 @@ export const chatRouter = router({
       const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
       if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, o.nnAmount, o.id);
+      // 汇率保护：按"当前"底池汇率重算发放量，防止旧汇率挂单在改价后按旧价铸币
+      const curInfo = await getPoolInfo(db);
+      const nnNow = o.usdtAmount * curInfo.priceNnPerUsdt;
+      if (nnNow !== o.nnAmount) {
+        await db.update(nnPoolOrders).set({ nnAmount: nnNow }).where(eq(nnPoolOrders.id, o.id));
+      }
+      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, nnNow, o.id);
       if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备或金库不足，无法发放" });
       await db.update(nnPoolOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnPoolOrders.id, o.id));
-      return { ok: true, nnGranted: o.nnAmount };
+      return { ok: true, nnGranted: nnNow };
     }),
 
   adminCancelPoolOrder: adminProcedure

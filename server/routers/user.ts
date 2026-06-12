@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte, count, like, or, ne, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -603,31 +603,15 @@ export const userRouter = router({
         bio: users.bio,
       };
 
-      // 纯数字：按唯一 ID 精确查找
-      if (/^\d+$/.test(raw)) {
-        const idNum = Number(raw);
-        if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
-        const rows = await db
-          .select(cols)
-          .from(users)
-          .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum)))
-          .limit(1);
-        return rows.map(u => ({
-          id: u.id,
-          name: u.name ?? u.username ?? `User #${u.id}`,
-          username: u.username,
-          avatar: u.avatar,
-          bio: u.bio,
-        }));
-      }
-
-      // 非数字：按昵称/用户名模糊匹配
-      const q = `%${raw}%`;
+      // 仅允许 ID 精确搜索（用户名/昵称不可被搜索，保护隐私）
+      if (!/^\d+$/.test(raw)) return [];
+      const idNum = Number(raw);
+      if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
       const rows = await db
         .select(cols)
         .from(users)
-        .where(and(ne(users.id, ctx.user.id), or(like(users.name, q), like(users.username, q))))
-        .limit(20);
+        .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum)))
+        .limit(1);
       return rows.map(u => ({
         id: u.id,
         name: u.name ?? u.username ?? `User #${u.id}`,

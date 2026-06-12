@@ -33,7 +33,8 @@ export interface BotCatalogItem {
   icon: string; // Ionicons 名
   tagline: string; // 一句话卖点
   desc: string;
-  monthlyNN: number; // 月订阅价（NN 治理代币），0=免费
+  monthlyNN: number; // 月订阅价（按 currency 计价），0=免费
+  currency: "NP" | "NN"; // 计价货币：基础四件套用 NP（积分出口），其余用 NN
   interactive: boolean; // 是否会主动/被动发消息（互动机器人）
   configFields: BotConfigField[];
   defaultConfig: Record<string, unknown>;
@@ -47,7 +48,8 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "hand-left",
     tagline: "新成员入群自动欢迎",
     desc: "有人加入群聊时，自动发送一条欢迎语，可带群规与暗号。",
-    monthlyNN: 0,
+    monthlyNN: 10000,
+    currency: "NP",
     interactive: true,
     configFields: [
       { key: "message", label: "欢迎语", type: "textarea", placeholder: "欢迎 {name} 加入本群！进群先看群公告~", hint: "可用 {name} 代表新成员昵称" },
@@ -60,7 +62,8 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "shield-checkmark",
     tagline: "关键词检测 · 自动提醒",
     desc: "检测到设定的违禁关键词时自动发出提醒，减轻群主管理负担。",
-    monthlyNN: 29,
+    monthlyNN: 30000,
+    currency: "NP",
     interactive: true,
     configFields: [
       { key: "keywords", label: "违禁关键词", type: "tags", hint: "命中任一关键词即提醒，回车添加" },
@@ -74,7 +77,8 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "trending-up",
     tagline: "定时播报币价行情",
     desc: "每天定时在群里播报关注币种的价格与涨跌（需后端调度开启）。",
-    monthlyNN: 39,
+    monthlyNN: 80000,
+    currency: "NP",
     interactive: true,
     configFields: [
       { key: "tokens", label: "关注币种", type: "tags", hint: "如 BTC、ETH、SOL，回车添加" },
@@ -88,7 +92,8 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     icon: "sparkles",
     tagline: "签到 · 定时活动提醒",
     desc: "定时提醒群成员签到/参与活动，活跃群氛围（需后端调度开启）。",
-    monthlyNN: 19,
+    monthlyNN: 150000,
+    currency: "NP",
     interactive: true,
     configFields: [
       { key: "message", label: "活动提醒语", type: "textarea", placeholder: "今日签到开始啦，回复「签到」参与～" },
@@ -103,6 +108,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "AI 在群里自由聊天互动",
     desc: "一个有人设的 AI 成员，会根据群里聊天内容自然地参与讨论、答疑、活跃气氛（可设人设/回复频率/仅被@时回复）。",
     monthlyNN: 49,
+    currency: "NN",
     interactive: true,
     configFields: [
       { key: "persona", label: "机器人人设/风格", type: "textarea", placeholder: "你是本群的 AI 助手，友好、专业又幽默，擅长 Web3 话题", hint: "决定它的说话风格" },
@@ -118,6 +124,7 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "拉新增长 · 邀请奖励",
     desc: "成员通过邀请链接拉来新人时，自动奖励邀请人 NP 并在群里致谢，激励大家拉新涨粉。",
     monthlyNN: 35,
+    currency: "NN",
     interactive: true,
     configFields: [
       { key: "inviteReward", label: "每邀请1人奖励(NP)", type: "number", placeholder: "5", hint: "上限 100/人" },
@@ -133,45 +140,41 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     tagline: "群数据周报",
     desc: "解锁「群数据看板」并每周生成增长/活跃周报。",
     monthlyNN: 25,
+    currency: "NN",
     interactive: false,
     configFields: [],
     defaultConfig: {},
   },
 ];
 
-/** 套餐：打包订阅更便宜（前端展示用，下单时逐个写入 group_bots 即可） */
+/** 套餐：打包订阅更便宜（同币种打包，下单时逐个写入 group_bots 即可） */
 export const BOT_PACKAGES = [
   {
     key: "starter",
     name: "新群启动包",
     desc: "欢迎 + 活动，零门槛把群带活。",
     bots: ["welcome", "activity"] as BotType[],
-    monthlyNN: 15, // 原价 0+19，套餐价
+    monthlyNN: 135000, // 原价 10000+150000=160000，套餐价（NP）
+    currency: "NP" as const,
     badge: "入门",
   },
   {
     key: "owner",
-    name: "群主管理包",
-    desc: "管理 + 欢迎 + 数据，群主省心三件套。",
-    bots: ["manage", "welcome", "stats"] as BotType[],
-    monthlyNN: 45, // 原价 29+0+25=54
+    name: "群管四件套",
+    desc: "欢迎 + 管理 + 行情 + 活动，群运营一步到位。",
+    bots: ["welcome", "manage", "price", "activity"] as BotType[],
+    monthlyNN: 225000, // 原价 10000+30000+80000+150000=270000，套餐价（NP）
+    currency: "NP" as const,
     badge: "热门",
   },
   {
     key: "growth",
-    name: "涨粉增长包",
-    desc: "添粉 + 互动 + 欢迎，拉新 + AI 互动一条龙。",
-    bots: ["growth", "interact", "welcome"] as BotType[],
-    monthlyNN: 69, // 原价 35+49+0=84
+    name: "AI 增长包",
+    desc: "互动 + 添粉 + 数据，AI 互动与拉新一条龙。",
+    bots: ["interact", "growth", "stats"] as BotType[],
+    monthlyNN: 89, // 原价 49+35+25=109，套餐价（NN）
+    currency: "NN" as const,
     badge: "涨粉",
-  },
-  {
-    key: "pro",
-    name: "全能旗舰包",
-    desc: "全部机器人，互动/添粉/行情/活动/管理/数据全开。",
-    bots: ["welcome", "manage", "price", "activity", "stats", "interact", "growth"] as BotType[],
-    monthlyNN: 159, // 原价 0+29+39+19+25+49+35=196
-    badge: "超值",
   },
 ];
 
