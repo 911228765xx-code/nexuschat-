@@ -331,7 +331,7 @@ export default function Login() {
           <MessageCircle size={28} color="white" />
         </div>
         <h1 style={S.logoTitle}>NexusChat</h1>
-        <p style={S.logoSub}>Web3 社交 · AI 投研 · 链上交易</p>
+        <p style={S.logoSub}>全球首款 AI 智能体 · Web3 社交平台</p>
       </div>
 
       {/* Card — solid background, NO backdrop-blur */}
