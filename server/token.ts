@@ -173,15 +173,11 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
 export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 15) / 100);
 
 /**
- * 联合曲线（分档 bonding curve）：随累计售出量上涨，越早买每 USDT 得到的 NN 越多。
- * rate = 每 1 USDT 兑换的 NN 数量（越往后越少 = 价格越高）。
+ * 底池兑换：NN 与 USDT 1:1 锚定（rate = 每 1 USDT 兑换的 NN 数量）。
  */
 export interface PoolTier { round: number; untilSold: number; rate: number; }
 export const NN_POOL_TIERS: PoolTier[] = [
-  { round: 1, untilSold: 500_000, rate: 25 },     // 早鸟：1 USDT = 25 NN
-  { round: 2, untilSold: 1_500_000, rate: 20 },
-  { round: 3, untilSold: 2_500_000, rate: 16 },
-  { round: 4, untilSold: NN_POOL_SEED, rate: 12 }, // 末轮：1 USDT = 12 NN
+  { round: 1, untilSold: NN_POOL_SEED, rate: 1 }, // NN 与 USDT 1:1 锚定
 ];
 
 /** 按当前累计售出量取所在档（含下一档信息，用于前端展示涨价进度） */
@@ -204,7 +200,7 @@ export async function getPool(db: Db) {
   let [p] = await db.select().from(nnPool).where(eq(nnPool.id, 1)).limit(1);
   if (!p) {
     try {
-      await db.insert(nnPool).values({ id: 1, reserveNN: NN_POOL_SEED, soldNN: 0, priceNnPerUsdt: 20, raisedUsdt: 0 });
+      await db.insert(nnPool).values({ id: 1, reserveNN: NN_POOL_SEED, soldNN: 0, priceNnPerUsdt: 1, raisedUsdt: 0 });
     } catch { /* 并发已建 */ }
     [p] = await db.select().from(nnPool).where(eq(nnPool.id, 1)).limit(1);
   }

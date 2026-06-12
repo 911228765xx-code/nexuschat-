@@ -34,7 +34,7 @@ export interface PartnerTier {
   badge: string;
   minUsdt: number;
   maxUsdt: number;
-  nnPerUsdt: number;       // 认购 NN 配额汇率（对比底池末轮 12/U 有溢价）
+  nnPerUsdt: number;       // 认购 NN 配额汇率（NN 与 USDT 1:1 锚定）
   feeSharePct: number;     // 手续费池档位份额（占交易额百分比：1 / 1.2 / 1.5，合计 3.7）
   revWeight: number;       // 收益池档位系数（×认购额加权）
   bonusPct: number;        // USDT 认购奖励比例（5 / 8 / 10）
@@ -51,49 +51,49 @@ export const FEE_POOL_PCT = 3.7;
 /** 收益分红池：平台服务收入注入比例 */
 export const REVENUE_POOL_PCT = 20;
 /** 平台服务收入口径（nn_transactions.type，amount<0 的消费侧） */
-export const REVENUE_TYPES = ["membership", "report", "promote", "bot_sub", "package"];
+export const REVENUE_TYPES = ["membership", "report", "promote", "bot_sub", "package", "ai_chat"];
 /** USDT 奖励解锁期数（月） */
 export const BONUS_PERIODS = 6;
 
 export const PARTNER_TIERS: PartnerTier[] = [
   {
     key: "partner", name: "合伙人", badge: "合伙人",
-    minUsdt: 3000, maxUsdt: 9999, nnPerUsdt: 12,
+    minUsdt: 3000, maxUsdt: 9999, nnPerUsdt: 1,
     feeSharePct: 1.0, revWeight: 1, bonusPct: 5,
     cliffMonths: 0, durationMonths: 6, seats: 88, proGiftMonths: 6,
     benefits: [
       "手续费分红池 1% 档位权益（NN·日结）",
       "收益分红池按认购额加权（NN·日结）",
       "认购额 5% USDT 奖励 · 6 期解锁",
-      "NN 配额 1U=12NN · 6 月线性释放",
+      "NN 配额按认购额 1:1 · 6 月线性释放",
       "Pro 会员 6 个月 · 合伙人专属标识",
       "治理权重 ×3 · 新功能内测优先",
     ],
   },
   {
     key: "super", name: "超级合伙人", badge: "超级",
-    minUsdt: 10000, maxUsdt: 49999, nnPerUsdt: 13,
+    minUsdt: 10000, maxUsdt: 49999, nnPerUsdt: 1,
     feeSharePct: 1.2, revWeight: 1.5, bonusPct: 8,
     cliffMonths: 1, durationMonths: 9, seats: 28, proGiftMonths: 12,
     benefits: [
       "手续费分红池 1.2% 档位权益（NN·日结）",
       "收益分红池 ×1.5 系数加权（NN·日结）",
       "认购额 8% USDT 奖励 · 6 期解锁",
-      "NN 配额 1U=13NN · 1 月锁仓 + 9 月线性",
+      "NN 配额按认购额 1:1 · 1 月锁仓 + 9 月线性",
       "Pro 会员 12 个月 · 超级合伙人标识",
       "治理权重 ×8 · 官方共建群席位 · 重大提案优先投票",
     ],
   },
   {
     key: "founder", name: "联合创始人", badge: "联创",
-    minUsdt: 50000, maxUsdt: 100000, nnPerUsdt: 15,
+    minUsdt: 50000, maxUsdt: 100000, nnPerUsdt: 1,
     feeSharePct: 1.5, revWeight: 2, bonusPct: 10,
     cliffMonths: 1, durationMonths: 12, seats: 8, proGiftMonths: 999,
     benefits: [
       "手续费分红池 1.5% 档位权益（NN·日结）",
       "收益分红池 ×2 系数加权（NN·日结）",
       "认购额 10% USDT 奖励 · 6 期解锁",
-      "NN 配额 1U=15NN · 1 月锁仓 + 12 月线性",
+      "NN 配额按认购额 1:1 · 1 月锁仓 + 12 月线性",
       "终身 Pro 会员 · 联合创始人铭牌",
       "治理权重 ×20 · 产品路线共决权 · 专属客户经理",
       "官网创始成员署名（自愿）",

@@ -40,20 +40,32 @@ export interface MembershipTier {
 export const MEMBERSHIP_TIERS: MembershipTier[] = [
   {
     key: "free", name: "免费用户", monthlyNN: 0, color: "#94A3B8", tagline: "基础社交体验",
-    benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 3, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false },
-    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "每日 3 次免费 AI", "文件 ≤ 60MB", "视频 ≤ 60MB"],
+    benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 0, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false },
+    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "AI 按次付费 10 NN/次", "文件 ≤ 60MB", "视频 ≤ 60MB"],
   },
   {
-    key: "plus", name: "会员 Plus", monthlyNN: 99, color: "#6366F1", tagline: "进阶社群运营",
-    benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 15, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false },
-    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 15 次免费 AI", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
+    key: "plus", name: "会员 Plus", monthlyNN: 80, color: "#6366F1", tagline: "进阶社群运营",
+    benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false },
+    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 NN/次）", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
   },
   {
-    key: "pro", name: "高级会员 Pro", monthlyNN: 299, color: "#F59E0B", tagline: "专业玩家 / KOL",
-    benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 50, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true },
-    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 50 次免费 AI", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
+    key: "pro", name: "高级会员 Pro", monthlyNN: 200, color: "#F59E0B", tagline: "专业玩家 / KOL",
+    benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true },
+    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 NN/次）", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
   },
 ];
+
+/** 订阅期限折扣：3 个月 8 折、12 个月 5 折 */
+export const MEMBERSHIP_TERMS = [
+  { months: 1, discount: 1, label: "1 个月" },
+  { months: 3, discount: 0.8, label: "3 个月 · 8 折" },
+  { months: 12, discount: 0.5, label: "12 个月 · 5 折" },
+];
+export function membershipCost(monthlyNN: number, months: number): number {
+  const term = MEMBERSHIP_TERMS.find((t) => t.months === months);
+  const discount = term?.discount ?? 1;
+  return Math.ceil(monthlyNN * months * discount);
+}
 
 const tierByKey = new Map(MEMBERSHIP_TIERS.map((t) => [t.key, t]));
 export function getTier(key: string): MembershipTier {
@@ -83,6 +95,7 @@ export async function getMembership(db: Db, userId: number) {
     daysLeft: eff === "free" ? null : daysLeft,
     nnBalance: Number(u?.nn ?? 0),
     tiers: MEMBERSHIP_TIERS,
+    terms: MEMBERSHIP_TERMS,
   };
 }
 
@@ -98,7 +111,7 @@ export async function getBenefits(db: Db, userId: number): Promise<TierBenefits>
 export async function buyMembership(db: Db, userId: number, tierKey: ProTier, months: number) {
   const tier = getTier(tierKey);
   if (tier.key === "free" || tier.monthlyNN <= 0) throw new Error("invalid tier");
-  const cost = tier.monthlyNN * months;
+  const cost = membershipCost(tier.monthlyNN, months);
   const ok = await spendNN(db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
   if (!ok) throw new Error("insufficient_nn");
 
