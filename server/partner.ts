@@ -7,17 +7,17 @@
  *   联合创始人  50,000 – 100,000 USDT
  *
  * 收益结构：
- * 1) 手续费分红池（NN·每日结算）：生态内交易收 5% 手续费，其中 3.7% 注入分红池，
+ * 1) 手续费分红池（AI·每日结算）：生态内交易收 5% 手续费，其中 3.7% 注入分红池，
  *    按档位拆分 1% / 1.2% / 1.5%（合计 3.7%），档内按认购额加权分配。
  *    手续费来源通过 recordPlatformFee() 逐笔记账（红包/转账/交易功能接入时调用）。
- * 2) 收益分红池（NN·每日结算）：平台服务收入（会员/AI报告/推广/机器人/群套餐 NN 流水）
+ * 2) 收益分红池（AI·每日结算）：平台服务收入（会员/AI报告/推广/机器人/群套餐 AI 流水）
  *    的 20% 注入，全体合伙人按 认购额×档位系数 加权分配。
  * 3) 认购奖励（USDT）：确认到账后按档位 5% / 8% / 10% 生成奖励，分 6 期按月解锁，
  *    领取需近 30 天内活跃；提取走运营审核打款。
- * 4) NN 配额：认购额 × 档位汇率，按档位锁仓线性释放（复用 nn_vesting）。
+ * 4) AI 配额：认购额 × 档位汇率，按档位锁仓线性释放（复用 nn_vesting）。
  *
  * 合规护栏：分红与奖励均为平台经营收益分享，不承诺保本/固定收益；
- * 仅向非中国大陆地区用户开放（与 NN 一致的地域隔离要求），文案见 App 端免责声明。
+ * 仅向非中国大陆地区用户开放（与 AI 一致的地域隔离要求），文案见 App 端免责声明。
  */
 import { and, eq, sql, desc, inArray, gte, lt, isNotNull } from "drizzle-orm";
 import { getDb } from "./db";
@@ -34,12 +34,12 @@ export interface PartnerTier {
   badge: string;
   minUsdt: number;
   maxUsdt: number;
-  nnPerUsdt: number;       // 认购 NN 配额汇率（NN 与 USDT 1:1 锚定）
+  nnPerUsdt: number;       // 认购 AI 配额汇率（AI 与 USDT 1:1 锚定）
   feeSharePct: number;     // 手续费池档位份额（占交易额百分比：1 / 1.2 / 1.5，合计 3.7）
   revWeight: number;       // 收益池档位系数（×认购额加权）
   bonusPct: number;        // USDT 认购奖励比例（5 / 8 / 10）
-  cliffMonths: number;     // NN 锁仓
-  durationMonths: number;  // NN 线性释放时长
+  cliffMonths: number;     // AI 锁仓
+  durationMonths: number;  // AI 线性释放时长
   seats: number;           // 限量席位
   proGiftMonths: number;   // 赠送 Pro 会员月数（0=不送；999=终身）
   benefits: string[];
@@ -62,10 +62,10 @@ export const PARTNER_TIERS: PartnerTier[] = [
     feeSharePct: 1.0, revWeight: 1, bonusPct: 5,
     cliffMonths: 0, durationMonths: 6, seats: 88, proGiftMonths: 6,
     benefits: [
-      "手续费分红池 1% 档位权益（NN·日结）",
-      "收益分红池按认购额加权（NN·日结）",
+      "手续费分红池 1% 档位权益（AI·日结）",
+      "收益分红池按认购额加权（AI·日结）",
       "认购额 5% USDT 奖励 · 6 期解锁",
-      "NN 配额按认购额 1:1 · 6 月线性释放",
+      "AI 配额按认购额 1:1 · 6 月线性释放",
       "Pro 会员 6 个月 · 合伙人专属标识",
       "治理权重 ×3 · 新功能内测优先",
     ],
@@ -76,10 +76,10 @@ export const PARTNER_TIERS: PartnerTier[] = [
     feeSharePct: 1.2, revWeight: 1.5, bonusPct: 8,
     cliffMonths: 1, durationMonths: 9, seats: 28, proGiftMonths: 12,
     benefits: [
-      "手续费分红池 1.2% 档位权益（NN·日结）",
-      "收益分红池 ×1.5 系数加权（NN·日结）",
+      "手续费分红池 1.2% 档位权益（AI·日结）",
+      "收益分红池 ×1.5 系数加权（AI·日结）",
       "认购额 8% USDT 奖励 · 6 期解锁",
-      "NN 配额按认购额 1:1 · 1 月锁仓 + 9 月线性",
+      "AI 配额按认购额 1:1 · 1 月锁仓 + 9 月线性",
       "Pro 会员 12 个月 · 超级合伙人标识",
       "治理权重 ×8 · 官方共建群席位 · 重大提案优先投票",
     ],
@@ -90,10 +90,10 @@ export const PARTNER_TIERS: PartnerTier[] = [
     feeSharePct: 1.5, revWeight: 2, bonusPct: 10,
     cliffMonths: 1, durationMonths: 12, seats: 8, proGiftMonths: 999,
     benefits: [
-      "手续费分红池 1.5% 档位权益（NN·日结）",
-      "收益分红池 ×2 系数加权（NN·日结）",
+      "手续费分红池 1.5% 档位权益（AI·日结）",
+      "收益分红池 ×2 系数加权（AI·日结）",
       "认购额 10% USDT 奖励 · 6 期解锁",
-      "NN 配额按认购额 1:1 · 1 月锁仓 + 12 月线性",
+      "AI 配额按认购额 1:1 · 1 月锁仓 + 12 月线性",
       "终身 Pro 会员 · 联合创始人铭牌",
       "治理权重 ×20 · 产品路线共决权 · 专属客户经理",
       "官网创始成员署名（自愿）",
@@ -124,7 +124,7 @@ export function tierOrder(key: string | null): number {
 /**
  * 平台手续费记账钩子：任何"收 5% 手续费"的交易场景调用一次。
  * baseNN = 交易基数（如转账额/红包额）；入池额 = baseNN × 3.7%。
- * 红包/NN 转账/交易等功能接入时调用本函数即可自动进入手续费分红池。
+ * 红包/AI 转账/交易等功能接入时调用本函数即可自动进入手续费分红池。
  */
 export async function recordPlatformFee(db: Db, baseNN: number, source: string): Promise<void> {
   if (baseNN <= 0) return;
@@ -169,7 +169,7 @@ function ymdOf(d: Date): string {
 
 /**
  * 每日分红结算（幂等：partner_settle_runs 唯一闸）。
- * 结算"昨天"的两池：手续费池（未结算台账全量）+ 收益池（昨日平台 NN 收入 ×20%）。
+ * 结算"昨天"的两池：手续费池（未结算台账全量）+ 收益池（昨日平台 AI 收入 ×20%）。
  */
 export async function runPartnerSettlement(now = new Date()): Promise<{ fee: number; revenue: number } | null> {
   const db = await getDb();

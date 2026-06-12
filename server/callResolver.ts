@@ -1,7 +1,7 @@
 /**
- * Alpha 战绩判定（NP 模型 Phase 3）：定时结算到期的 Call。
+ * Alpha 战绩判定（AC 模型 Phase 3）：定时结算到期的 Call。
  *  - 取当前行情，与建仓价比较；±1% 死区内视为 void（波动太小不计）。
- *  - 方向判对 → +NP（直接入账，不farmable：受 5/天发 Call 限频且需真命中）+ 声誉。
+ *  - 方向判对 → +AC（直接入账，不farmable：受 5/天发 Call 限频且需真命中）+ 声誉。
  *  - 判错 → 扣声誉（不为负）。声誉抬高个人产出加成，形成正循环。
  */
 import { eq, and, lte, sql } from "drizzle-orm";
@@ -13,10 +13,10 @@ import logger from "./utils/logger";
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
 const DEADBAND_BP = 100;        // ±1% 死区（基点）
-const WIN_NP = 150;             // 判对 NP 奖励
+const WIN_NP = 150;             // 判对 AC 奖励
 const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
-const STAKE_WIN_BONUS = 0.3;    // 策展质押命中奖励比例（押对 +30%，押错销毁 → 净 NP 出口）
+const STAKE_WIN_BONUS = 0.3;    // 策展质押命中奖励比例（押对 +30%，押错销毁 → 净 AC 出口）
 
 /** 策展质押结算返还额：押对=本金+30%，void=退本金，押错=0（销毁）。 */
 export function stakePayout(amount: number, callStatus: "win" | "lose" | "void"): number {

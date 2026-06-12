@@ -1,7 +1,7 @@
 /**
- * TGE（NP 模型 Phase 5）：NP → NN 单向兑换。默认关闭，临近发币由管理员快照 + 开启。
- *  - 快照：记录每个用户当下 NP 持有量 + 全站总 NP。
- *  - 兑换：pro-rata —— NN = nnPool × 个人快照NP / 全站快照NP；NP 按快照量销毁，单向不可逆。
+ * TGE（AC 模型 Phase 5）：AC → AI 单向兑换。默认关闭，临近发币由管理员快照 + 开启。
+ *  - 快照：记录每个用户当下 AC 持有量 + 全站总 AC。
+ *  - 兑换：pro-rata —— AI = nnPool × 个人快照AC / 全站快照AC；AC 按快照量销毁，单向不可逆。
  *  - 平时不可兑、不可提现；只有 TGE 开启后每人可领一次。
  */
 import { z } from "zod";
@@ -42,19 +42,19 @@ export const tgeRouter = router({
     };
   }),
 
-  // ─── 领取（NP→NN，单向，每人一次）───────────────────────────────────────────────
+  // ─── 领取（AC→AI，单向，每人一次）───────────────────────────────────────────────
   claim: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const cfg = await loadConfig(db);
     if (!cfg?.enabled) throw new TRPCError({ code: "FORBIDDEN", message: "TGE 尚未开启" });
     const [claim] = await db.select().from(tgeClaims).where(eq(tgeClaims.userId, ctx.user.id)).limit(1);
-    if (!claim) throw new TRPCError({ code: "BAD_REQUEST", message: "你没有 TGE 快照（快照后才有 NP 可兑换）" });
+    if (!claim) throw new TRPCError({ code: "BAD_REQUEST", message: "你没有 TGE 快照（快照后才有 AC 可兑换）" });
     if (claim.claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已领取过" });
 
     const nn = estimateNn(cfg.nnPool, claim.npSnapshot, cfg.totalNpSnapshot);
     await db.transaction(async (tx) => {
-      // 原子条件：仅当仍未领取时置为已领，防并发双领白嫖 NN
+      // 原子条件：仅当仍未领取时置为已领，防并发双领白嫖 AI
       const res = await tx.update(tgeClaims)
         .set({ claimed: true, nnAmount: nn, claimedAt: new Date() })
         .where(and(eq(tgeClaims.id, claim.id), eq(tgeClaims.claimed, false)));
@@ -67,17 +67,17 @@ export const tgeRouter = router({
     return { ok: true, nn };
   }),
 
-  // ─── 管理员：拍快照（记录每人 NP + 全站总 NP）────────────────────────────────────
+  // ─── 管理员：拍快照（记录每人 AC + 全站总 AC）────────────────────────────────────
   adminSnapshot: adminProcedure
     .input(z.object({ nnPool: z.number().int().min(0) }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      // 安全护栏：TGE 开启中、或已有人领取过 → 禁止重拍（否则清掉领取记录会导致 NN 双发）
+      // 安全护栏：TGE 开启中、或已有人领取过 → 禁止重拍（否则清掉领取记录会导致 AI 双发）
       const cfg = await loadConfig(db);
       if (cfg?.enabled) throw new TRPCError({ code: "BAD_REQUEST", message: "TGE 进行中，请先关闭再重拍快照" });
       const [claimed] = await db.select({ id: tgeClaims.id }).from(tgeClaims).where(eq(tgeClaims.claimed, true)).limit(1);
-      if (claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已有用户领取过 NN，禁止重拍快照（会导致重复发放）" });
+      if (claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已有用户领取过 AI，禁止重拍快照（会导致重复发放）" });
       const [{ total = 0 } = { total: 0 }] = await db
         .select({ total: sql<number>`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
       // 重建快照

@@ -100,7 +100,7 @@ export const emailAuthRouter = router({
         name: z.string().min(1, "请输入昵称").max(50),
         /** Cloudflare Turnstile token — required in production */
         turnstileToken: z.string().optional(),
-        /** 设备指纹（防多号撸NP）：同设备最多注册 3 个账号 */
+        /** 设备指纹（防多号撸AC）：同设备最多注册 3 个账号 */
         deviceId: z.string().max(64).optional(),
       })
     )
@@ -153,7 +153,7 @@ export const emailAuthRouter = router({
         }
       }
 
-      // ── 设备维度限制：同一设备最多注册 3 个账号（防脚本/多号撸NP）──
+      // ── 设备维度限制：同一设备最多注册 3 个账号（防脚本/多号撸AC）──
       const deviceId = input.deviceId?.trim() || null;
       if (deviceId) {
         const [{ c: devCount = 0 } = { c: 0 }] = await db

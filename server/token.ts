@@ -1,14 +1,14 @@
 /**
- * NN 治理代币（与 NP 积分区分）
+ * AI 治理代币（与 AC 积分区分）
  *
- * - NN：治理 + 付费服务货币，总量恒定 2100 万枚。用户持有量记在 users.nnBalance。
- * - NP：社交积分（红包/任务等），只进不出、不可提现。
+ * - AI：治理 + 付费服务货币，总量恒定 2100 万枚。用户持有量记在 users.nnBalance。
+ * - AC：社交积分（红包/任务等），只进不出、不可提现。
  *
  * 供应守恒模型（无需额外账本表）：
  *   总量 TOTAL = 21,000,000（恒定）
  *   流通 circulating = SUM(users.nnBalance)
  *   金库 treasury = TOTAL - circulating（协议未分发/已回收部分）
- *   - 用户付费（买机器人等）→ nnBalance 减少 → 流通下降、金库回升（NN 回流金库）
+ *   - 用户付费（买机器人等）→ nnBalance 减少 → 流通下降、金库回升（AI 回流金库）
  *   - 分发（空投/任务/兑换）→ nnBalance 增加 → 流通上升、金库下降（不可超过金库）
  */
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
@@ -36,10 +36,10 @@ async function recordTx(db: Db, userId: number, amount: number, meta: NNTxMeta):
   } catch { /* 账本记录失败不影响主流程 */ }
 }
 
-/** NN 总发行量：2100 万枚（恒定） */
+/** AI 总发行量：2100 万枚（恒定） */
 export const NN_TOTAL_SUPPLY = 21_000_000;
-export const NN_SYMBOL = "NN";
-export const NN_NAME = "NexusNation 治理代币";
+export const NN_SYMBOL = "AI";
+export const NN_NAME = "AIChat 治理代币";
 
 /**
  * 代币分配模型（DAO 私募认购）。比例可调，需合计 100%。
@@ -55,8 +55,8 @@ export interface AllocationBucket {
 }
 
 const ALLOCATION_PCT: Omit<AllocationBucket, "amount">[] = [
-  { key: "node",      name: "合伙人认购",   pct: 25, desc: "平台共建：合伙人席位认购，认购即获 NN 配额", vesting: "按合伙人档位线性释放" },
-  { key: "staking",   name: "质押挖矿",     pct: 30, desc: "质押 NN/参与生态挖矿产出，长期激励持有者", vesting: "随挖矿逐步产出" },
+  { key: "node",      name: "合伙人认购",   pct: 25, desc: "平台共建：合伙人席位认购，认购即获 AI 配额", vesting: "按合伙人档位线性释放" },
+  { key: "staking",   name: "质押挖矿",     pct: 30, desc: "质押 AI/参与生态挖矿产出，长期激励持有者", vesting: "随挖矿逐步产出" },
   { key: "liquidity", name: "流动性共建",   pct: 15, desc: "DEX/做市流动性池，社区共建交易深度", vesting: "随流动性投放释放" },
   { key: "treasury",  name: "DAO 金库",     pct: 15, desc: "生态建设、治理提案、运营储备", vesting: "DAO 治理解锁" },
   { key: "team",      name: "团队",         pct: 10, desc: "创始与核心贡献者", vesting: "12 月悬崖 + 24 月线性" },
@@ -78,7 +78,7 @@ export interface NodeTier {
   name: string;
   badge: string;
   usdtPrice: number;        // 认购价（USDT）
-  nnAmount: number;         // 获得 NN
+  nnAmount: number;         // 获得 AI
   governanceWeight: number; // 治理投票权重
   cliffMonths: number;      // 锁仓期（满后才开始解锁）
   durationMonths: number;   // 线性释放总时长
@@ -142,8 +142,8 @@ export async function getTokenInfo(db: Db, userId?: number) {
 }
 
 /**
- * 从用户扣 NN（付费）。原子操作：余额足够才扣。
- * 返回是否成功。NN 回流金库（流通减少）。
+ * 从用户扣 AI（付费）。原子操作：余额足够才扣。
+ * 返回是否成功。AI 回流金库（流通减少）。
  */
 export async function spendNN(db: Db, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
   if (amount <= 0) return true;
@@ -156,7 +156,7 @@ export async function spendNN(db: Db, userId: number, amount: number, meta?: NNT
 }
 
 /**
- * 向用户发放 NN（空投/任务/兑换）。不可超过金库余额（守恒）。
+ * 向用户发放 AI（空投/任务/兑换）。不可超过金库余额（守恒）。
  * 返回是否成功。
  */
 export async function grantNN(db: Db, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
@@ -168,16 +168,16 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
   return true;
 }
 
-// ─── NN 底池（流动性共建 · 用户从底池购买 NN） ──────────────────────────────────
-/** 底池初始储备 = 流动性共建桶 15% = 3,150,000 NN */
+// ─── AI 底池（流动性共建 · 用户从底池购买 AI） ──────────────────────────────────
+/** 底池初始储备 = 流动性共建桶 15% = 3,150,000 AI */
 export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 15) / 100);
 
 /**
- * 底池兑换：NN 与 USDT 1:1 锚定（rate = 每 1 USDT 兑换的 NN 数量）。
+ * 底池兑换：AI 与 USDT 1:1 锚定（rate = 每 1 USDT 兑换的 AI 数量）。
  */
 export interface PoolTier { round: number; untilSold: number; rate: number; }
 export const NN_POOL_TIERS: PoolTier[] = [
-  { round: 1, untilSold: NN_POOL_SEED, rate: 1 }, // NN 与 USDT 1:1 锚定
+  { round: 1, untilSold: NN_POOL_SEED, rate: 1 }, // AI 与 USDT 1:1 锚定
 ];
 
 /** 按当前累计售出量取所在档（含下一档信息，用于前端展示涨价进度） */
@@ -224,7 +224,7 @@ export async function getPoolInfo(db: Db) {
 }
 
 /**
- * 确认底池购买到账：发放 NN 给用户 + 更新底池（已售↑/储备↓/募集↑）。
+ * 确认底池购买到账：发放 AI 给用户 + 更新底池（已售↑/储备↓/募集↑）。
  * 返回是否成功（储备不足或金库不足则失败）。
  */
 export async function confirmPoolPurchase(db: Db, userId: number, usdtAmount: number, nnAmount: number, orderId: number): Promise<boolean> {
@@ -240,7 +240,7 @@ export async function confirmPoolPurchase(db: Db, userId: number, usdtAmount: nu
   return true;
 }
 
-// ─── NN 线性归属（vesting）──────────────────────────────────────────────────────
+// ─── AI 线性归属（vesting）──────────────────────────────────────────────────────
 const MONTH_MS = 30 * 24 * 3600 * 1000;
 
 /** 截至 now 已归属（解锁）数量：cliff 内为 0，之后按时长线性到满 */
@@ -275,7 +275,7 @@ export async function getMyVesting(db: Db, userId: number) {
   });
 }
 
-/** 领取某计划当前可解锁部分 → 发 NN，更新 claimed */
+/** 领取某计划当前可解锁部分 → 发 AI，更新 claimed */
 export async function claimVesting(db: Db, userId: number, vestingId: number): Promise<{ ok: boolean; claimed: number }> {
   const [v] = await db.select().from(nnVesting).where(eq(nnVesting.id, vestingId)).limit(1);
   if (!v || v.userId !== userId) return { ok: false, claimed: 0 };
@@ -288,14 +288,14 @@ export async function claimVesting(db: Db, userId: number, vestingId: number): P
   return { ok: true, claimed: claimable };
 }
 
-/** 用户 NN 流水（最近 N 条） */
+/** 用户 AI 流水（最近 N 条） */
 export async function getMyNNTransactions(db: Db, userId: number, limit = 50) {
   return db.select().from(nnTransactions)
     .where(eq(nnTransactions.userId, userId))
     .orderBy(desc(nnTransactions.createdAt)).limit(limit);
 }
 
-/** 运营：NN 营收概览（按类型汇总支出额，即平台收入） */
+/** 运营：AI 营收概览（按类型汇总支出额，即平台收入） */
 export async function getNNRevenue(db: Db) {
   const rows = await db
     .select({

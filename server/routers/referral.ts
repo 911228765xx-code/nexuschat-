@@ -7,14 +7,14 @@ import { eq, and, desc, count, sql } from "drizzle-orm";
 import { ensureInviteCode } from "../utils/inviteCode";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
-// 按 NP 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
+// 按 AC 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
 // 高价值里程碑(开会员+800/+2000、建群+500 等，见 referralRewards.ts)，降低小号互绑套利动力。
-const REFERRER_REWARD = 100; // NP for inviter
-const INVITEE_REWARD = 200;  // NP for invitee
+const REFERRER_REWARD = 100; // AC for inviter
+const INVITEE_REWARD = 200;  // AC for invitee
 
 // ─── Milestone tiers ─────────────────────────────────────────────────────────
 const REWARD_TIERS = [
-  { count: 5, reward: "500 NP Bonus", icon: "🎁" },
+  { count: 5, reward: "500 AC Bonus", icon: "🎁" },
   { count: 10, reward: "Exclusive Badge", icon: "🏅" },
   { count: 25, reward: "1% Fee Rebate", icon: "💰" },
   { count: 50, reward: "VIP Status", icon: "👑" },
@@ -147,7 +147,7 @@ export const referralRouter = router({
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
 
-      // 防多号撸NP（设备维度两条规则）：
+      // 防多号撸AC（设备维度两条规则）：
       // 1) 同设备的两个账号禁止互绑（自己小号绑自己）；
       // 2) 同一设备最多 3 个账号能建立邀请关系（防一台设备换号无限绑）。
       {
@@ -187,7 +187,7 @@ export const referralRouter = router({
         }
       }
 
-      // Create referral record + award NP to both atomically, so a partial failure
+      // Create referral record + award AC to both atomically, so a partial failure
       // can't leave a referral without its rewards (or one side rewarded but not the other).
       await db.transaction(async (tx) => {
         await tx.insert(referrals).values({
@@ -208,6 +208,6 @@ export const referralRouter = router({
           .where(eq(users.id, inviteeId));
       });
 
-      return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} NP` };
+      return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
     }),
 });

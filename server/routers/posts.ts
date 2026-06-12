@@ -13,7 +13,7 @@ import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
 import { enforceContent } from "../moderation";
 
-// 广场推广档位（NN 计价，按天）
+// 广场推广档位（AI 计价，按天）
 export const PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 天" },
   { key: "day3", days: 3, priceNN: 75, label: "3 天" },
@@ -98,7 +98,7 @@ export const postsRouter = router({
       };
     }),
 
-  // ─── 广场推广位（付费置顶，NN 计价） ──────────────────────────────────────
+  // ─── 广场推广位（付费置顶，AI 计价） ──────────────────────────────────────
   promotePlans: publicProcedure.query(() => ({ plans: PROMOTE_PLANS })),
 
   promotePost: protectedProcedure
@@ -113,7 +113,7 @@ export const postsRouter = router({
       const plan = PROMOTE_PLANS.find((p) => p.key === input.planKey);
       if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "未知推广档位" });
       const ok = await spendNN(db, ctx.user.id, plan.priceNN, { type: "promote", refType: "post", refId: input.postId, memo: plan.key });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "NN 余额不足" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
       const base = post.promotedUntil && post.promotedUntil.getTime() > Date.now() ? post.promotedUntil.getTime() : Date.now();
       const until = new Date(base + plan.days * 24 * 3600 * 1000);
       await db.update(posts).set({ promotedUntil: until }).where(eq(posts.id, input.postId));
@@ -232,7 +232,7 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
-      // NP 产出：首次发帖里程碑 + 每日发帖（每日上限内）。
+      // AC 产出：首次发帖里程碑 + 每日发帖（每日上限内）。
       // 质量门槛（防灌水刷分）：内容 ≥15 字，且当天没发过相同内容，才计每日发帖分。
       void awardTaskEvent(db, ctx.user.id, "first_post");
       const trimmed = input.content.trim();
@@ -304,7 +304,7 @@ export const postsRouter = router({
             ))
             .limit(1);
           if (!seen) {
-            // NP 产出：内容获赞奖励给作者（仅首次）
+            // AC 产出：内容获赞奖励给作者（仅首次）
             void awardTaskEvent(db, post.authorId, "like_received");
             const [liker] = await db
               .select({ name: users.name, avatar: users.avatar })
@@ -423,7 +423,7 @@ export const postsRouter = router({
         content: sanitizeInput(input.content, 1000),
       });
 
-      // NP 产出：有效评论（每日上限内）。质量门槛：≥5 字才计分（"好""赞"类水评不计）。
+      // AC 产出：有效评论（每日上限内）。质量门槛：≥5 字才计分（"好""赞"类水评不计）。
       if (input.content.trim().length >= 5) {
         void awardTaskEvent(db, ctx.user.id, "comment_made");
       }
