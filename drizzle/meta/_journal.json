@@ -372,6 +372,13 @@
       "when": 1781244021527,
       "tag": "0052_ai_cost_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1781244022527,
+      "tag": "0053_voice_rooms",
+      "breakpoints": true
     }
   ]
 }

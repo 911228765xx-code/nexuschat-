@@ -1180,3 +1180,29 @@ export const consultingPayments = mysqlTable(
 );
 export type ConsultingPayment = typeof consultingPayments.$inferSelect;
 export type InsertConsultingPayment = typeof consultingPayments.$inferInsert;
+
+// 语音房（TRTC 实时音视频房间登记；房间号即 TRTC roomId）
+export const voiceRooms = mysqlTable(
+  "voice_rooms",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    roomId: int("roomId").notNull(),                          // TRTC 数字房间号（进房用）
+    title: varchar("title", { length: 60 }).notNull(),
+    topic: varchar("topic", { length: 80 }),
+    category: mysqlEnum("category", ["trade", "study", "project", "chat"]).default("chat").notNull(),
+    hostUserId: int("hostUserId").notNull(),
+    isMembersOnly: boolean("isMembersOnly").default(false).notNull(),
+    status: mysqlEnum("status", ["live", "ended"]).default("live").notNull(),
+    speakerCount: int("speakerCount").default(1).notNull(),   // 麦上人数（含房主）
+    listenerCount: int("listenerCount").default(0).notNull(), // 听众数
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    endedAt: timestamp("endedAt"),
+  },
+  (t) => [
+    uniqueIndex("uq_vroom_roomid").on(t.roomId),
+    index("idx_vroom_status").on(t.status, t.createdAt),
+    index("idx_vroom_host").on(t.hostUserId),
+  ]
+);
+export type VoiceRoomRow = typeof voiceRooms.$inferSelect;
+export type InsertVoiceRoom = typeof voiceRooms.$inferInsert;
