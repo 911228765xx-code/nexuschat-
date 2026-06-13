@@ -1,7 +1,7 @@
 /**
- * 语音房（腾讯 TRTC）：房间登记 + UserSig 签发。
- * UserSig 一律服务端签发，密钥（TRTC_SECRET_KEY）只存在于服务端环境变量。
- * 客户端拿到 { sdkAppId, userId, userSig, roomId } 后用 TRTC SDK 进房。
+ * 语音房（LiveKit）：房间登记 + 访问令牌签发。
+ * Token 一律服务端签发，API Secret（LIVEKIT_API_SECRET）只存在于服务端环境变量。
+ * 客户端拿到 { wsUrl, token, roomName, role } 后用 @livekit/react-native 连接房间。
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -10,15 +10,30 @@ import { getDb } from "../db";
 import { voiceRooms, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { ENV } from "../_core/env";
-import { genTRTCUserSig } from "../_core/trtcUserSig";
+import { genLiveKitToken } from "../_core/livekitToken";
 import { getBenefits } from "../membership";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
 
-function trtcConfigured(): boolean {
-  return ENV.trtcSdkAppId > 0 && ENV.trtcSecretKey.length > 0;
+function liveKitConfigured(): boolean {
+  return ENV.livekitUrl.length > 0 && ENV.livekitApiKey.length > 0 && ENV.livekitApiSecret.length > 0;
+}
+
+/** LiveKit 房间名：用 TRTC 数字房间号同源（voice_<roomId>），保证唯一可读 */
+function roomName(roomId: number): string {
+  return `voice_${roomId}`;
+}
+
+/** 为某用户签发进房 token */
+function signToken(userId: number, displayName: string, roomId: number, canPublish: boolean): string {
+  return genLiveKitToken(ENV.livekitApiKey, ENV.livekitApiSecret, {
+    room: roomName(roomId),
+    identity: String(userId),
+    name: displayName,
+    canPublish,
+  });
 }
 
 /** 生成一个未被占用的数字房间号（TRTC roomId，1..2^31-1） */
@@ -33,8 +48,8 @@ async function allocRoomId(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): 
 }
 
 export const voiceRoomRouter = router({
-  /** TRTC 是否已配置（未配置时客户端提示「即将开放」，不报错） */
-  config: protectedProcedure.query(() => ({ enabled: trtcConfigured(), sdkAppId: ENV.trtcSdkAppId })),
+  /** LiveKit 是否已配置（未配置时客户端提示「即将开放」，不报错） */
+  config: protectedProcedure.query(() => ({ enabled: liveKitConfigured(), wsUrl: ENV.livekitUrl })),
 
   /** 进行中的语音房列表 */
   listRooms: protectedProcedure
@@ -79,7 +94,7 @@ export const voiceRoomRouter = router({
       isMembersOnly: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (!trtcConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
+      if (!liveKitConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
       const roomId = await allocRoomId(db);
@@ -94,15 +109,17 @@ export const voiceRoomRouter = router({
         speakerCount: 1,
         listenerCount: 0,
       });
-      const userSig = genTRTCUserSig(String(ctx.user.id), ENV.trtcSdkAppId, ENV.trtcSecretKey);
-      return { roomId, sdkAppId: ENV.trtcSdkAppId, userId: String(ctx.user.id), userSig, role: "host" as const };
+      const [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq(voiceRooms.roomId, roomId)).limit(1);
+      const name = ctx.user.name ?? ctx.user.username ?? `用户${ctx.user.id}`;
+      const token = signToken(ctx.user.id, name, roomId, /*canPublish*/ true);
+      return { id: String(row?.id ?? roomId), roomId, wsUrl: ENV.livekitUrl, roomName: roomName(roomId), token, role: "host" as const, title: input.title };
     }),
 
   /** 进入语音房：会员房做权限校验，返回进房 sig + 当前麦上信息。 */
   enterRoom: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      if (!trtcConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
+      if (!liveKitConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
       const rid = Number.parseInt(input.id, 10);
@@ -120,12 +137,15 @@ export const voiceRoomRouter = router({
       if (!isHost) {
         await db.update(voiceRooms).set({ listenerCount: sql`${voiceRooms.listenerCount} + 1` }).where(eq(voiceRooms.id, rid));
       }
-      const userSig = genTRTCUserSig(String(ctx.user.id), ENV.trtcSdkAppId, ENV.trtcSecretKey);
+      // 进房时房主/嘉宾可发声，听众仅收听（举手上麦后由后续接口提权，先以听众身份进）
+      const name = ctx.user.name ?? ctx.user.username ?? `用户${ctx.user.id}`;
+      const token = signToken(ctx.user.id, name, room.roomId, /*canPublish*/ isHost);
       return {
+        id: String(room.id),
         roomId: room.roomId,
-        sdkAppId: ENV.trtcSdkAppId,
-        userId: String(ctx.user.id),
-        userSig,
+        wsUrl: ENV.livekitUrl,
+        roomName: roomName(room.roomId),
+        token,
         role: isHost ? ("host" as const) : ("audience" as const),
         title: room.title,
         topic: room.topic ?? "",

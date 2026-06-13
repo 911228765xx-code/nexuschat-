@@ -18,6 +18,7 @@ import { referralRouter } from "./routers/referral";
 import { emailAuthRouter } from "./routers/emailAuth";
 import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
+import { voiceRoomRouter } from "./routers/voiceRoom";
 import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
 import { aiRouter } from "./routers/ai";
@@ -25,7 +26,6 @@ import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
 import { tgeRouter } from "./routers/tge";
 import { partnerRouter } from "./routers/partner";
-import { voiceRoomRouter } from "./routers/voiceRoom";
 
 export const appRouter = router({
   system: systemRouter,
@@ -53,7 +53,6 @@ export const appRouter = router({
   npStore: npStoreRouter,
   tge: tgeRouter,
   partner: partnerRouter,
-  voiceRoom: voiceRoomRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
@@ -65,6 +64,7 @@ export const appRouter = router({
   emailAuth: emailAuthRouter,
   webPush: webPushRouter,
   voice: voiceRouter,
+  voiceRoom: voiceRoomRouter,
   appVersion: appVersionRouter,
   consulting: consultingRouter,
 });
