@@ -313,13 +313,20 @@ export const chatRouter = router({
         expiresAt,
       });
       const messageId = (result as any).insertId;
+      // 群昵称解析:有群昵称则广播群昵称,否则全局名
+      let displayName: string | null = (ctx.user as any).name ?? (ctx.user as any).username ?? null;
+      try {
+        const [mr] = await db.select({ alias: groupMembers.alias }).from(groupMembers)
+          .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+        if (mr?.alias) displayName = mr.alias;
+      } catch { /* 用全局名 */ }
       // 实时广播给群内在线成员（客户端 5s 轮询作为兜底）
       try {
         getSocketIO()?.to(`group:${input.groupId}`).emit("new_message", {
           id: messageId,
           groupId: input.groupId,
           senderId: ctx.user.id,
-          senderName: (ctx.user as any).name ?? (ctx.user as any).username ?? null,
+          senderName: displayName,
           senderAvatar: (ctx.user as any).avatar ?? null,
           content: sanitizeInput(input.content, 5000),
           messageType: input.messageType,
