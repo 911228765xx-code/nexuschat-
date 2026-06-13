@@ -386,6 +386,13 @@
       "when": 1781244023527,
       "tag": "0054_voice_room_public",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "5",
+      "when": 1781244024527,
+      "tag": "0055_ico_curve_subscription",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ import { emailAuthRouter } from "./routers/emailAuth";
 import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
 import { voiceRoomRouter } from "./routers/voiceRoom";
+import { icoRouter } from "./routers/ico";
 import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
 import { aiRouter } from "./routers/ai";
@@ -65,6 +66,7 @@ export const appRouter = router({
   webPush: webPushRouter,
   voice: voiceRouter,
   voiceRoom: voiceRoomRouter,
+  ico: icoRouter,
   appVersion: appVersionRouter,
   consulting: consultingRouter,
 });
