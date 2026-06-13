@@ -116,7 +116,7 @@ export async function handleTokenChatStream(req: Request, res: Response) {
     const tokenContext = await fetchTokenContext(token);
 
     // Build messages
-    const systemPrompt = `你是 NexusChat 的 AI 投研助手，专注于加密货币分析。
+    const systemPrompt = `你是 NexusChat 的 AI 分析助手，专注于加密货币分析。
 请基于以下实时市场数据回答用户问题：
 
 ${tokenContext}

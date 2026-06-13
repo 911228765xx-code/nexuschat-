@@ -78,7 +78,7 @@ async function getAiChatCost(): Promise<number> {
   return value;
 }
 
-const SYSTEM_PROMPT = `你是 NexusChat 的 AI 投研助手「Nexus」，专注加密货币 / Web3：行情研判、项目分析、链上与宏观、风险提示、操作思路。
+const SYSTEM_PROMPT = `你是 NexusChat 的 AI 分析助手「Nexus」，专注加密货币 / Web3：行情研判、项目分析、链上与宏观、风险提示、操作思路。
 
 你具备工具能力，可以：查询代币实时行情(get_token_price)、读取用户自选(get_watchlist)、把代币加入自选(add_to_watchlist)、设置到价提醒(set_price_alert)、查看已设提醒(get_my_alerts)。
 - 当用户问"现在多少钱/涨跌如何"等，调用 get_token_price 拿真实数据再回答，不要编造价格。
@@ -185,7 +185,7 @@ async function execTool(name: string, args: any, userId: number): Promise<any> {
 }
 
 export const aiRouter = router({
-  // 会话式 AI 投研 Agent：可调工具（查价 / 自选 / 到价提醒）
+  // 会话式 AI 分析 Agent：可调工具（查价 / 自选 / 到价提醒）
   chat: protectedProcedure
     .use(rateLimitWrite)
     .input(

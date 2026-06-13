@@ -142,8 +142,8 @@ export const TASK_DEFINITIONS: Record<
     eventOnly: true,
   },
   first_research: {
-    label: "生成 AI 投研报告",
-    description: "使用 AI 生成一份代币投研报告（需先绑定邀请人）",
+    label: "生成 AI 分析报告",
+    description: "使用 AI 生成一份代币分析报告（需先绑定邀请人）",
     npReward: 200,
     maxCompletions: 1,
     eventOnly: true,
@@ -183,8 +183,8 @@ export const TASK_DEFINITIONS: Record<
     eventOnly: true,
   },
   research_daily: {
-    label: "AI 投研报告",
-    description: "生成 AI 投研报告（每日 3 次，需先绑定邀请人）",
+    label: "AI 分析报告",
+    description: "生成 AI 分析报告（每日 3 次，需先绑定邀请人）",
     npReward: 50,
     maxCompletions: 999999,
     daily: 3,
