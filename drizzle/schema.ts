@@ -2,6 +2,7 @@ import {
   bigint,
   boolean,
   int,
+  decimal,
   mysqlEnum,
   mysqlTable,
   text,
@@ -1207,3 +1208,80 @@ export const voiceRooms = mysqlTable(
 );
 export type VoiceRoomRow = typeof voiceRooms.$inferSelect;
 export type InsertVoiceRoom = typeof voiceRooms.$inferInsert;
+
+// ─── ICO 曲线认购 ───────────────────────────────────────────────────────────
+// 配置(单行 id=1,管理员可改;价格/枚数用 decimal 保精度)
+export const icoConfig = mysqlTable("ico_config", {
+  id: int("id").primaryKey(),                                        // 固定 1
+  totalTokens: decimal("totalTokens", { precision: 30, scale: 8 }).notNull(),     // 认购总额度 Q
+  tokensSold: decimal("tokensSold", { precision: 30, scale: 8 }).default("0").notNull(),
+  startPrice: decimal("startPrice", { precision: 18, scale: 8 }).notNull(),       // 0.8
+  endPrice: decimal("endPrice", { precision: 18, scale: 8 }).notNull(),           // 2.0 封顶
+  exponent: decimal("exponent", { precision: 8, scale: 4 }).default("1.5000").notNull(),
+  listingPrice: decimal("listingPrice", { precision: 18, scale: 8 }).default("3").notNull(), // 预计上线价
+  status: mysqlEnum("status", ["paused", "active", "ended"]).default("paused").notNull(),
+  perWalletCap: decimal("perWalletCap", { precision: 30, scale: 8 }).default("0").notNull(), // 单钱包上限(0=不限)
+  // 质押奖励池
+  rewardPoolTotal: decimal("rewardPoolTotal", { precision: 30, scale: 8 }).default("0").notNull(),
+  rewardEmitted: decimal("rewardEmitted", { precision: 30, scale: 8 }).default("0").notNull(),
+  rewardDays: int("rewardDays").default(730).notNull(),              // 奖励释放总天数
+  alpha: decimal("alpha", { precision: 6, scale: 3 }).default("0.500").notNull(),     // 公平度(开方=0.5)
+  baseShare: decimal("baseShare", { precision: 6, scale: 3 }).default("0.200").notNull(), // 保底平分比例
+  vestMonths: int("vestMonths").default(12).notNull(),
+  vestCliffMonths: int("vestCliffMonths").default(1).notNull(),
+  startAt: timestamp("startAt"),
+  endAt: timestamp("endAt"),
+});
+export type IcoConfigRow = typeof icoConfig.$inferSelect;
+
+// 认购订单(USDT 充值 → 填哈希 → 运营确认 → 按当时曲线成交)
+export const icoOrders = mysqlTable("ico_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  usdtAmount: decimal("usdtAmount", { precision: 20, scale: 6 }).notNull(),
+  minTokens: decimal("minTokens", { precision: 30, scale: 8 }).default("0").notNull(), // 滑点保护:至少买到
+  txHash: varchar("txHash", { length: 120 }),
+  payAddress: varchar("payAddress", { length: 120 }),
+  status: mysqlEnum("status", ["pending", "confirmed", "cancelled"]).default("pending").notNull(),
+  purchaseId: int("purchaseId"),                                   // 确认后关联的成交流水
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  confirmedAt: timestamp("confirmedAt"),
+}, (t) => [index("idx_icoord_user").on(t.userId), index("idx_icoord_status").on(t.status)]);
+export type IcoOrder = typeof icoOrders.$inferSelect;
+
+// 每笔认购(不可变流水)
+export const icoPurchases = mysqlTable("ico_purchases", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  usdtAmount: decimal("usdtAmount", { precision: 20, scale: 6 }).notNull(),
+  tokensBought: decimal("tokensBought", { precision: 30, scale: 8 }).notNull(),
+  priceFrom: decimal("priceFrom", { precision: 18, scale: 8 }).notNull(),
+  priceTo: decimal("priceTo", { precision: 18, scale: 8 }).notNull(),
+  avgPrice: decimal("avgPrice", { precision: 18, scale: 8 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [index("idx_icopur_user").on(t.userId)]);
+export type IcoPurchase = typeof icoPurchases.$inferSelect;
+
+// 每用户 ICO 账户(锁仓/质押/收益聚合)
+export const icoAccounts = mysqlTable("ico_accounts", {
+  userId: int("userId").primaryKey(),
+  lockedTotal: decimal("lockedTotal", { precision: 30, scale: 8 }).default("0").notNull(),       // 累计认购(全锁)
+  withdrawnPrincipal: decimal("withdrawnPrincipal", { precision: 30, scale: 8 }).default("0").notNull(), // 已提取的释放本金
+  stakedBalance: decimal("stakedBalance", { precision: 30, scale: 8 }).default("0").notNull(),   // 当前质押中(锁仓+未提)
+  pendingReward: decimal("pendingReward", { precision: 30, scale: 8 }).default("0").notNull(),   // 待领质押收益
+  claimedReward: decimal("claimedReward", { precision: 30, scale: 8 }).default("0").notNull(),
+  autoCompound: boolean("autoCompound").default(true).notNull(),    // 释放本金不提则复投
+  firstPurchaseAt: timestamp("firstPurchaseAt"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type IcoAccount = typeof icoAccounts.$inferSelect;
+
+// 质押收益每日结算日志(幂等)
+export const icoRewardRuns = mysqlTable("ico_reward_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  runDate: varchar("runDate", { length: 10 }).notNull(),           // YYYY-MM-DD
+  stakers: int("stakers").default(0).notNull(),
+  totalWeight: decimal("totalWeight", { precision: 40, scale: 8 }).default("0").notNull(),
+  emitted: decimal("emitted", { precision: 30, scale: 8 }).default("0").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uq_icorun_date").on(t.runDate)]);

@@ -358,6 +358,13 @@
       "when": 1781338458820,
       "tag": "0054_voice_room_public",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1781346550576,
+      "tag": "0055_ico_curve_subscription",
+      "breakpoints": true
     }
   ]
 }
