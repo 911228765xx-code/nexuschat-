@@ -114,24 +114,33 @@ export const icoRouter = router({
     return rows.map((o) => ({ id: o.id, usdtAmount: n(o.usdtAmount), status: o.status, txHash: o.txHash, createdAt: o.createdAt }));
   }),
 
-  /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 */
+  /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 + 释放进度参数 */
   myAccount: protectedProcedure.query(async ({ ctx }) => {
+    const empty = { lockedTotal: 0, vested: 0, vestedPct: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true, vestMonths: 12, vestCliffMonths: 1, monthsElapsed: 0, firstPurchaseAt: null as string | null };
     const db = await getDb();
     const c = db ? await loadConfig(db) : null;
-    if (!db || !c) return { lockedTotal: 0, vested: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true };
+    if (!db || !c) return empty;
     const [acc] = await db.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).limit(1);
-    if (!acc) return { lockedTotal: 0, vested: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true };
+    if (!acc) return { ...empty, vestMonths: n(c.vestMonths), vestCliffMonths: n(c.vestCliffMonths) };
     const vested = await vestedPrincipal(db, ctx.user.id, c);
     const withdrawn = n(acc.withdrawnPrincipal);
+    const locked = n(acc.lockedTotal);
+    const first = acc.firstPurchaseAt ? new Date(acc.firstPurchaseAt) : null;
+    const monthsElapsed = first ? (Date.now() - first.getTime()) / (30 * 24 * 3600 * 1000) : 0;
     return {
-      lockedTotal: n(acc.lockedTotal),
+      lockedTotal: locked,
       vested,
+      vestedPct: locked > 0 ? vested / locked : 0,
       withdrawable: Math.max(0, vested - withdrawn),
       withdrawn,
       staked: n(acc.stakedBalance),
       pendingReward: n(acc.pendingReward),
       claimedReward: n(acc.claimedReward),
       autoCompound: !!acc.autoCompound,
+      vestMonths: n(c.vestMonths),
+      vestCliffMonths: n(c.vestCliffMonths),
+      monthsElapsed,
+      firstPurchaseAt: first ? first.toISOString() : null,
     };
   }),
 
