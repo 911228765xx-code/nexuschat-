@@ -25,6 +25,7 @@ export interface TierBenefits {
   badge: string | null;     // 资料页徽章
   publicGroups: boolean;    // 可创建公开群（发现社区可见）；free 仅私密群
   bannerSlot: boolean;      // 发现页滚动广告位投放权（Pro 专属）
+  voiceRoomFreeMonthly: number; // 每月免费开「智能体语音房」次数；超出按 10 AI/次
 }
 
 export interface MembershipTier {
@@ -40,18 +41,18 @@ export interface MembershipTier {
 export const MEMBERSHIP_TIERS: MembershipTier[] = [
   {
     key: "free", name: "免费用户", monthlyNN: 0, color: "#94A3B8", tagline: "基础社交体验",
-    benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 0, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false },
-    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "AI 按次付费 10 AI/次", "文件 ≤ 60MB", "视频 ≤ 60MB"],
+    benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 0, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false, voiceRoomFreeMonthly: 0 },
+    perks: ["建群上限 5 个（仅私密群）", "群人数上限 100", "AI 按次付费 10 AI/次", "智能体语音房 10 AI/次开房", "文件 ≤ 60MB", "视频 ≤ 60MB"],
   },
   {
     key: "plus", name: "会员 Plus", monthlyNN: 80, color: "#6366F1", tagline: "进阶社群运营",
-    benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false },
-    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 AI/次）", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
+    benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false, voiceRoomFreeMonthly: 10 },
+    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 AI/次）", "智能体语音房每月 10 次免费开房", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
   },
   {
     key: "pro", name: "高级会员 Pro", monthlyNN: 200, color: "#F59E0B", tagline: "专业玩家 / KOL",
-    benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true },
-    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 AI/次）", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
+    benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true, voiceRoomFreeMonthly: 20 },
+    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 AI/次）", "智能体语音房每月 20 次免费开房", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
   },
 ];
 
