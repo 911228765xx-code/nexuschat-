@@ -210,21 +210,22 @@ export function initSocketIO(httpServer: HttpServer) {
         const messageId = (result as any).insertId;
         const timestamp = new Date();
 
-        // Lookup sender's role in this group
+        // Lookup sender's role + 群昵称 in this group
         let senderRole: string = "member";
+        let senderDisplayName = userName; // 有群昵称则用群昵称,否则全局名
         try {
           const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-          const [memberRow] = await db.select({ role: groupMembers.role }).from(groupMembers)
+          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers)
             .where(and(eq(groupMembers.groupId, data.groupId), eq(groupMembers.userId, senderIdNum)))
             .limit(1);
-          if (memberRow) senderRole = memberRow.role;
+          if (memberRow) { senderRole = memberRow.role; if (memberRow.alias) senderDisplayName = memberRow.alias; }
         } catch (_) { /* fallback to member */ }
 
         const outgoingMessage = {
           id: messageId,
           groupId: data.groupId,
           senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          senderName: userName,
+          senderName: senderDisplayName,
           senderAvatar: userAvatar ?? null,
           senderRole,
           content: data.content,

@@ -175,6 +175,7 @@ export const groupMembers = mysqlTable(
     groupId: int("groupId").notNull(),
     userId: int("userId").notNull(),
     role: mysqlEnum("role", ["owner", "admin", "member"]).default("member").notNull(),
+    alias: varchar("alias", { length: 50 }),   // 群昵称(本人在该群的显示名;空=用全局名)
     joinedAt: timestamp("joinedAt").defaultNow().notNull(),
   },
   (t) => [index("idx_group_user").on(t.groupId, t.userId)]
