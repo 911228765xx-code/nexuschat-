@@ -379,6 +379,13 @@
       "when": 1781353177101,
       "tag": "0057_ico_stake_lots",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1781359905789,
+      "tag": "0058_users_ico_tier",
+      "breakpoints": true
     }
   ]
 }

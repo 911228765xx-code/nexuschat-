@@ -50,6 +50,8 @@ export const users = mysqlTable("users", {
   // 合伙人计划：身份档位（partner/super/founder，null=非合伙人）+ 累计已确认认购额（USDT）
   partnerTier: varchar("partnerTier", { length: 20 }),
   partnerStakeUsdt: int("partnerStakeUsdt").default(0).notNull(),
+  // ICO 合伙人等级（0=非合伙人 1=种子 2=核心 3=创世；按累计 ICO 认购 USDT 自动授予，聊天/资料页展示徽章）
+  icoTier: int("icoTier").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
