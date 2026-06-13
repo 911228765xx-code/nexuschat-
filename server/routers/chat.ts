@@ -264,7 +264,7 @@ export const chatRouter = router({
           createdAt: messages.createdAt,
           expiresAt: messages.expiresAt,
           senderId: messages.senderId,
-          senderName: users.name,
+          senderName: sql<string | null>`COALESCE(${groupMembers.alias}, ${users.name})`,
           senderAvatar: users.avatar,
           senderRole: groupMembers.role,
           replyContent: repliedMsg.content,
@@ -623,7 +623,8 @@ export const chatRouter = router({
         .select({
           id: users.id,
           username: users.username,
-          name: users.name,
+          name: sql<string | null>`COALESCE(${groupMembers.alias}, ${users.name})`,
+          alias: groupMembers.alias,
           avatar: users.avatar,
           role: groupMembers.role,
           joinedAt: groupMembers.joinedAt,
@@ -633,6 +634,21 @@ export const chatRouter = router({
         .where(eq(groupMembers.groupId, input.groupId))
         .orderBy(groupMembers.role, groupMembers.joinedAt)
         .limit(200);
+    }),
+
+  // 设置/清除自己在某群的群昵称(仅本人,空字符串=清除回全局名)
+  setGroupAlias: protectedProcedure
+    .input(z.object({ groupId: z.number(), alias: z.string().max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const aliasVal = sanitizeInput(input.alias, 50).trim();
+      const [m] = await db.select({ id: groupMembers.id }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!m) throw new TRPCError({ code: "BAD_REQUEST", message: "你不在该群" });
+      await db.update(groupMembers).set({ alias: aliasVal || null })
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      return { ok: true, alias: aliasVal || null };
     }),
 
   // Get group info (name, description, memberCount, avatar)
