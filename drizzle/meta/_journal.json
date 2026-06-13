@@ -351,6 +351,13 @@
       "when": 1781185888425,
       "tag": "0049_loose_inhumans",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1781338458820,
+      "tag": "0054_voice_room_public",
+      "breakpoints": true
     }
   ]
 }

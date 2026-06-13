@@ -8,15 +8,30 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { voiceRooms, users } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { genLiveKitToken } from "../_core/livekitToken";
 import { getBenefits } from "../membership";
+import { spendNN } from "../token";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
 import { setParticipantCanPublish } from "../_core/livekitService";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
+const VOICE_ROOM_COST = 10; // 超出会员免费额度后，单次开房消耗 AI
+
+/** 当月第一天（用于统计本月开房次数） */
+function startOfMonth(): Date {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+/** 统计某用户本月已开房次数 */
+async function roomsThisMonth(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number): Promise<number> {
+  const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(voiceRooms)
+    .where(and(eq(voiceRooms.hostUserId, userId), gte(voiceRooms.createdAt, startOfMonth())));
+  return Number(row?.cnt ?? 0);
+}
 
 // 语音房礼物目录（AC 计价）。送礼扣 AC，礼物动画由客户端经 LiveKit 数据通道广播。
 export const VOICE_GIFTS = [
@@ -87,7 +102,9 @@ export const voiceRoomRouter = router({
       })
         .from(voiceRooms)
         .leftJoin(users, eq(users.id, voiceRooms.hostUserId))
-        .where(cat === "all" ? eq(voiceRooms.status, "live") : and(eq(voiceRooms.status, "live"), eq(voiceRooms.category, cat)))
+        .where(cat === "all"
+          ? and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true))
+          : and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true), eq(voiceRooms.category, cat)))
         .orderBy(desc(voiceRooms.listenerCount), desc(voiceRooms.createdAt))
         .limit(50);
       return rows.map((r) => ({
@@ -113,11 +130,21 @@ export const voiceRoomRouter = router({
       topic: z.string().trim().max(80).optional(),
       category: z.enum(CATEGORIES).default("chat"),
       isMembersOnly: z.boolean().default(false),
+      isPublic: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
       if (!liveKitConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      // 开房额度：会员每月免费 N 次（Plus 10 / Pro 20 / 免费 0），超出按 10 AI/次
+      const benefits = await getBenefits(db, ctx.user.id);
+      const used = await roomsThisMonth(db, ctx.user.id);
+      let charged = false;
+      if (used >= benefits.voiceRoomFreeMonthly) {
+        const ok = await spendNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id });
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AI 不足：本月免费开房已用完，单次开房需 ${VOICE_ROOM_COST} AI，或升级会员获更多免费次数` });
+        charged = true;
+      }
       const roomId = await allocRoomId(db);
       await db.insert(voiceRooms).values({
         roomId,
@@ -126,6 +153,7 @@ export const voiceRoomRouter = router({
         category: input.category,
         hostUserId: ctx.user.id,
         isMembersOnly: input.isMembersOnly,
+        isPublic: input.isPublic,
         status: "live",
         speakerCount: 1,
         listenerCount: 0,
@@ -133,8 +161,18 @@ export const voiceRoomRouter = router({
       const [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq(voiceRooms.roomId, roomId)).limit(1);
       const name = ctx.user.name ?? ctx.user.username ?? `用户${ctx.user.id}`;
       const token = signToken(ctx.user.id, name, roomId, /*canPublish*/ true);
-      return { id: String(row?.id ?? roomId), roomId, wsUrl: ENV.livekitUrl, roomName: roomName(roomId), token, role: "host" as const, title: input.title };
+      return { id: String(row?.id ?? roomId), roomId, wsUrl: ENV.livekitUrl, roomName: roomName(roomId), token, role: "host" as const, title: input.title, charged };
     }),
+
+  /** 我的开房额度（供前端开房前展示「本月免费 X/Y」或「需 10 AI」） */
+  roomQuota: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { freeMonthly: 0, used: 0, freeRemaining: 0, cost: VOICE_ROOM_COST };
+    const benefits = await getBenefits(db, ctx.user.id);
+    const used = await roomsThisMonth(db, ctx.user.id);
+    const free = benefits.voiceRoomFreeMonthly;
+    return { freeMonthly: free, used, freeRemaining: Math.max(0, free - used), cost: VOICE_ROOM_COST };
+  }),
 
   /** 进入语音房：会员房做权限校验，返回进房 sig + 当前麦上信息。 */
   enterRoom: protectedProcedure

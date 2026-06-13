@@ -1192,6 +1192,7 @@ export const voiceRooms = mysqlTable(
     category: mysqlEnum("category", ["trade", "study", "project", "chat"]).default("chat").notNull(),
     hostUserId: int("hostUserId").notNull(),
     isMembersOnly: boolean("isMembersOnly").default(false).notNull(),
+    isPublic: boolean("isPublic").default(true).notNull(),    // 公开=语音房广场可见；私密=仅分享进入
     status: mysqlEnum("status", ["live", "ended"]).default("live").notNull(),
     speakerCount: int("speakerCount").default(1).notNull(),   // 麦上人数（含房主）
     listenerCount: int("listenerCount").default(0).notNull(), // 听众数
