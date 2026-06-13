@@ -9,11 +9,12 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, users } from "../../drizzle/schema";
-import { eq, and, desc, gt, asc, sql } from "drizzle-orm";
+import { eq, and, desc, gt, asc, inArray, sql } from "drizzle-orm";
 import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN, grantNN } from "../token";
 import { sanitizeInput } from "../utils/sanitize";
 import { priceAtSold, costForTokens, tokensForBudget, quote as curveQuote, type IcoCurve } from "../ico/pricing";
 import { vestedFraction, distributeAprLots, effectiveApr, type StakeLot } from "../ico/rewards";
+import { deriveIcoTier, nextTierGap, ICO_TIERS } from "../ico/tiers";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -62,10 +63,25 @@ export const icoRouter = router({
       aprStart: n(c.aprStart),
       aprEnd: n(c.aprEnd),
       aprDeclineDays: n(c.aprDeclineDays),
+      tiers: ICO_TIERS,             // 认购档位/徽章定义(给前端展示)
       payAddress: USDT_DEPOSIT_ADDRESS,
       payChain: USDT_CHAIN,
     };
   }),
+
+  /** 批量取用户的合伙人等级(聊天/成员列表挂徽章用,只返回有等级的)。 */
+  tiersByUsers: protectedProcedure
+    .input(z.object({ userIds: z.array(z.number().int()).max(200) }))
+    .query(async ({ input }) => {
+      const out: Record<number, number> = {};
+      if (!input.userIds.length) return out;
+      const db = await getDb();
+      if (!db) return out;
+      const rows = await db.select({ id: users.id, t: users.icoTier }).from(users)
+        .where(and(inArray(users.id, input.userIds), gt(users.icoTier, 0)));
+      for (const r of rows) out[r.id] = r.t;
+      return out;
+    }),
 
   /** 报价:给定 USDT,按当前曲线能买多少枚 + 均价 + 成交后新价 */
   quote: protectedProcedure
@@ -120,7 +136,7 @@ export const icoRouter = router({
 
   /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 + 释放进度参数 */
   myAccount: protectedProcedure.query(async ({ ctx }) => {
-    const empty = { lockedTotal: 0, vested: 0, vestedPct: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true, vestMonths: 12, vestCliffMonths: 1, monthsElapsed: 0, firstPurchaseAt: null as string | null, currentApr: 0, aprStart: 0, aprEnd: 0 };
+    const empty = { lockedTotal: 0, vested: 0, vestedPct: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true, vestMonths: 12, vestCliffMonths: 1, monthsElapsed: 0, firstPurchaseAt: null as string | null, currentApr: 0, aprStart: 0, aprEnd: 0, subscribedUsdt: 0, tier: null as null | { level: number; key: string; name: string; badge: string; color: string; bonusPct: number }, nextTier: null as null | { name: string; gap: number } };
     const db = await getDb();
     const c = db ? await loadConfig(db) : null;
     if (!db || !c) return empty;
@@ -139,8 +155,16 @@ export const icoRouter = router({
       wsum += amt * effectiveApr(n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), age); asum += amt;
     }
     const currentApr = asum > 0 ? wsum / asum : n(c.aprStart);
+    // 认购档位/徽章:按累计认购 USDT
+    const [{ usdt }] = await db.select({ usdt: sql<number>`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq(icoPurchases.userId, ctx.user.id));
+    const subscribedUsdt = n(usdt);
+    const t = deriveIcoTier(subscribedUsdt);
+    const ng = nextTierGap(subscribedUsdt);
     return {
       currentApr, aprStart: n(c.aprStart), aprEnd: n(c.aprEnd),
+      subscribedUsdt,
+      tier: t ? { level: t.level, key: t.key, name: t.name, badge: t.badge, color: t.color, bonusPct: t.bonusPct } : null,
+      nextTier: ng ? { name: ng.tier.name, gap: ng.gap } : null,
       lockedTotal: locked,
       vested,
       vestedPct: locked > 0 ? vested / locked : 0,
@@ -306,23 +330,32 @@ export const icoRouter = router({
         if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError({ code: "BAD_REQUEST", message: "超过单钱包认购上限" });
       }
       const q = curveQuote(curve, sold, tokens);
-      // 成交:推进售出、记流水、锁仓进质押
+      // 累计认购(含本单)→ 合伙人档位 → 认购代币加成
+      const [{ prevUsdt }] = await db.select({ prevUsdt: sql<number>`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq(icoPurchases.userId, o.userId));
+      const cumUsdt = n(prevUsdt) + usdt;
+      const tier = deriveIcoTier(cumUsdt);
+      const bonusPct = tier?.bonusPct ?? 0;
+      const bonus = tokens * bonusPct;          // 加成代币(不走曲线、不推进售出)
+      const credited = tokens + bonus;          // 实际入账(基础+加成):锁仓+质押+计龄
+      // 成交:曲线按基础量推进、流水记实际入账、锁仓进质押
       await db.update(icoConfig).set({ tokensSold: sql`${icoConfig.tokensSold} + ${tokens}` }).where(eq(icoConfig.id, 1));
       const [pr]: any = await db.insert(icoPurchases).values({
-        userId: o.userId, usdtAmount: String(usdt), tokensBought: String(tokens),
-        priceFrom: String(q.priceFrom), priceTo: String(q.priceTo), avgPrice: String(q.avgPrice),
+        userId: o.userId, usdtAmount: String(usdt), tokensBought: String(credited),
+        priceFrom: String(q.priceFrom), priceTo: String(q.priceTo), avgPrice: String(credited > 0 ? usdt / credited : q.avgPrice),
       });
       const purchaseId = pr?.insertId ?? pr?.[0]?.insertId ?? null;
       await db.insert(icoAccounts).values({
-        userId: o.userId, lockedTotal: String(tokens), stakedBalance: String(tokens), firstPurchaseAt: new Date(),
+        userId: o.userId, lockedTotal: String(credited), stakedBalance: String(credited), firstPurchaseAt: new Date(),
       }).onDuplicateKeyUpdate({ set: {
-        lockedTotal: sql`${icoAccounts.lockedTotal} + ${tokens}`,
-        stakedBalance: sql`${icoAccounts.stakedBalance} + ${tokens}`,
+        lockedTotal: sql`${icoAccounts.lockedTotal} + ${credited}`,
+        stakedBalance: sql`${icoAccounts.stakedBalance} + ${credited}`,
       } });
       // 新资金 → 一条质押批次(从此刻起按 aprStart 起步计龄)
-      await db.insert(icoStakeLots).values({ userId: o.userId, amount: String(tokens), stakedAt: new Date(), source: "purchase" });
+      await db.insert(icoStakeLots).values({ userId: o.userId, amount: String(credited), stakedAt: new Date(), source: "purchase" });
+      // 同步合伙人等级(聊天/资料页徽章用)
+      if (tier) await db.update(users).set({ icoTier: tier.level }).where(eq(users.id, o.userId));
       await db.update(icoOrders).set({ status: "confirmed", purchaseId, confirmedAt: new Date() }).where(eq(icoOrders.id, o.id));
-      return { ok: true, tokens, avgPrice: q.avgPrice };
+      return { ok: true, tokens: credited, baseTokens: tokens, bonus, bonusPct, tierLevel: tier?.level ?? 0, avgPrice: q.avgPrice };
     }),
 
   /** 取消订单 */
