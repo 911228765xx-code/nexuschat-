@@ -184,6 +184,42 @@ export const icoRouter = router({
     }),
 
   // ─── 管理员 ───────────────────────────────────────────────────────────────
+  /** 当前配置原始值(给管理员表单回填) + 概览 */
+  adminGetConfig: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { config: null, raised: 0, rewardEmitted: 0 };
+    const c = await loadConfig(db);
+    if (!c) return { config: null, raised: 0, rewardEmitted: 0 };
+    return {
+      config: {
+        totalTokens: n(c.totalTokens), tokensSold: n(c.tokensSold), startPrice: n(c.startPrice), endPrice: n(c.endPrice),
+        exponent: n(c.exponent), listingPrice: n(c.listingPrice), perWalletCap: n(c.perWalletCap),
+        rewardPoolTotal: n(c.rewardPoolTotal), rewardDays: n(c.rewardDays), alpha: n(c.alpha), baseShare: n(c.baseShare),
+        vestMonths: n(c.vestMonths), vestCliffMonths: n(c.vestCliffMonths), status: c.status,
+      },
+      raised: costForTokens(curveOf(c), 0, n(c.tokensSold)),
+      rewardEmitted: n(c.rewardEmitted),
+    };
+  }),
+
+  /** 待确认订单(给管理员审核) */
+  adminListOrders: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "confirmed", "cancelled", "all"]).default("pending") }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const st = input?.status ?? "pending";
+      const rows = await db.select({ o: icoOrders, name: users.name, username: users.username })
+        .from(icoOrders).leftJoin(users, eq(users.id, icoOrders.userId))
+        .where(st === "all" ? sql`1=1` : eq(icoOrders.status, st))
+        .orderBy(desc(icoOrders.createdAt)).limit(100);
+      return rows.map((r) => ({
+        id: r.o.id, userId: r.o.userId, userName: r.name ?? r.username ?? `用户${r.o.userId}`,
+        usdtAmount: n(r.o.usdtAmount), minTokens: n(r.o.minTokens), txHash: r.o.txHash,
+        status: r.o.status, createdAt: r.o.createdAt,
+      }));
+    }),
+
   /** 配置/开关 ICO */
   adminSetConfig: adminProcedure
     .input(z.object({
