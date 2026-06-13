@@ -1221,12 +1221,15 @@ export const icoConfig = mysqlTable("ico_config", {
   listingPrice: decimal("listingPrice", { precision: 18, scale: 8 }).default("3").notNull(), // 预计上线价
   status: mysqlEnum("status", ["paused", "active", "ended"]).default("paused").notNull(),
   perWalletCap: decimal("perWalletCap", { precision: 30, scale: 8 }).default("0").notNull(), // 单钱包上限(0=不限)
-  // 质押奖励池
+  // 质押奖励池(线性·每人目标年化·封顶·年化可线性递减·可随时调)
   rewardPoolTotal: decimal("rewardPoolTotal", { precision: 30, scale: 8 }).default("0").notNull(),
   rewardEmitted: decimal("rewardEmitted", { precision: 30, scale: 8 }).default("0").notNull(),
-  rewardDays: int("rewardDays").default(730).notNull(),              // 奖励释放总天数
-  alpha: decimal("alpha", { precision: 6, scale: 3 }).default("0.500").notNull(),     // 公平度(开方=0.5)
-  baseShare: decimal("baseShare", { precision: 6, scale: 3 }).default("0.200").notNull(), // 保底平分比例
+  aprStart: decimal("aprStart", { precision: 8, scale: 4 }).default("1.0000").notNull(),     // 起始年化(1=100%)
+  aprEnd: decimal("aprEnd", { precision: 8, scale: 4 }).default("1.0000").notNull(),         // 结束年化(线性降到此值;=aprStart 则恒定)
+  aprDeclineDays: int("aprDeclineDays").default(365).notNull(),       // 从 aprStart 线性降到 aprEnd 的天数
+  rewardDays: int("rewardDays").default(730).notNull(),              // (已停用·旧固定释放天数)
+  alpha: decimal("alpha", { precision: 6, scale: 3 }).default("0.500").notNull(),     // (已停用·旧开方公平度)
+  baseShare: decimal("baseShare", { precision: 6, scale: 3 }).default("0.200").notNull(), // (已停用·旧保底平分)
   vestMonths: int("vestMonths").default(12).notNull(),
   vestCliffMonths: int("vestCliffMonths").default(1).notNull(),
   startAt: timestamp("startAt"),
@@ -1275,6 +1278,17 @@ export const icoAccounts = mysqlTable("ico_accounts", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type IcoAccount = typeof icoAccounts.$inferSelect;
+
+// 质押批次(每笔成交/复投一条,各自计龄;收益按本批次年龄取年化;提取按 FIFO 减老批次)
+export const icoStakeLots = mysqlTable("ico_stake_lots", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: decimal("amount", { precision: 30, scale: 8 }).notNull(),   // 本批次当前仍质押数量(FIFO 提取会减少)
+  stakedAt: timestamp("stakedAt").notNull(),                          // 入场时间(年化计龄起点)
+  source: mysqlEnum("source", ["purchase", "compound"]).default("purchase").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [index("idx_icolot_user").on(t.userId)]);
+export type IcoStakeLot = typeof icoStakeLots.$inferSelect;
 
 // 质押收益每日结算日志(幂等)
 export const icoRewardRuns = mysqlTable("ico_reward_runs", {

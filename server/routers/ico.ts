@@ -8,12 +8,12 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoRewardRuns, users } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, users } from "../../drizzle/schema";
+import { eq, and, desc, gt, asc, sql } from "drizzle-orm";
 import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN, grantNN } from "../token";
 import { sanitizeInput } from "../utils/sanitize";
 import { priceAtSold, costForTokens, tokensForBudget, quote as curveQuote, type IcoCurve } from "../ico/pricing";
-import { vestedFraction, dailyEmission, distribute, type StakerStake } from "../ico/rewards";
+import { vestedFraction, distributeAprLots, effectiveApr, type StakeLot } from "../ico/rewards";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -58,6 +58,10 @@ export const icoRouter = router({
       perWalletCap: n(c.perWalletCap),
       vestMonths: n(c.vestMonths),
       vestCliffMonths: n(c.vestCliffMonths),
+      targetApr: n(c.aprStart),     // 新资金起始年化(每笔从入场起按此起步)
+      aprStart: n(c.aprStart),
+      aprEnd: n(c.aprEnd),
+      aprDeclineDays: n(c.aprDeclineDays),
       payAddress: USDT_DEPOSIT_ADDRESS,
       payChain: USDT_CHAIN,
     };
@@ -116,18 +120,27 @@ export const icoRouter = router({
 
   /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 + 释放进度参数 */
   myAccount: protectedProcedure.query(async ({ ctx }) => {
-    const empty = { lockedTotal: 0, vested: 0, vestedPct: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true, vestMonths: 12, vestCliffMonths: 1, monthsElapsed: 0, firstPurchaseAt: null as string | null };
+    const empty = { lockedTotal: 0, vested: 0, vestedPct: 0, withdrawable: 0, withdrawn: 0, staked: 0, pendingReward: 0, claimedReward: 0, autoCompound: true, vestMonths: 12, vestCliffMonths: 1, monthsElapsed: 0, firstPurchaseAt: null as string | null, currentApr: 0, aprStart: 0, aprEnd: 0 };
     const db = await getDb();
     const c = db ? await loadConfig(db) : null;
     if (!db || !c) return empty;
     const [acc] = await db.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).limit(1);
-    if (!acc) return { ...empty, vestMonths: n(c.vestMonths), vestCliffMonths: n(c.vestCliffMonths) };
+    if (!acc) return { ...empty, vestMonths: n(c.vestMonths), vestCliffMonths: n(c.vestCliffMonths), aprStart: n(c.aprStart), aprEnd: n(c.aprEnd) };
     const vested = await vestedPrincipal(db, ctx.user.id, c);
     const withdrawn = n(acc.withdrawnPrincipal);
     const locked = n(acc.lockedTotal);
     const first = acc.firstPurchaseAt ? new Date(acc.firstPurchaseAt) : null;
     const monthsElapsed = first ? (Date.now() - first.getTime()) / (30 * 24 * 3600 * 1000) : 0;
+    // 我的当前年化 = 各质押批次按年龄取年化、按数量加权平均
+    const myLots = await db.select().from(icoStakeLots).where(and(eq(icoStakeLots.userId, ctx.user.id), gt(icoStakeLots.amount, "0")));
+    let wsum = 0, asum = 0; const now2 = Date.now();
+    for (const l of myLots) {
+      const amt = n(l.amount), age = (now2 - new Date(l.stakedAt).getTime()) / 86400000;
+      wsum += amt * effectiveApr(n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), age); asum += amt;
+    }
+    const currentApr = asum > 0 ? wsum / asum : n(c.aprStart);
     return {
+      currentApr, aprStart: n(c.aprStart), aprEnd: n(c.aprEnd),
       lockedTotal: locked,
       vested,
       vestedPct: locked > 0 ? vested / locked : 0,
@@ -162,6 +175,16 @@ export const icoRouter = router({
         withdrawnPrincipal: sql`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
         stakedBalance: sql`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`,
       }).where(eq(icoAccounts.userId, ctx.user.id));
+      // FIFO 减少质押批次(老资金先出)
+      let toReduce = input.amount;
+      const lots = await db.select().from(icoStakeLots)
+        .where(and(eq(icoStakeLots.userId, ctx.user.id), gt(icoStakeLots.amount, "0"))).orderBy(asc(icoStakeLots.stakedAt));
+      for (const lot of lots) {
+        if (toReduce <= 1e-9) break;
+        const amt = n(lot.amount), cut = Math.min(amt, toReduce);
+        await db.update(icoStakeLots).set({ amount: String(amt - cut) }).where(eq(icoStakeLots.id, lot.id));
+        toReduce -= cut;
+      }
       return { ok: true, withdrawn: input.amount };
     }),
 
@@ -203,7 +226,7 @@ export const icoRouter = router({
       config: {
         totalTokens: n(c.totalTokens), tokensSold: n(c.tokensSold), startPrice: n(c.startPrice), endPrice: n(c.endPrice),
         exponent: n(c.exponent), listingPrice: n(c.listingPrice), perWalletCap: n(c.perWalletCap),
-        rewardPoolTotal: n(c.rewardPoolTotal), rewardDays: n(c.rewardDays), alpha: n(c.alpha), baseShare: n(c.baseShare),
+        rewardPoolTotal: n(c.rewardPoolTotal), aprStart: n(c.aprStart), aprEnd: n(c.aprEnd), aprDeclineDays: n(c.aprDeclineDays),
         vestMonths: n(c.vestMonths), vestCliffMonths: n(c.vestCliffMonths), status: c.status,
       },
       raised: costForTokens(curveOf(c), 0, n(c.tokensSold)),
@@ -239,9 +262,9 @@ export const icoRouter = router({
       listingPrice: z.number().min(0).default(3),
       perWalletCap: z.number().min(0).default(0),
       rewardPoolTotal: z.number().min(0).default(0),
-      rewardDays: z.number().int().min(1).default(730),
-      alpha: z.number().min(0).max(1).default(0.5),
-      baseShare: z.number().min(0).max(1).default(0.2),
+      aprStart: z.number().min(0).max(100).default(1),       // 起始年化(1=100%)
+      aprEnd: z.number().min(0).max(100).default(1),         // 结束年化(线性降到此值)
+      aprDeclineDays: z.number().int().min(1).default(365),  // 递减天数
       vestMonths: z.number().int().min(1).default(12),
       vestCliffMonths: z.number().int().min(0).default(1),
       status: z.enum(["paused", "active", "ended"]).default("paused"),
@@ -253,8 +276,8 @@ export const icoRouter = router({
         id: 1,
         totalTokens: String(input.totalTokens), startPrice: String(input.startPrice), endPrice: String(input.endPrice),
         exponent: String(input.exponent), listingPrice: String(input.listingPrice), perWalletCap: String(input.perWalletCap),
-        rewardPoolTotal: String(input.rewardPoolTotal), rewardDays: input.rewardDays,
-        alpha: String(input.alpha), baseShare: String(input.baseShare),
+        rewardPoolTotal: String(input.rewardPoolTotal),
+        aprStart: String(input.aprStart), aprEnd: String(input.aprEnd), aprDeclineDays: input.aprDeclineDays,
         vestMonths: input.vestMonths, vestCliffMonths: input.vestCliffMonths, status: input.status,
       };
       const { id: _id, ...upd } = vals;
@@ -296,6 +319,8 @@ export const icoRouter = router({
         lockedTotal: sql`${icoAccounts.lockedTotal} + ${tokens}`,
         stakedBalance: sql`${icoAccounts.stakedBalance} + ${tokens}`,
       } });
+      // 新资金 → 一条质押批次(从此刻起按 aprStart 起步计龄)
+      await db.insert(icoStakeLots).values({ userId: o.userId, amount: String(tokens), stakedAt: new Date(), source: "purchase" });
       await db.update(icoOrders).set({ status: "confirmed", purchaseId, confirmedAt: new Date() }).where(eq(icoOrders.id, o.id));
       return { ok: true, tokens, avgPrice: q.avgPrice };
     }),
@@ -310,7 +335,7 @@ export const icoRouter = router({
       return { ok: true };
     }),
 
-  /** 每日质押收益结算(幂等,按 runDate)。开方分配 + 保底平分,自动复投/挂待领。 */
+  /** 每日质押收益结算(幂等,按 runDate)。每笔批次各自计龄取年化 + 奖励池封顶 + 线性,自动复投/挂待领。 */
   adminRunRewards: adminProcedure
     .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
     .mutation(async ({ input }) => {
@@ -320,30 +345,32 @@ export const icoRouter = router({
       if (exist) return { ok: true, skipped: true as const };
       const c = await loadConfig(db);
       if (!c) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "未配置 ICO" });
-      const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted), days = n(c.rewardDays);
-      // 当前是奖励第几天:已结算次数 + 1
-      const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)` }).from(icoRewardRuns);
-      const day = Number(cnt) + 1;
-      let emission = dailyEmission(pool, days, day);
-      if (emittedSoFar + emission > pool) emission = Math.max(0, pool - emittedSoFar);
+      const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
+      const remaining = Math.max(0, pool - emittedSoFar);
+
+      // 每笔质押批次各自计龄:新资金/复投按 aprStart 起步,沿曲线降到 aprEnd
+      const now = Date.now();
+      const lotRows = await db.select().from(icoStakeLots).where(gt(icoStakeLots.amount, "0"));
+      const lots: StakeLot[] = lotRows.map((l) => ({
+        userId: l.userId, amount: n(l.amount),
+        ageDays: (now - new Date(l.stakedAt).getTime()) / 86400000,
+      }));
+      const { perUser, emitted, uncapped, factor } = distributeAprLots(lots, n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), remaining);
 
       const accs = await db.select().from(icoAccounts);
-      const stakers: StakerStake[] = accs.map((a) => ({ userId: a.userId, staked: n(a.stakedBalance) })).filter((s) => s.staked > 0);
-      const dist = distribute(emission, stakers, n(c.alpha), n(c.baseShare));
-
-      let totalWeight = 0;
-      for (const a of accs) totalWeight += Math.pow(n(a.stakedBalance), n(c.alpha));
-      for (const [userId, reward] of Array.from(dist.entries())) {
+      for (const [userId, reward] of Array.from(perUser.entries())) {
         if (reward <= 0) continue;
         const acc = accs.find((a) => a.userId === userId)!;
         if (acc.autoCompound) {
+          // 复投 → 余额增加 + 新批次(age0,重新享 aprStart)
           await db.update(icoAccounts).set({ stakedBalance: sql`${icoAccounts.stakedBalance} + ${reward}` }).where(eq(icoAccounts.userId, userId));
+          await db.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: new Date(), source: "compound" });
         } else {
           await db.update(icoAccounts).set({ pendingReward: sql`${icoAccounts.pendingReward} + ${reward}` }).where(eq(icoAccounts.userId, userId));
         }
       }
-      await db.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emission}` }).where(eq(icoConfig.id, 1));
-      await db.insert(icoRewardRuns).values({ runDate: input.date, stakers: stakers.length, totalWeight: String(totalWeight), emitted: String(emission) });
-      return { ok: true, skipped: false as const, day, emission, stakers: stakers.length };
+      await db.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq(icoConfig.id, 1));
+      await db.insert(icoRewardRuns).values({ runDate: input.date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
+      return { ok: true, skipped: false as const, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
     }),
 });
