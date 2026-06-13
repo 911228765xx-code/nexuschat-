@@ -14,8 +14,29 @@ import { genLiveKitToken } from "../_core/livekitToken";
 import { getBenefits } from "../membership";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
+import { setParticipantCanPublish } from "../_core/livekitService";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
+
+// 语音房礼物目录（AC 计价）。送礼扣 AC，礼物动画由客户端经 LiveKit 数据通道广播。
+export const VOICE_GIFTS = [
+  { key: "like", name: "点赞", emoji: "👍", ac: 5 },
+  { key: "rose", name: "玫瑰", emoji: "🌹", ac: 10 },
+  { key: "beer", name: "啤酒", emoji: "🍺", ac: 20 },
+  { key: "rocket", name: "火箭", emoji: "🚀", ac: 100 },
+  { key: "crown", name: "皇冠", emoji: "👑", ac: 300 },
+  { key: "diamond", name: "钻石", emoji: "💎", ac: 520 },
+] as const;
+
+/** 原子扣 AC（npPoints），余额不足返回 false */
+async function spendAC(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number, cost: number): Promise<boolean> {
+  if (cost <= 0) return true;
+  const res: any = await db.update(users)
+    .set({ npPoints: sql`${users.npPoints} - ${cost}` })
+    .where(and(eq(users.id, userId), sql`${users.npPoints} >= ${cost}`));
+  const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+  return affected > 0;
+}
 
 function liveKitConfigured(): boolean {
   return ENV.livekitUrl.length > 0 && ENV.livekitApiKey.length > 0 && ENV.livekitApiSecret.length > 0;
@@ -179,6 +200,60 @@ export const voiceRoomRouter = router({
       if (!room) return { ok: true };
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以结束语音房" });
       await db.update(voiceRooms).set({ status: "ended", endedAt: new Date() }).where(eq(voiceRooms.id, rid));
+      return { ok: true };
+    }),
+
+  /** 礼物目录（供前端礼物面板） */
+  gifts: protectedProcedure.query(() => ({ gifts: VOICE_GIFTS })),
+
+  /** 送礼：扣 AC，返回新余额。礼物动画由前端经数据通道广播给房间。 */
+  sendGift: protectedProcedure
+    .use(rateLimitWrite)
+    .input(z.object({ id: z.string(), giftKey: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const gift = VOICE_GIFTS.find((g) => g.key === input.giftKey);
+      if (!gift) throw new TRPCError({ code: "BAD_REQUEST", message: "礼物不存在" });
+      const rid = Number.parseInt(input.id, 10);
+      const [room] = await db.select({ id: voiceRooms.id }).from(voiceRooms)
+        .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
+      if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
+      const ok = await spendAC(db, ctx.user.id, gift.ac);
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AC 不足，送出${gift.name}需 ${gift.ac} AC` });
+      const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
+    }),
+
+  /** 房主抱人上麦：把听众的 LiveKit canPublish 设为 true，实时生效。 */
+  grantSpeak: protectedProcedure
+    .input(z.object({ id: z.string(), targetUserId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const rid = Number.parseInt(input.id, 10);
+      const [room] = await db.select().from(voiceRooms)
+        .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
+      if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
+      if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以邀请上麦" });
+      await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), true);
+      await db.update(voiceRooms).set({ speakerCount: sql`${voiceRooms.speakerCount} + 1` }).where(eq(voiceRooms.id, rid));
+      return { ok: true };
+    }),
+
+  /** 房主请人下麦：canPublish=false。 */
+  revokeSpeak: protectedProcedure
+    .input(z.object({ id: z.string(), targetUserId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const rid = Number.parseInt(input.id, 10);
+      const [room] = await db.select().from(voiceRooms)
+        .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
+      if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
+      if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以操作" });
+      await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), false);
+      await db.update(voiceRooms).set({ speakerCount: sql`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq(voiceRooms.id, rid));
       return { ok: true };
     }),
 });
