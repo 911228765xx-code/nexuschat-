@@ -55,11 +55,11 @@ export interface AllocationBucket {
 }
 
 const ALLOCATION_PCT: Omit<AllocationBucket, "amount">[] = [
-  { key: "node",      name: "合伙人认购",   pct: 25, desc: "平台共建：合伙人席位认购，认购即获 AI 配额", vesting: "按合伙人档位线性释放" },
-  { key: "staking",   name: "质押挖矿",     pct: 30, desc: "质押 AI/参与生态挖矿产出，长期激励持有者", vesting: "随挖矿逐步产出" },
+  { key: "ico",       name: "ICO 曲线认购", pct: 15, desc: "曲线定价认购(0.8U 起/2U 封顶)，认购即全额锁仓进二池质押", vesting: "首月悬崖 + 12 月曲线释放" },
+  { key: "staking",   name: "质押挖矿",     pct: 40, desc: "质押挖矿奖励池：每笔资金各自计龄，起步年化沿曲线递减", vesting: "随挖矿逐步产出·奖励池封顶" },
   { key: "liquidity", name: "流动性共建",   pct: 15, desc: "DEX/做市流动性池，社区共建交易深度", vesting: "随流动性投放释放" },
-  { key: "treasury",  name: "DAO 金库",     pct: 15, desc: "生态建设、治理提案、运营储备", vesting: "DAO 治理解锁" },
-  { key: "team",      name: "团队",         pct: 10, desc: "创始与核心贡献者", vesting: "12 月悬崖 + 24 月线性" },
+  { key: "ecosystem", name: "生态建设",     pct: 15, desc: "生态激励、合作伙伴、开发者扶持与市场拓展", vesting: "按生态计划逐步释放" },
+  { key: "treasury",  name: "DAO 国库",     pct: 10, desc: "治理提案、运营储备与风险准备金", vesting: "DAO 治理解锁" },
   { key: "community", name: "社区/空投",    pct: 5,  desc: "早期用户激励、任务空投", vesting: "活动逐步释放" },
 ];
 
