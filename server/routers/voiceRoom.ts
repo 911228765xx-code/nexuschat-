@@ -102,7 +102,9 @@ export const voiceRoomRouter = router({
       })
         .from(voiceRooms)
         .leftJoin(users, eq(users.id, voiceRooms.hostUserId))
-        .where(cat === "all" ? eq(voiceRooms.status, "live") : and(eq(voiceRooms.status, "live"), eq(voiceRooms.category, cat)))
+        .where(cat === "all"
+          ? and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true))
+          : and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true), eq(voiceRooms.category, cat)))
         .orderBy(desc(voiceRooms.listenerCount), desc(voiceRooms.createdAt))
         .limit(50);
       return rows.map((r) => ({
@@ -128,6 +130,7 @@ export const voiceRoomRouter = router({
       topic: z.string().trim().max(80).optional(),
       category: z.enum(CATEGORIES).default("chat"),
       isMembersOnly: z.boolean().default(false),
+      isPublic: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
       if (!liveKitConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "语音房即将开放，敬请期待" });
@@ -150,6 +153,7 @@ export const voiceRoomRouter = router({
         category: input.category,
         hostUserId: ctx.user.id,
         isMembersOnly: input.isMembersOnly,
+        isPublic: input.isPublic,
         status: "live",
         speakerCount: 1,
         listenerCount: 0,

@@ -379,6 +379,13 @@
       "when": 1781244022527,
       "tag": "0053_voice_rooms",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1781244023527,
+      "tag": "0054_voice_room_public",
+      "breakpoints": true
     }
   ]
 }
