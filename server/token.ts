@@ -70,7 +70,7 @@ export const NN_ALLOCATION: AllocationBucket[] = ALLOCATION_PCT.map((b) => ({
 
 /** USDT 收款配置（链上结算在 App 外；地址/链通过环境变量配置，避免硬编码） */
 export const USDT_DEPOSIT_ADDRESS = process.env.USDT_DEPOSIT_ADDRESS || "";
-export const USDT_CHAIN = process.env.USDT_CHAIN || "TRC20";
+export const USDT_CHAIN = process.env.USDT_CHAIN || "BEP20"; // 默认 BSC(BEP20);项目 USDT 为 BSC-Peg。若收款钱包在以太坊主网则设环境变量 USDT_CHAIN=ERC20
 
 /** 旧版节点等级（已停售，仅保留给历史订单展示/确认；新认购走 server/partner.ts 合伙人档位） */
 export interface NodeTier {
