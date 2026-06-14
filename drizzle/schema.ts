@@ -1322,9 +1322,25 @@ export type Feedback = typeof feedback.$inferSelect;
 // 单例池(id=1):储备金支撑的恒定乘积做市;认购完成后由 admin 用募集 USDT + AI 播种开市
 export const aiAmmPool = mysqlTable("ai_amm_pool", {
   id: int("id").primaryKey(),
+  // x*y=k 市价做市池
   aiReserve: decimal("aiReserve", { precision: 30, scale: 8 }).default("0").notNull(),
   usdtReserve: decimal("usdtReserve", { precision: 30, scale: 8 }).default("0").notNull(),
-  feeBps: int("feeBps").default(30).notNull(),                 // 0.30% swap 费(留池,增厚 k)
+  // 储备地板(FloorAMM 逻辑):买入 θ 分流进 reserveR;地板价 F=reserveR/circulatingAi;跌到地板走 redeem 兜底
+  reserveR: decimal("reserveR", { precision: 30, scale: 8 }).default("0").notNull(),
+  circulatingAi: decimal("circulatingAi", { precision: 30, scale: 8 }).default("0").notNull(), // 市场净流通 AI(地板分母)
+  crisisFund: decimal("crisisFund", { precision: 30, scale: 8 }).default("0").notNull(),         // 超额卖税注资;深跌补 reserveR
+  divPool: decimal("divPool", { precision: 30, scale: 8 }).default("0").notNull(),               // 基础卖税累积(各档分红+技术费,分配走后续)
+  // θ 买入分流(基点,早高晚低,按累计买入 USDT 递减)
+  thetaStartBps: int("thetaStartBps").default(5200).notNull(),
+  thetaEndBps: int("thetaEndBps").default(2700).notNull(),
+  thetaHalfBuyUsdt: decimal("thetaHalfBuyUsdt", { precision: 30, scale: 8 }).default("100000").notNull(),
+  cumBoughtUsdt: decimal("cumBoughtUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
+  // 动态卖税(基点):base→分红池,(税-base)→危机金;按距峰回撤 base→max
+  baseTaxBps: int("baseTaxBps").default(500).notNull(),
+  maxTaxBps: int("maxTaxBps").default(5000).notNull(),
+  peakDecayPerDayBps: int("peakDecayPerDayBps").default(400).notNull(),
+  peakPrice: decimal("peakPrice", { precision: 30, scale: 10 }).default("0").notNull(),
+  peakUpdatedAt: timestamp("peakUpdatedAt"),
   seeded: boolean("seeded").default(false).notNull(),
   totalVolUsdt: decimal("totalVolUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
