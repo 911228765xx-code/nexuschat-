@@ -287,20 +287,24 @@ export const partnerRouter = router({
       const [p] = await db.select().from(partnerPayouts).where(eq(partnerPayouts.id, input.payoutId)).limit(1);
       if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "申请不存在" });
       if (p.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "已处理" });
-      await db.update(partnerPayouts).set({
-        status: input.action,
-        txHash: input.txHash ? sanitizeInput(input.txHash, 120) : null,
-        paidAt: input.action === "paid" ? new Date() : null,
-      }).where(eq(partnerPayouts.id, p.id));
-      // 驳回则回退奖励已领进度，允许重新申请
-      if (input.action === "rejected") {
-        await db.update(partnerBonuses).set({
-          claimedPeriods: sql`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
-          claimedUsdt: sql`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`,
-        }).where(eq(partnerBonuses.id, p.bonusId));
-        // 删除驳回记录以释放 (bonusId, period) 唯一闸 → 用户可换地址重领
-        await db.delete(partnerPayouts).where(eq(partnerPayouts.id, p.id));
-      }
+      // 事务 + 条件更新:仅当仍为 pending 才处理,并发/重放只成功一次,杜绝重复回退进度
+      await db.transaction(async (tx) => {
+        const res: any = await tx.update(partnerPayouts).set({
+          status: input.action,
+          txHash: input.txHash ? sanitizeInput(input.txHash, 120) : null,
+          paidAt: input.action === "paid" ? new Date() : null,
+        }).where(and(eq(partnerPayouts.id, p.id), eq(partnerPayouts.status, "pending")));
+        const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "已处理" });
+        // 驳回则回退奖励已领进度，允许重新申请(条件更新保证只执行一次)
+        if (input.action === "rejected") {
+          await tx.update(partnerBonuses).set({
+            claimedPeriods: sql`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
+            claimedUsdt: sql`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`,
+          }).where(eq(partnerBonuses.id, p.bonusId));
+          await tx.delete(partnerPayouts).where(eq(partnerPayouts.id, p.id));
+        }
+      });
       return { ok: true };
     }),
 

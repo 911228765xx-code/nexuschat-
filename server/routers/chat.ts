@@ -2184,18 +2184,20 @@ export const chatRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      const [o] = await db.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).limit(1);
-      if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
-      if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
-      // 汇率保护：按"当前"底池汇率重算发放量，防止旧汇率挂单在改价后按旧价铸币
-      const curInfo = await getPoolInfo(db);
-      const nnNow = o.usdtAmount * curInfo.priceNnPerUsdt;
-      if (nnNow !== o.nnAmount) {
-        await db.update(nnPoolOrders).set({ nnAmount: nnNow }).where(eq(nnPoolOrders.id, o.id));
-      }
-      const ok = await confirmPoolPurchase(db, o.userId, o.usdtAmount, nnNow, o.id);
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备或金库不足，无法发放" });
-      await db.update(nnPoolOrders).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(nnPoolOrders.id, o.id));
+      let nnNow = 0;
+      // 事务 + 锁订单行:并发/重放双确认会串行化,第二次读到 status!=='pending' 直接拒,杜绝双倍铸币
+      await db.transaction(async (tx) => {
+        const [o] = await tx.select().from(nnPoolOrders).where(eq(nnPoolOrders.id, input.orderId)).for("update").limit(1);
+        if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+        if (o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单已处理" });
+        // 汇率保护：按"当前"底池汇率重算发放量，防止旧汇率挂单在改价后按旧价铸币
+        const curInfo = await getPoolInfo(tx as any);
+        nnNow = o.usdtAmount * curInfo.priceNnPerUsdt;
+        // confirmPoolPurchase 内已原子扣减储备;失败 throw → 整个事务回滚(撤销扣减+状态)
+        const ok = await confirmPoolPurchase(tx as any, o.userId, o.usdtAmount, nnNow, o.id);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "底池储备或金库不足，无法发放" });
+        await tx.update(nnPoolOrders).set({ status: "confirmed", nnAmount: nnNow, confirmedAt: new Date() }).where(eq(nnPoolOrders.id, o.id));
+      });
       return { ok: true, nnGranted: nnNow };
     }),
 

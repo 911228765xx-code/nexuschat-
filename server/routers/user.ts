@@ -754,50 +754,40 @@ async function _completeTask(
   const overrides = await getTaskRewardOverrides(db);
   let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
 
-  // 每日可重复任务（def.daily）：按"当天完成次数"限频；一次性任务：按 maxCompletions 限频
   const isDaily = typeof def.daily === "number";
-  if (isDaily) {
-    const todayStart = startOfUtcDay(ymdUtc());
-    const [{ c: todayCount } = { c: 0 }] = await db
-      .select({ c: count() })
-      .from(userTasks)
-      .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType), gte(userTasks.completedAt, todayStart)));
-    if (Number(todayCount) >= (def.daily as number)) {
-      return { success: false, npEarned: 0, alreadyCompleted: true };
-    }
-  } else {
-    const existing = await db
-      .select({ id: userTasks.id })
-      .from(userTasks)
-      .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType)));
-    if (existing.length >= def.maxCompletions) {
-      return { success: false, npEarned: 0, alreadyCompleted: true };
-    }
-  }
-
-  // 连续签到：按 lastSigninYmd 计算连签天数，奖励递增封顶
-  let newStreak = 0;
-  if (taskType === "daily_login") {
-    const [u] = await db
-      .select({ streak: users.signinStreak, last: users.lastSigninYmd })
-      .from(users).where(eq(users.id, userId)).limit(1);
-    const today = ymdUtc();
-    const yesterday = ymdUtc(new Date(Date.now() - 86_400_000));
-    newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
-    reward = signinStreakReward(newStreak);
-  }
-
-  // 发放：每日可重复任务 + 签到受每日产出上限约束；一次性里程碑不受限。
-  const capped = isDaily;
+  const capped = isDaily; // 每日/签到受每日产出上限约束；一次性里程碑不受限
   let granted = 0;
+  let blocked = false;
+  // 全程一个事务 + 锁用户行:并发同任务调用串行化,频次校验与写入原子,杜绝并发双领
   await db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1); // 行锁:串行化本用户
+    // 频次校验(拿锁后,事务内)
+    if (isDaily) {
+      const todayStart = startOfUtcDay(ymdUtc());
+      const [{ c: todayCount } = { c: 0 }] = await tx
+        .select({ c: count() }).from(userTasks)
+        .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType), gte(userTasks.completedAt, todayStart)));
+      if (Number(todayCount) >= (def.daily as number)) { blocked = true; return; }
+    } else {
+      const existing = await tx
+        .select({ id: userTasks.id }).from(userTasks)
+        .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType)));
+      if (existing.length >= def.maxCompletions) { blocked = true; return; }
+    }
+    // 连续签到:拿锁后读改一致,奖励递增封顶
     if (taskType === "daily_login") {
+      const [u] = await tx
+        .select({ streak: users.signinStreak, last: users.lastSigninYmd })
+        .from(users).where(eq(users.id, userId)).limit(1);
+      const yesterday = ymdUtc(new Date(Date.now() - 86_400_000));
+      const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
+      reward = signinStreakReward(newStreak);
       await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
     await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
-
+  if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 
