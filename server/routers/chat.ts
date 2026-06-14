@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
-import { eq, and, desc, lt, sql, or, ne, gt, like, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, lt, sql, or, ne, gt, gte, asc, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { emitToUser, getSocketIO } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
@@ -2096,6 +2096,41 @@ export const chatRouter = router({
       if (!db) throw new Error("DB unavailable");
       const info = await getPoolInfo(db);
       return { ...info, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN };
+    }),
+
+  // 交易对行情:现价(USDT/AI)+ 24h 涨跌/高低/量 + 最近成交(由已确认底池订单派生)
+  getPoolMarket: publicProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) return null;
+      const info = await getPoolInfo(db);
+      const priceNow = info.priceNnPerUsdt > 0 ? 1 / info.priceNnPerUsdt : 0; // 1 AI 值多少 USDT
+      // 最近成交(已确认订单,新→旧)
+      const recent = await db.select({ usdt: nnPoolOrders.usdtAmount, nn: nnPoolOrders.nnAmount, at: nnPoolOrders.confirmedAt })
+        .from(nnPoolOrders).where(eq(nnPoolOrders.status, "confirmed"))
+        .orderBy(desc(nnPoolOrders.confirmedAt)).limit(20);
+      const trades = recent.map((r) => ({
+        usdt: r.usdt, nn: r.nn,
+        price: r.nn > 0 ? r.usdt / r.nn : 0,   // USDT/AI
+        at: r.at ? r.at.toISOString() : null,
+      }));
+      // 24h 窗口(旧→新,取开盘价/高低/量)
+      const since = new Date(Date.now() - 24 * 3600 * 1000);
+      const day = await db.select({ usdt: nnPoolOrders.usdtAmount, nn: nnPoolOrders.nnAmount })
+        .from(nnPoolOrders).where(and(eq(nnPoolOrders.status, "confirmed"), gte(nnPoolOrders.confirmedAt, since)))
+        .orderBy(asc(nnPoolOrders.confirmedAt));
+      const p24 = day.map((r) => (r.nn > 0 ? r.usdt / r.nn : 0)).filter((x) => x > 0);
+      const vol24 = day.reduce((s, r) => s + r.usdt, 0);
+      const open24 = p24.length ? p24[0] : priceNow;
+      const high24 = Math.max(priceNow, ...(p24.length ? p24 : [priceNow]));
+      const low24 = Math.min(priceNow, ...(p24.length ? p24 : [priceNow]));
+      const change24 = open24 > 0 ? (priceNow - open24) / open24 : 0;
+      return {
+        ...info,
+        price: priceNow, change24, high24, low24, vol24Usdt: vol24, trades24: day.length,
+        trades,
+        payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN,
+      };
     }),
 
   // 下单购买：输入 USDT 金额，按底池单价折算 AI，建待支付订单

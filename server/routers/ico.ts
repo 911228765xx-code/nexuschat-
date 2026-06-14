@@ -17,6 +17,7 @@ import { vestedFraction, distributeAprLots, effectiveApr, type StakeLot } from "
 import { deriveIcoTier, nextTierGap, ICO_TIERS } from "../ico/tiers";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0]; // 事务句柄(与 Db 共享查询接口)
 const n = (v: unknown) => Number(v ?? 0);
 
 async function loadConfig(db: Db) {
@@ -27,7 +28,7 @@ function curveOf(c: any): IcoCurve {
   return { totalTokens: n(c.totalTokens), startPrice: n(c.startPrice), endPrice: n(c.endPrice), exponent: n(c.exponent) };
 }
 /** 跨所有认购累计已释放本金(每笔按自身锁仓时钟) */
-async function vestedPrincipal(db: Db, userId: number, c: any): Promise<number> {
+async function vestedPrincipal(db: Db | Tx, userId: number, c: any): Promise<number> {
   const rows = await db.select().from(icoPurchases).where(eq(icoPurchases.userId, userId));
   let vested = 0;
   for (const p of rows) {
@@ -188,27 +189,31 @@ export const icoRouter = router({
       const db = await getDb();
       const c = db ? await loadConfig(db) : null;
       if (!db || !c) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      const [acc] = await db.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).limit(1);
-      if (!acc) throw new TRPCError({ code: "BAD_REQUEST", message: "无认购记录" });
-      const vested = await vestedPrincipal(db, ctx.user.id, c);
-      const withdrawable = Math.max(0, vested - n(acc.withdrawnPrincipal));
-      if (input.amount > withdrawable + 1e-8) throw new TRPCError({ code: "BAD_REQUEST", message: `可提余额不足,当前可提 ${withdrawable.toFixed(4)}` });
-      const ok = await grantNN(db, ctx.user.id, input.amount, { type: "ico_withdraw", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "发放失败,请稍后再试" });
-      await db.update(icoAccounts).set({
-        withdrawnPrincipal: sql`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
-        stakedBalance: sql`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`,
-      }).where(eq(icoAccounts.userId, ctx.user.id));
-      // FIFO 减少质押批次(老资金先出)
-      let toReduce = input.amount;
-      const lots = await db.select().from(icoStakeLots)
-        .where(and(eq(icoStakeLots.userId, ctx.user.id), gt(icoStakeLots.amount, "0"))).orderBy(asc(icoStakeLots.stakedAt));
-      for (const lot of lots) {
-        if (toReduce <= 1e-9) break;
-        const amt = n(lot.amount), cut = Math.min(amt, toReduce);
-        await db.update(icoStakeLots).set({ amount: String(amt - cut) }).where(eq(icoStakeLots.id, lot.id));
-        toReduce -= cut;
-      }
+      // 全程一个事务 + 行锁:并发"提全部"会串行化,第二笔读到已扣账的余额 → 校验失败,杜绝双花
+      await db.transaction(async (tx) => {
+        const [acc] = await tx.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).for("update").limit(1);
+        if (!acc) throw new TRPCError({ code: "BAD_REQUEST", message: "无认购记录" });
+        const vested = await vestedPrincipal(tx, ctx.user.id, c);
+        const withdrawable = Math.max(0, vested - n(acc.withdrawnPrincipal));
+        if (input.amount > withdrawable + 1e-8) throw new TRPCError({ code: "BAD_REQUEST", message: `可提余额不足,当前可提 ${withdrawable.toFixed(4)}` });
+        // 先扣账,再发钱;grantNN 失败 throw → 整个事务回滚
+        await tx.update(icoAccounts).set({
+          withdrawnPrincipal: sql`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
+          stakedBalance: sql`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`,
+        }).where(eq(icoAccounts.userId, ctx.user.id));
+        // FIFO 减少质押批次(老资金先出)
+        let toReduce = input.amount;
+        const lots = await tx.select().from(icoStakeLots)
+          .where(and(eq(icoStakeLots.userId, ctx.user.id), gt(icoStakeLots.amount, "0"))).orderBy(asc(icoStakeLots.stakedAt));
+        for (const lot of lots) {
+          if (toReduce <= 1e-9) break;
+          const amt = n(lot.amount), cut = Math.min(amt, toReduce);
+          await tx.update(icoStakeLots).set({ amount: String(amt - cut) }).where(eq(icoStakeLots.id, lot.id));
+          toReduce -= cut;
+        }
+        const ok = await grantNN(tx as unknown as Db, ctx.user.id, input.amount, { type: "ico_withdraw", refType: "user", refId: ctx.user.id });
+        if (!ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "发放失败,请稍后再试" });
+      });
       return { ok: true, withdrawn: input.amount };
     }),
 
@@ -216,16 +221,22 @@ export const icoRouter = router({
   claimRewards: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-    const [acc] = await db.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).limit(1);
-    const pending = n(acc?.pendingReward);
-    if (pending <= 0) return { ok: true, claimed: 0 };
-    const ok = await grantNN(db, ctx.user.id, pending, { type: "ico_reward", refType: "user", refId: ctx.user.id });
-    if (!ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "发放失败" });
-    await db.update(icoAccounts).set({
-      pendingReward: "0",
-      claimedReward: sql`${icoAccounts.claimedReward} + ${pending}`,
-    }).where(eq(icoAccounts.userId, ctx.user.id));
-    return { ok: true, claimed: pending };
+    let claimed = 0;
+    // 事务 + 行锁:并发双领会串行化,第二次读到 pending=0 → 不重发
+    await db.transaction(async (tx) => {
+      const [acc] = await tx.select().from(icoAccounts).where(eq(icoAccounts.userId, ctx.user.id)).for("update").limit(1);
+      const pending = n(acc?.pendingReward);
+      if (pending <= 0) return;
+      // 先清账(置0+累计),再发钱;grantNN 失败 throw → 回滚
+      await tx.update(icoAccounts).set({
+        pendingReward: "0",
+        claimedReward: sql`${icoAccounts.claimedReward} + ${pending}`,
+      }).where(eq(icoAccounts.userId, ctx.user.id));
+      const ok = await grantNN(tx as unknown as Db, ctx.user.id, pending, { type: "ico_reward", refType: "user", refId: ctx.user.id });
+      if (!ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "发放失败" });
+      claimed = pending;
+    });
+    return { ok: true, claimed };
   }),
 
   /** 开关:释放本金不提则自动复投 */
@@ -315,47 +326,52 @@ export const icoRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      const [o] = await db.select().from(icoOrders).where(eq(icoOrders.id, input.orderId)).limit(1);
-      if (!o || o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单不存在或已处理" });
-      const c = await loadConfig(db);
-      if (!c || c.status !== "active") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "ICO 未在进行" });
-      const curve = curveOf(c), sold = n(c.tokensSold);
-      const usdt = n(o.usdtAmount);
-      const tokens = tokensForBudget(curve, sold, usdt);
-      if (tokens <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "额度已售罄" });
-      if (tokens + 1e-8 < n(o.minTokens)) throw new TRPCError({ code: "BAD_REQUEST", message: "价格已变动超出滑点保护,请用户重新下单" });
-      // 单钱包上限
-      if (n(c.perWalletCap) > 0) {
-        const [acc0] = await db.select({ locked: icoAccounts.lockedTotal }).from(icoAccounts).where(eq(icoAccounts.userId, o.userId)).limit(1);
-        if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError({ code: "BAD_REQUEST", message: "超过单钱包认购上限" });
-      }
-      const q = curveQuote(curve, sold, tokens);
-      // 累计认购(含本单)→ 合伙人档位 → 认购代币加成
-      const [{ prevUsdt }] = await db.select({ prevUsdt: sql<number>`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq(icoPurchases.userId, o.userId));
-      const cumUsdt = n(prevUsdt) + usdt;
-      const tier = deriveIcoTier(cumUsdt);
-      const bonusPct = tier?.bonusPct ?? 0;
-      const bonus = tokens * bonusPct;          // 加成代币(不走曲线、不推进售出)
-      const credited = tokens + bonus;          // 实际入账(基础+加成):锁仓+质押+计龄
-      // 成交:曲线按基础量推进、流水记实际入账、锁仓进质押
-      await db.update(icoConfig).set({ tokensSold: sql`${icoConfig.tokensSold} + ${tokens}` }).where(eq(icoConfig.id, 1));
-      const [pr]: any = await db.insert(icoPurchases).values({
-        userId: o.userId, usdtAmount: String(usdt), tokensBought: String(credited),
-        priceFrom: String(q.priceFrom), priceTo: String(q.priceTo), avgPrice: String(credited > 0 ? usdt / credited : q.avgPrice),
+      let result: { ok: true; tokens: number; baseTokens: number; bonus: number; bonusPct: number; tierLevel: number; avgPrice: number };
+      // 事务 + 锁订单行(防同单双确认双发币)+ 锁配置行(串行化曲线成交,防并发按同一 tokensSold 重复定价/超售)
+      await db.transaction(async (tx) => {
+        const [o] = await tx.select().from(icoOrders).where(eq(icoOrders.id, input.orderId)).for("update").limit(1);
+        if (!o || o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单不存在或已处理" });
+        const [c] = await tx.select().from(icoConfig).where(eq(icoConfig.id, 1)).for("update").limit(1);
+        if (!c || c.status !== "active") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "ICO 未在进行" });
+        const curve = curveOf(c), sold = n(c.tokensSold);
+        const usdt = n(o.usdtAmount);
+        const tokens = tokensForBudget(curve, sold, usdt);
+        if (tokens <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "额度已售罄" });
+        if (tokens + 1e-8 < n(o.minTokens)) throw new TRPCError({ code: "BAD_REQUEST", message: "价格已变动超出滑点保护,请用户重新下单" });
+        // 单钱包上限
+        if (n(c.perWalletCap) > 0) {
+          const [acc0] = await tx.select({ locked: icoAccounts.lockedTotal }).from(icoAccounts).where(eq(icoAccounts.userId, o.userId)).limit(1);
+          if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError({ code: "BAD_REQUEST", message: "超过单钱包认购上限" });
+        }
+        const q = curveQuote(curve, sold, tokens);
+        // 累计认购(含本单)→ 合伙人档位 → 认购代币加成
+        const [{ prevUsdt }] = await tx.select({ prevUsdt: sql<number>`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq(icoPurchases.userId, o.userId));
+        const cumUsdt = n(prevUsdt) + usdt;
+        const tier = deriveIcoTier(cumUsdt);
+        const bonusPct = tier?.bonusPct ?? 0;
+        const bonus = tokens * bonusPct;          // 加成代币(不走曲线、不推进售出)
+        const credited = tokens + bonus;          // 实际入账(基础+加成):锁仓+质押+计龄
+        // 成交:曲线按基础量推进、流水记实际入账、锁仓进质押
+        await tx.update(icoConfig).set({ tokensSold: sql`${icoConfig.tokensSold} + ${tokens}` }).where(eq(icoConfig.id, 1));
+        const [pr]: any = await tx.insert(icoPurchases).values({
+          userId: o.userId, usdtAmount: String(usdt), tokensBought: String(credited),
+          priceFrom: String(q.priceFrom), priceTo: String(q.priceTo), avgPrice: String(credited > 0 ? usdt / credited : q.avgPrice),
+        });
+        const purchaseId = pr?.insertId ?? pr?.[0]?.insertId ?? null;
+        await tx.insert(icoAccounts).values({
+          userId: o.userId, lockedTotal: String(credited), stakedBalance: String(credited), firstPurchaseAt: new Date(),
+        }).onDuplicateKeyUpdate({ set: {
+          lockedTotal: sql`${icoAccounts.lockedTotal} + ${credited}`,
+          stakedBalance: sql`${icoAccounts.stakedBalance} + ${credited}`,
+        } });
+        // 新资金 → 一条质押批次(从此刻起按 aprStart 起步计龄)
+        await tx.insert(icoStakeLots).values({ userId: o.userId, amount: String(credited), stakedAt: new Date(), source: "purchase" });
+        // 同步合伙人等级(聊天/资料页徽章用)
+        if (tier) await tx.update(users).set({ icoTier: tier.level }).where(eq(users.id, o.userId));
+        await tx.update(icoOrders).set({ status: "confirmed", purchaseId, confirmedAt: new Date() }).where(eq(icoOrders.id, o.id));
+        result = { ok: true, tokens: credited, baseTokens: tokens, bonus, bonusPct, tierLevel: tier?.level ?? 0, avgPrice: q.avgPrice };
       });
-      const purchaseId = pr?.insertId ?? pr?.[0]?.insertId ?? null;
-      await db.insert(icoAccounts).values({
-        userId: o.userId, lockedTotal: String(credited), stakedBalance: String(credited), firstPurchaseAt: new Date(),
-      }).onDuplicateKeyUpdate({ set: {
-        lockedTotal: sql`${icoAccounts.lockedTotal} + ${credited}`,
-        stakedBalance: sql`${icoAccounts.stakedBalance} + ${credited}`,
-      } });
-      // 新资金 → 一条质押批次(从此刻起按 aprStart 起步计龄)
-      await db.insert(icoStakeLots).values({ userId: o.userId, amount: String(credited), stakedAt: new Date(), source: "purchase" });
-      // 同步合伙人等级(聊天/资料页徽章用)
-      if (tier) await db.update(users).set({ icoTier: tier.level }).where(eq(users.id, o.userId));
-      await db.update(icoOrders).set({ status: "confirmed", purchaseId, confirmedAt: new Date() }).where(eq(icoOrders.id, o.id));
-      return { ok: true, tokens: credited, baseTokens: tokens, bonus, bonusPct, tierLevel: tier?.level ?? 0, avgPrice: q.avgPrice };
+      return result!;
     }),
 
   /** 取消订单 */
@@ -374,36 +390,51 @@ export const icoRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      const [exist] = await db.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, input.date)).limit(1);
-      if (exist) return { ok: true, skipped: true as const };
-      const c = await loadConfig(db);
-      if (!c) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "未配置 ICO" });
-      const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
-      const remaining = Math.max(0, pool - emittedSoFar);
-
-      // 每笔质押批次各自计龄:新资金/复投按 aprStart 起步,沿曲线降到 aprEnd
-      const now = Date.now();
-      const lotRows = await db.select().from(icoStakeLots).where(gt(icoStakeLots.amount, "0"));
-      const lots: StakeLot[] = lotRows.map((l) => ({
-        userId: l.userId, amount: n(l.amount),
-        ageDays: (now - new Date(l.stakedAt).getTime()) / 86400000,
-      }));
-      const { perUser, emitted, uncapped, factor } = distributeAprLots(lots, n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), remaining);
-
-      const accs = await db.select().from(icoAccounts);
-      for (const [userId, reward] of Array.from(perUser.entries())) {
-        if (reward <= 0) continue;
-        const acc = accs.find((a) => a.userId === userId)!;
-        if (acc.autoCompound) {
-          // 复投 → 余额增加 + 新批次(age0,重新享 aprStart)
-          await db.update(icoAccounts).set({ stakedBalance: sql`${icoAccounts.stakedBalance} + ${reward}` }).where(eq(icoAccounts.userId, userId));
-          await db.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: new Date(), source: "compound" });
-        } else {
-          await db.update(icoAccounts).set({ pendingReward: sql`${icoAccounts.pendingReward} + ${reward}` }).where(eq(icoAccounts.userId, userId));
-        }
+      // 快路径:当日已结算直接跳过
+      const [exist0] = await db.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, input.date)).limit(1);
+      if (exist0) return { ok: true, skipped: true as const };
+      try {
+        let out: { ok: true; skipped: false; emitted: number; stakers: number; factor: number; poolLeft: number } | null = null;
+        await db.transaction(async (tx) => {
+          // 锁配置行,串行化 rewardEmitted 读改一致(并发结算只能一个进临界区)
+          const [c] = await tx.select().from(icoConfig).where(eq(icoConfig.id, 1)).for("update").limit(1);
+          if (!c) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "未配置 ICO" });
+          // 拿到锁后再确认一次当日未结算(防前一笔刚结算完)
+          const [exist] = await tx.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, input.date)).limit(1);
+          if (exist) return; // out 保持 null → 外层返回 skipped
+          const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
+          const remaining = Math.max(0, pool - emittedSoFar);
+          // 每笔质押批次各自计龄:新资金/复投按 aprStart 起步,沿曲线降到 aprEnd
+          const now = Date.now();
+          const lotRows = await tx.select().from(icoStakeLots).where(gt(icoStakeLots.amount, "0"));
+          const lots: StakeLot[] = lotRows.map((l) => ({
+            userId: l.userId, amount: n(l.amount),
+            ageDays: (now - new Date(l.stakedAt).getTime()) / 86400000,
+          }));
+          const { perUser, emitted, uncapped, factor } = distributeAprLots(lots, n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), remaining);
+          const accs = await tx.select().from(icoAccounts);
+          for (const [userId, reward] of Array.from(perUser.entries())) {
+            if (reward <= 0) continue;
+            const acc = accs.find((a) => a.userId === userId)!;
+            if (acc.autoCompound) {
+              // 复投 → 余额增加 + 新批次(age0,重新享 aprStart)
+              await tx.update(icoAccounts).set({ stakedBalance: sql`${icoAccounts.stakedBalance} + ${reward}` }).where(eq(icoAccounts.userId, userId));
+              await tx.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: new Date(), source: "compound" });
+            } else {
+              await tx.update(icoAccounts).set({ pendingReward: sql`${icoAccounts.pendingReward} + ${reward}` }).where(eq(icoAccounts.userId, userId));
+            }
+          }
+          await tx.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq(icoConfig.id, 1));
+          // 唯一 runDate:并发抢同日会抛 → 整个事务回滚,绝不双发
+          await tx.insert(icoRewardRuns).values({ runDate: input.date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
+          out = { ok: true, skipped: false, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
+        });
+        return out ?? { ok: true, skipped: true as const };
+      } catch (e: any) {
+        // 并发抢同一天 → 唯一键冲突,说明已被另一次结算,干净返回跳过(不报错)
+        const msg = String(e?.message ?? e?.cause?.message ?? "");
+        if (e?.code === "ER_DUP_ENTRY" || e?.errno === 1062 || /duplicate/i.test(msg)) return { ok: true, skipped: true as const };
+        throw e;
       }
-      await db.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq(icoConfig.id, 1));
-      await db.insert(icoRewardRuns).values({ runDate: input.date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
-      return { ok: true, skipped: false as const, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
     }),
 });
