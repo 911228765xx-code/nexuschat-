@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp, feedback } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -509,6 +509,51 @@ export const userRouter = router({
       const db = await getDb();
       if (!db) return { ok: false };
       await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq(users.id, ctx.user.id));
+      return { ok: true };
+    }),
+
+  // ─── 意见反馈（help.tsx 反馈表单的真实落库）─────────────────────────────────────
+  submitFeedback: protectedProcedure
+    .input(z.object({
+      content: z.string().min(1).max(1000),
+      contact: z.string().max(120).optional(),
+      appVersion: z.string().max(24).optional(),
+      platform: z.string().max(16).optional(),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const content = sanitizeInput(input.content, 1000).trim();
+      if (!content) throw new TRPCError({ code: "BAD_REQUEST", message: "反馈内容不能为空" });
+      await db.insert(feedback).values({
+        userId: ctx.user.id,
+        content,
+        contact: input.contact ? sanitizeInput(input.contact, 120) : null,
+        appVersion: input.appVersion ? sanitizeInput(input.appVersion, 24) : null,
+        platform: input.platform ? sanitizeInput(input.platform, 16) : null,
+      });
+      return { ok: true };
+    }),
+
+  adminListFeedback: adminProcedure
+    .input(z.object({ status: z.enum(["new", "read", "resolved"]).optional(), limit: z.number().min(1).max(200).default(100) }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = input?.status ? [eq(feedback.status, input.status)] : [];
+      return db.select().from(feedback)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(feedback.createdAt))
+        .limit(input?.limit ?? 100);
+    }),
+
+  adminSetFeedbackStatus: adminProcedure
+    .input(z.object({ id: z.number(), status: z.enum(["new", "read", "resolved"]) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(feedback).set({ status: input.status }).where(eq(feedback.id, input.id));
       return { ok: true };
     }),
 
