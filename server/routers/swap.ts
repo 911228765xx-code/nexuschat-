@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, aiAmmPool, aiSwapTrades, usdtDeposits, usdtWithdrawals } from "../../drizzle/schema";
+import { users, aiAmmPool, aiSwapTrades, usdtDeposits, usdtWithdrawals, icoPurchases } from "../../drizzle/schema";
 import { eq, and, gte, desc, asc, sql, inArray } from "drizzle-orm";
 import { rateLimitWrite } from "../rateLimit";
 import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
@@ -360,9 +360,16 @@ export const swapRouter = router({
         if (divPool <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "无可分配分红" });
         // 基础税内部:种子0.20/核心0.24/创世0.30/技术0.26(=1.0/1.2/1.5/1.3 of 5%)
         const tierRatio: Record<number, number> = { 1: 0.20, 2: 0.24, 3: 0.30 };
-        const all = await tx.select({ id: users.id, tier: users.icoTier, w: users.nnBalance }).from(users).where(inArray(users.icoTier, [1, 2, 3]));
+        const all = await tx.select({ id: users.id, tier: users.icoTier }).from(users).where(inArray(users.icoTier, [1, 2, 3]));
+        const ids = all.map((m) => m.id);
+        // 权重 = ICO 认购金额(SUM icoPurchases.usdtAmount)。认购时确定,swap 二级市场买卖不计入(上线后购买不算)。
+        const subs = ids.length
+          ? await tx.select({ uid: icoPurchases.userId, usdt: sql<number>`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` })
+              .from(icoPurchases).where(inArray(icoPurchases.userId, ids)).groupBy(icoPurchases.userId)
+          : [];
+        const subMap = new Map(subs.map((s) => [s.uid, Number(s.usdt)]));
         const byTier: Record<number, { id: number; w: number }[]> = { 1: [], 2: [], 3: [] };
-        for (const m of all) { if (m.tier && byTier[m.tier]) byTier[m.tier].push({ id: m.id, w: Number(m.w) }); }
+        for (const m of all) { if (m.tier && byTier[m.tier]) byTier[m.tier].push({ id: m.id, w: subMap.get(m.id) ?? 0 }); }
         let distributed = 0;
         const summary: { tier: number; members: number; amount: number }[] = [];
         for (const tier of [1, 2, 3]) {
