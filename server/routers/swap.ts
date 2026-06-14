@@ -2,9 +2,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, aiAmmPool, aiSwapTrades } from "../../drizzle/schema";
-import { eq, and, gte, desc, asc, sql } from "drizzle-orm";
+import { users, aiAmmPool, aiSwapTrades, usdtDeposits, usdtWithdrawals } from "../../drizzle/schema";
+import { eq, and, gte, desc, asc, sql, inArray } from "drizzle-orm";
 import { rateLimitWrite } from "../rateLimit";
+import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
+import { sanitizeInput } from "../utils/sanitize";
 import {
   poolFromRow, spotPrice, floorPrice, currentThetaBps, currentSellTaxBps, effectivePeak, quoteBuy, quoteSell,
 } from "../swap/floorAmm";
@@ -73,7 +75,8 @@ export const swapRouter = router({
         aiReserve: ps.aiReserve, usdtReserve: ps.usdtReserve,
         // FloorAMM 透明展示
         floor, floorPct: price > 0 ? floor / price : 0,
-        reserveR: ps.reserveR, crisisFund: ps.crisisFund,
+        reserveR: ps.reserveR, crisisFund: ps.crisisFund, divPool: ps.divPool,
+        dividendClaimsEnabled: pool.dividendClaimsEnabled,
         thetaBps: Math.round(currentThetaBps(ps)), sellTaxBps: currentSellTaxBps(ps, now),
         baseTaxBps: ps.baseTaxBps, maxTaxBps: ps.maxTaxBps,
         candles, trades,
@@ -233,5 +236,152 @@ export const swapRouter = router({
       if (!db) throw new Error("DB unavailable");
       await db.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${input.amount}` }).where(eq(users.id, input.userId));
       return { ok: true };
+    }),
+
+  // ─── USDT 出入金(充值=转账+回填哈希待确认;提现=申请即冻结余额待打款)─────────────────
+  depositInfo: publicProcedure.query(() => ({ payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN })),
+
+  requestDeposit: protectedProcedure
+    .input(z.object({ amount: z.number().positive().max(1_000_000), txHash: z.string().min(6).max(120) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.insert(usdtDeposits).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), txHash: sanitizeInput(input.txHash, 120) });
+      return { ok: true };
+    }),
+
+  requestWithdraw: protectedProcedure
+    .input(z.object({ amount: z.number().positive().max(1_000_000), address: z.string().min(6).max(80) }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return db.transaction(async (tx) => {
+        const r = await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} - ${input.amount.toFixed(8)}` })
+          .where(and(eq(users.id, ctx.user.id), gte(users.usdtBalance, input.amount.toFixed(8))));
+        if (affected(r) < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "USDT 余额不足" });
+        await tx.insert(usdtWithdrawals).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), address: sanitizeInput(input.address, 80) });
+        return { ok: true };
+      });
+    }),
+
+  myTransfers: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { deposits: [], withdrawals: [] };
+    const [deposits, withdrawals] = await Promise.all([
+      db.select().from(usdtDeposits).where(eq(usdtDeposits.userId, ctx.user.id)).orderBy(desc(usdtDeposits.createdAt)).limit(30),
+      db.select().from(usdtWithdrawals).where(eq(usdtWithdrawals.userId, ctx.user.id)).orderBy(desc(usdtWithdrawals.createdAt)).limit(30),
+    ]);
+    return { deposits, withdrawals };
+  }),
+
+  adminListDeposits: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "confirmed", "rejected"]).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = input?.status ? [eq(usdtDeposits.status, input.status)] : [];
+      return db.select().from(usdtDeposits).where(conds.length ? and(...conds) : undefined).orderBy(desc(usdtDeposits.createdAt)).limit(100);
+    }),
+  adminConfirmDeposit: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return db.transaction(async (tx) => {
+        const [d] = await tx.select().from(usdtDeposits).where(eq(usdtDeposits.id, input.id)).for("update").limit(1);
+        if (!d || d.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "状态不可改" });
+        await tx.update(usdtDeposits).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(usdtDeposits.id, input.id));
+        await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${d.amount}` }).where(eq(users.id, d.userId));
+        return { ok: true };
+      });
+    }),
+  adminRejectDeposit: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(usdtDeposits).set({ status: "rejected", confirmedAt: new Date() }).where(and(eq(usdtDeposits.id, input.id), eq(usdtDeposits.status, "pending")));
+      return { ok: true };
+    }),
+
+  adminListWithdrawals: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "done", "rejected"]).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = input?.status ? [eq(usdtWithdrawals.status, input.status)] : [];
+      return db.select().from(usdtWithdrawals).where(conds.length ? and(...conds) : undefined).orderBy(desc(usdtWithdrawals.createdAt)).limit(100);
+    }),
+  adminCompleteWithdrawal: adminProcedure
+    .input(z.object({ id: z.number(), txHash: z.string().min(6).max(120) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(usdtWithdrawals).set({ status: "done", txHash: sanitizeInput(input.txHash, 120), processedAt: new Date() })
+        .where(and(eq(usdtWithdrawals.id, input.id), eq(usdtWithdrawals.status, "pending")));
+      return { ok: true };
+    }),
+  adminRejectWithdrawal: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return db.transaction(async (tx) => {
+        const [w] = await tx.select().from(usdtWithdrawals).where(eq(usdtWithdrawals.id, input.id)).for("update").limit(1);
+        if (!w || w.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "状态不可改" });
+        await tx.update(usdtWithdrawals).set({ status: "rejected", processedAt: new Date() }).where(eq(usdtWithdrawals.id, input.id));
+        await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${w.amount}` }).where(eq(users.id, w.userId)); // 退回冻结余额
+        return { ok: true };
+      });
+    }),
+
+  // ─── 分红分配(🔴 合规闸门:USDT 持币分红=Howey,默认关,律师结论后 admin 开)──────────
+  adminSetDividendClaims: adminProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await getPool(db);
+      await db.update(aiAmmPool).set({ dividendClaimsEnabled: input.enabled }).where(eq(aiAmmPool.id, 1));
+      return { ok: true };
+    }),
+  adminDistributeDividends: adminProcedure
+    .input(z.object({ teamUserId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      return db.transaction(async (tx) => {
+        const [row] = await tx.select().from(aiAmmPool).where(eq(aiAmmPool.id, 1)).for("update").limit(1);
+        if (!row) throw new TRPCError({ code: "BAD_REQUEST", message: "池不存在" });
+        if (!row.dividendClaimsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "分红未开闸(需合规结论)" });
+        const divPool = Number(row.divPool);
+        if (divPool <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "无可分配分红" });
+        // 基础税内部:种子0.20/核心0.24/创世0.30/技术0.26(=1.0/1.2/1.5/1.3 of 5%)
+        const tierRatio: Record<number, number> = { 1: 0.20, 2: 0.24, 3: 0.30 };
+        const all = await tx.select({ id: users.id, tier: users.icoTier, w: users.nnBalance }).from(users).where(inArray(users.icoTier, [1, 2, 3]));
+        const byTier: Record<number, { id: number; w: number }[]> = { 1: [], 2: [], 3: [] };
+        for (const m of all) { if (m.tier && byTier[m.tier]) byTier[m.tier].push({ id: m.id, w: Number(m.w) }); }
+        let distributed = 0;
+        const summary: { tier: number; members: number; amount: number }[] = [];
+        for (const tier of [1, 2, 3]) {
+          const members = byTier[tier];
+          const tierAmount = divPool * tierRatio[tier];
+          const totalW = members.reduce((s, m) => s + m.w, 0);
+          if (totalW <= 0 || members.length === 0) { summary.push({ tier, members: members.length, amount: 0 }); continue; }
+          for (const m of members) {
+            const share = tierAmount * (m.w / totalW);
+            if (share > 0) await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq(users.id, m.id));
+          }
+          distributed += tierAmount;
+          summary.push({ tier, members: members.length, amount: tierAmount });
+        }
+        const tech = divPool * 0.26; // 技术服务费 → 团队
+        await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq(users.id, input.teamUserId));
+        distributed += tech;
+        await tx.update(aiAmmPool).set({ divPool: sql`${aiAmmPool.divPool} - ${distributed.toFixed(8)}` }).where(eq(aiAmmPool.id, 1));
+        return { ok: true, distributed, tech, summary };
+      });
     }),
 });

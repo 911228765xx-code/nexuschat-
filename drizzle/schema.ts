@@ -1341,11 +1341,37 @@ export const aiAmmPool = mysqlTable("ai_amm_pool", {
   peakDecayPerDayBps: int("peakDecayPerDayBps").default(400).notNull(),
   peakPrice: decimal("peakPrice", { precision: 30, scale: 10 }).default("0").notNull(),
   peakUpdatedAt: timestamp("peakUpdatedAt"),
+  dividendClaimsEnabled: boolean("dividendClaimsEnabled").default(false).notNull(), // 🔴 合规闸门:USDT持币分红=Howey,律师结论后才开
   seeded: boolean("seeded").default(false).notNull(),
   totalVolUsdt: decimal("totalVolUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type AiAmmPool = typeof aiAmmPool.$inferSelect;
+
+// 内部 USDT 充值(转账到官方地址 → 回填 txHash → admin 确认入账)
+export const usdtDeposits = mysqlTable("usdt_deposits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: decimal("amount", { precision: 30, scale: 8 }).notNull(),
+  txHash: varchar("txHash", { length: 120 }).notNull(),
+  status: mysqlEnum("status", ["pending", "confirmed", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  confirmedAt: timestamp("confirmedAt"),
+}, (t) => [index("idx_usdtdep_user").on(t.userId), index("idx_usdtdep_status").on(t.status)]);
+export type UsdtDeposit = typeof usdtDeposits.$inferSelect;
+
+// 内部 USDT 提现(申请即冻结/扣余额 → admin 打款填 txHash;驳回则退回)
+export const usdtWithdrawals = mysqlTable("usdt_withdrawals", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: decimal("amount", { precision: 30, scale: 8 }).notNull(),
+  address: varchar("address", { length: 80 }).notNull(),
+  status: mysqlEnum("status", ["pending", "done", "rejected"]).default("pending").notNull(),
+  txHash: varchar("txHash", { length: 120 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  processedAt: timestamp("processedAt"),
+}, (t) => [index("idx_usdtwd_user").on(t.userId), index("idx_usdtwd_status").on(t.status)]);
+export type UsdtWithdrawal = typeof usdtWithdrawals.$inferSelect;
 
 // 每笔成交(供 K线 OHLC 聚合 + 行情 + 最近成交)
 export const aiSwapTrades = mysqlTable("ai_swap_trades", {
