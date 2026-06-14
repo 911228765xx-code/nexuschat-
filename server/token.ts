@@ -11,7 +11,7 @@
  *   - 用户付费（买机器人等）→ nnBalance 减少 → 流通下降、金库回升（AI 回流金库）
  *   - 分发（空投/任务/兑换）→ nnBalance 增加 → 流通上升、金库下降（不可超过金库）
  */
-import { eq, sql, desc, and, inArray } from "drizzle-orm";
+import { eq, sql, desc, and, gte, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { users, nnTransactions, nnPool, nnVesting } from "../drizzle/schema";
 
@@ -228,16 +228,18 @@ export async function getPoolInfo(db: Db) {
  * 返回是否成功（储备不足或金库不足则失败）。
  */
 export async function confirmPoolPurchase(db: Db, userId: number, usdtAmount: number, nnAmount: number, orderId: number): Promise<boolean> {
-  const p = await getPool(db);
-  if (Number(p.reserveNN) < nnAmount) return false;
-  const ok = await grantNN(db, userId, nnAmount, { type: "pool_buy", refType: "pool_order", refId: orderId, memo: `${usdtAmount}USDT` });
-  if (!ok) return false;
-  await db.update(nnPool).set({
+  await getPool(db); // 确保单行存在
+  // 原子条件扣减储备:仅当 reserveNN>=nnAmount 才扣 → 并发确认不会把储备扣成负(防超卖穿仓)
+  const res: any = await db.update(nnPool).set({
     reserveNN: sql`${nnPool.reserveNN} - ${nnAmount}`,
     soldNN: sql`${nnPool.soldNN} + ${nnAmount}`,
     raisedUsdt: sql`${nnPool.raisedUsdt} + ${usdtAmount}`,
-  }).where(eq(nnPool.id, 1));
-  return true;
+  }).where(and(eq(nnPool.id, 1), gte(nnPool.reserveNN, nnAmount)));
+  const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
+  if (affected < 1) return false; // 储备不足
+  // 已原子占用储备,再发币;grantNN 失败(金库不足)返回 false,由调用方在事务里 throw 回滚扣减
+  const ok = await grantNN(db, userId, nnAmount, { type: "pool_buy", refType: "pool_order", refId: orderId, memo: `${usdtAmount}USDT` });
+  return ok;
 }
 
 // ─── AI 线性归属（vesting）──────────────────────────────────────────────────────

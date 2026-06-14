@@ -10,6 +10,7 @@ import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { tgeConfig, tgeClaims, users } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { grantNN, getCirculating, NN_TOTAL_SUPPLY } from "../token";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -60,8 +61,12 @@ export const tgeRouter = router({
         .where(and(eq(tgeClaims.id, claim.id), eq(tgeClaims.claimed, false)));
       const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
       if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "已领取过" });
+      // 守恒发放:走 grantNN(含"流通+发放≤总量"金库护栏),失败 throw → 整个事务回滚、不置 claimed
+      const ok = await grantNN(tx as any, ctx.user.id, nn, { type: "tge_claim", refType: "user", refId: ctx.user.id });
+      if (!ok) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "金库余额不足，无法发放" });
+      // 销毁对应 AC(grantNN 只管发 AI,这里单独扣 AC)
       await tx.update(users)
-        .set({ nnBalance: sql`nnBalance + ${nn}`, npPoints: sql`GREATEST(0, npPoints - ${claim.npSnapshot})` })
+        .set({ npPoints: sql`GREATEST(0, npPoints - ${claim.npSnapshot})` })
         .where(eq(users.id, ctx.user.id));
     });
     return { ok: true, nn };
@@ -78,6 +83,9 @@ export const tgeRouter = router({
       if (cfg?.enabled) throw new TRPCError({ code: "BAD_REQUEST", message: "TGE 进行中，请先关闭再重拍快照" });
       const [claimed] = await db.select({ id: tgeClaims.id }).from(tgeClaims).where(eq(tgeClaims.claimed, true)).limit(1);
       if (claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已有用户领取过 AI，禁止重拍快照（会导致重复发放）" });
+      // 守恒护栏:TGE 奖励池不得超过金库当前可用余额,否则全员领取会突破代币总量恒定
+      const maxPool = NN_TOTAL_SUPPLY - (await getCirculating(db));
+      if (input.nnPool > maxPool) throw new TRPCError({ code: "BAD_REQUEST", message: `奖励池(${input.nnPool})超过金库可用余额,最多 ${maxPool}` });
       const [{ total = 0 } = { total: 0 }] = await db
         .select({ total: sql<number>`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
       // 重建快照
