@@ -1302,3 +1302,16 @@ export const icoRewardRuns = mysqlTable("ico_reward_runs", {
   emitted: decimal("emitted", { precision: 30, scale: 8 }).default("0").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => [uniqueIndex("uq_icorun_date").on(t.runDate)]);
+
+// 用户意见反馈
+export const feedback = mysqlTable("feedback", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  content: varchar("content", { length: 1000 }).notNull(),
+  contact: varchar("contact", { length: 120 }),                  // 可选联系方式
+  appVersion: varchar("appVersion", { length: 24 }),
+  platform: varchar("platform", { length: 16 }),
+  status: mysqlEnum("status", ["new", "read", "resolved"]).default("new").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [index("idx_feedback_user").on(t.userId), index("idx_feedback_status").on(t.status)]);
+export type Feedback = typeof feedback.$inferSelect;
