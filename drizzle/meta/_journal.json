@@ -400,6 +400,20 @@
       "when": 1781445171485,
       "tag": "0058_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1781451548852,
+      "tag": "0059_ai_swap",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1781451548852,
+      "tag": "0060_swap_onramp_dividends",
+      "breakpoints": true
     }
   ]
 }

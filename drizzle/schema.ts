@@ -28,6 +28,8 @@ export const users = mysqlTable("users", {
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
   // NN 治理代币余额（与 NP 积分区分；NN 用于付费服务/治理，总量 2100 万枚）
   nnBalance: bigint("nnBalance", { mode: "number" }).default(0).notNull(),
+  // 内部 USDT 余额（二级市场 Swap 即时结算；充值=转账到官方地址后入账，提现=申请）
+  usdtBalance: decimal("usdtBalance", { precision: 30, scale: 8 }).default("0").notNull(),
   // Pro 会员等级与到期（free/plus/pro；proUntil 过期则降级为 free）
   proTier: varchar("proTier", { length: 20 }).default("free").notNull(),
   proUntil: timestamp("proUntil"),
@@ -1315,3 +1317,70 @@ export const feedback = mysqlTable("feedback", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => [index("idx_feedback_user").on(t.userId), index("idx_feedback_status").on(t.status)]);
 export type Feedback = typeof feedback.$inferSelect;
+
+// ─── AI/USDT 二级市场 Swap(链下 x*y=k AMM)──────────────────────────────────────
+// 单例池(id=1):储备金支撑的恒定乘积做市;认购完成后由 admin 用募集 USDT + AI 播种开市
+export const aiAmmPool = mysqlTable("ai_amm_pool", {
+  id: int("id").primaryKey(),
+  // x*y=k 市价做市池
+  aiReserve: decimal("aiReserve", { precision: 30, scale: 8 }).default("0").notNull(),
+  usdtReserve: decimal("usdtReserve", { precision: 30, scale: 8 }).default("0").notNull(),
+  // 储备地板(FloorAMM 逻辑):买入 θ 分流进 reserveR;地板价 F=reserveR/circulatingAi;跌到地板走 redeem 兜底
+  reserveR: decimal("reserveR", { precision: 30, scale: 8 }).default("0").notNull(),
+  circulatingAi: decimal("circulatingAi", { precision: 30, scale: 8 }).default("0").notNull(), // 市场净流通 AI(地板分母)
+  crisisFund: decimal("crisisFund", { precision: 30, scale: 8 }).default("0").notNull(),         // 超额卖税注资;深跌补 reserveR
+  divPool: decimal("divPool", { precision: 30, scale: 8 }).default("0").notNull(),               // 基础卖税累积(各档分红+技术费,分配走后续)
+  // θ 买入分流(基点,早高晚低,按累计买入 USDT 递减)
+  thetaStartBps: int("thetaStartBps").default(5200).notNull(),
+  thetaEndBps: int("thetaEndBps").default(2700).notNull(),
+  thetaHalfBuyUsdt: decimal("thetaHalfBuyUsdt", { precision: 30, scale: 8 }).default("100000").notNull(),
+  cumBoughtUsdt: decimal("cumBoughtUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
+  // 动态卖税(基点):base→分红池,(税-base)→危机金;按距峰回撤 base→max
+  baseTaxBps: int("baseTaxBps").default(500).notNull(),
+  maxTaxBps: int("maxTaxBps").default(5000).notNull(),
+  peakDecayPerDayBps: int("peakDecayPerDayBps").default(400).notNull(),
+  peakPrice: decimal("peakPrice", { precision: 30, scale: 10 }).default("0").notNull(),
+  peakUpdatedAt: timestamp("peakUpdatedAt"),
+  dividendClaimsEnabled: boolean("dividendClaimsEnabled").default(false).notNull(), // 🔴 合规闸门:USDT持币分红=Howey,律师结论后才开
+  seeded: boolean("seeded").default(false).notNull(),
+  totalVolUsdt: decimal("totalVolUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AiAmmPool = typeof aiAmmPool.$inferSelect;
+
+// 内部 USDT 充值(转账到官方地址 → 回填 txHash → admin 确认入账)
+export const usdtDeposits = mysqlTable("usdt_deposits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: decimal("amount", { precision: 30, scale: 8 }).notNull(),
+  txHash: varchar("txHash", { length: 120 }).notNull(),
+  status: mysqlEnum("status", ["pending", "confirmed", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  confirmedAt: timestamp("confirmedAt"),
+}, (t) => [index("idx_usdtdep_user").on(t.userId), index("idx_usdtdep_status").on(t.status)]);
+export type UsdtDeposit = typeof usdtDeposits.$inferSelect;
+
+// 内部 USDT 提现(申请即冻结/扣余额 → admin 打款填 txHash;驳回则退回)
+export const usdtWithdrawals = mysqlTable("usdt_withdrawals", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: decimal("amount", { precision: 30, scale: 8 }).notNull(),
+  address: varchar("address", { length: 80 }).notNull(),
+  status: mysqlEnum("status", ["pending", "done", "rejected"]).default("pending").notNull(),
+  txHash: varchar("txHash", { length: 120 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  processedAt: timestamp("processedAt"),
+}, (t) => [index("idx_usdtwd_user").on(t.userId), index("idx_usdtwd_status").on(t.status)]);
+export type UsdtWithdrawal = typeof usdtWithdrawals.$inferSelect;
+
+// 每笔成交(供 K线 OHLC 聚合 + 行情 + 最近成交)
+export const aiSwapTrades = mysqlTable("ai_swap_trades", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  side: mysqlEnum("side", ["buy", "sell"]).notNull(),
+  aiAmount: decimal("aiAmount", { precision: 30, scale: 8 }).notNull(),
+  usdtAmount: decimal("usdtAmount", { precision: 30, scale: 8 }).notNull(),
+  price: decimal("price", { precision: 30, scale: 10 }).notNull(),    // USDT per AI
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [index("idx_aiswap_time").on(t.createdAt)]);
+export type AiSwapTrade = typeof aiSwapTrades.$inferSelect;
