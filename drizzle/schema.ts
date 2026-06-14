@@ -28,6 +28,8 @@ export const users = mysqlTable("users", {
   npPoints: bigint("npPoints", { mode: "number" }).default(0).notNull(),
   // NN 治理代币余额（与 NP 积分区分；NN 用于付费服务/治理，总量 2100 万枚）
   nnBalance: bigint("nnBalance", { mode: "number" }).default(0).notNull(),
+  // 内部 USDT 余额（二级市场 Swap 即时结算；充值=转账到官方地址后入账，提现=申请）
+  usdtBalance: decimal("usdtBalance", { precision: 30, scale: 8 }).default("0").notNull(),
   // Pro 会员等级与到期（free/plus/pro；proUntil 过期则降级为 free）
   proTier: varchar("proTier", { length: 20 }).default("free").notNull(),
   proUntil: timestamp("proUntil"),
@@ -1315,3 +1317,28 @@ export const feedback = mysqlTable("feedback", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => [index("idx_feedback_user").on(t.userId), index("idx_feedback_status").on(t.status)]);
 export type Feedback = typeof feedback.$inferSelect;
+
+// ─── AI/USDT 二级市场 Swap(链下 x*y=k AMM)──────────────────────────────────────
+// 单例池(id=1):储备金支撑的恒定乘积做市;认购完成后由 admin 用募集 USDT + AI 播种开市
+export const aiAmmPool = mysqlTable("ai_amm_pool", {
+  id: int("id").primaryKey(),
+  aiReserve: decimal("aiReserve", { precision: 30, scale: 8 }).default("0").notNull(),
+  usdtReserve: decimal("usdtReserve", { precision: 30, scale: 8 }).default("0").notNull(),
+  feeBps: int("feeBps").default(30).notNull(),                 // 0.30% swap 费(留池,增厚 k)
+  seeded: boolean("seeded").default(false).notNull(),
+  totalVolUsdt: decimal("totalVolUsdt", { precision: 40, scale: 8 }).default("0").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AiAmmPool = typeof aiAmmPool.$inferSelect;
+
+// 每笔成交(供 K线 OHLC 聚合 + 行情 + 最近成交)
+export const aiSwapTrades = mysqlTable("ai_swap_trades", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  side: mysqlEnum("side", ["buy", "sell"]).notNull(),
+  aiAmount: decimal("aiAmount", { precision: 30, scale: 8 }).notNull(),
+  usdtAmount: decimal("usdtAmount", { precision: 30, scale: 8 }).notNull(),
+  price: decimal("price", { precision: 30, scale: 10 }).notNull(),    // USDT per AI
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [index("idx_aiswap_time").on(t.createdAt)]);
+export type AiSwapTrade = typeof aiSwapTrades.$inferSelect;
