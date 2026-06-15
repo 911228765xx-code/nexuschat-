@@ -8,6 +8,38 @@ import { and, eq, or, desc } from "drizzle-orm";
 import { createNotification } from "./notificationsRouter";
 
 export const contactsRouter = router({
+  // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
+  //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
+  getProfileById: protectedProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [u] = await db
+        .select({
+          // 仅公开字段:绝不外泄 npPoints(他人积分余额)/email/openId 等
+          id: users.id, name: users.name, username: users.username,
+          avatar: users.avatar, bio: users.bio, isBot: users.isBot, createdAt: users.createdAt,
+        })
+        .from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+      const isSelf = input.userId === ctx.user.id;
+      let isFriend = false, requestPending = false;
+      if (!isSelf) {
+        const [rel] = await db
+          .select({ status: friendRequests.status })
+          .from(friendRequests)
+          .where(or(
+            and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.userId)),
+            and(eq(friendRequests.senderId, input.userId), eq(friendRequests.receiverId, ctx.user.id)),
+          ))
+          .limit(1);
+        if (rel?.status === "accepted") isFriend = true;
+        else if (rel?.status === "pending") requestPending = true;
+      }
+      return { ...u, isSelf, isFriend, requestPending };
+    }),
+
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure
     .input(z.object({ receiverId: z.number().int().positive() }))
