@@ -414,6 +414,13 @@
       "when": 1781451548852,
       "tag": "0060_swap_onramp_dividends",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1781494576693,
+      "tag": "0061_usdt_deposit_txhash_unique",
+      "breakpoints": true
     }
   ]
 }

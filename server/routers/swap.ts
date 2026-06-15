@@ -26,6 +26,11 @@ function affected(r: unknown): number {
   const a = r as any;
   return a?.[0]?.affectedRows ?? a?.affectedRows ?? a?.rowsAffected ?? 0;
 }
+/** 可赎回供应量 = 全体用户 AI 持仓 SUM(nnBalance)。地板价 F = reserveR / 此值(对应链上 R/totalSupply)。 */
+async function sumNn(d: any): Promise<number> {
+  const [r] = await d.select({ s: sql<number>`COALESCE(SUM(${users.nnBalance}),0)` }).from(users);
+  return Number(r?.s ?? 0);
+}
 
 export const swapRouter = router({
   // ─── 行情:现价 + 地板价 + 储备/危机金 + 当前税/θ + 24h + OHLC K线 + 最近成交 ───────
@@ -69,7 +74,8 @@ export const swapRouter = router({
       }
       const candles = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]).map(([t, c]) => ({ t, o: c.o, h: c.h, l: c.l, c: c.c }));
 
-      const floor = floorPrice(ps);
+      const supply = await sumNn(db);
+      const floor = floorPrice(ps, supply);
       return {
         seeded: pool.seeded, price, change24, high24, low24, vol24Usdt: vol24,
         aiReserve: ps.aiReserve, usdtReserve: ps.usdtReserve,
@@ -135,23 +141,24 @@ export const swapRouter = router({
         } else {
           const aiIn = Math.floor(input.amountIn);
           if (aiIn <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "数量过小" });
-          const q = quoteSell(ps, aiIn, now);
+          const supply = await sumNn(tx); // 地板分母 = 全体用户持仓
+          const q = quoteSell(ps, aiIn, now, supply);
           if (q.usdtOut <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "数量过小" });
           if (q.usdtOut < input.minOut) throw new TRPCError({ code: "BAD_REQUEST", message: "滑点超限,请重试" });
           if (q.viaFloor) {
             if (q.usdtOut >= ps.reserveR) throw new TRPCError({ code: "BAD_REQUEST", message: "储备暂不足,请减少数量" });
             await tx.update(aiAmmPool).set({
               reserveR: sql`${aiAmmPool.reserveR} - ${q.usdtOut}`,
-              circulatingAi: sql`${aiAmmPool.circulatingAi} - ${aiIn}`,
+              circulatingAi: sql`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
               totalVolUsdt: sql`${aiAmmPool.totalVolUsdt} + ${q.usdtOut}`,
             }).where(eq(aiAmmPool.id, 1));
-            marketPrice = floorPrice(ps);
+            marketPrice = floorPrice(ps, supply);
           } else {
             if (q.grossUsdt >= ps.usdtReserve) throw new TRPCError({ code: "BAD_REQUEST", message: "超过池可付额度" });
             await tx.update(aiAmmPool).set({
               aiReserve: sql`${aiAmmPool.aiReserve} + ${aiIn}`,
               usdtReserve: sql`${aiAmmPool.usdtReserve} - ${q.grossUsdt}`,
-              circulatingAi: sql`${aiAmmPool.circulatingAi} - ${aiIn}`,
+              circulatingAi: sql`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
               divPool: sql`${aiAmmPool.divPool} + ${q.baseTax.toFixed(8)}`,
               crisisFund: sql`${aiAmmPool.crisisFund} + ${q.excessTax.toFixed(8)}`,
               totalVolUsdt: sql`${aiAmmPool.totalVolUsdt} + ${q.grossUsdt}`,
@@ -216,7 +223,8 @@ export const swapRouter = router({
         const [row] = await tx.select().from(aiAmmPool).where(eq(aiAmmPool.id, 1)).for("update").limit(1);
         if (!row || !row.seeded) throw new TRPCError({ code: "BAD_REQUEST", message: "未开市" });
         const ps = poolFromRow(row);
-        const spot = spotPrice(ps), peak = effectivePeak(ps, now), F = floorPrice(ps);
+        const supply = await sumNn(tx);
+        const spot = spotPrice(ps), peak = effectivePeak(ps, now), F = floorPrice(ps, supply);
         const trigger = (peak > 0 && spot <= peak * 0.30) || (F > 0 && spot <= F * 1.1);
         if (!trigger) throw new TRPCError({ code: "BAD_REQUEST", message: "未达危机触发(现价>峰值30%且>1.1地板)" });
         if (input.amount > ps.crisisFund) throw new TRPCError({ code: "BAD_REQUEST", message: "危机金不足" });
@@ -247,7 +255,15 @@ export const swapRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      await db.insert(usdtDeposits).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), txHash: sanitizeInput(input.txHash, 120) });
+      const txHash = sanitizeInput(input.txHash, 120);
+      // 同一链上 txHash 全局唯一:杜绝把一笔真转账拆成多条各自确认 = 凭空多入账(CF-05)
+      const [dup] = await db.select({ id: usdtDeposits.id }).from(usdtDeposits).where(eq(usdtDeposits.txHash, txHash)).limit(1);
+      if (dup) throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已提交过,请勿重复" });
+      try {
+        await db.insert(usdtDeposits).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), txHash });
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已提交过,请勿重复" }); // 唯一索引兜底(并发)
+      }
       return { ok: true };
     }),
 
@@ -285,16 +301,17 @@ export const swapRouter = router({
       return db.select().from(usdtDeposits).where(conds.length ? and(...conds) : undefined).orderBy(desc(usdtDeposits.createdAt)).limit(100);
     }),
   adminConfirmDeposit: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), amount: z.number().positive().max(1_000_000).optional() })) // amount: admin 按链上实际到账核定;缺省=信任用户自填
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       return db.transaction(async (tx) => {
         const [d] = await tx.select().from(usdtDeposits).where(eq(usdtDeposits.id, input.id)).for("update").limit(1);
         if (!d || d.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "状态不可改" });
-        await tx.update(usdtDeposits).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(usdtDeposits.id, input.id));
-        await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${d.amount}` }).where(eq(users.id, d.userId));
-        return { ok: true };
+        const credit = (input.amount ?? Number(d.amount)).toFixed(8); // 按核定金额入账,并回写订单
+        await tx.update(usdtDeposits).set({ status: "confirmed", confirmedAt: new Date(), amount: credit }).where(eq(usdtDeposits.id, input.id));
+        await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${credit}` }).where(eq(users.id, d.userId));
+        return { ok: true, credited: Number(credit) };
       });
     }),
   adminRejectDeposit: adminProcedure
@@ -370,25 +387,29 @@ export const swapRouter = router({
         const subMap = new Map(subs.map((s) => [s.uid, Number(s.usdt)]));
         const byTier: Record<number, { id: number; w: number }[]> = { 1: [], 2: [], 3: [] };
         for (const m of all) { if (m.tier && byTier[m.tier]) byTier[m.tier].push({ id: m.id, w: subMap.get(m.id) ?? 0 }); }
-        let distributed = 0;
+        let paidToPartners = 0; // 实际写入合伙人余额的总额(逐笔 toFixed 求和)
+        let unclaimed = 0;      // 空档(无成员/无认购权重)的应分额 → 转危机金,避免滞留 divPool 被反复抽 tech
         const summary: { tier: number; members: number; amount: number }[] = [];
         for (const tier of [1, 2, 3]) {
           const members = byTier[tier];
           const tierAmount = divPool * tierRatio[tier];
           const totalW = members.reduce((s, m) => s + m.w, 0);
-          if (totalW <= 0 || members.length === 0) { summary.push({ tier, members: members.length, amount: 0 }); continue; }
+          if (totalW <= 0 || members.length === 0) { unclaimed += tierAmount; summary.push({ tier, members: members.length, amount: 0 }); continue; }
+          let paid = 0;
           for (const m of members) {
-            const share = tierAmount * (m.w / totalW);
-            if (share > 0) await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq(users.id, m.id));
+            const share = Number((tierAmount * (m.w / totalW)).toFixed(8));
+            if (share > 0) { await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq(users.id, m.id)); paid += share; }
           }
-          distributed += tierAmount;
-          summary.push({ tier, members: members.length, amount: tierAmount });
+          paidToPartners += paid;
+          summary.push({ tier, members: members.length, amount: paid });
         }
-        const tech = divPool * 0.26; // 技术服务费 → 团队
+        // 技术服务费 = 本轮 divPool 的 26% → 团队(只对本轮新增 realized 税计一次;空档残额已转出,不会被反复抽)
+        const tech = Number((divPool * 0.26).toFixed(8));
         await tx.update(users).set({ usdtBalance: sql`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq(users.id, input.teamUserId));
-        distributed += tech;
-        await tx.update(aiAmmPool).set({ divPool: sql`${aiAmmPool.divPool} - ${distributed.toFixed(8)}` }).where(eq(aiAmmPool.id, 1));
-        return { ok: true, distributed, tech, summary };
+        if (unclaimed > 1e-9) await tx.update(aiAmmPool).set({ crisisFund: sql`${aiAmmPool.crisisFund} + ${unclaimed.toFixed(8)}` }).where(eq(aiAmmPool.id, 1));
+        const drained = paidToPartners + tech + unclaimed; // 从 divPool 真正扣除的总额
+        await tx.update(aiAmmPool).set({ divPool: sql`GREATEST(${aiAmmPool.divPool} - ${drained.toFixed(8)}, 0)` }).where(eq(aiAmmPool.id, 1));
+        return { ok: true, distributed: drained, paidToPartners, tech, unclaimedToCrisis: unclaimed, summary };
       });
     }),
 });
