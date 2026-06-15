@@ -8,7 +8,7 @@ const supplyOf = users => Object.values(users).reduce((s, u) => s + u.ai, 0); //
 
 // ── 引擎(复刻 floorAmm.ts)──
 const spot = p => p.aiReserve > 0 ? p.usdtReserve / p.aiReserve : 0;
-const floor = (p, users) => { const s = supplyOf(users); return s > 0 ? p.reserveR / s : 0; }; // R / 可赎回供应量
+const floor = (p, users) => { const s = supplyOf(users); if (s <= 0) return 0; const f = p.reserveR / s; const sp = spot(p); return sp > 0 ? Math.min(f, sp) : f; }; // R/可赎回供应量,封顶现价
 function thetaBps(p) { const span = p.thetaHalfBuyUsdt * 2; if (span <= 0 || p.cumBoughtUsdt >= span) return p.thetaEndBps; return p.thetaStartBps - (p.thetaStartBps - p.thetaEndBps) * (p.cumBoughtUsdt / span); }
 function effPeak(p, now) { const s = spot(p); if (!p.peakUpdatedAt || p.peakPrice <= 0) return Math.max(s, p.peakPrice); const days = (now - p.peakUpdatedAt) / 86400000; const dec = Math.max(0, p.peakPrice - p.peakPrice * (p.peakDecayPerDayBps / 1e4) * days); return Math.max(s, dec); }
 function sellTaxBps(p, now) { const s = spot(p), pk = effPeak(p, now); if (pk <= 0 || s >= pk) return p.baseTaxBps; const dd = (pk - s) / pk; return Math.min(p.maxTaxBps, Math.round(p.baseTaxBps + (p.maxTaxBps - p.baseTaxBps) * dd)); }

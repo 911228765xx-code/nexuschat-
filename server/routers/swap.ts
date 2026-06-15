@@ -225,7 +225,8 @@ export const swapRouter = router({
         const ps = poolFromRow(row);
         const supply = await sumNn(tx);
         const spot = spotPrice(ps), peak = effectivePeak(ps, now), F = floorPrice(ps, supply);
-        const trigger = (peak > 0 && spot <= peak * 0.30) || (F > 0 && spot <= F * 1.1);
+        // 地板接近触发仅在 F<现价(地板在市价下方)才有意义;储备过厚使 F 封顶=现价时,该条恒真会误判,需排除
+        const trigger = (peak > 0 && spot <= peak * 0.30) || (F > 0 && F < spot && spot <= F * 1.1);
         if (!trigger) throw new TRPCError({ code: "BAD_REQUEST", message: "未达危机触发(现价>峰值30%且>1.1地板)" });
         if (input.amount > ps.crisisFund) throw new TRPCError({ code: "BAD_REQUEST", message: "危机金不足" });
         if (input.amount > ps.crisisFund / 3 + 1e-6) throw new TRPCError({ code: "BAD_REQUEST", message: "单次≤危机金 1/3" });
