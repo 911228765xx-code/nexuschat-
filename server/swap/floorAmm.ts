@@ -23,7 +23,12 @@ export function spotPrice(p: PoolState): number {
  * 且用户卖出 ICO/空投得来的币时会变负。调用方必须传入 SUM(nnBalance)。
  */
 export function floorPrice(p: PoolState, supply: number): number {
-  return supply > 0 ? p.reserveR / supply : 0;
+  if (supply <= 0) return 0;
+  const f = p.reserveR / supply;
+  const s = spotPrice(p);
+  // 地板不超过现价:储备远厚于流通供应(早期供应小)时按现价封顶——既杜绝展示成"地板6526%现价"的荒谬数,
+  // 也保证赎回永不高于市价(配合 quoteSell 的 F<spot 守卫,F=spot 时赎回不触发,走 AMM)。
+  return s > 0 ? Math.min(f, s) : f;
 }
 /** 当前 θ(基点):随累计买入从 start 线性降到 end(达 2×half 触底) */
 export function currentThetaBps(p: PoolState): number {
