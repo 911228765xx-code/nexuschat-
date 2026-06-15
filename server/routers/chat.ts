@@ -399,6 +399,58 @@ export const chatRouter = router({
       return { messageId };
     }),
 
+  // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
+  //   名片内容由服务端按 contactUserId 现取(权威,防客户端伪造他人名片)。
+  shareContact: protectedProcedure
+    .input(z.object({
+      contactUserId: z.number().int().positive(),
+      targetGroupId: z.number().int().positive().optional(),
+      targetReceiverId: z.number().int().positive().optional(),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      if (!input.targetGroupId === !input.targetReceiverId)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "请选择且仅选择一个发送目标" });
+      const [c] = await db
+        .select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar, bio: users.bio })
+        .from(users).where(eq(users.id, input.contactUserId)).limit(1);
+      if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+      const card = JSON.stringify({
+        // 防御性净化:name/bio 是自由文本(注册路径未必 stripHtml),入库前清一遍
+        contactId: c.id, name: sanitizeInput(c.name ?? "", 50), username: c.username ?? "",
+        avatar: c.avatar ?? "", bio: sanitizeInput(c.bio ?? "", 200),
+      });
+      const senderName = (ctx.user as any).name ?? (ctx.user as any).username ?? `User #${ctx.user.id}`;
+      if (input.targetGroupId) {
+        await assertGroupMember(db, input.targetGroupId, ctx.user.id);
+        const [r] = await db.insert(messages).values({
+          groupId: input.targetGroupId, senderId: ctx.user.id, content: card, messageType: "contact",
+        });
+        const messageId = (r as any).insertId;
+        try {
+          getSocketIO()?.to(`group:${input.targetGroupId}`).emit("new_message", {
+            id: messageId, groupId: input.targetGroupId, senderId: ctx.user.id,
+            senderName, senderAvatar: (ctx.user as any).avatar ?? null,
+            content: card, messageType: "contact", mediaUrl: null, durationSeconds: null,
+            replyToId: null, createdAt: new Date().toISOString(),
+          });
+        } catch { /* 广播失败不影响落库 */ }
+        return { messageId };
+      }
+      const [r] = await db.insert(messages).values({
+        senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "contact",
+      });
+      const messageId = (r as any).insertId;
+      emitToUser(input.targetReceiverId!, "dm_message", {
+        messageId, senderId: ctx.user.id, senderName,
+        content: card, messageType: "contact", mediaUrl: null, durationSeconds: null,
+        createdAt: new Date().toISOString(),
+      });
+      return { messageId };
+    }),
+
   // ─── DM: Get message history between two users ────────────────────────────
   getDMHistory: protectedProcedure
     .input(z.object({

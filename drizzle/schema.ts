@@ -194,7 +194,7 @@ export const messages = mysqlTable(
     senderId: int("senderId").notNull(),
     receiverId: int("receiverId"),
     content: text("content").notNull(),
-    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer", "voice", "video"]).default("text").notNull(),
+    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer", "voice", "video", "contact"]).default("text").notNull(),
     mediaUrl: text("mediaUrl"),
     // 语音/视频时长（秒），仅 voice/video 类型使用
     durationSeconds: int("durationSeconds"),
@@ -1357,7 +1357,8 @@ export const usdtDeposits = mysqlTable("usdt_deposits", {
   status: mysqlEnum("status", ["pending", "confirmed", "rejected"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   confirmedAt: timestamp("confirmedAt"),
-}, (t) => [index("idx_usdtdep_user").on(t.userId), index("idx_usdtdep_status").on(t.status)]);
+}, (t) => [index("idx_usdtdep_user").on(t.userId), index("idx_usdtdep_status").on(t.status),
+  uniqueIndex("uq_usdtdep_tx").on(t.txHash)]); // 同一链上 txHash 全局唯一,杜绝同笔转账拆多条重复入账
 export type UsdtDeposit = typeof usdtDeposits.$inferSelect;
 
 // 内部 USDT 提现(申请即冻结/扣余额 → admin 打款填 txHash;驳回则退回)
