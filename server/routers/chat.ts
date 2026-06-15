@@ -451,6 +451,53 @@ export const chatRouter = router({
       return { messageId };
     }),
 
+  // ─── 分享语音房:发一条可点进房的 voiceroom 消息到群或私信 ────────────────────
+  shareVoiceRoom: protectedProcedure
+    .input(z.object({
+      roomId: z.string().min(1).max(80),
+      title: z.string().max(60).default(""),
+      targetGroupId: z.number().int().positive().optional(),
+      targetReceiverId: z.number().int().positive().optional(),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      if (!input.targetGroupId === !input.targetReceiverId)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "请选择且仅选择一个发送目标" });
+      const card = JSON.stringify({
+        roomId: sanitizeInput(input.roomId, 80),
+        title: sanitizeInput(input.title || "语音房", 60),
+      });
+      const senderName = (ctx.user as any).name ?? (ctx.user as any).username ?? `User #${ctx.user.id}`;
+      if (input.targetGroupId) {
+        await assertGroupMember(db, input.targetGroupId, ctx.user.id);
+        const [r] = await db.insert(messages).values({
+          groupId: input.targetGroupId, senderId: ctx.user.id, content: card, messageType: "voiceroom",
+        });
+        const messageId = (r as any).insertId;
+        try {
+          getSocketIO()?.to(`group:${input.targetGroupId}`).emit("new_message", {
+            id: messageId, groupId: input.targetGroupId, senderId: ctx.user.id,
+            senderName, senderAvatar: (ctx.user as any).avatar ?? null,
+            content: card, messageType: "voiceroom", mediaUrl: null, durationSeconds: null,
+            replyToId: null, createdAt: new Date().toISOString(),
+          });
+        } catch { /* 广播失败不影响落库 */ }
+        return { messageId };
+      }
+      const [r] = await db.insert(messages).values({
+        senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "voiceroom",
+      });
+      const messageId = (r as any).insertId;
+      emitToUser(input.targetReceiverId!, "dm_message", {
+        messageId, senderId: ctx.user.id, senderName,
+        content: card, messageType: "voiceroom", mediaUrl: null, durationSeconds: null,
+        createdAt: new Date().toISOString(),
+      });
+      return { messageId };
+    }),
+
   // ─── DM: Get message history between two users ────────────────────────────
   getDMHistory: protectedProcedure
     .input(z.object({

@@ -194,7 +194,7 @@ export const messages = mysqlTable(
     senderId: int("senderId").notNull(),
     receiverId: int("receiverId"),
     content: text("content").notNull(),
-    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer", "voice", "video", "contact"]).default("text").notNull(),
+    messageType: mysqlEnum("messageType", ["text", "image", "file", "system", "redpacket", "transfer", "voice", "video", "contact", "voiceroom"]).default("text").notNull(),
     mediaUrl: text("mediaUrl"),
     // 语音/视频时长（秒），仅 voice/video 类型使用
     durationSeconds: int("durationSeconds"),
