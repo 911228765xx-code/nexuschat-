@@ -17,6 +17,7 @@ import { getMembership, getBenefits, buyMembership } from "../membership";
 import { awardReferrerMilestone } from "../referralRewards";
 import { awardTaskEvent } from "./user";
 import { enforceContent, reviewMessageAsync } from "../moderation";
+import { assertCanDM } from "../utils/relations";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -404,6 +405,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      await assertCanDM(db, ctx.user.id, input.receiverId); // 仅好友可私信 + 拉黑校验
       // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
       if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
       // 引用鉴权:被引用消息必须属于本私信会话(双方之间),防止引用别处消息带出无权内容
@@ -490,6 +492,7 @@ export const chatRouter = router({
         } catch { /* 广播失败不影响落库 */ }
         return { messageId };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "contact",
       });
@@ -537,6 +540,7 @@ export const chatRouter = router({
         } catch { /* 广播失败不影响落库 */ }
         return { messageId };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "voiceroom",
       });
@@ -1087,6 +1091,7 @@ export const chatRouter = router({
         });
         return { messageId: (r as any).insertId as number };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         receiverId: input.targetReceiverId!, senderId: ctx.user.id, groupId: null, content: src.content,
         messageType: src.messageType, mediaUrl: src.mediaUrl ?? undefined,
@@ -1207,11 +1212,18 @@ export const chatRouter = router({
       const existing = await db.select({ id: groupMembers.id }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, l.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
-      // 群容量上限校验
-      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups)
+      // 群容量上限 + 进群审批校验
+      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups)
         .where(eq(chatGroups.id, l.groupId)).limit(1);
       if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
         throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
+      }
+      // 开了进群审批的群:邀请链接也必须走审批(不凭链接直接进),提交申请待群主通过
+      if (cap?.joinApproval) {
+        const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
+          .where(and(eq(groupJoinRequests.groupId, l.groupId), eq(groupJoinRequests.userId, ctx.user.id), eq(groupJoinRequests.status, "pending"))).limit(1);
+        if (!pending[0]) await db.insert(groupJoinRequests).values({ groupId: l.groupId, userId: ctx.user.id });
+        return { groupId: l.groupId, alreadyMember: false, pending: true };
       }
       // 原子占用一个名额:maxUses 限制下并发只有一方能 +1 成功,杜绝超额使用
       if (l.maxUses > 0) {

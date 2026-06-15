@@ -3,9 +3,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { friendRequests, users, contactMetadata } from "../../drizzle/schema";
+import { friendRequests, users, contactMetadata, userBlocklist } from "../../drizzle/schema";
 import { and, eq, or, desc } from "drizzle-orm";
 import { createNotification } from "./notificationsRouter";
+import { hasBlocked, isBlockedEither } from "../utils/relations";
 
 export const contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
@@ -24,7 +25,7 @@ export const contactsRouter = router({
         .from(users).where(eq(users.id, input.userId)).limit(1);
       if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
       const isSelf = input.userId === ctx.user.id;
-      let isFriend = false, requestPending = false;
+      let isFriend = false, requestPending = false, blockedByMe = false;
       if (!isSelf) {
         const [rel] = await db
           .select({ status: friendRequests.status })
@@ -36,9 +37,54 @@ export const contactsRouter = router({
           .limit(1);
         if (rel?.status === "accepted") isFriend = true;
         else if (rel?.status === "pending") requestPending = true;
+        blockedByMe = await hasBlocked(db, ctx.user.id, input.userId);
       }
-      return { ...u, isSelf, isFriend, requestPending };
+      return { ...u, isSelf, isFriend, requestPending, blockedByMe };
     }),
+
+  // ─── 拉黑 / 解除拉黑 / 黑名单列表 ─────────────────────────────────────────────
+  blockUser: protectedProcedure
+    .input(z.object({ targetId: z.number().int().positive() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      if (input.targetId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能拉黑自己" });
+      try {
+        await db.insert(userBlocklist).values({ blockerId: ctx.user.id, blockedId: input.targetId });
+      } catch { /* 已拉黑(唯一索引),幂等 */ }
+      // 拉黑即解除好友关系(双向),并清理双方备注/收藏元数据
+      await db.delete(friendRequests).where(or(
+        and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.targetId)),
+        and(eq(friendRequests.senderId, input.targetId), eq(friendRequests.receiverId, ctx.user.id)),
+      ));
+      await db.delete(contactMetadata).where(or(
+        and(eq(contactMetadata.userId, ctx.user.id), eq(contactMetadata.contactId, input.targetId)),
+        and(eq(contactMetadata.userId, input.targetId), eq(contactMetadata.contactId, ctx.user.id)),
+      ));
+      return { ok: true };
+    }),
+  unblockUser: protectedProcedure
+    .input(z.object({ targetId: z.number().int().positive() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.delete(userBlocklist)
+        .where(and(eq(userBlocklist.blockerId, ctx.user.id), eq(userBlocklist.blockedId, input.targetId)));
+      return { ok: true };
+    }),
+  listBlocked: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select({
+      id: users.id, name: users.name, username: users.username, avatar: users.avatar,
+      blockedAt: userBlocklist.createdAt,
+    }).from(userBlocklist)
+      .innerJoin(users, eq(users.id, userBlocklist.blockedId))
+      .where(eq(userBlocklist.blockerId, ctx.user.id))
+      .orderBy(desc(userBlocklist.createdAt));
+  }),
 
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure
@@ -48,6 +94,7 @@ export const contactsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       if (input.receiverId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能添加自己为好友" });
+      if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError({ code: "FORBIDDEN", message: "无法添加好友(存在拉黑关系)" });
 
       // Check if request already exists
       const existing = await db
