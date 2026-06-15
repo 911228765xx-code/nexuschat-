@@ -17,6 +17,7 @@ import { getMembership, getBenefits, buyMembership } from "../membership";
 import { awardReferrerMilestone } from "../referralRewards";
 import { awardTaskEvent } from "./user";
 import { enforceContent, reviewMessageAsync } from "../moderation";
+import { assertCanDM } from "../utils/relations";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -28,6 +29,37 @@ async function assertGroupMember(db: Db, groupId: number, userId: number): Promi
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
     .limit(1);
   if (!m) throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+}
+
+/**
+ * 过滤出 userId 有权查看「已读回执」的 messageId 子集，防止靠全局自增 id 枚举他人消息的已读状态/读者身份（IDOR）。
+ * - 群消息：调用者必须是该消息所属群的成员。
+ * - 私信（groupId 为 null）：调用者必须是发送方或接收方。
+ * 不存在的 id 与无权查看的 id 都会被丢弃（不报错），调用方据此过滤而非返回全部请求的 id。
+ */
+async function filterReadableMessageIds(db: Db, messageIds: number[], userId: number): Promise<number[]> {
+  if (messageIds.length === 0) return [];
+  const msgs = await db
+    .select({ id: messages.id, groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId })
+    .from(messages)
+    .where(inArray(messages.id, messageIds));
+  if (msgs.length === 0) return [];
+  // 这些消息涉及的去重群 id
+  const groupIds = Array.from(new Set(msgs.map((m) => m.groupId).filter((g): g is number => g != null)));
+  // 其中调用者实际属于的群
+  let memberGroupIds = new Set<number>();
+  if (groupIds.length > 0) {
+    const memberships = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.userId, userId), inArray(groupMembers.groupId, groupIds)));
+    memberGroupIds = new Set(memberships.map((r) => r.groupId));
+  }
+  return msgs
+    .filter((m) =>
+      m.groupId != null ? memberGroupIds.has(m.groupId) : m.senderId === userId || m.receiverId === userId
+    )
+    .map((m) => m.id);
 }
 
 /** 用户清除历史后的游标：只显示 id > clearedBeforeId 的消息（0=未清除）。 */
@@ -299,6 +331,16 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertGroupMember(db, input.groupId, ctx.user.id);
+      // 禁言校验:被禁言(永久=expiresAt 为空,或未过期)不能在群里发言(原来禁言形同虚设)
+      const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes)
+        .where(and(eq(groupMutes.groupId, input.groupId), eq(groupMutes.userId, ctx.user.id),
+          or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, new Date())))).limit(1);
+      if (muted) throw new TRPCError({ code: "FORBIDDEN", message: "你已被禁言,暂时无法发言" });
+      // 引用鉴权:被引用消息必须属于本群,防止引用别群/私信的消息把无权内容带出来
+      if (input.replyToId) {
+        const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq(messages.id, input.replyToId)).limit(1);
+        if (!rep || rep.groupId !== input.groupId) throw new TRPCError({ code: "BAD_REQUEST", message: "引用的消息无效" });
+      }
       // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
       if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
@@ -363,8 +405,19 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      await assertCanDM(db, ctx.user.id, input.receiverId); // 仅好友可私信 + 拉黑校验
       // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
       if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
+      // 引用鉴权:被引用消息必须属于本私信会话(双方之间),防止引用别处消息带出无权内容
+      if (input.replyToId) {
+        const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId })
+          .from(messages).where(eq(messages.id, input.replyToId)).limit(1);
+        const inThisDM = rep && !rep.groupId && (
+          (rep.senderId === ctx.user.id && rep.receiverId === input.receiverId) ||
+          (rep.senderId === input.receiverId && rep.receiverId === ctx.user.id)
+        );
+        if (!inThisDM) throw new TRPCError({ code: "BAD_REQUEST", message: "引用的消息无效" });
+      }
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         senderId: ctx.user.id,
@@ -439,6 +492,7 @@ export const chatRouter = router({
         } catch { /* 广播失败不影响落库 */ }
         return { messageId };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "contact",
       });
@@ -486,6 +540,7 @@ export const chatRouter = router({
         } catch { /* 广播失败不影响落库 */ }
         return { messageId };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         senderId: ctx.user.id, receiverId: input.targetReceiverId, groupId: null, content: card, messageType: "voiceroom",
       });
@@ -1016,9 +1071,17 @@ export const chatRouter = router({
       const [src] = await db.select({
         content: messages.content, messageType: messages.messageType, mediaUrl: messages.mediaUrl,
         durationSeconds: messages.durationSeconds, recalledAt: messages.recalledAt, isDeleted: messages.isDeleted,
+        groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId,
       }).from(messages).where(eq(messages.id, input.messageId)).limit(1);
       if (!src || src.isDeleted || src.recalledAt) throw new TRPCError({ code: "NOT_FOUND", message: "原消息不可用" });
       if (src.messageType === "redpacket") throw new TRPCError({ code: "BAD_REQUEST", message: "红包不能转发" });
+      if (src.messageType === "contact" || src.messageType === "voiceroom") throw new TRPCError({ code: "BAD_REQUEST", message: "该消息不支持转发" });
+      // 鉴权:必须有权读原消息才能转发(群成员 / 私信参与方),否则可越权把别人的群/私信内容转出去
+      if (src.groupId) {
+        await assertGroupMember(db, src.groupId, ctx.user.id);
+      } else if (src.senderId !== ctx.user.id && src.receiverId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无权转发该消息" });
+      }
       if (input.targetGroupId) {
         await assertGroupMember(db, input.targetGroupId, ctx.user.id);
         const [r] = await db.insert(messages).values({
@@ -1028,6 +1091,7 @@ export const chatRouter = router({
         });
         return { messageId: (r as any).insertId as number };
       }
+      await assertCanDM(db, ctx.user.id, input.targetReceiverId!);
       const [r] = await db.insert(messages).values({
         receiverId: input.targetReceiverId!, senderId: ctx.user.id, groupId: null, content: src.content,
         messageType: src.messageType, mediaUrl: src.mediaUrl ?? undefined,
@@ -1148,15 +1212,30 @@ export const chatRouter = router({
       const existing = await db.select({ id: groupMembers.id }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, l.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
-      // 群容量上限校验
-      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups)
+      // 群容量上限 + 进群审批校验
+      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups)
         .where(eq(chatGroups.id, l.groupId)).limit(1);
       if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
         throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
       }
+      // 开了进群审批的群:邀请链接也必须走审批(不凭链接直接进),提交申请待群主通过
+      if (cap?.joinApproval) {
+        const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
+          .where(and(eq(groupJoinRequests.groupId, l.groupId), eq(groupJoinRequests.userId, ctx.user.id), eq(groupJoinRequests.status, "pending"))).limit(1);
+        if (!pending[0]) await db.insert(groupJoinRequests).values({ groupId: l.groupId, userId: ctx.user.id });
+        return { groupId: l.groupId, alreadyMember: false, pending: true };
+      }
+      // 原子占用一个名额:maxUses 限制下并发只有一方能 +1 成功,杜绝超额使用
+      if (l.maxUses > 0) {
+        const upd = await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` })
+          .where(and(eq(groupInviteLinks.id, l.id), sql`${groupInviteLinks.useCount} < ${groupInviteLinks.maxUses}`));
+        const aff = (upd as any)?.[0]?.affectedRows ?? (upd as any)?.affectedRows ?? (upd as any)?.rowsAffected ?? 0;
+        if (aff < 1) throw new TRPCError({ code: "FORBIDDEN", message: "邀请链接已达使用上限" });
+      } else {
+        await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
+      }
       await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
       await db.update(chatGroups).set({ memberCount: sql`memberCount + 1` }).where(eq(chatGroups.id, l.groupId));
-      await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
       const newMemberName = (ctx.user as any).name || (ctx.user as any).username || "新朋友";
       // 添粉机器人：奖励邀请人 + 群内致谢；欢迎机器人：欢迎语（均不阻塞）
       void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger.warn({ err }, "growth bot failed"));
@@ -1251,14 +1330,17 @@ export const chatRouter = router({
 
   getReadCounts: protectedProcedure
     .input(z.object({ messageIds: z.array(z.number()) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       if (input.messageIds.length === 0) return {};
       const db = await getDb();
       if (!db) return {};
+      // 仅统计调用者有权查看的消息，避免靠全局 id 枚举他人群/私信的已读人数
+      const allowedIds = await filterReadableMessageIds(db, input.messageIds, ctx.user.id);
+      if (allowedIds.length === 0) return {};
       const rows = await db
         .select({ messageId: messageReadReceipts.messageId, count: sql<number>`COUNT(*)` })
         .from(messageReadReceipts)
-        .where(sql`${messageReadReceipts.messageId} IN (${sql.join(input.messageIds.map(id => sql`${id}`), sql`, `)})`)
+        .where(inArray(messageReadReceipts.messageId, allowedIds))
         .groupBy(messageReadReceipts.messageId);
       return Object.fromEntries(rows.map(r => [r.messageId, r.count]));
     }),
@@ -1266,9 +1348,12 @@ export const chatRouter = router({
   // Returns up to 5 readers (with avatar) for a specific message
   getReadReceipts: protectedProcedure
     .input(z.object({ messageId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      // 无权查看（非群成员 / 非私信双方，或消息不存在）时返回空，不泄露读者身份
+      const allowedIds = await filterReadableMessageIds(db, [input.messageId], ctx.user.id);
+      if (allowedIds.length === 0) return [];
       const rows = await db
         .select({
           userId: messageReadReceipts.userId,
@@ -1680,6 +1765,14 @@ export const chatRouter = router({
       if (!db) return null;
       const [rp] = await db.select().from(redPackets).where(eq(redPackets.messageId, input.messageId)).limit(1);
       if (!rp) return null;
+      // 鉴权:群红包仅群成员可看、私信红包仅收发双方可看(防 messageId 枚举偷看谁抢了多少)
+      if (rp.groupId) {
+        const [m] = await db.select({ id: groupMembers.id }).from(groupMembers)
+          .where(and(eq(groupMembers.groupId, rp.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+        if (!m) return null;
+      } else if (rp.receiverId && rp.receiverId !== ctx.user.id && rp.senderId !== ctx.user.id) {
+        return null;
+      }
       const claims = await db.select({
         claimedBy: redPacketClaims.claimedBy,
         amount: redPacketClaims.amount,

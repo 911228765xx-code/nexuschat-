@@ -33,7 +33,10 @@ async function recordTx(db: Db, userId: number, amount: number, meta: NNTxMeta):
       refId: meta.refId ?? null,
       memo: meta.memo ?? null,
     });
-  } catch { /* 账本记录失败不影响主流程 */ }
+  } catch (e) {
+    // 账本记录失败不阻断主流程,但绝不能静默:余额已变而流水缺失会导致对账不平,必须可监控告警
+    console.error("[recordTx] 流水写入失败(余额已变,账本缺失):", { userId, amount, type: meta.type, refType: meta.refType, refId: meta.refId, err: (e as Error)?.message });
+  }
 }
 
 /** AI 总发行量：2100 万枚（恒定） */
@@ -284,9 +287,19 @@ export async function claimVesting(db: Db, userId: number, vestingId: number): P
   const vested = vestedAmount(v);
   const claimable = Math.max(0, vested - v.claimedNN);
   if (claimable <= 0) return { ok: false, claimed: 0 };
+  // 先用「读到的 claimedNN」作乐观锁条件原子推进,杜绝并发双领(两个请求都读到旧值→都发币→双倍铸币)。
+  // 只有第一个请求的 WHERE claimedNN=旧值 命中,第二个 affected=0 直接失败。
+  const upd = await db.update(nnVesting)
+    .set({ claimedNN: sql`${nnVesting.claimedNN} + ${claimable}` })
+    .where(and(eq(nnVesting.id, v.id), eq(nnVesting.claimedNN, v.claimedNN)));
+  const affected = (upd as any)?.[0]?.affectedRows ?? (upd as any)?.affectedRows ?? (upd as any)?.rowsAffected ?? 0;
+  if (affected < 1) return { ok: false, claimed: 0 }; // 并发竞争失败,本次不发
+  // 推进成功后再发币;发币失败则回滚 claimedNN,避免「扣了额度没发币」
   const ok = await grantNN(db, userId, claimable, { type: "vesting_claim", refType: "vesting", refId: v.id, memo: v.source });
-  if (!ok) return { ok: false, claimed: 0 };
-  await db.update(nnVesting).set({ claimedNN: sql`${nnVesting.claimedNN} + ${claimable}` }).where(eq(nnVesting.id, v.id));
+  if (!ok) {
+    await db.update(nnVesting).set({ claimedNN: sql`GREATEST(${nnVesting.claimedNN} - ${claimable}, 0)` }).where(eq(nnVesting.id, v.id));
+    return { ok: false, claimed: 0 };
+  }
   return { ok: true, claimed: claimable };
 }
 

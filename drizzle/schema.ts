@@ -473,6 +473,22 @@ export const contactMetadata = mysqlTable(
 
 export type ContactMetadata = typeof contactMetadata.$inferSelect;
 
+// ─── 拉黑(防骚扰):blockerId 拉黑 blockedId ──────────────────────────────────────
+export const userBlocklist = mysqlTable(
+  "user_blocklist",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    blockerId: int("blockerId").notNull(), // 发起拉黑的人
+    blockedId: int("blockedId").notNull(), // 被拉黑的人
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_block_pair").on(t.blockerId, t.blockedId),
+    index("idx_block_blocked").on(t.blockedId),
+  ]
+);
+export type UserBlock = typeof userBlocklist.$inferSelect;
+
 // ─── User Watchlist ───────────────────────────────────────────────────────────
 export const userWatchlist = mysqlTable(
   "user_watchlist",
