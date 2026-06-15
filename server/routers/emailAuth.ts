@@ -14,6 +14,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { ENV } from "../_core/env";
+import { sanitizeInput } from "../utils/sanitize";
 import { notifyOwner } from "../_core/notification";
 import { sendPasswordResetEmail } from "../_core/email";
 import { isDisposableEmail } from "../utils/disposableEmailBlocklist";
@@ -176,11 +177,12 @@ export const emailAuthRouter = router({
 
       // Determine role: first user with owner openId gets admin
       const role = openId === ENV.ownerOpenId ? "admin" : "user";
+      const safeName = sanitizeInput(input.name, 50); // 注册昵称净化(与 updateProfile 一致,杜绝脏数据从源头流入)
 
       const [insertResult] = await db.insert(users).values({
         openId,
         email: normalizedEmail,
-        name: input.name,
+        name: safeName,
         loginMethod: "email",
         passwordHash,
         role,
@@ -191,12 +193,12 @@ export const emailAuthRouter = router({
       // Assign a referral invite code so this user can be referred by code immediately.
       const newUserId = (insertResult as { insertId?: number }).insertId;
       if (newUserId) {
-        await ensureInviteCode(db, newUserId, input.name).catch(() => {});
+        await ensureInviteCode(db, newUserId, safeName).catch(() => {});
       }
 
       // Create session and set cookie
       const sessionToken = await sdk.signSession(
-        { openId, appId: ENV.appId, name: input.name },
+        { openId, appId: ENV.appId, name: safeName },
         { expiresInMs: ONE_YEAR_MS }
       );
       const cookieOptions = getSessionCookieOptions(ctx.req);
