@@ -238,6 +238,63 @@ export const swapRouter = router({
       });
     }),
 
+  // ─── 底池注资:开市后**可重复**向底池加钱(解决 adminSeed 一次性、首次播种后不可再加)─────────────
+  //   储备R=抬地板后备;危机金=深跌补仓弹药;AMM流动性=按现价配比加 USDT+AI,加深盘口、价格不变。
+  adminTopUp: adminProcedure
+    .input(z.object({
+      addReserveR: z.number().min(0).max(100_000_000).default(0),
+      addCrisis: z.number().min(0).max(100_000_000).default(0),
+      addLiquidityUsdt: z.number().min(0).max(100_000_000).default(0), // 注资 AMM,自动按现价配比补 AI 保持价格不变
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      if (input.addReserveR + input.addCrisis + input.addLiquidityUsdt <= 0)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "未填任何注资项" });
+      return db.transaction(async (tx) => {
+        const [row] = await tx.select().from(aiAmmPool).where(eq(aiAmmPool.id, 1)).for("update").limit(1);
+        if (!row || !row.seeded) throw new TRPCError({ code: "BAD_REQUEST", message: "未开市,请先 adminSeed 播种" });
+        const ps = poolFromRow(row);
+        const set: Record<string, unknown> = {};
+        if (input.addReserveR > 0) set.reserveR = sql`${aiAmmPool.reserveR} + ${input.addReserveR.toFixed(8)}`;
+        if (input.addCrisis > 0) set.crisisFund = sql`${aiAmmPool.crisisFund} + ${input.addCrisis.toFixed(8)}`;
+        let addAi = 0;
+        if (input.addLiquidityUsdt > 0) {
+          const price = spotPrice(ps);
+          if (price <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "池价异常,无法配比注资" });
+          addAi = input.addLiquidityUsdt / price; // dUsdt/dAi = 现价 → 价格不变,仅加深流动性(k 增大)
+          set.usdtReserve = sql`${aiAmmPool.usdtReserve} + ${input.addLiquidityUsdt.toFixed(8)}`;
+          set.aiReserve = sql`${aiAmmPool.aiReserve} + ${addAi.toFixed(8)}`;
+        }
+        await tx.update(aiAmmPool).set(set).where(eq(aiAmmPool.id, 1));
+        return { ok: true, addReserveR: input.addReserveR, addCrisis: input.addCrisis, addLiquidityUsdt: input.addLiquidityUsdt, addAi };
+      });
+    }),
+
+  // ─── 底池提取:把储备R/危机金的一部分撤回国库(开市后可逆,夹断不穿负;不动 AMM 流动性,避免影响盘口)──
+  adminWithdrawPool: adminProcedure
+    .input(z.object({
+      fromReserveR: z.number().min(0).max(100_000_000).default(0),
+      fromCrisis: z.number().min(0).max(100_000_000).default(0),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      if (input.fromReserveR + input.fromCrisis <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "未填任何提取项" });
+      return db.transaction(async (tx) => {
+        const [row] = await tx.select().from(aiAmmPool).where(eq(aiAmmPool.id, 1)).for("update").limit(1);
+        if (!row || !row.seeded) throw new TRPCError({ code: "BAD_REQUEST", message: "未开市" });
+        const ps = poolFromRow(row);
+        if (input.fromReserveR > ps.reserveR + 1e-9) throw new TRPCError({ code: "BAD_REQUEST", message: "储备R不足" });
+        if (input.fromCrisis > ps.crisisFund + 1e-9) throw new TRPCError({ code: "BAD_REQUEST", message: "危机金不足" });
+        const set: Record<string, unknown> = {};
+        if (input.fromReserveR > 0) set.reserveR = sql`GREATEST(${aiAmmPool.reserveR} - ${input.fromReserveR.toFixed(8)}, 0)`;
+        if (input.fromCrisis > 0) set.crisisFund = sql`GREATEST(${aiAmmPool.crisisFund} - ${input.fromCrisis.toFixed(8)}, 0)`;
+        await tx.update(aiAmmPool).set(set).where(eq(aiAmmPool.id, 1));
+        return { ok: true, fromReserveR: input.fromReserveR, fromCrisis: input.fromCrisis };
+      });
+    }),
+
   adminCreditUsdt: adminProcedure
     .input(z.object({ userId: z.number(), amount: z.number().positive() }))
     .mutation(async ({ input }) => {

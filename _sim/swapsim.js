@@ -57,6 +57,15 @@ function sell(p, u, amountIn, now, users) {
   return { ok: true, out: q.usdtOut, viaFloor: q.viaFloor, burned, taxBps: q.taxBps };
 }
 
+// 底池注资(复刻 adminTopUp):储备R/危机金=外部USDT注入;AMM流动性=按现价配比加USDT+AI(价不变)
+function topUp(p, { addReserveR = 0, addCrisis = 0, addLiquidityUsdt = 0 }, lg) {
+  const priceBefore = spot(p);
+  if (addReserveR > 0) { p.reserveR += addReserveR; lg.extUsdt += addReserveR; }
+  if (addCrisis > 0) { p.crisisFund += addCrisis; lg.extUsdt += addCrisis; }
+  let addAi = 0;
+  if (addLiquidityUsdt > 0) { addAi = addLiquidityUsdt / priceBefore; p.usdtReserve += addLiquidityUsdt; p.aiReserve += addAi; lg.extUsdt += addLiquidityUsdt; lg.extAi += addAi; }
+  return { priceBefore, priceAfter: spot(p), addAi };
+}
 function mkPool() {
   return { aiReserve: 1_000_000, usdtReserve: 200_000, reserveR: 300_000, circulatingAi: 0, crisisFund: 200_000, divPool: 0,
     thetaStartBps: 5200, thetaEndBps: 2700, thetaHalfBuyUsdt: 100_000, cumBoughtUsdt: 0,
@@ -154,5 +163,21 @@ header('场景E:买入→立即赎回 套利攻击(应无利可图)');
   check(u.usdt <= before + EPS, `E: 买入→赎回 套利获利 ${(u.usdt - before).toFixed(2)} > 0 — 储备被套`);
 }
 
-console.log('\n' + (FAIL === 0 ? '✅ 全部不变量通过(地板<现价、无负值、守恒、无套利)' : `❌ 共 ${FAIL} 处不变量破坏`));
+header('场景F:底池注资(开市后可重复加)→ 地板随储备升、加流动性价不变、守恒');
+{
+  const p = mkPool(), lg = ledger(), users = { holders: { ai: 8_000_000, usdt: 0 } };
+  lg.extAi += 8_000_000;
+  const Fbefore = floor(p, users);
+  topUp(p, { addReserveR: 100_000, addCrisis: 50_000 }, lg);
+  const Fafter = floor(p, users);
+  check(Fafter > Fbefore - EPS, `F: 加储备后地板未升 ${Fbefore.toFixed(5)}→${Fafter.toFixed(5)}`);
+  invariants(p, users, lg, 'F:加储备');
+  const r = topUp(p, { addLiquidityUsdt: 80_000 }, lg);
+  check(Math.abs(r.priceAfter - r.priceBefore) < 1e-6, `F: 加流动性改了价 ${r.priceBefore.toFixed(6)}→${r.priceAfter.toFixed(6)}`);
+  invariants(p, users, lg, 'F:加流动性');
+  console.log(`  加储备10万+危机5万 → 地板 ${Fbefore.toFixed(4)}→${Fafter.toFixed(4)},R=${p.reserveR},危机=${p.crisisFund}`);
+  console.log(`  加流动性8万 → 配比补 ${r.addAi.toFixed(0)} AI,价 ${r.priceBefore.toFixed(4)}→${r.priceAfter.toFixed(4)}(不变✓)`);
+}
+
+console.log('\n' + (FAIL === 0 ? '✅ 全部不变量通过(地板<现价、无负值、守恒、无套利、注资价不变)' : `❌ 共 ${FAIL} 处不变量破坏`));
 process.exit(FAIL ? 1 : 0);
