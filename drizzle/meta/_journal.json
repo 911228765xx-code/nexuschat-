@@ -428,6 +428,13 @@
       "when": 1781501699922,
       "tag": "0062_message_contact_type",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1781507824949,
+      "tag": "0063_message_voiceroom_type",
+      "breakpoints": true
     }
   ]
 }

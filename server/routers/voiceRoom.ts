@@ -15,7 +15,7 @@ import { getBenefits } from "../membership";
 import { spendNN } from "../token";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
-import { setParticipantCanPublish } from "../_core/livekitService";
+import { setParticipantCanPublish, listParticipantCount } from "../_core/livekitService";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
 const VOICE_ROOM_COST = 10; // 超出会员免费额度后，单次开房消耗 AI
@@ -62,6 +62,21 @@ function roomName(roomId: number): string {
   return `voice_${roomId}`;
 }
 
+const MAX_SPEAKERS = 12; // 麦位上限(含房主)
+
+// 在线人数对账:DB 的 listenerCount 只在 enter/leave 显式调用时增减,断线/闪退不会 -1 会漂移。
+// 列表展示时改用 LiveKit ListParticipants 的真实人数,15s 内存缓存,避免每次 listRooms 都打 twirp。
+const _lastGiftAt = new Map<number, number>(); // 送礼限频:userId → 上次送礼时刻,配合前端防抖挡脚本刷礼
+const _onlineCache = new Map<number, { n: number; at: number }>();
+async function realOnline(roomIdNum: number): Promise<number | null> {
+  const c = _onlineCache.get(roomIdNum);
+  const now = Date.now();
+  if (c && now - c.at < 15000) return c.n;
+  const n = await listParticipantCount(`voice_${roomIdNum}`);
+  if (n != null) _onlineCache.set(roomIdNum, { n, at: now });
+  return n;
+}
+
 /** 为某用户签发进房 token */
 function signToken(userId: number, displayName: string, roomId: number, canPublish: boolean): string {
   return genLiveKitToken(ENV.livekitApiKey, ENV.livekitApiSecret, {
@@ -76,8 +91,9 @@ function signToken(userId: number, displayName: string, roomId: number, canPubli
 async function allocRoomId(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<number> {
   for (let i = 0; i < 8; i++) {
     const candidate = 100000 + Math.floor(Math.random() * 900000000);
+    // 唯一索引 uq_vroom_roomid 不分状态:已结束房间的 roomId 仍占位,这里也必须不分状态查,否则 INSERT 撞唯一键报 500
     const [exist] = await db.select({ id: voiceRooms.id }).from(voiceRooms)
-      .where(and(eq(voiceRooms.roomId, candidate), eq(voiceRooms.status, "live"))).limit(1);
+      .where(eq(voiceRooms.roomId, candidate)).limit(1);
     if (!exist) return candidate;
   }
   throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "房间号分配失败，请重试" });
@@ -107,19 +123,27 @@ export const voiceRoomRouter = router({
           : and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true), eq(voiceRooms.category, cat)))
         .orderBy(desc(voiceRooms.listenerCount), desc(voiceRooms.createdAt))
         .limit(50);
-      return rows.map((r) => ({
-        id: String(r.room.id),
-        roomId: r.room.roomId,
-        title: r.room.title,
-        topic: r.room.topic ?? "",
-        category: r.room.category,
-        hostName: r.hostName ?? r.hostUsername ?? "主播",
-        hostAvatar: r.hostAvatar ?? null,
-        listenerCount: r.room.listenerCount,
-        speakerCount: r.room.speakerCount,
-        isLive: true,
-        isMembersOnly: r.room.isMembersOnly,
+      const lkOn = liveKitConfigured();
+      const mapped = await Promise.all(rows.map(async (r) => {
+        const real = lkOn ? await realOnline(r.room.roomId) : null; // LiveKit 真实在线
+        // 真实在线(含主播+麦上+听众);取不到则用 DB 缓存值(听众+主播)兜底
+        const online = real != null ? real : r.room.listenerCount + 1;
+        return {
+          id: String(r.room.id),
+          roomId: r.room.roomId,
+          title: r.room.title,
+          topic: r.room.topic ?? "",
+          category: r.room.category,
+          hostName: r.hostName ?? r.hostUsername ?? "主播",
+          hostAvatar: r.hostAvatar ?? null,
+          listenerCount: online,
+          speakerCount: r.room.speakerCount,
+          isLive: true,
+          isMembersOnly: r.room.isMembersOnly,
+        };
       }));
+      mapped.sort((a, b) => b.listenerCount - a.listenerCount); // 按真实在线重排(SQL 按 DB 计数排的已不准)
+      return mapped;
     }),
 
   /** 创建语音房（自己为房主）。返回进房所需 sig。 */
@@ -206,6 +230,7 @@ export const voiceRoomRouter = router({
         roomName: roomName(room.roomId),
         token,
         role: isHost ? ("host" as const) : ("audience" as const),
+        hostId: room.hostUserId, // 客户端用它校验数据通道里 granted/revoked/roomEnded 是否真来自房主
         title: room.title,
         topic: room.topic ?? "",
       };
@@ -251,6 +276,11 @@ export const voiceRoomRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      // 送礼限频:同一用户最快 600ms 一次,挡住绕过前端的脚本连刷
+      const lastGift = _lastGiftAt.get(ctx.user.id) ?? 0;
+      const nowGift = Date.now();
+      if (nowGift - lastGift < 600) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "送礼太快了,慢一点~" });
+      _lastGiftAt.set(ctx.user.id, nowGift);
       const gift = VOICE_GIFTS.find((g) => g.key === input.giftKey);
       if (!gift) throw new TRPCError({ code: "BAD_REQUEST", message: "礼物不存在" });
       const rid = Number.parseInt(input.id, 10);
@@ -274,8 +304,11 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以邀请上麦" });
+      if (input.targetUserId === room.hostUserId) return { ok: true }; // 房主本就在麦上,幂等
+      if (room.speakerCount >= MAX_SPEAKERS) throw new TRPCError({ code: "BAD_REQUEST", message: `麦位已满（上限 ${MAX_SPEAKERS}）` });
       await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), true);
-      await db.update(voiceRooms).set({ speakerCount: sql`${voiceRooms.speakerCount} + 1` }).where(eq(voiceRooms.id, rid));
+      // 麦位计数封顶,杜绝重复抱同一人把 speakerCount 顶到天上
+      await db.update(voiceRooms).set({ speakerCount: sql`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq(voiceRooms.id, rid));
       return { ok: true };
     }),
 
@@ -290,6 +323,7 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以操作" });
+      if (input.targetUserId === room.hostUserId) throw new TRPCError({ code: "BAD_REQUEST", message: "不能请房主下麦" });
       await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), false);
       await db.update(voiceRooms).set({ speakerCount: sql`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq(voiceRooms.id, rid));
       return { ok: true };

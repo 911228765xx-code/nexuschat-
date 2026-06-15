@@ -53,3 +53,18 @@ export async function setParticipantCanPublish(room: string, identity: string, c
 export async function removeParticipant(room: string, identity: string): Promise<void> {
   await callRoomService("RemoveParticipant", room, { room, identity });
 }
+
+/** 房间真实在线人数（LiveKit ListParticipants）。用于列表对账 DB 计数漂移；失败/超时返回 null。 */
+export async function listParticipantCount(room: string): Promise<number | null> {
+  try {
+    // 2.5s 超时:LiveKit 慢/无响应时不拖住整个房间列表(回退 DB 计数)
+    const res: any = await Promise.race([
+      callRoomService("ListParticipants", room, { room }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2500)),
+    ]);
+    const ps = res?.participants;
+    return Array.isArray(ps) ? ps.length : 0;
+  } catch {
+    return null;
+  }
+}
