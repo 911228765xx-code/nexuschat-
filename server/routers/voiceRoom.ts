@@ -15,7 +15,7 @@ import { getBenefits } from "../membership";
 import { spendNN } from "../token";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
-import { setParticipantCanPublish } from "../_core/livekitService";
+import { setParticipantCanPublish, listParticipantCount } from "../_core/livekitService";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
 const VOICE_ROOM_COST = 10; // 超出会员免费额度后，单次开房消耗 AI
@@ -64,6 +64,19 @@ function roomName(roomId: number): string {
 
 const MAX_SPEAKERS = 12; // 麦位上限(含房主)
 
+// 在线人数对账:DB 的 listenerCount 只在 enter/leave 显式调用时增减,断线/闪退不会 -1 会漂移。
+// 列表展示时改用 LiveKit ListParticipants 的真实人数,15s 内存缓存,避免每次 listRooms 都打 twirp。
+const _lastGiftAt = new Map<number, number>(); // 送礼限频:userId → 上次送礼时刻,配合前端防抖挡脚本刷礼
+const _onlineCache = new Map<number, { n: number; at: number }>();
+async function realOnline(roomIdNum: number): Promise<number | null> {
+  const c = _onlineCache.get(roomIdNum);
+  const now = Date.now();
+  if (c && now - c.at < 15000) return c.n;
+  const n = await listParticipantCount(`voice_${roomIdNum}`);
+  if (n != null) _onlineCache.set(roomIdNum, { n, at: now });
+  return n;
+}
+
 /** 为某用户签发进房 token */
 function signToken(userId: number, displayName: string, roomId: number, canPublish: boolean): string {
   return genLiveKitToken(ENV.livekitApiKey, ENV.livekitApiSecret, {
@@ -110,19 +123,27 @@ export const voiceRoomRouter = router({
           : and(eq(voiceRooms.status, "live"), eq(voiceRooms.isPublic, true), eq(voiceRooms.category, cat)))
         .orderBy(desc(voiceRooms.listenerCount), desc(voiceRooms.createdAt))
         .limit(50);
-      return rows.map((r) => ({
-        id: String(r.room.id),
-        roomId: r.room.roomId,
-        title: r.room.title,
-        topic: r.room.topic ?? "",
-        category: r.room.category,
-        hostName: r.hostName ?? r.hostUsername ?? "主播",
-        hostAvatar: r.hostAvatar ?? null,
-        listenerCount: r.room.listenerCount,
-        speakerCount: r.room.speakerCount,
-        isLive: true,
-        isMembersOnly: r.room.isMembersOnly,
+      const lkOn = liveKitConfigured();
+      const mapped = await Promise.all(rows.map(async (r) => {
+        const real = lkOn ? await realOnline(r.room.roomId) : null; // LiveKit 真实在线
+        // 真实在线(含主播+麦上+听众);取不到则用 DB 缓存值(听众+主播)兜底
+        const online = real != null ? real : r.room.listenerCount + 1;
+        return {
+          id: String(r.room.id),
+          roomId: r.room.roomId,
+          title: r.room.title,
+          topic: r.room.topic ?? "",
+          category: r.room.category,
+          hostName: r.hostName ?? r.hostUsername ?? "主播",
+          hostAvatar: r.hostAvatar ?? null,
+          listenerCount: online,
+          speakerCount: r.room.speakerCount,
+          isLive: true,
+          isMembersOnly: r.room.isMembersOnly,
+        };
       }));
+      mapped.sort((a, b) => b.listenerCount - a.listenerCount); // 按真实在线重排(SQL 按 DB 计数排的已不准)
+      return mapped;
     }),
 
   /** 创建语音房（自己为房主）。返回进房所需 sig。 */
@@ -255,6 +276,11 @@ export const voiceRoomRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      // 送礼限频:同一用户最快 600ms 一次,挡住绕过前端的脚本连刷
+      const lastGift = _lastGiftAt.get(ctx.user.id) ?? 0;
+      const nowGift = Date.now();
+      if (nowGift - lastGift < 600) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "送礼太快了,慢一点~" });
+      _lastGiftAt.set(ctx.user.id, nowGift);
       const gift = VOICE_GIFTS.find((g) => g.key === input.giftKey);
       if (!gift) throw new TRPCError({ code: "BAD_REQUEST", message: "礼物不存在" });
       const rid = Number.parseInt(input.id, 10);
