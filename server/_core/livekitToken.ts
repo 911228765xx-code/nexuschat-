@@ -17,13 +17,13 @@ export interface LiveKitGrant {
   identity: string;
   canPublish: boolean;   // 麦上（房主/嘉宾）可发声；听众 false
   name?: string;         // 显示名
-  ttlSeconds?: number;   // 默认 6h
+  ttlSeconds?: number;   // 默认 2h(够一场语音房;再长可重进刷新,缩短被盗 token 的滥用窗口)
 }
 
 /** 生成 LiveKit JWT 访问令牌 */
 export function genLiveKitToken(apiKey: string, apiSecret: string, grant: LiveKitGrant): string {
   const now = Math.floor(Date.now() / 1000);
-  const ttl = grant.ttlSeconds ?? 6 * 3600;
+  const ttl = grant.ttlSeconds ?? 2 * 3600;
   const header = { alg: "HS256", typ: "JWT" };
   const payload: Record<string, unknown> = {
     iss: apiKey,

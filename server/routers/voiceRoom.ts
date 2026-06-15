@@ -62,6 +62,8 @@ function roomName(roomId: number): string {
   return `voice_${roomId}`;
 }
 
+const MAX_SPEAKERS = 12; // 麦位上限(含房主)
+
 /** 为某用户签发进房 token */
 function signToken(userId: number, displayName: string, roomId: number, canPublish: boolean): string {
   return genLiveKitToken(ENV.livekitApiKey, ENV.livekitApiSecret, {
@@ -76,8 +78,9 @@ function signToken(userId: number, displayName: string, roomId: number, canPubli
 async function allocRoomId(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<number> {
   for (let i = 0; i < 8; i++) {
     const candidate = 100000 + Math.floor(Math.random() * 900000000);
+    // 唯一索引 uq_vroom_roomid 不分状态:已结束房间的 roomId 仍占位,这里也必须不分状态查,否则 INSERT 撞唯一键报 500
     const [exist] = await db.select({ id: voiceRooms.id }).from(voiceRooms)
-      .where(and(eq(voiceRooms.roomId, candidate), eq(voiceRooms.status, "live"))).limit(1);
+      .where(eq(voiceRooms.roomId, candidate)).limit(1);
     if (!exist) return candidate;
   }
   throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "房间号分配失败，请重试" });
@@ -206,6 +209,7 @@ export const voiceRoomRouter = router({
         roomName: roomName(room.roomId),
         token,
         role: isHost ? ("host" as const) : ("audience" as const),
+        hostId: room.hostUserId, // 客户端用它校验数据通道里 granted/revoked/roomEnded 是否真来自房主
         title: room.title,
         topic: room.topic ?? "",
       };
@@ -274,8 +278,11 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以邀请上麦" });
+      if (input.targetUserId === room.hostUserId) return { ok: true }; // 房主本就在麦上,幂等
+      if (room.speakerCount >= MAX_SPEAKERS) throw new TRPCError({ code: "BAD_REQUEST", message: `麦位已满（上限 ${MAX_SPEAKERS}）` });
       await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), true);
-      await db.update(voiceRooms).set({ speakerCount: sql`${voiceRooms.speakerCount} + 1` }).where(eq(voiceRooms.id, rid));
+      // 麦位计数封顶,杜绝重复抱同一人把 speakerCount 顶到天上
+      await db.update(voiceRooms).set({ speakerCount: sql`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq(voiceRooms.id, rid));
       return { ok: true };
     }),
 
@@ -290,6 +297,7 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以操作" });
+      if (input.targetUserId === room.hostUserId) throw new TRPCError({ code: "BAD_REQUEST", message: "不能请房主下麦" });
       await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), false);
       await db.update(voiceRooms).set({ speakerCount: sql`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq(voiceRooms.id, rid));
       return { ok: true };
