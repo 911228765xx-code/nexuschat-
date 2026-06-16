@@ -1270,7 +1270,8 @@ export const icoOrders = mysqlTable("ico_orders", {
   purchaseId: int("purchaseId"),                                   // 确认后关联的成交流水
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   confirmedAt: timestamp("confirmedAt"),
-}, (t) => [index("idx_icoord_user").on(t.userId), index("idx_icoord_status").on(t.status)]);
+}, (t) => [index("idx_icoord_user").on(t.userId), index("idx_icoord_status").on(t.status),
+  uniqueIndex("uq_icoord_tx").on(t.txHash)]); // 同一链上 txHash 全局唯一(NULL 不限):杜绝一笔转账填到多单各自确认=凭空多发币
 export type IcoOrder = typeof icoOrders.$inferSelect;
 
 // 每笔认购(不可变流水)

@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, users } from "../../drizzle/schema";
-import { eq, and, desc, gt, asc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, gt, asc, inArray, sql, ne } from "drizzle-orm";
 import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN, grantNN } from "../token";
 import { sanitizeInput } from "../utils/sanitize";
 import { priceAtSold, costForTokens, tokensForBudget, quote as curveQuote, type IcoCurve } from "../ico/pricing";
@@ -121,9 +121,17 @@ export const icoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const txHash = sanitizeInput(input.txHash, 120);
       const [o] = await db.select().from(icoOrders).where(and(eq(icoOrders.id, input.orderId), eq(icoOrders.userId, ctx.user.id))).limit(1);
       if (!o || o.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "订单不存在或已处理" });
-      await db.update(icoOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq(icoOrders.id, input.orderId));
+      // 同一链上 txHash 全局唯一:杜绝一笔转账填到多张订单各自确认 = 凭空多发认购代币
+      const [dup] = await db.select({ id: icoOrders.id }).from(icoOrders).where(and(eq(icoOrders.txHash, txHash), ne(icoOrders.id, o.id))).limit(1);
+      if (dup) throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已用于其它订单,请勿重复" });
+      try {
+        await db.update(icoOrders).set({ txHash }).where(eq(icoOrders.id, input.orderId));
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已用于其它订单,请勿重复" }); // 唯一索引兜底(并发)
+      }
       return { ok: true };
     }),
 
