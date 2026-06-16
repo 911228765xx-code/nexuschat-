@@ -18,6 +18,7 @@ import { awardReferrerMilestone } from "../referralRewards";
 import { awardTaskEvent } from "./user";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 import { assertCanDM } from "../utils/relations";
+import { BOT_PERSONAS } from "../botAutoReply";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -2168,6 +2169,91 @@ export const chatRouter = router({
     }),
 
   // 运营：机器人订阅统计 + AI 营收 + 节点订单概览
+  // ─── 运营增长:一键填公开群人数 + 一键扩充互动机器人(替代服务器脚本)──────────────
+  adminFillGroupMembers: adminProcedure
+    .input(z.object({
+      targetMin: z.number().int().min(1).max(5000).default(220),
+      targetMax: z.number().int().min(1).max(5000).default(480),
+      maxPerCall: z.number().int().min(1).max(2000).default(800), // 单次最多新增,防 HTTP 超时;不够再点一次
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const lo = Math.min(input.targetMin, input.targetMax), hi = Math.max(input.targetMin, input.targetMax);
+      const groups = await db.select({ id: chatGroups.id, name: chatGroups.name }).from(chatGroups).where(eq(chatGroups.isPublic, true)).limit(60);
+      const PRE = ["0x", "Crypto", "Web3", "DeFi", "Chain", "Block", "Token", "NFT", "Eth", "BTC", "Sol", "Ape", "Degen", "Meta", "Zk", "Layer"];
+      const SUF = ["Whale", "Degen", "Hodler", "Maxi", "Anon", "Dev", "Trader", "Farmer", "Bull", "Bear", "Ape", "Fren", "Chad", "Wizard", "Ninja", "Guru"];
+      const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+      const pastDate = (maxDays: number) => new Date(Date.now() - Math.random() * maxDays * 86_400_000);
+      let added = 0, remaining = 0, ctr = Date.now() * 1000;
+      const summary: { group: string; from: number; to: number }[] = [];
+      for (const g of groups) {
+        const [cnt] = await db.select({ c: sql<number>`COUNT(*)` }).from(groupMembers).where(eq(groupMembers.groupId, g.id));
+        const have = Number(cnt?.c ?? 0);
+        const target = lo + Math.floor(Math.random() * (hi - lo + 1));
+        const want = target - have;
+        if (want <= 0) continue;
+        const budget = input.maxPerCall - added;
+        if (budget <= 0) { remaining += want; continue; }
+        const need = Math.min(want, budget);
+        // 分批多行 INSERT(避免逐条往返超时;单条多行插入的自增 id 连续,可推导成员行)
+        let done = 0;
+        while (done < need) {
+          const n = Math.min(100, need - done);
+          const rows = Array.from({ length: n }, () => {
+            const uname = `${pick(PRE)}${pick(SUF)}_${(ctr++).toString(36)}`;
+            return { openId: `silent_${ctr}_${Math.floor(Math.random() * 1e6)}`, name: uname, loginMethod: "silent", role: "user" as const, username: uname, isBot: true, lastSignedIn: pastDate(7) };
+          });
+          const res = await db.insert(users).values(rows);
+          const firstId = (res as any)?.insertId ?? (res as any)?.[0]?.insertId;
+          if (!firstId) break;
+          await db.insert(groupMembers).values(Array.from({ length: n }, (_, i) => ({ groupId: g.id, userId: Number(firstId) + i, role: "member" as const, joinedAt: pastDate(60) })));
+          done += n;
+        }
+        const [c2] = await db.select({ c: sql<number>`COUNT(*)` }).from(groupMembers).where(eq(groupMembers.groupId, g.id));
+        await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq(chatGroups.id, g.id));
+        added += done;
+        if (want > done) remaining += want - done;
+        summary.push({ group: g.name, from: have, to: Number(c2?.c ?? 0) });
+      }
+      return { added, remaining, summary }; // remaining>0 时再点一次继续填
+    }),
+
+  adminAddBots: adminProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("DB unavailable");
+    const NEW_BOTS = [
+      { openId: "bot_meme_king", name: "MemeKing", username: "meme_king" },
+      { openId: "bot_nft_collector", name: "NFTCollector", username: "nft_collector" },
+      { openId: "bot_dev_builder", name: "DevBuilder", username: "dev_builder" },
+      { openId: "bot_macro_trader", name: "MacroTrader", username: "macro_trader" },
+      { openId: "bot_yield_farmer", name: "YieldFarmer", username: "yield_farmer" },
+      { openId: "bot_news_flash", name: "NewsFlash", username: "news_flash" },
+    ];
+    let created = 0;
+    for (const b of NEW_BOTS) {
+      const [ex] = await db.select({ id: users.id }).from(users).where(eq(users.openId, b.openId)).limit(1);
+      if (ex) continue;
+      await db.insert(users).values({ openId: b.openId, name: b.name, loginMethod: "bot", role: "user", username: b.username, isBot: true, lastSignedIn: new Date() });
+      created++;
+    }
+    // 把所有「有人设的机器人」(BOT_PERSONAS,排除静默填充号)加入所有公开群
+    const bots = await db.select({ id: users.id }).from(users).where(inArray(users.openId, Object.values(BOT_PERSONAS).map((p) => p.openId)));
+    const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.isPublic, true)).limit(60);
+    let joins = 0;
+    for (const g of groups) {
+      for (const bot of bots) {
+        const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and(eq(groupMembers.groupId, g.id), eq(groupMembers.userId, bot.id))).limit(1);
+        if (m) continue;
+        await db.insert(groupMembers).values({ groupId: g.id, userId: bot.id, role: "member" });
+        joins++;
+      }
+      const [c2] = await db.select({ c: sql<number>`COUNT(*)` }).from(groupMembers).where(eq(groupMembers.groupId, g.id));
+      await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq(chatGroups.id, g.id));
+    }
+    return { createdBots: created, totalBots: bots.length, groups: groups.length, joins };
+  }),
+
   adminBotStats: adminProcedure
     .query(async () => {
       const db = await getDb();
