@@ -3,11 +3,12 @@
  * 每天 09:00 发布早报，21:00 发布晚间话题
  */
 import { getDb } from "./db";
-import { messages, users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { messages, users, chatGroups, groupMembers } from "../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { emitToUser, getSocketIO } from "./socket";
 import { runDueGroupBots } from "./groupBots";
+import { BOT_PERSONAS } from "./botAutoReply";
 import pino from "pino";
 
 const logger = pino({ level: "info" });
@@ -198,6 +199,65 @@ function shouldPostEvening(): boolean {
 let lastMorningPost = 0;
 let lastEveningPost = 0;
 
+// ── 公开群「氛围机器人」：不等真人,机器人之间也主动聊/抛话题,让群随时有活气 ──────────
+const AMBIENT_COOLDOWN_MS = Number(process.env.BOT_AMBIENT_COOLDOWN_MS || 11 * 60 * 1000); // 每群最快 ~11 分钟一条
+const AMBIENT_TICK_PROB = Number(process.env.BOT_AMBIENT_TICK_PROB || 0.4);                // 每分钟 tick 触发概率
+const lastAmbientPerGroup: Record<number, number> = {};
+
+function personaStyleByOpenId(openId: string | null): string {
+  for (const p of Object.values(BOT_PERSONAS)) if (p.openId === openId) return p.style;
+  return "你是本群活跃的资深成员，友好专业，擅长 Web3 话题，爱活跃气氛";
+}
+
+async function postAsBot(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, groupId: number, botId: number, name: string | null, avatar: string | null, content: string) {
+  const [r] = await db.insert(messages).values({ groupId, senderId: botId, content, messageType: "text" }).$returningId();
+  const io = getSocketIO();
+  if (io) io.to(`group:${groupId}`).emit("new_message", { id: r.id, groupId, senderId: botId, senderName: name, senderAvatar: avatar, content, messageType: "text", createdAt: new Date() });
+}
+
+async function runAmbientChatter() {
+  if (Math.random() > AMBIENT_TICK_PROB) return; // 全局节流:不是每分钟都发
+  const db = await getDb();
+  if (!db) return;
+  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.isPublic, true)).limit(40);
+  const now = Date.now();
+  const eligible = groups.filter((g) => !lastAmbientPerGroup[g.id] || now - lastAmbientPerGroup[g.id] > AMBIENT_COOLDOWN_MS);
+  if (eligible.length === 0) return;
+  const group = eligible[Math.floor(Math.random() * eligible.length)];
+  // 群里的机器人成员(动态:跑了 seed 加的新 bot 自动纳入)
+  const bots = await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId })
+    .from(groupMembers).innerJoin(users, eq(users.id, groupMembers.userId))
+    .where(and(eq(groupMembers.groupId, group.id), eq(users.isBot, true)));
+  if (bots.length === 0) return;
+  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId })
+    .from(messages).leftJoin(users, eq(messages.senderId, users.id))
+    .where(and(eq(messages.groupId, group.id), eq(messages.isDeleted, false)))
+    .orderBy(desc(messages.createdAt)).limit(6);
+  const lastAge = recent[0]?.createdAt ? now - new Date(recent[0].createdAt).getTime() : Infinity;
+  // 避免连着同一个 bot 说话
+  const pool = bots.filter((b) => b.id !== recent[0]?.senderId);
+  const cand = pool.length ? pool : bots;
+  const bot = cand[Math.floor(Math.random() * cand.length)];
+  lastAmbientPerGroup[group.id] = now; // 立即标记防并发
+  const quiet = lastAge > 30 * 60 * 1000 || recent.length === 0;
+  const context = recent.slice().reverse().map((m) => `${m.name ?? "用户"}: ${m.content}`).join("\n");
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: `${personaStyleByOpenId(bot.openId)}。你在一个 Web3 社区群里活跃气氛。${quiet ? "群里有点安静，请发起一个有意思、能引发讨论的简短话题（行情观点/提问/分享皆可）" : "请根据最近对话自然地接一句（评论/提问/补充观点），别复读上文"}。要求：15-70字，中英文混用，自然不做作，不要以“我”开头，只发一条，不要带引号。` },
+        { role: "user", content: quiet ? "请发起一个话题：" : `群聊最近消息：\n${context}\n\n自然接一句：` },
+      ],
+    });
+    const raw = response.choices?.[0]?.message?.content;
+    const content = typeof raw === "string" ? raw.trim().replace(/^["「']|["」']$/g, "").trim() : null;
+    if (!content || content.length < 4) return;
+    await postAsBot(db, group.id, bot.id, bot.name, bot.avatar, content);
+    logger.info({ groupId: group.id, bot: bot.name, quiet }, "Ambient: 机器人发言");
+  } catch (err) {
+    logger.warn({ err }, "Ambient: 发言失败（非致命）");
+  }
+}
+
 async function checkAndPost() {
   const now = Date.now();
   const oneDay = 24 * 60 * 60 * 1000;
@@ -206,6 +266,9 @@ async function checkAndPost() {
   const d = new Date();
   runDueGroupBots(d.getHours(), d.getMinutes()).catch((err) =>
     logger.error({ err }, "BotScheduler: 群机器人定时任务失败"));
+
+  // 公开群氛围机器人：随时活跃,不等真人
+  runAmbientChatter().catch((err) => logger.error({ err }, "BotScheduler: 氛围机器人失败"));
 
   if (shouldPostMorning() && now - lastMorningPost > oneDay - 60000) {
     logger.info("BotScheduler: 触发早报任务");
