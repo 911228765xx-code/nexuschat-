@@ -224,10 +224,12 @@ async function runAmbientChatter() {
   const eligible = groups.filter((g) => !lastAmbientPerGroup[g.id] || now - lastAmbientPerGroup[g.id] > AMBIENT_COOLDOWN_MS);
   if (eligible.length === 0) return;
   const group = eligible[Math.floor(Math.random() * eligible.length)];
-  // 群里的机器人成员(动态:跑了 seed 加的新 bot 自动纳入)
-  const bots = await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId })
+  // 群里「有人设的机器人」成员(只让 BOT_PERSONAS 里的真机器人发言,排除静默填充号——它们也是 isBot=true)
+  const personaOpenIds = new Set(Object.values(BOT_PERSONAS).map((p) => p.openId));
+  const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId })
     .from(groupMembers).innerJoin(users, eq(users.id, groupMembers.userId))
-    .where(and(eq(groupMembers.groupId, group.id), eq(users.isBot, true)));
+    .where(and(eq(groupMembers.groupId, group.id), eq(users.isBot, true))))
+    .filter((b) => personaOpenIds.has(b.openId ?? ""));
   if (bots.length === 0) return;
   const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId })
     .from(messages).leftJoin(users, eq(messages.senderId, users.id))
