@@ -6,6 +6,7 @@ import { getDb } from "./db";
 import { messages, users, chatGroups, groupMembers } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
+import { consumeBotLLMBudget } from "./botBudget";
 import { emitToUser, getSocketIO } from "./socket";
 import { runDueGroupBots } from "./groupBots";
 import { BOT_PERSONAS } from "./botAutoReply";
@@ -49,6 +50,7 @@ async function generateMorningReport(): Promise<{ groupId: number; botName: stri
   const topic = topics[Math.floor(Math.random() * topics.length)];
 
   try {
+    if (!consumeBotLLMBudget()) return []; // 今日机器人 LLM 额度已用完
     const response = await invokeLLM({
       messages: [
         {
@@ -106,6 +108,7 @@ async function generateEveningTopics(): Promise<{ groupId: number; botName: stri
   const results: { groupId: number; botName: string; content: string }[] = [];
   for (const item of groupTopics) {
     try {
+      if (!consumeBotLLMBudget()) break; // 今日机器人 LLM 额度已用完,返回已生成的部分
       const response = await invokeLLM({
         messages: [
           {
@@ -244,6 +247,7 @@ async function runAmbientChatter() {
   const quiet = lastAge > 30 * 60 * 1000 || recent.length === 0;
   const context = recent.slice().reverse().map((m) => `${m.name ?? "用户"}: ${m.content}`).join("\n");
   try {
+    if (!consumeBotLLMBudget()) return; // 今日机器人 LLM 额度已用完
     const response = await invokeLLM({
       messages: [
         { role: "system", content: `${personaStyleByOpenId(bot.openId)}。你在一个 Web3 社区群里活跃气氛。${quiet ? "群里有点安静，请发起一个有意思、能引发讨论的简短话题（行情观点/提问/分享皆可）" : "请根据最近对话自然地接一句（评论/提问/补充观点），别复读上文"}。要求：15-70字，中英文混用，自然不做作，不要以“我”开头，只发一条，不要带引号。` },

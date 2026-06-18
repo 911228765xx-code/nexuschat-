@@ -13,6 +13,7 @@ import { getDb } from "./db";
 import { groupBots, messages, users } from "../drizzle/schema";
 import { getSocketIO } from "./socket";
 import { invokeLLM } from "./_core/llm";
+import { consumeBotLLMBudget } from "./botBudget";
 import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -365,6 +366,7 @@ export async function runInteractBot(db: Db, groupId: number, triggerUserId: num
   const delayMs = 4000 + Math.floor(Math.random() * 8000);
   setTimeout(async () => {
     try {
+      if (!consumeBotLLMBudget()) return; // 今日机器人 LLM 额度已用完,本次跳过
       const resp = await invokeLLM({
         messages: [
           { role: "system", content: `${persona}。你正在参与一个群聊，请根据最近的对话生成一条自然、简短(20-80字)的中文回复。要求：不要重复上文、不要生成多条、不要以"我"开头。` },
