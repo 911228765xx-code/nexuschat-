@@ -790,6 +790,7 @@ export const chatRouter = router({
           avatar: users.avatar,
           role: groupMembers.role,
           joinedAt: groupMembers.joinedAt,
+          isBot: users.isBot, // 供前端把机器人/静默填充号从 @提及 候选里排除
         })
         .from(groupMembers)
         .innerJoin(users, eq(groupMembers.userId, users.id))

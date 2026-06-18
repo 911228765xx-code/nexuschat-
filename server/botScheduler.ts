@@ -219,7 +219,7 @@ async function runAmbientChatter() {
   if (Math.random() > AMBIENT_TICK_PROB) return; // 全局节流:不是每分钟都发
   const db = await getDb();
   if (!db) return;
-  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.isPublic, true)).limit(40);
+  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.isPublic, true)).limit(500);
   const now = Date.now();
   const eligible = groups.filter((g) => !lastAmbientPerGroup[g.id] || now - lastAmbientPerGroup[g.id] > AMBIENT_COOLDOWN_MS);
   if (eligible.length === 0) return;
