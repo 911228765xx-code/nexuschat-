@@ -6,6 +6,7 @@ import { getDb } from "./db";
 import { messages, users, groupMembers } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
+import { consumeBotLLMBudget } from "./botBudget";
 import { getSocketIO } from "./socket";
 import logger from "./utils/logger";
 
@@ -165,6 +166,7 @@ export async function triggerBotAutoReply(
 
   setTimeout(async () => {
     try {
+      if (!consumeBotLLMBudget()) return; // 今日机器人 LLM 额度已用完,本次跳过
       const response = await invokeLLM({
         messages: [
           {
