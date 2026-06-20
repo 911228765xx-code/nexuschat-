@@ -15,6 +15,7 @@ import { startMessageCleanup } from "../messageCleanup";
 import { startRankAggregation } from "../rankEngine";
 import { startCallResolver } from "../callResolver";
 import { startPartnerSettlement } from "../partner";
+import { startIcoRewardScheduler } from "../icoRewardScheduler";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
@@ -132,6 +133,8 @@ async function startServer() {
   startCallResolver();
   // 合伙人双池分红：每日结算（幂等）
   startPartnerSettlement();
+  // ICO 质押收益：每日结算（幂等，未配置则跳过）
+  startIcoRewardScheduler();
 
   // Backfill referral invite codes for any users missing one (best-effort, non-blocking).
   void (async () => {
