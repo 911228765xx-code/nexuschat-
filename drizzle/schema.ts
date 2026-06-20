@@ -724,6 +724,22 @@ export const pushSubscriptions = mysqlTable(
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
 
+// 原生推送（Expo Push）设备 token：与 Web Push(VAPID) 的 push_subscriptions 并存
+export const devicePushTokens = mysqlTable(
+  "device_push_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    token: varchar("token", { length: 255 }).notNull(),
+    platform: varchar("platform", { length: 16 }).default("android").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_device_push_token").on(t.token), index("idx_device_push_user").on(t.userId)]
+);
+export type DevicePushToken = typeof devicePushTokens.$inferSelect;
+export type InsertDevicePushToken = typeof devicePushTokens.$inferInsert;
+
 // ─── Group Unread Counts ─────────────────────────────────────────────────────
 // Tracks the last-read message ID per user per group, used to compute unread badge counts
 export const groupUnreadCounts = mysqlTable(
