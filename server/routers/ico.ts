@@ -103,6 +103,62 @@ async function verifyAndSettle(db: Db, order: { id: number; txHash: string | nul
   }
 }
 
+/** 每日 ICO 质押收益结算（幂等，按 runDate）。供后台手动触发 + 定时器调用。 */
+export async function settleIcoRewards(date: string): Promise<
+  | { ok: true; skipped: true }
+  | { ok: true; skipped: false; emitted: number; stakers: number; factor: number; poolLeft: number }
+> {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+  // 未配置 ICO → 安静跳过（定时器场景不报错）
+  const [cfg0] = await db.select({ id: icoConfig.id }).from(icoConfig).where(eq(icoConfig.id, 1)).limit(1);
+  if (!cfg0) return { ok: true, skipped: true };
+  // 快路径：当日已结算直接跳过
+  const [exist0] = await db.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, date)).limit(1);
+  if (exist0) return { ok: true, skipped: true };
+  try {
+    let out: { ok: true; skipped: false; emitted: number; stakers: number; factor: number; poolLeft: number } | null = null;
+    await db.transaction(async (tx) => {
+      // 锁配置行，串行化 rewardEmitted 读改一致（并发结算只能一个进临界区）
+      const [c] = await tx.select().from(icoConfig).where(eq(icoConfig.id, 1)).for("update").limit(1);
+      if (!c) return;
+      // 拿到锁后再确认一次当日未结算（防前一笔刚结算完）
+      const [exist] = await tx.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, date)).limit(1);
+      if (exist) return;
+      const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
+      const remaining = Math.max(0, pool - emittedSoFar);
+      // 每笔质押批次各自计龄：新资金/复投按 aprStart 起步，沿曲线降到 aprEnd
+      const now = Date.now();
+      const lotRows = await tx.select().from(icoStakeLots).where(gt(icoStakeLots.amount, "0"));
+      const lots: StakeLot[] = lotRows.map((l) => ({
+        userId: l.userId, amount: n(l.amount),
+        ageDays: (now - new Date(l.stakedAt).getTime()) / 86400000,
+      }));
+      const { perUser, emitted, uncapped, factor } = distributeAprLots(lots, n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), remaining);
+      const accs = await tx.select().from(icoAccounts);
+      for (const [userId, reward] of Array.from(perUser.entries())) {
+        if (reward <= 0) continue;
+        const acc = accs.find((a) => a.userId === userId)!;
+        if (acc.autoCompound) {
+          await tx.update(icoAccounts).set({ stakedBalance: sql`${icoAccounts.stakedBalance} + ${reward}` }).where(eq(icoAccounts.userId, userId));
+          await tx.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: new Date(), source: "compound" });
+        } else {
+          await tx.update(icoAccounts).set({ pendingReward: sql`${icoAccounts.pendingReward} + ${reward}` }).where(eq(icoAccounts.userId, userId));
+        }
+      }
+      await tx.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq(icoConfig.id, 1));
+      // 唯一 runDate：并发抢同日会抛 → 整个事务回滚，绝不双发
+      await tx.insert(icoRewardRuns).values({ runDate: date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
+      out = { ok: true, skipped: false, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
+    });
+    return out ?? { ok: true, skipped: true };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e?.cause?.message ?? "");
+    if (e?.code === "ER_DUP_ENTRY" || e?.errno === 1062 || /duplicate/i.test(msg)) return { ok: true, skipped: true };
+    throw e;
+  }
+}
+
 export const icoRouter = router({
   /** 公开:曲线状态 + 进度 + 上线价 + 充值地址 */
   config: protectedProcedure.query(async () => {
@@ -429,54 +485,5 @@ export const icoRouter = router({
   /** 每日质押收益结算(幂等,按 runDate)。每笔批次各自计龄取年化 + 奖励池封顶 + 线性,自动复投/挂待领。 */
   adminRunRewards: adminProcedure
     .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      // 快路径:当日已结算直接跳过
-      const [exist0] = await db.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, input.date)).limit(1);
-      if (exist0) return { ok: true, skipped: true as const };
-      try {
-        let out: { ok: true; skipped: false; emitted: number; stakers: number; factor: number; poolLeft: number } | null = null;
-        await db.transaction(async (tx) => {
-          // 锁配置行,串行化 rewardEmitted 读改一致(并发结算只能一个进临界区)
-          const [c] = await tx.select().from(icoConfig).where(eq(icoConfig.id, 1)).for("update").limit(1);
-          if (!c) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "未配置 ICO" });
-          // 拿到锁后再确认一次当日未结算(防前一笔刚结算完)
-          const [exist] = await tx.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq(icoRewardRuns.runDate, input.date)).limit(1);
-          if (exist) return; // out 保持 null → 外层返回 skipped
-          const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
-          const remaining = Math.max(0, pool - emittedSoFar);
-          // 每笔质押批次各自计龄:新资金/复投按 aprStart 起步,沿曲线降到 aprEnd
-          const now = Date.now();
-          const lotRows = await tx.select().from(icoStakeLots).where(gt(icoStakeLots.amount, "0"));
-          const lots: StakeLot[] = lotRows.map((l) => ({
-            userId: l.userId, amount: n(l.amount),
-            ageDays: (now - new Date(l.stakedAt).getTime()) / 86400000,
-          }));
-          const { perUser, emitted, uncapped, factor } = distributeAprLots(lots, n(c.aprStart), n(c.aprEnd), n(c.aprDeclineDays), remaining);
-          const accs = await tx.select().from(icoAccounts);
-          for (const [userId, reward] of Array.from(perUser.entries())) {
-            if (reward <= 0) continue;
-            const acc = accs.find((a) => a.userId === userId)!;
-            if (acc.autoCompound) {
-              // 复投 → 余额增加 + 新批次(age0,重新享 aprStart)
-              await tx.update(icoAccounts).set({ stakedBalance: sql`${icoAccounts.stakedBalance} + ${reward}` }).where(eq(icoAccounts.userId, userId));
-              await tx.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: new Date(), source: "compound" });
-            } else {
-              await tx.update(icoAccounts).set({ pendingReward: sql`${icoAccounts.pendingReward} + ${reward}` }).where(eq(icoAccounts.userId, userId));
-            }
-          }
-          await tx.update(icoConfig).set({ rewardEmitted: sql`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq(icoConfig.id, 1));
-          // 唯一 runDate:并发抢同日会抛 → 整个事务回滚,绝不双发
-          await tx.insert(icoRewardRuns).values({ runDate: input.date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
-          out = { ok: true, skipped: false, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
-        });
-        return out ?? { ok: true, skipped: true as const };
-      } catch (e: any) {
-        // 并发抢同一天 → 唯一键冲突,说明已被另一次结算,干净返回跳过(不报错)
-        const msg = String(e?.message ?? e?.cause?.message ?? "");
-        if (e?.code === "ER_DUP_ENTRY" || e?.errno === 1062 || /duplicate/i.test(msg)) return { ok: true, skipped: true as const };
-        throw e;
-      }
-    }),
+    .mutation(async ({ input }) => settleIcoRewards(input.date)),
 });
