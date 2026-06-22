@@ -4,9 +4,9 @@
  */
 import { TRPCError } from "@trpc/server";
 import webpush from "web-push";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { pushSubscriptions } from "../../drizzle/schema";
+import { pushSubscriptions, devicePushTokens } from "../../drizzle/schema";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 
@@ -76,7 +76,58 @@ export const webPushRouter = router({
 
       return { success: true };
     }),
+
+  /** 注册原生推送（Expo Push）设备 token。同一 token 改归当前用户（换账号登录），幂等。 */
+  registerDeviceToken: protectedProcedure
+    .input(z.object({ token: z.string().min(10).max(255), platform: z.enum(["android", "ios"]).default("android") }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂时不可用" });
+      await db.delete(devicePushTokens).where(eq(devicePushTokens.token, input.token));
+      await db.insert(devicePushTokens).values({ userId: ctx.user.id, token: input.token, platform: input.platform });
+      return { success: true };
+    }),
+
+  /** 注销设备 token（退出登录时调用）。 */
+  unregisterDeviceToken: protectedProcedure
+    .input(z.object({ token: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db.delete(devicePushTokens).where(eq(devicePushTokens.token, input.token));
+      return { success: true };
+    }),
 });
+
+/** 发原生推送（Expo Push Service）。失效 token 自动清理。 */
+async function sendExpoPush(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  userId: number,
+  payload: { title: string; body: string; url?: string },
+) {
+  const tokens = await db.select().from(devicePushTokens).where(eq(devicePushTokens.userId, userId));
+  const expoTokens = tokens
+    .map((t) => t.token)
+    .filter((t) => t.startsWith("ExponentPushToken") || t.startsWith("ExpoPushToken"));
+  if (expoTokens.length === 0) return;
+  const messages = expoTokens.map((to) => ({
+    to,
+    title: payload.title,
+    body: payload.body,
+    sound: "default" as const,
+    data: { url: payload.url || "/notifications" },
+  }));
+  const resp = await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(messages),
+  });
+  const json = (await resp.json().catch(() => null)) as { data?: Array<{ status?: string; details?: { error?: string } }> } | null;
+  const dead = (json?.data ?? [])
+    .map((r, i) => (r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null))
+    .filter((t): t is string => !!t);
+  if (dead.length) await db.delete(devicePushTokens).where(inArray(devicePushTokens.token, dead));
+}
 
 /** Send a push notification to a specific user (called from server-side code) */
 export async function sendPushToUser(
@@ -85,6 +136,9 @@ export async function sendPushToUser(
 ) {
   const db = await getDb();
   if (!db) return;
+
+  // 原生推送（Expo）与下面的 Web Push 并行，互不影响
+  void sendExpoPush(db, userId, payload).catch(() => {});
 
   const subs = await db
     .select()

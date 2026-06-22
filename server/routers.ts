@@ -8,9 +8,11 @@ import { researchRouter } from "./routers/research";
 import { postsRouter } from "./routers/posts";
 import { userRouter } from "./routers/user";
 import { notificationsRouter } from "./routers/notificationsRouter";
+import { tradingRouter } from "./routers/trading";
 import { followRouter } from "./routers/follow";
 import { contactsRouter } from "./routers/contacts";
 import { watchlistRouter } from "./routers/watchlist";
+import { copyTradingRouter } from "./routers/copyTrading";
 import { settingsRouter } from "./routers/settings";
 import { referralRouter } from "./routers/referral";
 import { emailAuthRouter } from "./routers/emailAuth";
@@ -19,6 +21,7 @@ import { voiceRouter } from "./routers/voice";
 import { voiceRoomRouter } from "./routers/voiceRoom";
 import { icoRouter } from "./routers/ico";
 import { appVersionRouter } from "./routers/appVersion";
+import { consultingRouter } from "./routers/consulting";
 import { swapRouter } from "./routers/swap";
 import { aiRouter } from "./routers/ai";
 import { callsRouter } from "./routers/calls";
@@ -53,9 +56,11 @@ export const appRouter = router({
   tge: tgeRouter,
   partner: partnerRouter,
   notifications: notificationsRouter,
+  trading: tradingRouter,
   follow: followRouter,
   contacts: contactsRouter,
   watchlist: watchlistRouter,
+  copyTrading: copyTradingRouter,
   settings: settingsRouter,
   referral: referralRouter,
   emailAuth: emailAuthRouter,
@@ -64,6 +69,7 @@ export const appRouter = router({
   voiceRoom: voiceRoomRouter,
   ico: icoRouter,
   appVersion: appVersionRouter,
+  consulting: consultingRouter,
   swap: swapRouter,
 });
 

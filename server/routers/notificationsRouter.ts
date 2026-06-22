@@ -4,6 +4,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notifications, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { sendPushToUser } from "./webPush";
 
 export const notificationsRouter = router({
   // ─── Get notifications for current user ─────────────────────────────────────
@@ -170,4 +171,18 @@ export async function createNotification(params: {
     content: params.content,
     isRead: false,
   });
+
+  // 原生 / Web 推送（失败不影响通知入库）
+  const titleMap: Record<string, string> = {
+    like: `${params.fromUserName} 赞了你`,
+    comment: `${params.fromUserName} 评论了你`,
+    follow: `${params.fromUserName} 关注了你`,
+    mention: `${params.fromUserName} 提到了你`,
+    system: "AIChat 通知",
+  };
+  void sendPushToUser(params.targetUserId, {
+    title: titleMap[params.type] ?? "AIChat 通知",
+    body: params.content,
+    url: "/notifications",
+  }).catch(() => {});
 }
