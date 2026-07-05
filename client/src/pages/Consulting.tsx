@@ -278,7 +278,7 @@ export default function Consulting() {
         <div className="rounded-2xl border border-[#00d4ff]/20 bg-gradient-to-br from-[#00d4ff]/5 to-[#a855f7]/5 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Zap size={16} className="text-[#00d4ff]" />
-            <span className="text-sm font-semibold text-[#00d4ff]">专业级加密投研报告</span>
+            <span className="text-sm font-semibold text-[#00d4ff]">专业级加密 AI 分析报告</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[

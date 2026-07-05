@@ -57,6 +57,8 @@ export default function CreateGroup() {
     tokenName: "",
   });
   const [adminIds, setAdminIds] = useState<string[]>([]);
+  // 公开群=发现页可见（Plus/Pro 会员专属）；默认私密群
+  const [isPublicGroup, setIsPublicGroup] = useState(false);
   const [allowInvite, setAllowInvite] = useState(true);
   const [muteNewMembers, setMuteNewMembers] = useState(false);
   const [groupCategory, setGroupCategory] = useState("community");  // ─── Load real contacts from backend ────────────────────────────────────────
@@ -69,7 +71,7 @@ export default function CreateGroup() {
   }, [search]);
   const { data: searchResults } = trpc.user.searchUsers.useQuery(
     { query: debouncedSearch },
-    { enabled: debouncedSearch.length >= 1, staleTime: 15_000 }
+    { enabled: /^\d+$/.test(debouncedSearch.trim()), staleTime: 15_000 }
   );
 
   // Merge friends + search results into Contact[] format
@@ -150,7 +152,7 @@ export default function CreateGroup() {
     createGroupMutation.mutate({
       name: groupName.trim(),
       description: groupDesc.trim() || undefined,
-      isPublic: !tokenGate.enabled,
+      isPublic: isPublicGroup && !tokenGate.enabled,
       isTokenGated: tokenGate.enabled,
       tokenGateAmount: tokenGate.enabled ? tokenGate.minAmount : undefined,
       tokenGateContract: tokenGate.enabled ? tokenGate.contractAddress : undefined,
@@ -401,6 +403,30 @@ export default function CreateGroup() {
                 maxLength={200}
               />
               <p className="text-sm text-muted-foreground mt-2 px-2">{groupDesc.length}/200</p>
+            </div>
+
+            {/* 群类型：公开（会员专属）/私密 */}
+            <div>
+              <label className="text-sm text-muted-foreground mb-2.5 block px-2">群类型</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPublicGroup(false)}
+                  className={`h-12 rounded-xl border text-sm transition-all ${!isPublicGroup ? "border-neon-cyan/60 bg-neon-cyan/10 text-foreground" : "border-border/30 bg-secondary/40 text-muted-foreground"}`}
+                >
+                  私密群 · 仅邀请可入
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPublicGroup(true)}
+                  className={`h-12 rounded-xl border text-sm transition-all ${isPublicGroup ? "border-neon-cyan/60 bg-neon-cyan/10 text-foreground" : "border-border/30 bg-secondary/40 text-muted-foreground"}`}
+                >
+                  公开群 · 会员专属
+                </button>
+              </div>
+              {isPublicGroup && (
+                <p className="text-sm text-muted-foreground mt-2 px-2">公开群将展示在发现社区，需 Plus/Pro 会员；非会员请选择私密群。</p>
+              )}
             </div>
 
             {/* Category Selection */}

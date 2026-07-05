@@ -125,7 +125,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
             <MessageCircle size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">NexusChat</h1>
-          <p className="text-sm text-gray-400 text-center">Web3 社交 · AI 投研 · 量化跟单</p>
+          <p className="text-sm text-gray-400 text-center">全球首款 AI 智能体 · Web3 社交平台</p>
         </div>
         {/* Login button */}
         <a

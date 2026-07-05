@@ -128,7 +128,7 @@ export default function Contacts() {
   // tRPC: search users for adding contact
   const { data: searchResults, isFetching: isSearching } = trpc.user.searchUsers.useQuery(
     { query: userSearchQuery },
-    { enabled: userSearchQuery.trim().length >= 1, staleTime: 5_000 }
+    { enabled: /^\d+$/.test(userSearchQuery.trim()), staleTime: 5_000 }
   );
   // tRPC: send friend request
   const sendRequestMutation = trpc.contacts.sendRequest.useMutation({
@@ -845,12 +845,12 @@ export default function Contacts() {
               {/* Search by username */}
               <div className="space-y-3">
                   <div className="relative">
-                    <label className="text-[13px] text-muted-foreground font-medium mb-2 block">搜索用户名</label>
+                    <label className="text-[13px] text-muted-foreground font-medium mb-2 block">按 ID 搜索</label>
                     <input
                       ref={focusOnMount}
                       value={userSearchQuery}
                       onChange={(e) => { setUserSearchQuery(e.target.value); setSelectedUserId(null); setSelectedUserName(""); }}
-                      placeholder="输入用户名或昵称..."
+                      placeholder="输入对方的用户 ID（纯数字）..."
                       className="w-full h-10 px-3 rounded-xl bg-secondary/60 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
                     />
                     {isSearching && <span className="absolute right-3 top-7 text-sm text-muted-foreground">搜索中...</span>}
@@ -876,7 +876,7 @@ export default function Contacts() {
                     </div>
                   )}
                   {searchResults && searchResults.length === 0 && userSearchQuery.length >= 1 && !isSearching && (
-                    <p className="text-sm text-muted-foreground text-center py-2">未找到用户</p>
+                    <p className="text-sm text-muted-foreground text-center py-2">未找到用户（仅支持 ID 精确搜索）</p>
                   )}
                   {/* Selected user confirmation */}
                   {selectedUserId && (

@@ -347,7 +347,7 @@ export default function ChatRoom() {
             id: (Date.now() + 1).toString(),
             sender: "NexusBot",
             senderAvatar: "🤖",
-            content: `📊 **${token} 投研快报**\n\n💰 价格: $67,432.10 (+1.8%)\n📈 市值: $1.32T (#1)\n🔒 TVL: $12.8B\n⛓️ 24h活跃地址: 892,341\n\n🤖 AI评级: **看好** (7.8/10)\n\n> ${token} 链上数据表现活跃，机构持仓持续增加。短期注意回调风险。`,
+            content: `📊 **${token} AI 分析快报**\n\n💰 价格: $67,432.10 (+1.8%)\n📈 市值: $1.32T (#1)\n🔒 TVL: $12.8B\n⛓️ 24h活跃地址: 892,341\n\n🤖 AI评级: **看好** (7.8/10)\n\n> ${token} 链上数据表现活跃，机构持仓持续增加。短期注意回调风险。`,
             time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
             isMine: false,
             isAI: true,

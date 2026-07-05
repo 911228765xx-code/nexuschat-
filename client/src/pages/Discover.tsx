@@ -239,7 +239,7 @@ export default function Discover() {
       id: String(u.id),
       name: u.displayName,
       avatar: u.avatar ?? u.displayName.charAt(0).toUpperCase(),
-      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} NP` : `${u.npPoints ?? 0} NP`,
+      bio: u.walletAddress ? `${u.shortAddress ?? ""} · ${u.npPoints ?? 0} AC` : `${u.npPoints ?? 0} AC`,
       followers: u.npPoints ?? 0,
       isVerified: (u.npPoints ?? 0) >= 1000,
     }));
@@ -929,15 +929,15 @@ export default function Discover() {
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
                               <BarChart3 size={12} className="text-white" />
                             </div>
-                            <span className="text-sm font-bold text-white font-['Space_Grotesk']">AI 投研报告</span>
+                            <span className="text-sm font-bold text-white font-['Space_Grotesk']">AI 分析报告</span>
                             <Sparkles size={10} className="text-[#a855f7]" />
                             <span className="ml-auto text-sm text-[#00d4ff] flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                               查看完整报告 <ExternalLink size={9} />
                             </span>
                           </div>
-                          {post.tags && post.tags.includes("投研报告") && (
+                          {post.tags && (post.tags.includes("AI 分析报告") || post.tags.includes("投研报告")) && (
                             <div className="flex items-center gap-2.5 flex-wrap">
-                              {post.tags.filter(t => t !== "投研报告").map(tag => (
+                              {post.tags.filter(t => t !== "AI 分析报告" && t !== "投研报告").map(tag => (
                                 <span key={tag} className="px-3 py-1 rounded text-sm font-medium bg-[#a855f7]/15 text-[#a855f7]">
                                   {tag}
                                 </span>

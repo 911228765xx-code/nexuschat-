@@ -86,7 +86,7 @@ export default function Profile() {
     {
       title: t("profile.growth"),
       items: [
-        { icon: Gift, label: t("profile.invite"), value: "+1000 NP", color: "text-neon-green" },
+        { icon: Gift, label: t("profile.invite"), value: "+1000 AC", color: "text-neon-green" },
         { icon: Trophy, label: t("profile.leaderboard"), value: "#1,247", color: "text-neon-cyan" },
         { icon: CheckSquare, label: t("profile.tasks"), value: "3/5", color: "text-neon-purple" },
       ],
@@ -171,7 +171,7 @@ export default function Profile() {
           {/* Core Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: t("profile.points"), value: statsLoading ? "..." : (stats?.npPoints ?? 0).toLocaleString(), sub: "NP", color: "text-neon-cyan" },
+              { label: t("profile.points"), value: statsLoading ? "..." : (stats?.npPoints ?? 0).toLocaleString(), sub: "AC", color: "text-neon-cyan" },
               { label: "Followers", value: followCounts ? followCounts.followers.toLocaleString() : (statsLoading ? "..." : "0"), sub: "followers", color: "text-neon-green" },
               { label: "Following", value: followCounts ? followCounts.following.toLocaleString() : (statsLoading ? "..." : "0"), sub: "following", color: "text-neon-purple" },
             ].map((stat) => (
@@ -190,7 +190,7 @@ export default function Profile() {
         <div className="mx-4 mt-3 p-3 rounded-xl bg-card/50 border border-border/20">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-sm font-medium">{t("profile.level")}</span>
-            <span className="text-sm text-muted-foreground font-mono">{(stats?.npPoints ?? 0).toLocaleString()} / {Math.ceil(((stats?.npPoints ?? 0) + 1) / 10000) * 10000} NP</span>
+            <span className="text-sm text-muted-foreground font-mono">{(stats?.npPoints ?? 0).toLocaleString()} / {Math.ceil(((stats?.npPoints ?? 0) + 1) / 10000) * 10000} AC</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
             <motion.div
