@@ -17,6 +17,7 @@ import { startCallResolver } from "../callResolver";
 import { startPartnerSettlement } from "../partner";
 import { startIcoRewardScheduler } from "../icoRewardScheduler";
 import { handleTokenChatStream } from "../express/tokenChatStream";
+import { handleApkDownload } from "../express/apkDownload";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
 import { handleChunkStart, handleChunkPart, handleChunkFinish } from "../express/chunkedUpload";
@@ -81,6 +82,8 @@ async function startServer() {
   registerStorageProxy(app);
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // APK 固定下载短链：对外只发 https://<域名>/apk（外链流式中转,大陆可直连;版本随后台配置)
+  app.get(["/apk", "/download/apk"], handleApkDownload);
   // SSE streaming endpoints (must be before tRPC middleware)
   // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
   app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);

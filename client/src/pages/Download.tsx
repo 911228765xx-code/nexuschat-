@@ -1,21 +1,18 @@
 /**
- * Download — NexusChat 下载页面
- * 双平台（Android / iOS）下载入口 + 二维码 + 安装说明
+ * Download — App 下载页面
+ * 版本号/下载地址【动态】读自 appVersion.checkVersion(后台「版本发布」改一次,这里自动跟随,不再写死旧包)。
+ * - Android:大按钮走固定短链 /apk(服务端 302/流式中转,大陆可直连),附直链复制。
+ * - 微信/QQ 内置浏览器拦截 APK 下载 → 全屏引导「右上角···在浏览器打开」。
+ * - 二维码动态生成,指向本页(微信扫码也安全,进页再引导)。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCode } from "lucide-react";
+import {
+  Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCode, Copy, Check,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
-import { useI18n } from "@/contexts/I18nContext";
-
-// v1.5.6 — 修复键盘消失：完全移除 onFocus/onBlur 回调（2026-05-27）
-const ANDROID_APK_URL =
-  "/manus-storage/nexuschat-v1.5.6_73c39a04.apk";
-const QR_ANDROID =
-  "/manus-storage/qr_android_v152_5a027cb5.png";
-const QR_IOS =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/qr-ios_1d857524.png";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -23,18 +20,65 @@ const fadeUp = {
   transition: { duration: 0.5 },
 };
 
+/** 站点根(兼容自定义域/直连源站):二维码与复制直链都基于当前访问域名 */
+const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://nexuschat.best";
+const APK_SHORT_LINK = `${ORIGIN}/apk`;
+const PAGE_LINK = `${ORIGIN}/download`;
+
+const isWeChat = typeof navigator !== "undefined" && /MicroMessenger/i.test(navigator.userAgent);
+const isQQ = typeof navigator !== "undefined" && /\bQQ\/|QQBrowser/i.test(navigator.userAgent);
+const inAppBrowser = isWeChat || isQQ;
+
+interface VersionInfo { latestVersion: string; releaseNotes: string }
+
 export default function DownloadPage() {
   const [, setLocation] = useLocation();
-  const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<"android" | "ios">("android");
+  const [activeTab, setActiveTab] = useState<"android" | "ios">(
+    typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "ios" : "android",
+  );
+  const [ver, setVer] = useState<VersionInfo | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(inAppBrowser); // 微信/QQ 打开即引导
 
+  useEffect(() => {
+    // 公开端点,免登录:拿最新版本号 + 更新日志(与 App 内检查更新同一数据源)
+    const input = encodeURIComponent(JSON.stringify({ 0: { json: { currentVersion: "0.0.0", platform: "android" } } }));
+    fetch(`/api/trpc/appVersion.checkVersion?batch=1&input=${input}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const j = d?.[0]?.result?.data?.json;
+        if (j?.latestVersion) setVer({ latestVersion: j.latestVersion, releaseNotes: j.releaseNotes ?? "" });
+      })
+      .catch(() => {});
+  }, []);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(APK_SHORT_LINK);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // 剪贴板不可用(部分内置浏览器):选中输入框由用户手动复制
+      const el = document.getElementById("apk-link-input") as HTMLInputElement | null;
+      el?.select();
+    }
+  }
+
+  function onDownloadClick(e: React.MouseEvent) {
+    if (inAppBrowser) {
+      e.preventDefault();
+      setGuideOpen(true); // 微信/QQ 拦 APK:引导去系统浏览器
+    }
+    // 正常浏览器:交给 <a href="/apk"> 原生下载(短链服务端已带规范文件名/断点续传)
+  }
+
+  const versionLabel = ver ? `v${ver.latestVersion}` : "";
   const androidSteps = [
-    "点击下方「下载 Android APK」按钮，下载 APK 安装包",
+    "点击下方「下载 Android 版」按钮，下载 APK 安装包",
     "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
     "点击 APK 文件，按提示完成安装",
-    "安装完成后在桌面找到 NexusChat 图标，点击启动",
+    "安装完成后在桌面找到 AIChat 图标，点击启动",
   ];
-
   const iosSteps = [
     "使用 Safari 浏览器打开 nexuschat.best",
     "点击底部工具栏中间的「分享」按钮（方框加箭头图标）",
@@ -44,6 +88,26 @@ export default function DownloadPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+      {/* 微信/QQ 内置浏览器引导蒙层 */}
+      {guideOpen && inAppBrowser && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center px-8 pt-8"
+          onClick={() => setGuideOpen(false)}
+        >
+          <div className="self-end text-5xl leading-none select-none" aria-hidden>↗</div>
+          <div className="mt-6 max-w-xs text-center">
+            <p className="text-white text-lg font-bold leading-relaxed">
+              {isWeChat ? "微信" : "QQ"}内无法直接下载安装包
+            </p>
+            <p className="text-white/85 text-sm mt-3 leading-relaxed">
+              请点击右上角 <span className="inline-block px-2 rounded bg-white/20 font-bold">···</span> 菜单
+              <br />选择「<strong>在浏览器打开</strong>」后再下载
+            </p>
+            <p className="text-white/50 text-xs mt-6">点击任意处关闭提示</p>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/20 bg-background [backdrop-filter:none]">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -58,7 +122,7 @@ export default function DownloadPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
               <Download size={14} className="text-white" />
             </div>
-            <span className="font-bold text-sm">NexusChat 下载</span>
+            <span className="font-bold text-sm">AIChat 下载</span>
           </div>
           <Button
             onClick={() => setLocation("/app/chat")}
@@ -76,20 +140,19 @@ export default function DownloadPage() {
         <motion.div {...fadeUp}>
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
             <QrCode size={12} />
-            扫码或点击下载
+            扫码或点击下载 {versionLabel && <span className="font-bold">{versionLabel}</span>}
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">
-            下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">NexusChat</span>
+            下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">AIChat</span>
           </h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            支持 Android 和 iOS，随时随地掌控 Web3 资产、AI 智能体与加密社交
+            AI 智能体 · 加密社交 · Web3 资产，一个 App 全搞定
           </p>
         </motion.div>
       </section>
 
       {/* Platform Tabs */}
       <section className="max-w-4xl mx-auto px-4 pb-20">
-        {/* Tab Switcher */}
         <motion.div
           {...fadeUp}
           transition={{ duration: 0.5, delay: 0.1 }}
@@ -130,41 +193,49 @@ export default function DownloadPage() {
             transition={{ duration: 0.4 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start"
           >
-            {/* QR Code Card */}
+            {/* 下载卡:大按钮 + 动态二维码 + 直链复制 */}
             <div className="rounded-2xl border border-[#00d4ff]/20 bg-gradient-to-br from-[#00d4ff]/10 to-transparent p-6 flex flex-col items-center gap-4">
-              <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">扫码下载 Android APK</p>
-              <div className="rounded-xl overflow-hidden border border-[#00d4ff]/20 p-2 bg-[#0d1117]">
-                <img
-                  src={QR_ANDROID}
-                  alt="Android 下载二维码"
-                  className="w-48 h-48 object-contain"
-                  loading="lazy"
+              <a
+                href="/apk"
+                onClick={onDownloadClick}
+                className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-base font-bold hover:opacity-90 transition-opacity"
+              >
+                <Download size={18} />
+                下载 Android 版{versionLabel ? ` ${versionLabel}` : ""}
+              </a>
+
+              {/* 直链(复制发给好友/下载器) */}
+              <div className="w-full flex items-center gap-2">
+                <input
+                  id="apk-link-input"
+                  readOnly
+                  value={APK_SHORT_LINK}
+                  className="flex-1 h-9 rounded-lg bg-[#0d1117] border border-border/30 px-3 text-xs text-muted-foreground"
+                  onFocus={(e) => e.currentTarget.select()}
                 />
+                <Button
+                  onClick={copyLink}
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-3 border-[#00d4ff]/30 text-[#00d4ff] bg-transparent hover:bg-[#00d4ff]/10"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  <span className="ml-1 text-xs">{copied ? "已复制" : "复制"}</span>
+                </Button>
+              </div>
+
+              <div className="rounded-xl overflow-hidden border border-[#00d4ff]/20 p-3 bg-white">
+                <QRCodeSVG value={PAGE_LINK} size={168} level="M" />
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                使用手机扫描二维码<br />直接下载 APK 安装包
+                手机扫码打开本页下载<br />（微信扫码后请选「在浏览器打开」）
               </p>
-              <Button
-                onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = ANDROID_APK_URL;
-                  link.download = "NexusChat-v1.5.6-android.apk";
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-                className="w-full bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25"
-                variant="outline"
-              >
-                <Download size={15} className="mr-2" />
-                下载 Android APK v1.5.6
-              </Button>
               <p className="text-sm text-muted-foreground/60 text-center">
-                版本 v1.5.6 · 需要 Android 8.0+ · React Native 原生版
+                {versionLabel ? `版本 ${versionLabel} · ` : ""}需要 Android 8.0+ · 官方原生版
               </p>
             </div>
 
-            {/* Install Steps */}
+            {/* 安装步骤 + 更新日志 */}
             <div className="space-y-4">
               <h3 className="text-base font-semibold text-foreground">安装步骤</h3>
               <div className="space-y-3">
@@ -178,15 +249,20 @@ export default function DownloadPage() {
                 ))}
               </div>
 
-              {/* Note */}
-              <div className="mt-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
+              {ver?.releaseNotes ? (
+                <div className="mt-4 p-4 rounded-xl bg-card/40 border border-border/30 max-h-44 overflow-y-auto">
+                  <p className="text-xs font-semibold text-foreground mb-2">更新内容（{versionLabel}）</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{ver.releaseNotes}</p>
+                </div>
+              ) : null}
+
+              <div className="mt-4 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
                 <p className="text-sm text-amber-400/80 leading-relaxed">
                   <strong className="text-amber-400">安全提示：</strong>
-                  安装完成后建议在设置中关闭「允许安装未知来源应用」以保护设备安全。NexusChat APK 为官方发布版本，不含任何恶意代码。
+                  安装完成后建议在设置中关闭「允许安装未知来源应用」。本页下载的 APK 为官方发布版本。
                 </p>
               </div>
 
-              {/* Web fallback */}
               <div className="pt-2">
                 <p className="text-sm text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
                 <Button
@@ -215,19 +291,14 @@ export default function DownloadPage() {
             {/* QR Code Card */}
             <div className="rounded-2xl border border-[#a855f7]/20 bg-gradient-to-br from-[#a855f7]/10 to-transparent p-6 flex flex-col items-center gap-4">
               <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Safari 扫码打开</p>
-              <div className="rounded-xl overflow-hidden border border-[#a855f7]/20 p-2 bg-[#0d1117]">
-                <img
-                  src={QR_IOS}
-                  alt="iOS 安装二维码"
-                  className="w-48 h-48 object-contain"
-                  loading="lazy"
-                />
+              <div className="rounded-xl overflow-hidden border border-[#a855f7]/20 p-3 bg-white">
+                <QRCodeSVG value={ORIGIN} size={168} level="M" />
               </div>
               <p className="text-sm text-muted-foreground text-center">
                 使用 iPhone Safari 扫描二维码<br />然后按步骤添加到主屏幕
               </p>
               <Button
-                onClick={() => window.open("https://www.nexuschat.best", "_blank")}
+                onClick={() => window.open(ORIGIN, "_blank")}
                 className="w-full bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25"
                 variant="outline"
               >
@@ -253,7 +324,6 @@ export default function DownloadPage() {
                 ))}
               </div>
 
-              {/* Checkmarks */}
               <div className="mt-6 space-y-2">
                 {[
                   "全屏显示，无浏览器地址栏",
@@ -267,7 +337,6 @@ export default function DownloadPage() {
                 ))}
               </div>
 
-              {/* Note */}
               <div className="mt-4 p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
                 <p className="text-sm text-blue-400/80 leading-relaxed">
                   <strong className="text-blue-400">注意：</strong>
