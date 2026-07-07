@@ -63,7 +63,13 @@ export async function handleApkDownload(req: Request, res: Response) {
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
     const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
-    res.setHeader("Cache-Control", "no-store"); // 版本会换，短链不缓存
+    // 速度优化:
+    // 1) identity + no-transform → 关掉本服务的二次 gzip 和 CF 的动态压缩(APK 已是压缩包,再压 0 收益、
+    //    还费 CPU 且会丢 Content-Length 让进度条失效)。设 Content-Encoding 后 Express compression 会跳过。
+    // 2) public max-age → 允许 Cloudflare 边缘缓存(需在 CF 后台给 /apk 加一条 Cache Rule 才真正生效);
+    //    命中边缘后大陆用户就近下载,不再每次回源+从 expo.dev 二次拉取。版本换了最多 30 分钟内自愈。
+    res.setHeader("Content-Encoding", "identity");
+    res.setHeader("Cache-Control", "public, max-age=1800, no-transform");
     res.setHeader("Accept-Ranges", upstream.headers.get("accept-ranges") ?? "bytes");
     const len = upstream.headers.get("content-length");
     if (len) res.setHeader("Content-Length", len);

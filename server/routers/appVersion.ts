@@ -33,7 +33,7 @@ export const appVersionRouter = router({
         platform: z.enum(["android", "ios", "web"]).default("web"),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
 
       // Default config if DB unavailable or not seeded
@@ -81,7 +81,12 @@ export const appVersionRouter = router({
       } else if (input.platform === "web") {
         downloadUrl = config.downloadUrlWeb;
       } else {
-        downloadUrl = config.downloadUrlAndroid;
+        // Android 应内更新的下载地址一律走本域名 /apk 流式短链,而不是配置里的 expo.dev 原始直链:
+        // 直连海外 CDN 在大陆常超时/失败 → 用户点"立即更新"下不动或装不上 → 原生版本没变 → 反复提示。
+        // /apk 由本服务器把 downloadUrlAndroid 流式中转(稳定+断点续传),让更新真正装得上。
+        // 这是实时接口,存量老包下次检查即生效,无需先更新 App。
+        const host = ctx.req?.get?.("host");
+        downloadUrl = host ? `${ctx.req.protocol}://${host}/apk` : config.downloadUrlAndroid;
       }
 
       return {
