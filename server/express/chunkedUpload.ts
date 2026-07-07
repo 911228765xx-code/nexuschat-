@@ -6,6 +6,7 @@
 import type { Request, Response } from "express";
 import fs from "fs";
 import os from "os";
+import { ENV } from "../_core/env";
 import path from "path";
 import crypto from "crypto";
 import { sdk } from "../_core/sdk";
@@ -136,8 +137,9 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
     }
     await storagePut(key, body, s.mime);
     cleanup();
-    // 返回本域名代理地址（流式中转）：大陆网络直连海外 CDN 不稳，经 API 域名稳定可达
-    const publicUrl = `${req.protocol}://${req.get("host")}/manus-storage/${key}`;
+    // 返回公网域名代理地址（流式中转）：大陆网络直连海外 CDN 不稳，经 API 域名稳定可达
+    // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
+    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`;
     res.json({ url: publicUrl });
   } catch {
     cleanup();

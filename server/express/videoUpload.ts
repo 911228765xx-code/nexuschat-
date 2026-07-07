@@ -6,6 +6,7 @@
  */
 import type { Request, Response } from "express";
 import { sdk } from "../_core/sdk";
+import { ENV } from "../_core/env";
 import { getDb } from "../db";
 import { getBenefits } from "../membership";
 
@@ -57,7 +58,7 @@ export async function handleVideoUpload(req: Request, res: Response): Promise<vo
     const { storagePut } = await import("../storage");
     const key = `chat-videos/${user.id}/${Date.now()}.${ext}`;
     await storagePut(key, body, mime);
-    const publicUrl = `${req.protocol}://${req.get("host")}/manus-storage/${key}`;
+    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`; // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
     res.json({ url: publicUrl, maxMB });
   } catch (err) {
     res.status(500).json({ error: "上传失败，请重试" });

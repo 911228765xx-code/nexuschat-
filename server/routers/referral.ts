@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, or, desc, count, sql } from "drizzle-orm";
 import { ensureInviteCode, normalizeInviteCode } from "../utils/inviteCode";
+import { ENV } from "../_core/env";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
 // 按 AC 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
@@ -61,7 +62,7 @@ export const referralRouter = router({
 
     return {
       inviteCode,
-      inviteLink: `${ctx.req.protocol}://${ctx.req.get("host")}/i/${inviteCode}`,
+      inviteLink: `${ENV.publicOrigin}/i/${inviteCode}`, // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
       totalInvited,
       activeInvited,
       totalRewards,
