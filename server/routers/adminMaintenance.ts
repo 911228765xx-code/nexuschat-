@@ -120,10 +120,13 @@ export const adminMaintenanceRouter = router({
       const conn = await mysql.createConnection(url);
       try {
         // 1) 库内快照(DDL 会隐式提交,须在事务之前;DROP IF EXISTS 防重试撞名)
+        // 注:生产库是 TiDB,不支持 `CREATE TABLE ... AS SELECT`("not implemented yet"),
+        //    改用等价两步:LIKE 克隆结构 + INSERT SELECT 拷数据(TiDB/MySQL 都支持)。
         for (const b of BACKUP_TABLES) {
           const bk = `bk${ts}_${b}`;
           await conn.query(`DROP TABLE IF EXISTS \`${bk}\``);
-          await conn.query(`CREATE TABLE \`${bk}\` AS SELECT * FROM \`${b}\``);
+          await conn.query(`CREATE TABLE \`${bk}\` LIKE \`${b}\``);
+          await conn.query(`INSERT INTO \`${bk}\` SELECT * FROM \`${b}\``);
           backups.push(bk);
         }
         // 2) 事务内删除 + 收尾
