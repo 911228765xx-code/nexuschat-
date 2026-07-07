@@ -23,6 +23,7 @@ import { icoRouter } from "./routers/ico";
 import { appVersionRouter } from "./routers/appVersion";
 import { consultingRouter } from "./routers/consulting";
 import { swapRouter } from "./routers/swap";
+import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 import { aiRouter } from "./routers/ai";
 import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
@@ -71,6 +72,7 @@ export const appRouter = router({
   appVersion: appVersionRouter,
   consulting: consultingRouter,
   swap: swapRouter,
+  adminMaintenance: adminMaintenanceRouter,
 });
 
 export type AppRouter = typeof appRouter;
