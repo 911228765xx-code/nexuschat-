@@ -28,6 +28,7 @@ import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
 import { tgeRouter } from "./routers/tge";
 import { partnerRouter } from "./routers/partner";
+import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 
 export const appRouter = router({
   system: systemRouter,
@@ -71,6 +72,7 @@ export const appRouter = router({
   appVersion: appVersionRouter,
   consulting: consultingRouter,
   swap: swapRouter,
+  adminMaintenance: adminMaintenanceRouter,
 });
 
 export type AppRouter = typeof appRouter;
