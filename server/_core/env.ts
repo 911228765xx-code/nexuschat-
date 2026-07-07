@@ -20,4 +20,10 @@ export const ENV = {
     .filter(Boolean),
   /** Number of trusted reverse proxies/CDN hops in front of the app (for real client IP). */
   trustProxyHops: Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10) || 0,
+  /**
+   * 对外公网域名(拼绝对链接专用:更新下载地址/邀请链接/上传媒体 URL)。
+   * ⚠️ 不能用 req.get("host"):Cloudflare→Cloud Run 架构下 Express 看到的 Host 是
+   * *.a.run.app(Google 域名,大陆被墙),拼出去的链接国内用户全打不开。
+   */
+  publicOrigin: (process.env.PUBLIC_ORIGIN ?? "https://nexuschat.best").replace(/\/+$/, ""),
 };
