@@ -48,38 +48,47 @@ export async function handleApkDownload(req: Request, res: Response) {
       return;
     }
 
-    // 外部 URL：流式中转 + 规范文件名 + Range 透传
-    const upstreamHeaders: Record<string, string> = {};
-    const range = req.headers.range;
-    if (typeof range === "string") upstreamHeaders["Range"] = range;
+    // 外部 URL：流式中转 + 规范文件名。
+    // 关键:对上游【一律】用 Range 取(非 Range 客户端也强制 bytes=0-)。实测非 Range 完整 GET 会让
+    //   Cloud Run 实例 500 崩溃(应内更新首次下载正是非 Range→装不上→反复提示),而分片通道稳定可用。
+    //   非 Range 客户端仍回 200 + 完整 Content-Length(用上游 content-range 里的总长),行为等价一次完整下载。
+    const clientRange = req.headers.range;
+    const upstreamHeaders: Record<string, string> = {
+      Range: typeof clientRange === "string" ? clientRange : "bytes=0-",
+    };
 
     const upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
     if (!upstream.ok && upstream.status !== 206) {
       res.status(502).send(`下载源暂不可用（${upstream.status}），请稍后再试`);
       return;
     }
-
-    res.status(upstream.status === 206 ? 206 : 200);
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
-    res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
-    // 速度优化:
-    // 1) identity + no-transform → 关掉本服务的二次 gzip 和 CF 的动态压缩(APK 已是压缩包,再压 0 收益、
-    //    还费 CPU 且会丢 Content-Length 让进度条失效)。设 Content-Encoding 后 Express compression 会跳过。
-    // 2) public max-age → 允许 Cloudflare 边缘缓存(需在 CF 后台给 /apk 加一条 Cache Rule 才真正生效);
-    //    命中边缘后大陆用户就近下载,不再每次回源+从 expo.dev 二次拉取。版本换了最多 30 分钟内自愈。
-    res.setHeader("Content-Encoding", "identity");
-    res.setHeader("Cache-Control", "public, max-age=1800, no-transform");
-    res.setHeader("Accept-Ranges", upstream.headers.get("accept-ranges") ?? "bytes");
-    const len = upstream.headers.get("content-length");
-    if (len) res.setHeader("Content-Length", len);
-    const cr = upstream.headers.get("content-range");
-    if (cr) res.setHeader("Content-Range", cr);
-
     if (!upstream.body) {
       res.status(502).send("下载源返回为空");
       return;
     }
+
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
+    // identity + no-transform:APK 已是压缩包,禁二次 gzip(0 收益、丢 Content-Length 让进度失效)。
+    // public max-age:允许 Cloudflare 边缘缓存(需 CF 后台给 /apk 加 Cache Rule 才真正命中)。
+    res.setHeader("Content-Encoding", "identity");
+    res.setHeader("Cache-Control", "public, max-age=1800, no-transform");
+    res.setHeader("Accept-Ranges", "bytes");
+    const cr = upstream.headers.get("content-range"); // "bytes 0-N/TOTAL"
+    const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
+    if (typeof clientRange === "string") {
+      // 客户端确实请求了范围:如实回 206 + Content-Range
+      res.status(206);
+      if (cr) res.setHeader("Content-Range", cr);
+      const len = upstream.headers.get("content-length");
+      if (len) res.setHeader("Content-Length", len);
+    } else {
+      // 客户端要整包:回 200 + 完整长度(而非 206,符合 HTTP 语义,进度条/下载器正常)
+      res.status(200);
+      if (total) res.setHeader("Content-Length", String(total));
+    }
+
     const nodeStream = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]);
     nodeStream.pipe(res);
     nodeStream.on("error", () => { try { res.destroy(); } catch { /* ignore */ } });
