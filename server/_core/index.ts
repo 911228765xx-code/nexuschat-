@@ -84,6 +84,11 @@ async function startServer() {
   registerOAuthRoutes(app);
   // APK 固定下载短链：对外只发 https://<域名>/apk（外链流式中转,大陆可直连;版本随后台配置)
   app.get(["/apk", "/download/apk"], handleApkDownload);
+  // 邀请短链 /i/<code>：跳到下载落地页并带上推荐码（比原 /invite/<长码> 短;原 /invite 前端无路由=404,一并修活）
+  app.get("/i/:code", (req, res) => {
+    const code = String(req.params.code || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
+    res.redirect(302, code ? `/download?ref=${encodeURIComponent(code)}` : "/download");
+  });
   // SSE streaming endpoints (must be before tRPC middleware)
   // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
   app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);

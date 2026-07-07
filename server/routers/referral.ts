@@ -3,8 +3,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
-import { eq, and, desc, count, sql } from "drizzle-orm";
-import { ensureInviteCode } from "../utils/inviteCode";
+import { eq, and, or, desc, count, sql } from "drizzle-orm";
+import { ensureInviteCode, normalizeInviteCode } from "../utils/inviteCode";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
 // 按 AC 模型 v3.1 里程碑设计：注册激活档邀请人只给小奖(100)，大头留给后续
@@ -61,7 +61,7 @@ export const referralRouter = router({
 
     return {
       inviteCode,
-      inviteLink: `${ctx.req.protocol}://${ctx.req.get("host")}/invite/${inviteCode}`,
+      inviteLink: `${ctx.req.protocol}://${ctx.req.get("host")}/i/${inviteCode}`,
       totalInvited,
       activeInvited,
       totalRewards,
@@ -138,10 +138,13 @@ export const referralRouter = router({
       if (existing) return { success: false, message: "Already referred" };
 
       // Direct indexed lookup by stored invite code (O(1), no full-table scan / 10k cap).
+      // 输入容错:新码去横线/空格+大写(AI7KQ2);同时保留原样匹配旧存量码 NEXUS-XXXXXX-YYYY(含横线)。
+      const norm = normalizeInviteCode(input.inviteCode);
+      const rawUpper = input.inviteCode.trim().toUpperCase();
       const [referrer] = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.inviteCode, input.inviteCode))
+        .where(or(eq(users.inviteCode, norm), eq(users.inviteCode, rawUpper)))
         .limit(1);
 
       if (!referrer) return { success: false, message: "Invalid invite code" };
