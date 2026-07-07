@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import mysql from "mysql2/promise";
 import { getDb } from "../db";
 import { adminProcedure, router } from "../_core/trpc";
 
@@ -109,35 +110,45 @@ export const adminMaintenanceRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "确认口令不符:需输入「清零」二字" });
       }
 
-      // 1) 库内快照(DDL 隐式提交,须在删除事务之前做)
-      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 12); // YYYYMMDDHHmm
+      // 用原生 mysql2 连接跑执行:drizzle 的 db.execute 走 prepared 协议,
+      // 而 `CREATE TABLE ... AS SELECT` 等 DDL 在 prepared 协议下不被支持(表现为通用报错)。
+      // conn.query() 走 text 协议,支持全部语句;手动事务保证删除原子性。
+      const url = process.env.DATABASE_URL;
+      if (!url) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "缺少 DATABASE_URL" });
+      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14); // YYYYMMDDHHmmss(到秒,防同分钟重试撞名)
       const backups: string[] = [];
-      for (const b of BACKUP_TABLES) {
-        const bk = `bk${ts}_${b}`;
-        await db.execute(sql.raw(`CREATE TABLE \`${bk}\` AS SELECT * FROM \`${b}\``));
-        backups.push(bk);
-      }
-
-      // 2) 事务内删除 + 收尾
-      await db.transaction(async (tx) => {
+      const conn = await mysql.createConnection(url);
+      try {
+        // 1) 库内快照(DDL 会隐式提交,须在事务之前;DROP IF EXISTS 防重试撞名)
+        for (const b of BACKUP_TABLES) {
+          const bk = `bk${ts}_${b}`;
+          await conn.query(`DROP TABLE IF EXISTS \`${bk}\``);
+          await conn.query(`CREATE TABLE \`${bk}\` AS SELECT * FROM \`${b}\``);
+          backups.push(bk);
+        }
+        // 2) 事务内删除 + 收尾
+        await conn.beginTransaction();
         for (const t of WIPE_ALL) {
-          await tx.execute(sql.raw(`DELETE FROM \`${t}\``));
+          await conn.query(`DELETE FROM \`${t}\``);
         }
         // 真实用户的群成员行(机器人/管理员保留 → 群人数≈机器人数,满足"群和机器人数量不清零")
-        await tx.execute(sql.raw(`DELETE FROM \`group_members\` WHERE userId NOT IN (${idList})`));
+        await conn.query(`DELETE FROM \`group_members\` WHERE userId NOT IN (${idList})`);
         // 真实用户本体
-        await tx.execute(sql.raw(`DELETE FROM \`users\` WHERE id NOT IN (${idList})`));
-        // 保留的群:群主已被删的转移给执行操作的管理员;成员数按实际剩余重算
-        await tx.execute(sql.raw(`UPDATE \`chat_groups\` SET creatorId = ${ctx.user.id} WHERE creatorId NOT IN (${idList})`));
-        await tx.execute(sql.raw(`UPDATE \`group_announcements\` SET createdBy = ${ctx.user.id} WHERE createdBy NOT IN (${idList})`));
-        await tx.execute(sql.raw(
-          `UPDATE \`chat_groups\` SET memberCount = (SELECT COUNT(*) FROM \`group_members\` gm WHERE gm.groupId = chat_groups.id)`
-        ));
+        await conn.query(`DELETE FROM \`users\` WHERE id NOT IN (${idList})`);
+        // 保留的群:群主/公告作者已被删的转给执行操作的管理员;成员数按实际剩余重算
+        await conn.query(`UPDATE \`chat_groups\` SET creatorId = ${ctx.user.id} WHERE creatorId NOT IN (${idList})`);
+        await conn.query(`UPDATE \`group_announcements\` SET createdBy = ${ctx.user.id} WHERE createdBy NOT IN (${idList})`);
+        await conn.query(`UPDATE \`chat_groups\` SET memberCount = (SELECT COUNT(*) FROM \`group_members\` gm WHERE gm.groupId = chat_groups.id)`);
         // AMM 一并重置回未开市(参数列 theta/tax 保留,之后在 Swap 后台重新播种)
-        await tx.execute(sql.raw(
-          `UPDATE \`ai_amm_pool\` SET aiReserve=0, usdtReserve=0, reserveR=0, circulatingAi=0, crisisFund=0, divPool=0, cumBoughtUsdt=0, totalVolUsdt=0, peakPrice=0, peakUpdatedAt=NULL, seeded=0, dividendClaimsEnabled=0`
-        ));
-      });
+        await conn.query(`UPDATE \`ai_amm_pool\` SET aiReserve=0, usdtReserve=0, reserveR=0, circulatingAi=0, crisisFund=0, divPool=0, cumBoughtUsdt=0, totalVolUsdt=0, peakPrice=0, peakUpdatedAt=NULL, seeded=0, dividendClaimsEnabled=0`);
+        await conn.commit();
+      } catch (e) {
+        try { await conn.rollback(); } catch { /* ignore */ }
+        // 管理员专用工具:把真实数据库报错透传出来,别让生产 tRPC 吞成通用 "API Error"
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `清零失败(已回滚,数据未变动):${(e as Error).message}` });
+      } finally {
+        await conn.end();
+      }
 
       return { ...report, backups };
     }),
