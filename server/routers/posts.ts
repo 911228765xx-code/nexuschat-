@@ -66,6 +66,7 @@ export const postsRouter = router({
           desc(sql`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
           desc(posts.isPinned),
           desc(posts.createdAt),
+          desc(posts.id), // 稳定 tie-breaker:多帖 createdAt 同一秒时,不加它跨页(不同 offset)顺序不稳→重复/静默跳过
         )
         .limit(limit + 1)
         .offset(offset);
