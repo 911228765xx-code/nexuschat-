@@ -70,26 +70,33 @@ export default function DownloadPage() {
     if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
     if (dlProgress !== null) return; // 正在下
 
-    // 关键:服务端 /apk 对【非 Range 完整请求】会崩(返回网页,装不上);带 Range 的分片通道稳定返回真 APK。
-    // 浏览器点链接是非 Range,所以改用 JS 主动带 Range 拉取,再打包成文件下载,绕开那条坏路径。
+    // 关键:服务端 /apk 对【非 Range 完整请求】会崩(返回网页,装不上)。而且实测「开区间 bytes=0-」
+    // 或「上界超过文件末尾」也会被当成完整请求落到坏路径;只有【明确上下界、且不跨越整个文件】的分片
+    // 才稳定返回真 APK(206)。所以改成分块下载:每块 6MB、上界永远 < 文件总长,逐块拼成完整 APK。
     try {
       setDlProgress(0);
-      const res = await fetch("/apk", { headers: { Range: "bytes=0-" } });
-      if (!res.ok && res.status !== 206) throw new Error(`bad status ${res.status}`);
-      const cr = res.headers.get("content-range"); // "bytes 0-N/TOTAL"
-      const total = cr ? Number(cr.split("/")[1]) : Number(res.headers.get("content-length") || 0);
-      if (!res.body) throw new Error("no body");
-      const reader = res.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
+      const CHUNK = 6 * 1024 * 1024; // 6MB/块(远小于 ~176MB,保证每块都是"部分"而非整包)
+      const parts: BlobPart[] = [];
+      let start = 0;
+      let total = 0;
       for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (total > 0) setDlProgress(Math.min(0.999, received / total));
+        // 已知总长后,上界封顶到 total-1(绝不 ≥ 总长,否则被当完整请求)
+        const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
+        const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
+        if (res.status !== 206) throw new Error(`no partial (${res.status})`);
+        if (!total) {
+          const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
+          total = cr ? Number(cr.split("/")[1]) : 0;
+        }
+        const buf = new Uint8Array(await res.arrayBuffer());
+        if (buf.length === 0) break;
+        parts.push(buf);
+        start += buf.length;
+        if (total > 0) setDlProgress(Math.min(0.999, start / total));
+        if (total > 0 && start >= total) break;
+        if (total === 0) break; // 拿不到总长,至少存下已下的
       }
-      const blob = new Blob(chunks as BlobPart[], { type: "application/vnd.android.package-archive" });
+      const blob = new Blob(parts, { type: "application/vnd.android.package-archive" });
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objUrl;
