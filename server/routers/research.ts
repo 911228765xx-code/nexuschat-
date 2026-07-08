@@ -481,6 +481,10 @@ export const researchRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
+      // 只返回「已分享到广场」(有 post 引用该 reportId)的报告。原来 publicProcedure 按自增 reportId
+      // 直接返回任意报告全文 → 任何人(无需登录)遍历 id 即可拖走全站私有研报。收口为仅公开分享的报告。
+      const [shared] = await db.select({ id: posts.id }).from(posts).where(eq(posts.reportId, input.reportId)).limit(1);
+      if (!shared) return null;
       const [report] = await db
         .select({
           id: researchReports.id,

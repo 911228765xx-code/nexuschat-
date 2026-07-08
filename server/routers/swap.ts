@@ -296,7 +296,8 @@ export const swapRouter = router({
     }),
 
   adminCreditUsdt: adminProcedure
-    .input(z.object({ userId: z.number(), amount: z.number().positive() }))
+    // 补金额上限(与 requestDeposit/adminConfirmDeposit 一致):防内鬼/误输/凭证泄露一次凭空注入天量 USDT
+    .input(z.object({ userId: z.number(), amount: z.number().positive().max(1_000_000) }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");

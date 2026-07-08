@@ -12,7 +12,7 @@ import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { genLiveKitToken } from "../_core/livekitToken";
 import { getBenefits } from "../membership";
-import { spendNN } from "../token";
+import { spendNN, grantNN } from "../token";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
 import { setParticipantCanPublish, listParticipantCount } from "../_core/livekitService";
@@ -169,20 +169,28 @@ export const voiceRoomRouter = router({
         if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AI 不足：本月免费开房已用完，单次开房需 ${VOICE_ROOM_COST} AI，或升级会员获更多免费次数` });
         charged = true;
       }
-      const roomId = await allocRoomId(db);
-      await db.insert(voiceRooms).values({
-        roomId,
-        title: sanitizeInput(input.title),
-        topic: input.topic ? sanitizeInput(input.topic) : null,
-        category: input.category,
-        hostUserId: ctx.user.id,
-        isMembersOnly: input.isMembersOnly,
-        isPublic: input.isPublic,
-        status: "live",
-        speakerCount: 1,
-        listenerCount: 0,
-      });
-      const [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq(voiceRooms.roomId, roomId)).limit(1);
+      // 扣费后若建房失败(allocRoomId 撞唯一键 / DB 瞬断),退还已扣 AI,避免钱扣了房没建成
+      let roomId: number;
+      let row: { id: number } | undefined;
+      try {
+        roomId = await allocRoomId(db);
+        await db.insert(voiceRooms).values({
+          roomId,
+          title: sanitizeInput(input.title),
+          topic: input.topic ? sanitizeInput(input.topic) : null,
+          category: input.category,
+          hostUserId: ctx.user.id,
+          isMembersOnly: input.isMembersOnly,
+          isPublic: input.isPublic,
+          status: "live",
+          speakerCount: 1,
+          listenerCount: 0,
+        });
+        [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq(voiceRooms.roomId, roomId)).limit(1);
+      } catch (e) {
+        if (charged) await grantNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id, memo: "refund:create_failed" });
+        throw e;
+      }
       const name = ctx.user.name ?? ctx.user.username ?? `用户${ctx.user.id}`;
       const token = signToken(ctx.user.id, name, roomId, /*canPublish*/ true);
       return { id: String(row?.id ?? roomId), roomId, wsUrl: ENV.livekitUrl, roomName: roomName(roomId), token, role: "host" as const, title: input.title, charged };

@@ -148,7 +148,7 @@ export async function sendPushToUser(
   const notificationPayload = JSON.stringify({
     title: payload.title,
     body: payload.body,
-    url: payload.url || "/app/chat",
+    url: payload.url || "/(tabs)", // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
     icon: payload.icon || "/icons/icon-192x192.png",
     badge: "/icons/icon-72x72.png",
   });

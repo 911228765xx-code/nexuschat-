@@ -342,8 +342,10 @@ export const chatRouter = router({
         const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq(messages.id, input.replyToId)).limit(1);
         if (!rep || rep.groupId !== input.groupId) throw new TRPCError({ code: "BAD_REQUEST", message: "引用的消息无效" });
       }
-      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
-      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号。
+      // 基于 content 本身而非 messageType:否则把违禁文本塞进 image/file/voice 类型的 content 即可绕过全部审核。
+      const hasTextContent = !!input.content && input.content.trim().length > 0;
+      if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "group");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
@@ -379,12 +381,12 @@ export const chatRouter = router({
           createdAt: new Date().toISOString(),
         });
       } catch { /* 广播失败不影响落库 */ }
+      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）：任何带非空 content 的消息都过,与类型解耦防绕过
+      if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
-        // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
-        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
         // AC 产出：首次发消息里程碑
         void awardTaskEvent(db, ctx.user.id, "first_message");
       }
@@ -407,8 +409,9 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertCanDM(db, ctx.user.id, input.receiverId); // 仅好友可私信 + 拉黑校验
-      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
-      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号。基于 content 而非 messageType,防塞进媒体类型绕过。
+      const hasTextContent = !!input.content && input.content.trim().length > 0;
+      if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "dm");
       // 引用鉴权:被引用消息必须属于本私信会话(双方之间),防止引用别处消息带出无权内容
       if (input.replyToId) {
         const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId })
@@ -444,12 +447,10 @@ export const chatRouter = router({
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
-      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
-      if (input.messageType === "text") {
-        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-        // AC 产出：首次发消息里程碑
-        void awardTaskEvent(db, ctx.user.id, "first_message");
-      }
+      // 异步 AI 内容审核:任何带非空 content 的消息都过(与类型解耦防绕过)
+      if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+      // AC 产出：首次发消息里程碑(文本语义,保持原样)
+      if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
       return { messageId };
     }),
 

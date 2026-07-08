@@ -30,7 +30,7 @@ export function genLiveKitToken(apiKey: string, apiSecret: string, grant: LiveKi
     sub: grant.identity,
     nbf: now,
     exp: now + ttl,
-    jti: grant.identity,
+    jti: crypto.randomUUID(), // 唯一随机(原来=userId 可预测且复用);每次签发不同,缩短被盗/复用窗口
     ...(grant.name ? { name: grant.name } : {}),
     video: {
       room: grant.room,

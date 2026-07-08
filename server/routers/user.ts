@@ -374,6 +374,13 @@ export const userRouter = router({
       if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能封禁自己" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      // 保护:封禁前查目标角色,禁封管理员/机器人(防单个 admin 互封/封 owner 自锁群、封机器人打断运营;
+      // 与清零工具"保留管理员+机器人"的护栏一致)。服务端权威——原来仅客户端 disabled,直连 API 可绕过。
+      if (input.banned) {
+        const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq(users.id, input.userId)).limit(1);
+        if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        if (target.role === "admin" || target.isBot) throw new TRPCError({ code: "FORBIDDEN", message: "不能封禁管理员或系统机器人" });
+      }
       await db.update(users).set({ isBanned: input.banned }).where(eq(users.id, input.userId));
       return { success: true, banned: input.banned };
     }),
