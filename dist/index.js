@@ -2663,14 +2663,18 @@ async function buyMembership(db, userId, tierKey, months) {
   const tier = getTier(tierKey);
   if (tier.key === "free" || tier.monthlyNN <= 0) throw new Error("invalid tier");
   const cost = membershipCost(tier.monthlyNN, months);
-  const ok = await spendNN(db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
-  if (!ok) throw new Error("insufficient_nn");
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq5(users.id, userId)).limit(1);
-  const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
-  const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
-  const base = sameActiveTier ? u.proUntil.getTime() : Date.now();
-  const proUntil = new Date(base + months * 30 * 24 * 3600 * 1e3);
-  await db.update(users).set({ proTier: tierKey, proUntil }).where(eq5(users.id, userId));
+  const proUntil = await db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq5(users.id, userId)).for("update").limit(1);
+    const ok = await spendNN(tx, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
+    if (!ok) throw new Error("insufficient_nn");
+    const [u] = await tx.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq5(users.id, userId)).limit(1);
+    const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
+    const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
+    const base = sameActiveTier ? u.proUntil.getTime() : Date.now();
+    const until = new Date(base + months * 30 * 24 * 3600 * 1e3);
+    await tx.update(users).set({ proTier: tierKey, proUntil: until }).where(eq5(users.id, userId));
+    return until;
+  });
   void awardMembershipShare(db, userId, tierKey);
   void awardReferrerMilestone(db, userId, `membership_${tierKey}`, tierKey === "pro" ? 2e3 : 800);
   return { tier: tierKey, proUntil: proUntil.toISOString() };
@@ -3018,12 +3022,15 @@ var userRouter = router({
       npPoints: users.npPoints,
       walletAddress: users.walletAddress
     }).from(users).orderBy(desc2(users.npPoints)).limit(limit);
-    return rows.map((u, idx) => ({
-      ...u,
-      rank: idx + 1,
-      displayName: u.name ?? u.username ?? `User #${u.id}`,
-      shortAddress: u.walletAddress ? `${u.walletAddress.slice(0, 6)}...${u.walletAddress.slice(-4)}` : null
-    }));
+    return rows.map((u, idx) => {
+      const { walletAddress, ...pub } = u;
+      return {
+        ...pub,
+        rank: idx + 1,
+        displayName: pub.name ?? pub.username ?? `User #${u.id}`,
+        shortAddress: walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : null
+      };
+    });
   }),
   // ─── Get current user's rank ───────────────────────────────────────────────
   myRank: protectedProcedure.query(async ({ ctx }) => {
@@ -3894,7 +3901,7 @@ import { z as z5 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and11, desc as desc6, lt as lt2, sql as sql8, or as or4, gt as gt3, like, inArray as inArray6, isNull as isNull3 } from "drizzle-orm";
+import { eq as eq15, and as and11, desc as desc6, lt as lt2, sql as sql8, or as or5, gt as gt4, like, inArray as inArray6, isNull as isNull4 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 // server/socket.ts
@@ -3903,7 +3910,7 @@ import { parse as parseCookie } from "cookie";
 init_db();
 init_schema();
 init_logger();
-import { eq as eq12, and as and8 } from "drizzle-orm";
+import { eq as eq14, and as and10, or as or4, isNull as isNull3, gt as gt3 } from "drizzle-orm";
 
 // server/_core/corsOrigin.ts
 init_env();
@@ -4821,243 +4828,9 @@ async function runDueGroupBots(hour, minute) {
   }
 }
 
-// server/socket.ts
-async function isConversationMuted(userId, convKey) {
-  try {
-    const db = await getDb();
-    if (!db) return false;
-    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and8(eq12(conversationPrefs.userId, userId), eq12(conversationPrefs.convKey, convKey))).limit(1);
-    return !!p?.isMuted;
-  } catch {
-    return false;
-  }
-}
-async function authenticateSocket(socket) {
-  const authToken = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : void 0;
-  let token = authToken;
-  if (!token) {
-    const cookieHeader = socket.handshake.headers?.cookie;
-    if (cookieHeader) {
-      try {
-        token = parseCookie(cookieHeader)[COOKIE_NAME];
-      } catch {
-      }
-    }
-  }
-  if (!token) return null;
-  const session = await sdk.verifySession(token);
-  if (!session) return null;
-  const db = await getDb();
-  if (!db) return null;
-  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq12(users.openId, session.openId)).limit(1);
-  if (!row) return null;
-  return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
-}
-async function isGroupMember(db, groupId, userId) {
-  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and8(eq12(groupMembers.groupId, groupId), eq12(groupMembers.userId, userId))).limit(1);
-  return !!row;
-}
-var _io = null;
-var userSockets = /* @__PURE__ */ new Map();
-function getSocketIO() {
-  return _io;
-}
-function emitToUser(userId, event, data) {
-  if (!_io) return;
-  const sids = userSockets.get(userId);
-  if (!sids || sids.size === 0) return;
-  for (const sid of Array.from(sids)) {
-    _io.to(sid).emit(event, data);
-  }
-}
-function initSocketIO(httpServer) {
-  const io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    path: "/api/socket.io"
-  });
-  _io = io;
-  io.use(async (socket, next) => {
-    try {
-      const authed = await authenticateSocket(socket);
-      if (authed) {
-        socket.userId = authed.id;
-        socket.userName = authed.name;
-        socket.userAvatar = authed.avatar;
-      } else {
-        socket.userId = void 0;
-      }
-      next();
-    } catch (err) {
-      logger_default.warn({ err }, "Socket.io: auth middleware error");
-      next(new Error("Authentication failed"));
-    }
-  });
-  io.on("connection", (socket) => {
-    const userId = socket.userId;
-    const userName = socket.userName || "Anonymous";
-    const userAvatar = socket.userAvatar;
-    logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
-    if (userId) {
-      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
-      userSockets.get(userId).add(socket.id);
-    }
-    socket.on("register_user", () => {
-      if (!userId) return;
-      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
-      userSockets.get(userId).add(socket.id);
-    });
-    socket.on("join_group", async (groupId) => {
-      if (!userId || typeof groupId !== "number") return;
-      const db = await getDb();
-      if (!db || !await isGroupMember(db, groupId, userId)) {
-        socket.emit("error", { message: "Not a member of this group" });
-        return;
-      }
-      socket.join(`group:${groupId}`);
-      socket.to(`group:${groupId}`).emit("user_joined", {
-        userId,
-        userName,
-        groupId
-      });
-    });
-    socket.on("leave_group", (groupId) => {
-      socket.leave(`group:${groupId}`);
-    });
-    socket.on("send_message", async (data) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-        if (!await isGroupMember(db, data.groupId, userId)) {
-          socket.emit("error", { message: "Not a member of this group" });
-          return;
-        }
-        const [result] = await db.insert(messages).values({
-          groupId: data.groupId,
-          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          content: data.content,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl ?? void 0
-        });
-        const messageId = result.insertId;
-        const timestamp2 = /* @__PURE__ */ new Date();
-        let senderRole = "member";
-        let senderDisplayName = userName;
-        try {
-          const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and8(eq12(groupMembers.groupId, data.groupId), eq12(groupMembers.userId, senderIdNum))).limit(1);
-          if (memberRow) {
-            senderRole = memberRow.role;
-            if (memberRow.alias) senderDisplayName = memberRow.alias;
-          }
-        } catch (_) {
-        }
-        const outgoingMessage = {
-          id: messageId,
-          groupId: data.groupId,
-          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          senderName: senderDisplayName,
-          senderAvatar: userAvatar ?? null,
-          senderRole,
-          content: data.content,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: timestamp2
-        };
-        io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
-        const triggerUid = typeof userId === "number" ? userId : parseInt(String(userId));
-        triggerBotAutoReply(data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: BotAutoReply trigger failed"));
-        if ((data.messageType || "text") === "text") {
-          runInteractBot(db, data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: interact bot failed"));
-        }
-      } catch (err) {
-        logger_default.error({ err }, "Socket.io: Error saving message");
-        socket.emit("error", { message: "Failed to send message" });
-      }
-    });
-    socket.on("send_dm", async (data) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-        const [result] = await db.insert(messages).values({
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          content: data.content,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl ?? void 0
-        });
-        const messageId = result.insertId;
-        const outgoingMessage = {
-          id: messageId,
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          senderName: userName,
-          content: data.content,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: /* @__PURE__ */ new Date()
-        };
-        emitToUser(data.receiverId, "new_dm", outgoingMessage);
-        socket.emit("dm_sent", outgoingMessage);
-        const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId).size > 0;
-        if (!receiverOnline) {
-          const muted = await isConversationMuted(data.receiverId, `dm:${senderIdNum}`);
-          if (!muted) {
-            sendPushToUser(data.receiverId, {
-              title: `${userName} \u53D1\u6765\u6D88\u606F`,
-              body: data.content.length > 80 ? data.content.slice(0, 80) + "..." : data.content,
-              url: `/app/dm/${senderIdNum}`
-            }).catch((err) => logger_default.warn({ err }, "Socket: Web Push failed"));
-          }
-        }
-      } catch (err) {
-        logger_default.error({ err }, "Socket.io: Error saving DM");
-        socket.emit("error", { message: "Failed to send DM" });
-      }
-    });
-    socket.on("typing", (data) => {
-      socket.to(`group:${data.groupId}`).emit("user_typing", {
-        userId,
-        userName,
-        isTyping: data.isTyping
-      });
-    });
-    socket.on("dm_typing", (data) => {
-      emitToUser(data.receiverId, "dm_typing", {
-        fromUserId: userId,
-        isTyping: data.isTyping
-      });
-    });
-    socket.on("disconnect", () => {
-      logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User disconnected");
-      const uid = socket.userId;
-      if (uid && userSockets.has(uid)) {
-        userSockets.get(uid).delete(socket.id);
-        if (userSockets.get(uid).size === 0) userSockets.delete(uid);
-      }
-    });
-  });
-  return io;
-}
-
-// server/routers/chat.ts
-init_logger();
-init_schema();
-init_schema();
-
 // server/moderation.ts
 init_schema();
-import { eq as eq13, and as and9, gt as gt2, sql as sql7 } from "drizzle-orm";
+import { eq as eq12, and as and8, gt as gt2, sql as sql7 } from "drizzle-orm";
 import { TRPCError as TRPCError6 } from "@trpc/server";
 init_logger();
 var AUTO_BAN_THRESHOLD = 3;
@@ -5216,9 +4989,9 @@ async function recordAndMaybeBan(db, userId, category, source, snippet) {
   }
   try {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1e3);
-    const [cnt] = await db.select({ c: sql7`COUNT(*)` }).from(contentViolations).where(and9(eq13(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
+    const [cnt] = await db.select({ c: sql7`COUNT(*)` }).from(contentViolations).where(and8(eq12(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
     if (Number(cnt?.c ?? 0) >= AUTO_BAN_THRESHOLD) {
-      await db.update(users).set({ isBanned: true }).where(eq13(users.id, userId));
+      await db.update(users).set({ isBanned: true }).where(eq12(users.id, userId));
       logger_default.warn({ userId, category }, "moderation: \u7D2F\u8BA1\u8FDD\u89C4\u81EA\u52A8\u5C01\u53F7");
       return { banned: true };
     }
@@ -5241,7 +5014,7 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
     if (!AI_MODERATION || !text2) return;
     const r = await moderateWithAI(text2);
     if (!r.blocked) return;
-    await db.update(messages).set({ isDeleted: true }).where(eq13(messages.id, messageId));
+    await db.update(messages).set({ isDeleted: true }).where(eq12(messages.id, messageId));
     await recordAndMaybeBan(db, userId, r.category ?? "other", source, text2);
     logger_default.warn({ userId, messageId, category: r.category }, "moderation: \u5F02\u6B65 AI \u5220\u9664\u8FDD\u89C4\u6D88\u606F");
   } catch (err) {
@@ -5251,25 +5024,25 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
 
 // server/utils/relations.ts
 init_schema();
-import { and as and10, eq as eq14, or as or3 } from "drizzle-orm";
+import { and as and9, eq as eq13, or as or3 } from "drizzle-orm";
 import { TRPCError as TRPCError7 } from "@trpc/server";
 async function areFriends(db, a, b) {
   if (a === b) return true;
-  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and10(eq14(friendRequests.status, "accepted"), or3(
-    and10(eq14(friendRequests.senderId, a), eq14(friendRequests.receiverId, b)),
-    and10(eq14(friendRequests.senderId, b), eq14(friendRequests.receiverId, a))
+  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and9(eq13(friendRequests.status, "accepted"), or3(
+    and9(eq13(friendRequests.senderId, a), eq13(friendRequests.receiverId, b)),
+    and9(eq13(friendRequests.senderId, b), eq13(friendRequests.receiverId, a))
   ))).limit(1);
   return !!r;
 }
 async function isBlockedEither(db, a, b) {
   const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(or3(
-    and10(eq14(userBlocklist.blockerId, a), eq14(userBlocklist.blockedId, b)),
-    and10(eq14(userBlocklist.blockerId, b), eq14(userBlocklist.blockedId, a))
+    and9(eq13(userBlocklist.blockerId, a), eq13(userBlocklist.blockedId, b)),
+    and9(eq13(userBlocklist.blockerId, b), eq13(userBlocklist.blockedId, a))
   )).limit(1);
   return !!r;
 }
 async function hasBlocked(db, blocker, blocked) {
-  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and10(eq14(userBlocklist.blockerId, blocker), eq14(userBlocklist.blockedId, blocked))).limit(1);
+  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and9(eq13(userBlocklist.blockerId, blocker), eq13(userBlocklist.blockedId, blocked))).limit(1);
   return !!r;
 }
 async function assertCanDM(db, from, to) {
@@ -5278,7 +5051,254 @@ async function assertCanDM(db, from, to) {
   if (!await areFriends(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u4EC5\u597D\u53CB\u53EF\u79C1\u4FE1,\u8BF7\u5148\u52A0\u4E3A\u597D\u53CB" });
 }
 
+// server/socket.ts
+async function isConversationMuted(userId, convKey) {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and10(eq14(conversationPrefs.userId, userId), eq14(conversationPrefs.convKey, convKey))).limit(1);
+    return !!p?.isMuted;
+  } catch {
+    return false;
+  }
+}
+async function authenticateSocket(socket) {
+  const authToken = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : void 0;
+  let token = authToken;
+  if (!token) {
+    const cookieHeader = socket.handshake.headers?.cookie;
+    if (cookieHeader) {
+      try {
+        token = parseCookie(cookieHeader)[COOKIE_NAME];
+      } catch {
+      }
+    }
+  }
+  if (!token) return null;
+  const session = await sdk.verifySession(token);
+  if (!session) return null;
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq14(users.openId, session.openId)).limit(1);
+  if (!row) return null;
+  return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
+}
+async function isGroupMember(db, groupId, userId) {
+  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and10(eq14(groupMembers.groupId, groupId), eq14(groupMembers.userId, userId))).limit(1);
+  return !!row;
+}
+var _io = null;
+var userSockets = /* @__PURE__ */ new Map();
+function getSocketIO() {
+  return _io;
+}
+function emitToUser(userId, event, data) {
+  if (!_io) return;
+  const sids = userSockets.get(userId);
+  if (!sids || sids.size === 0) return;
+  for (const sid of Array.from(sids)) {
+    _io.to(sid).emit(event, data);
+  }
+}
+function initSocketIO(httpServer) {
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    path: "/api/socket.io"
+  });
+  _io = io;
+  io.use(async (socket, next) => {
+    try {
+      const authed = await authenticateSocket(socket);
+      if (authed) {
+        socket.userId = authed.id;
+        socket.userName = authed.name;
+        socket.userAvatar = authed.avatar;
+      } else {
+        socket.userId = void 0;
+      }
+      next();
+    } catch (err) {
+      logger_default.warn({ err }, "Socket.io: auth middleware error");
+      next(new Error("Authentication failed"));
+    }
+  });
+  io.on("connection", (socket) => {
+    const userId = socket.userId;
+    const userName = socket.userName || "Anonymous";
+    const userAvatar = socket.userAvatar;
+    logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
+    if (userId) {
+      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
+      userSockets.get(userId).add(socket.id);
+    }
+    socket.on("register_user", () => {
+      if (!userId) return;
+      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
+      userSockets.get(userId).add(socket.id);
+    });
+    socket.on("join_group", async (groupId) => {
+      if (!userId || typeof groupId !== "number") return;
+      const db = await getDb();
+      if (!db || !await isGroupMember(db, groupId, userId)) {
+        socket.emit("error", { message: "Not a member of this group" });
+        return;
+      }
+      socket.join(`group:${groupId}`);
+      socket.to(`group:${groupId}`).emit("user_joined", {
+        userId,
+        userName,
+        groupId
+      });
+    });
+    socket.on("leave_group", (groupId) => {
+      socket.leave(`group:${groupId}`);
+    });
+    socket.on("send_message", async (data) => {
+      try {
+        const db = await getDb();
+        if (!db || !userId) {
+          socket.emit("error", { message: "Not authenticated" });
+          return;
+        }
+        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+        if (!await isGroupMember(db, data.groupId, userId)) {
+          socket.emit("error", { message: "Not a member of this group" });
+          return;
+        }
+        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and10(
+          eq14(groupMutes.groupId, data.groupId),
+          eq14(groupMutes.userId, senderIdNum),
+          or4(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+        )).limit(1);
+        if (muted) {
+          socket.emit("error", { message: "\u4F60\u5DF2\u88AB\u7981\u8A00\uFF0C\u65E0\u6CD5\u53D1\u8A00" });
+          return;
+        }
+        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "group");
+        const safeContent = sanitizeInput(data.content, 5e3);
+        const [result] = await db.insert(messages).values({
+          groupId: data.groupId,
+          senderId: senderIdNum,
+          content: safeContent,
+          messageType: data.messageType || "text",
+          mediaUrl: data.mediaUrl ?? void 0
+        });
+        const messageId = result.insertId;
+        const timestamp2 = /* @__PURE__ */ new Date();
+        let senderRole = "member";
+        let senderDisplayName = userName;
+        try {
+          const senderIdNum2 = typeof userId === "number" ? userId : parseInt(String(userId));
+          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and10(eq14(groupMembers.groupId, data.groupId), eq14(groupMembers.userId, senderIdNum2))).limit(1);
+          if (memberRow) {
+            senderRole = memberRow.role;
+            if (memberRow.alias) senderDisplayName = memberRow.alias;
+          }
+        } catch (_) {
+        }
+        const outgoingMessage = {
+          id: messageId,
+          groupId: data.groupId,
+          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
+          senderName: senderDisplayName,
+          senderAvatar: userAvatar ?? null,
+          senderRole,
+          content: safeContent,
+          messageType: data.messageType || "text",
+          mediaUrl: data.mediaUrl,
+          createdAt: timestamp2
+        };
+        io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
+        const triggerUid = typeof userId === "number" ? userId : parseInt(String(userId));
+        triggerBotAutoReply(data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: BotAutoReply trigger failed"));
+        if ((data.messageType || "text") === "text") {
+          runInteractBot(db, data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: interact bot failed"));
+        }
+      } catch (err) {
+        logger_default.error({ err }, "Socket.io: Error saving message");
+        socket.emit("error", { message: "Failed to send message" });
+      }
+    });
+    socket.on("send_dm", async (data) => {
+      try {
+        const db = await getDb();
+        if (!db || !userId) {
+          socket.emit("error", { message: "Not authenticated" });
+          return;
+        }
+        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+        await assertCanDM(db, senderIdNum, data.receiverId);
+        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "dm");
+        const safeContent = sanitizeInput(data.content, 5e3);
+        const [result] = await db.insert(messages).values({
+          senderId: senderIdNum,
+          receiverId: data.receiverId,
+          content: safeContent,
+          messageType: data.messageType || "text",
+          mediaUrl: data.mediaUrl ?? void 0
+        });
+        const messageId = result.insertId;
+        const outgoingMessage = {
+          id: messageId,
+          senderId: senderIdNum,
+          receiverId: data.receiverId,
+          senderName: userName,
+          content: safeContent,
+          messageType: data.messageType || "text",
+          mediaUrl: data.mediaUrl,
+          createdAt: /* @__PURE__ */ new Date()
+        };
+        emitToUser(data.receiverId, "new_dm", outgoingMessage);
+        socket.emit("dm_sent", outgoingMessage);
+        const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId).size > 0;
+        if (!receiverOnline) {
+          const muted = await isConversationMuted(data.receiverId, `dm:${senderIdNum}`);
+          if (!muted) {
+            sendPushToUser(data.receiverId, {
+              title: `${userName} \u53D1\u6765\u6D88\u606F`,
+              body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
+              url: `/app/dm/${senderIdNum}`
+            }).catch((err) => logger_default.warn({ err }, "Socket: Web Push failed"));
+          }
+        }
+      } catch (err) {
+        logger_default.error({ err }, "Socket.io: Error saving DM");
+        socket.emit("error", { message: "Failed to send DM" });
+      }
+    });
+    socket.on("typing", (data) => {
+      socket.to(`group:${data.groupId}`).emit("user_typing", {
+        userId,
+        userName,
+        isTyping: data.isTyping
+      });
+    });
+    socket.on("dm_typing", (data) => {
+      emitToUser(data.receiverId, "dm_typing", {
+        fromUserId: userId,
+        isTyping: data.isTyping
+      });
+    });
+    socket.on("disconnect", () => {
+      logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User disconnected");
+      const uid = socket.userId;
+      if (uid && userSockets.has(uid)) {
+        userSockets.get(uid).delete(socket.id);
+        if (userSockets.get(uid).size === 0) userSockets.delete(uid);
+      }
+    });
+  });
+  return io;
+}
+
 // server/routers/chat.ts
+init_logger();
+init_schema();
+init_schema();
 async function assertGroupMember(db, groupId, userId) {
   const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, groupId), eq15(groupMembers.userId, userId))).limit(1);
   if (!m) throw new TRPCError8({ code: "FORBIDDEN", message: "Not a member of this group" });
@@ -5326,7 +5346,7 @@ var chatRouter = router({
     const q = input?.search?.trim();
     if (q) {
       const term = `%${q}%`;
-      const match = or4(like(chatGroups.name, term), like(chatGroups.description, term));
+      const match = or5(like(chatGroups.name, term), like(chatGroups.description, term));
       if (match) conditions.push(match);
     }
     return db.select().from(chatGroups).where(and11(...conditions)).orderBy(desc6(chatGroups.memberCount)).limit(input?.limit ?? 20).offset(input?.offset ?? 0);
@@ -5440,7 +5460,7 @@ var chatRouter = router({
       sql8`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
-    if (clearedG > 0) conditions.push(gt3(messages.id, clearedG));
+    if (clearedG > 0) conditions.push(gt4(messages.id, clearedG));
     if (input.before) {
       conditions.push(lt2(messages.id, input.before));
     }
@@ -5483,7 +5503,7 @@ var chatRouter = router({
     const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and11(
       eq15(groupMutes.groupId, input.groupId),
       eq15(groupMutes.userId, ctx.user.id),
-      or4(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+      or5(isNull4(groupMutes.expiresAt), gt4(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
     )).limit(1);
     if (muted) throw new TRPCError8({ code: "FORBIDDEN", message: "\u4F60\u5DF2\u88AB\u7981\u8A00,\u6682\u65F6\u65E0\u6CD5\u53D1\u8A00" });
     if (input.replyToId) {
@@ -5725,7 +5745,7 @@ var chatRouter = router({
     const myId = ctx.user.id;
     const otherId = input.otherUserId;
     const conditions = [
-      or4(
+      or5(
         and11(eq15(messages.senderId, myId), eq15(messages.receiverId, otherId)),
         and11(eq15(messages.senderId, otherId), eq15(messages.receiverId, myId))
       ),
@@ -5733,7 +5753,7 @@ var chatRouter = router({
       sql8`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedD = await getClearedBeforeId(db, myId, `dm:${otherId}`);
-    if (clearedD > 0) conditions.push(gt3(messages.id, clearedD));
+    if (clearedD > 0) conditions.push(gt4(messages.id, clearedD));
     if (input.before) conditions.push(lt2(messages.id, input.before));
     const repliedMsg = alias(messages, "replied_msg_d");
     const repliedUser = alias(users, "replied_user_d");
@@ -5784,7 +5804,7 @@ var chatRouter = router({
       receiverId: messages.receiverId
     }).from(messages).where(
       and11(
-        or4(
+        or5(
           eq15(messages.senderId, myId),
           eq15(messages.receiverId, myId)
         ),
@@ -5905,7 +5925,19 @@ var chatRouter = router({
   getGroupInfo: publicProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const rows = await db.select().from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
+    const rows = await db.select({
+      id: chatGroups.id,
+      name: chatGroups.name,
+      description: chatGroups.description,
+      avatar: chatGroups.avatar,
+      memberCount: chatGroups.memberCount,
+      maxMembers: chatGroups.maxMembers,
+      isPublic: chatGroups.isPublic,
+      category: chatGroups.category,
+      isTokenGated: chatGroups.isTokenGated,
+      tokenGateAmount: chatGroups.tokenGateAmount,
+      joinApproval: chatGroups.joinApproval
+    }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
     return rows[0] ?? null;
   }),
   // Get user info by userId (for DM partner display)
@@ -6007,7 +6039,7 @@ var chatRouter = router({
     ).where(and11(
       inArray6(messages.groupId, groupIds),
       eq15(messages.isDeleted, false),
-      gt3(messages.id, sql8`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
+      gt4(messages.id, sql8`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
     )).groupBy(messages.groupId);
     for (const r of rows) {
       if (r.groupId != null) result[r.groupId] = Number(r.count);
@@ -6037,16 +6069,14 @@ var chatRouter = router({
   deleteMessage: protectedProcedure.input(z5.object({ messageId: z5.number(), groupId: z5.number().optional() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const rows = await db.select({ senderId: messages.senderId }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
+    const rows = await db.select({ senderId: messages.senderId, groupId: messages.groupId }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
     if (!rows[0]) throw new Error("Message not found");
     const isSender = rows[0].senderId === ctx.user.id;
     if (!isSender) {
-      if (input.groupId) {
-        const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
-        if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-      } else {
-        throw new Error("Not authorized");
-      }
+      const realGroupId = rows[0].groupId;
+      if (realGroupId == null) throw new Error("Not authorized");
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, realGroupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
     }
     await db.update(messages).set({ isDeleted: true }).where(eq15(messages.id, input.messageId));
     return { ok: true };
@@ -6140,9 +6170,10 @@ var chatRouter = router({
     await db.update(messages).set({ isPinned: input.pinned }).where(and11(eq15(messages.id, input.messageId), eq15(messages.groupId, input.groupId)));
     return { ok: true };
   }),
-  getPinnedMessages: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ input }) => {
+  getPinnedMessages: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
+    await assertGroupMember(db, input.groupId, ctx.user.id);
     return db.select({
       id: messages.id,
       content: messages.content,
@@ -6374,7 +6405,7 @@ var chatRouter = router({
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") return [];
     const now = /* @__PURE__ */ new Date();
-    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq15(groupMutes.userId, users.id)).where(and11(eq15(groupMutes.groupId, input.groupId), gt3(groupMutes.expiresAt, now)));
+    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq15(groupMutes.userId, users.id)).where(and11(eq15(groupMutes.groupId, input.groupId), gt4(groupMutes.expiresAt, now)));
   }),
   // ─── Leave Group ──────────────────────────────────────────────────────────
   leaveGroup: protectedProcedure.input(z5.object({ groupId: z5.number() })).mutation(async ({ ctx, input }) => {
@@ -6461,7 +6492,7 @@ var chatRouter = router({
       maxId = m?.id ?? 0;
     } else if (input.convKey.startsWith("dm:")) {
       const other = parseInt(input.convKey.slice(3), 10);
-      const [m] = await db.select({ id: messages.id }).from(messages).where(or4(
+      const [m] = await db.select({ id: messages.id }).from(messages).where(or5(
         and11(eq15(messages.senderId, ctx.user.id), eq15(messages.receiverId, other)),
         and11(eq15(messages.senderId, other), eq15(messages.receiverId, ctx.user.id))
       )).orderBy(desc6(messages.id)).limit(1);
@@ -6725,21 +6756,21 @@ var chatRouter = router({
     const weekAgo = new Date(now - 7 * 24 * 3600 * 1e3);
     const prevWeekAgo = new Date(now - 14 * 24 * 3600 * 1e3);
     const [memberCount] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
-    const [newWeek] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), gt3(groupMembers.joinedAt, weekAgo)));
-    const [msgToday] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, dayAgo)));
-    const [msgWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
-    const [msgPrevWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
-    const [activeWeek] = await db.select({ c: sql8`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
+    const [newWeek] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), gt4(groupMembers.joinedAt, weekAgo)));
+    const [msgToday] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, dayAgo)));
+    const [msgWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
+    const [msgPrevWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
+    const [activeWeek] = await db.select({ c: sql8`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
     const daily = await db.select({
       day: sql8`DATE(${messages.createdAt})`,
       c: sql8`COUNT(*)`
-    }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(sql8`DATE(${messages.createdAt})`).orderBy(sql8`DATE(${messages.createdAt})`);
+    }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(sql8`DATE(${messages.createdAt})`).orderBy(sql8`DATE(${messages.createdAt})`);
     const topRows = await db.select({
       userId: messages.senderId,
       name: users.name,
       avatar: users.avatar,
       c: sql8`COUNT(*)`
-    }).from(messages).leftJoin(users, eq15(users.id, messages.senderId)).where(and11(eq15(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc6(sql8`COUNT(*)`)).limit(5);
+    }).from(messages).leftJoin(users, eq15(users.id, messages.senderId)).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc6(sql8`COUNT(*)`)).limit(5);
     const total = Number(memberCount?.c ?? 0);
     const active = Number(activeWeek?.c ?? 0);
     const mw = Number(msgWeek?.c ?? 0);
@@ -7021,9 +7052,9 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const now = /* @__PURE__ */ new Date();
-    const active = await db.select({ botType: groupBots.botType, c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), or4(isNull3(groupBots.expiresAt), gt3(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
+    const active = await db.select({ botType: groupBots.botType, c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), or5(isNull4(groupBots.expiresAt), gt4(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
     const soon = new Date(now.getTime() + 7 * 24 * 3600 * 1e3);
-    const [expiring] = await db.select({ c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), gt3(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
+    const [expiring] = await db.select({ c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), gt4(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
     const revenue = await getNNRevenue(db);
     const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql8`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
     const token = await getTokenInfo(db);
@@ -7504,7 +7535,7 @@ ${summary}${summary.length >= 150 ? "..." : ""}
 import { z as z8 } from "zod";
 init_db();
 init_schema();
-import { eq as eq18, and as and14, desc as desc9, sql as sql10, gt as gt4 } from "drizzle-orm";
+import { eq as eq18, and as and14, desc as desc9, sql as sql10, gt as gt5 } from "drizzle-orm";
 init_storage();
 
 // server/routers/notificationsRouter.ts
@@ -7569,7 +7600,9 @@ var notificationsRouter = router({
   create: protectedProcedure.input(
     z7.object({
       targetUserId: z7.number(),
-      type: z7.enum(["like", "comment", "follow", "mention", "system"]),
+      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+      // system 类通知只能由服务端 createNotification() 内部发起。
+      type: z7.enum(["like", "comment", "follow", "mention"]),
       content: z7.string().max(500),
       postId: z7.number().optional()
     })
@@ -7584,7 +7617,8 @@ var notificationsRouter = router({
       fromUserName: ctx.user.name ?? "Anonymous",
       fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
       postId: input.postId,
-      content: input.content,
+      content: sanitizeInput(input.content, 500),
+      // 之前未净化,存原始 markup 再回显
       isRead: false
     });
     return { success: true };
@@ -7724,7 +7758,7 @@ var postsRouter = router({
       name: users.name,
       username: users.username,
       avatar: users.avatar
-    }).from(promoBanners).leftJoin(users, eq18(promoBanners.userId, users.id)).where(and14(eq18(promoBanners.status, "active"), gt4(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(12);
+    }).from(promoBanners).leftJoin(users, eq18(promoBanners.userId, users.id)).where(and14(eq18(promoBanners.status, "active"), gt5(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(12);
     return rows.map((r) => ({
       id: r.id,
       text: r.text,
@@ -7737,7 +7771,7 @@ var postsRouter = router({
   promoBannerMine: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [b] = await db.select().from(promoBanners).where(and14(eq18(promoBanners.userId, ctx.user.id), eq18(promoBanners.status, "active"), gt4(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(1);
+    const [b] = await db.select().from(promoBanners).where(and14(eq18(promoBanners.userId, ctx.user.id), eq18(promoBanners.status, "active"), gt5(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(1);
     return b ? { id: b.id, text: b.text, targetType: b.targetType, targetId: b.targetId, expiresAt: b.expiresAt.toISOString() } : null;
   }),
   promoBannerSubmit: protectedProcedure.input(z8.object({
@@ -7810,7 +7844,7 @@ var postsRouter = router({
       const [dup] = await db.select({ id: posts.id }).from(posts).where(and14(
         eq18(posts.authorId, ctx.user.id),
         eq18(posts.content, sanitizeInput(input.content, 2e3)),
-        gt4(posts.createdAt, todayStart),
+        gt5(posts.createdAt, todayStart),
         sql10`${posts.id} != ${result.insertId}`
       )).limit(1);
       if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
@@ -8682,7 +8716,7 @@ import { z as z11 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and17, eq as eq21, or as or5, desc as desc11 } from "drizzle-orm";
+import { and as and17, eq as eq21, or as or6, desc as desc11 } from "drizzle-orm";
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -8703,7 +8737,7 @@ var contactsRouter = router({
     const isSelf = input.userId === ctx.user.id;
     let isFriend = false, requestPending = false, blockedByMe = false;
     if (!isSelf) {
-      const [rel] = await db.select({ status: friendRequests.status }).from(friendRequests).where(or5(
+      const [rel] = await db.select({ status: friendRequests.status }).from(friendRequests).where(or6(
         and17(eq21(friendRequests.senderId, ctx.user.id), eq21(friendRequests.receiverId, input.userId)),
         and17(eq21(friendRequests.senderId, input.userId), eq21(friendRequests.receiverId, ctx.user.id))
       )).limit(1);
@@ -8722,11 +8756,11 @@ var contactsRouter = router({
       await db.insert(userBlocklist).values({ blockerId: ctx.user.id, blockedId: input.targetId });
     } catch {
     }
-    await db.delete(friendRequests).where(or5(
+    await db.delete(friendRequests).where(or6(
       and17(eq21(friendRequests.senderId, ctx.user.id), eq21(friendRequests.receiverId, input.targetId)),
       and17(eq21(friendRequests.senderId, input.targetId), eq21(friendRequests.receiverId, ctx.user.id))
     ));
-    await db.delete(contactMetadata).where(or5(
+    await db.delete(contactMetadata).where(or6(
       and17(eq21(contactMetadata.userId, ctx.user.id), eq21(contactMetadata.contactId, input.targetId)),
       and17(eq21(contactMetadata.userId, input.targetId), eq21(contactMetadata.contactId, ctx.user.id))
     ));
@@ -8756,7 +8790,7 @@ var contactsRouter = router({
     if (input.receiverId === ctx.user.id) throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u6DFB\u52A0\u81EA\u5DF1\u4E3A\u597D\u53CB" });
     if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError11({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u6DFB\u52A0\u597D\u53CB(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
     const existing = await db.select({ id: friendRequests.id, status: friendRequests.status }).from(friendRequests).where(
-      or5(
+      or6(
         and17(eq21(friendRequests.senderId, ctx.user.id), eq21(friendRequests.receiverId, input.receiverId)),
         and17(eq21(friendRequests.senderId, input.receiverId), eq21(friendRequests.receiverId, ctx.user.id))
       )
@@ -8791,7 +8825,7 @@ var contactsRouter = router({
     await db.delete(friendRequests).where(
       and17(
         eq21(friendRequests.status, "accepted"),
-        or5(
+        or6(
           and17(eq21(friendRequests.senderId, ctx.user.id), eq21(friendRequests.receiverId, input.friendId)),
           and17(eq21(friendRequests.senderId, input.friendId), eq21(friendRequests.receiverId, ctx.user.id))
         )
@@ -8799,7 +8833,7 @@ var contactsRouter = router({
     );
     try {
       await db.delete(contactMetadata).where(
-        or5(
+        or6(
           and17(eq21(contactMetadata.userId, ctx.user.id), eq21(contactMetadata.contactId, input.friendId)),
           and17(eq21(contactMetadata.userId, input.friendId), eq21(contactMetadata.contactId, ctx.user.id))
         )
@@ -9386,7 +9420,7 @@ var settingsRouter = router({
 import { z as z15 } from "zod";
 init_db();
 init_schema();
-import { eq as eq25, and as and21, or as or6, desc as desc15, count as count4, sql as sql13 } from "drizzle-orm";
+import { eq as eq25, and as and21, or as or7, desc as desc15, count as count4, sql as sql13 } from "drizzle-orm";
 init_env();
 var REFERRER_REWARD = 100;
 var INVITEE_REWARD = 200;
@@ -9469,7 +9503,7 @@ var referralRouter = router({
     if (existing) return { success: false, message: "Already referred" };
     const norm = normalizeInviteCode(input.inviteCode);
     const rawUpper = input.inviteCode.trim().toUpperCase();
-    const [referrer] = await db.select({ id: users.id }).from(users).where(or6(eq25(users.inviteCode, norm), eq25(users.inviteCode, rawUpper))).limit(1);
+    const [referrer] = await db.select({ id: users.id }).from(users).where(or7(eq25(users.inviteCode, norm), eq25(users.inviteCode, rawUpper))).limit(1);
     if (!referrer) return { success: false, message: "Invalid invite code" };
     if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
     {
@@ -9495,7 +9529,10 @@ var referralRouter = router({
         cur = parentOf.get(cur);
       }
     }
-    await db.transaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq25(users.id, inviteeId)).for("update").limit(1);
+      const [dup] = await tx.select({ id: referrals.id }).from(referrals).where(eq25(referrals.inviteeId, inviteeId)).limit(1);
+      if (dup) return "dup";
       await tx.insert(referrals).values({
         referrerId: referrer.id,
         inviteeId,
@@ -9506,17 +9543,179 @@ var referralRouter = router({
       });
       await tx.update(users).set({ npPoints: sql13`${users.npPoints} + ${REFERRER_REWARD}` }).where(eq25(users.id, referrer.id));
       await tx.update(users).set({ npPoints: sql13`${users.npPoints} + ${INVITEE_REWARD}` }).where(eq25(users.id, inviteeId));
+      return "ok";
     });
+    if (outcome === "dup") return { success: false, message: "Already referred" };
     return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
+  })
+});
+
+// server/routers/adminMaintenance.ts
+init_db();
+import { z as z16 } from "zod";
+import { sql as sql14 } from "drizzle-orm";
+import { TRPCError as TRPCError12 } from "@trpc/server";
+import mysql from "mysql2/promise";
+var WIPE_ALL = [
+  // 聊天(机器人+真实用户)
+  "messages",
+  "message_reactions",
+  "message_read_receipts",
+  "group_unread_counts",
+  "conversation_prefs",
+  "red_packets",
+  "red_packet_claims",
+  "group_files",
+  "voice_rooms",
+  "group_join_requests",
+  "group_invite_links",
+  "group_mutes",
+  // 广场
+  "posts",
+  "post_comments",
+  "post_likes",
+  "promo_banners",
+  // 用户从属/社交
+  "notifications",
+  "friend_requests",
+  "contact_metadata",
+  "user_follows",
+  "user_blocklist",
+  "user_settings",
+  "user_tasks",
+  "user_daily_np",
+  "user_watchlist",
+  "user_api_keys",
+  "password_reset_tokens",
+  "device_push_tokens",
+  "push_subscriptions",
+  "price_alerts",
+  "ai_daily_usage",
+  "feedback",
+  "content_violations",
+  // 推荐关系(重新绑定)
+  "referrals",
+  "referral_milestones",
+  // AI 生成内容
+  "consulting_reports",
+  "consulting_payments",
+  "research_reports",
+  // 财务/经济流水(决策:一并清)
+  "calls",
+  "curation_stakes",
+  "nn_transactions",
+  "nn_vesting",
+  "nn_node_orders",
+  "nn_pool_orders",
+  "swap_history",
+  "ai_swap_trades",
+  "usdt_deposits",
+  "usdt_withdrawals",
+  "ico_orders",
+  "ico_purchases",
+  "ico_accounts",
+  "ico_stake_lots",
+  "ico_reward_runs",
+  "tge_claims",
+  "partner_bonuses",
+  "partner_earnings",
+  "partner_payouts",
+  "partner_settle_runs",
+  "platform_fee_ledger",
+  "rank_agg_run",
+  // 未上线金融模块残留
+  "trading_positions",
+  "trading_strategies",
+  "copy_traders",
+  "copy_trader_follows"
+];
+var BACKUP_TABLES = ["users", "usdt_deposits", "usdt_withdrawals", "ico_purchases", "ico_orders", "nn_transactions", "referrals"];
+async function rawRows(db, query) {
+  const res = await db.execute(sql14.raw(query));
+  if (Array.isArray(res)) return Array.isArray(res[0]) ? res[0] : res;
+  return [];
+}
+async function countRows(db, table) {
+  const rows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`${table}\``);
+  return Number(rows[0]?.c ?? 0);
+}
+var adminMaintenanceRouter = router({
+  resetOperationalData: adminProcedure.input(z16.object({
+    mode: z16.enum(["dryRun", "execute"]),
+    confirm: z16.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const keepRows = await rawRows(db, `SELECT id, isBot, role FROM users WHERE isBot = 1 OR role = 'admin'`);
+    const keepIds = keepRows.map((r) => Number(r.id)).filter((n2) => Number.isFinite(n2));
+    const botCount = keepRows.filter((r) => Number(r.isBot) === 1).length;
+    const adminCount = keepRows.filter((r) => String(r.role) === "admin").length;
+    if (adminCount === 0 || !keepIds.includes(ctx.user.id)) {
+      throw new TRPCError12({ code: "PRECONDITION_FAILED", message: "\u4FDD\u7559\u540D\u5355\u6821\u9A8C\u5931\u8D25(\u65E0\u7BA1\u7406\u5458),\u5DF2\u4E2D\u6B62" });
+    }
+    const idList = keepIds.join(",");
+    const usersTotal = await countRows(db, "users");
+    const usersToDelete = usersTotal - keepIds.length;
+    const gmRows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`group_members\` WHERE userId NOT IN (${idList})`);
+    const groupMembersToDelete = Number(gmRows[0]?.c ?? 0);
+    const tables = [];
+    for (const t3 of WIPE_ALL) tables.push({ name: t3, rows: await countRows(db, t3) });
+    const totalRows = tables.reduce((s, t3) => s + t3.rows, 0) + usersToDelete + groupMembersToDelete;
+    const report = {
+      mode: input.mode,
+      keep: { bots: botCount, admins: adminCount },
+      usersToDelete,
+      groupMembersToDelete,
+      tables,
+      totalRows
+    };
+    if (input.mode === "dryRun") return { ...report, backups: [] };
+    if (input.confirm !== "\u6E05\u96F6") {
+      throw new TRPCError12({ code: "BAD_REQUEST", message: "\u786E\u8BA4\u53E3\u4EE4\u4E0D\u7B26:\u9700\u8F93\u5165\u300C\u6E05\u96F6\u300D\u4E8C\u5B57" });
+    }
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u7F3A\u5C11 DATABASE_URL" });
+    const ts = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    const backups = [];
+    const conn = await mysql.createConnection(url);
+    try {
+      for (const b of BACKUP_TABLES) {
+        const bk = `bk${ts}_${b}`;
+        await conn.query(`DROP TABLE IF EXISTS \`${bk}\``);
+        await conn.query(`CREATE TABLE \`${bk}\` LIKE \`${b}\``);
+        await conn.query(`INSERT INTO \`${bk}\` SELECT * FROM \`${b}\``);
+        backups.push(bk);
+      }
+      await conn.beginTransaction();
+      for (const t3 of WIPE_ALL) {
+        await conn.query(`DELETE FROM \`${t3}\``);
+      }
+      await conn.query(`DELETE FROM \`group_members\` WHERE userId NOT IN (${idList})`);
+      await conn.query(`DELETE FROM \`users\` WHERE id NOT IN (${idList})`);
+      await conn.query(`UPDATE \`chat_groups\` SET creatorId = ${ctx.user.id} WHERE creatorId NOT IN (${idList})`);
+      await conn.query(`UPDATE \`group_announcements\` SET createdBy = ${ctx.user.id} WHERE createdBy NOT IN (${idList})`);
+      await conn.query(`UPDATE \`chat_groups\` SET memberCount = (SELECT COUNT(*) FROM \`group_members\` gm WHERE gm.groupId = chat_groups.id)`);
+      await conn.query(`UPDATE \`ai_amm_pool\` SET aiReserve=0, usdtReserve=0, reserveR=0, circulatingAi=0, crisisFund=0, divPool=0, cumBoughtUsdt=0, totalVolUsdt=0, peakPrice=0, peakUpdatedAt=NULL, seeded=0, dividendClaimsEnabled=0`);
+      await conn.commit();
+    } catch (e) {
+      try {
+        await conn.rollback();
+      } catch {
+      }
+      throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: `\u6E05\u96F6\u5931\u8D25(\u5DF2\u56DE\u6EDA,\u6570\u636E\u672A\u53D8\u52A8):${e.message}` });
+    } finally {
+      await conn.end();
+    }
+    return { ...report, backups };
   })
 });
 
 // server/routers/emailAuth.ts
 init_schema();
-import { TRPCError as TRPCError12 } from "@trpc/server";
+import { TRPCError as TRPCError13 } from "@trpc/server";
 import bcrypt from "bcryptjs";
-import { eq as eq26, and as and22, gt as gt5, isNull as isNull4, sql as sql14 } from "drizzle-orm";
-import { z as z16 } from "zod";
+import { eq as eq26, and as and22, gt as gt6, isNull as isNull5, sql as sql15 } from "drizzle-orm";
+import { z as z17 } from "zod";
 import { randomBytes as randomBytes2 } from "crypto";
 init_db();
 init_env();
@@ -10140,20 +10339,20 @@ function emailOpenId(email) {
 var emailAuthRouter = router({
   /** Register a new account with email + password */
   register: publicProcedure.input(
-    z16.object({
-      email: z16.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
-      password: z16.string().min(8, "\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128),
-      name: z16.string().min(1, "\u8BF7\u8F93\u5165\u6635\u79F0").max(50),
+    z17.object({
+      email: z17.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
+      password: z17.string().min(8, "\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128),
+      name: z17.string().min(1, "\u8BF7\u8F93\u5165\u6635\u79F0").max(50),
       /** Cloudflare Turnstile token — required in production */
-      turnstileToken: z16.string().optional(),
+      turnstileToken: z17.string().optional(),
       /** 设备指纹（防多号撸AC）：同设备最多注册 3 个账号 */
-      deviceId: z16.string().max(64).optional()
+      deviceId: z17.string().max(64).optional()
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     if (isDisposableEmail(input.email)) {
-      throw new TRPCError12({
+      throw new TRPCError13({
         code: "BAD_REQUEST",
         message: "\u8BF7\u4F7F\u7528\u771F\u5B9E\u90AE\u7BB1\u5730\u5740\u6CE8\u518C\uFF08\u4E0D\u652F\u6301\u4E34\u65F6\u90AE\u7BB1\uFF09"
       });
@@ -10163,7 +10362,7 @@ var emailAuthRouter = router({
     const ipRecord = ipRegisterAttempts.get(clientIp);
     if (ipRecord && now < ipRecord.resetAt) {
       if (ipRecord.count >= IP_REGISTER_LIMIT) {
-        throw new TRPCError12({
+        throw new TRPCError13({
           code: "TOO_MANY_REQUESTS",
           message: `\u540C\u4E00\u7F51\u7EDC\u6CE8\u518C\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF7 24 \u5C0F\u65F6\u540E\u518D\u8BD5`
         });
@@ -10177,13 +10376,13 @@ var emailAuthRouter = router({
       if (input.turnstileToken) {
         const turnstileOk = await verifyTurnstile(input.turnstileToken, clientIp);
         if (!turnstileOk) {
-          throw new TRPCError12({
+          throw new TRPCError13({
             code: "FORBIDDEN",
             message: "\u4EBA\u673A\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u5237\u65B0\u9875\u9762\u91CD\u8BD5"
           });
         }
       } else if (process.env.NODE_ENV === "production" && ENV.turnstileSecretKey && ENV.turnstileSecretKey !== "1x0000000000000000000000000000000AA") {
-        throw new TRPCError12({
+        throw new TRPCError13({
           code: "FORBIDDEN",
           message: "\u8BF7\u5B8C\u6210\u4EBA\u673A\u9A8C\u8BC1\u540E\u518D\u6CE8\u518C"
         });
@@ -10191,16 +10390,16 @@ var emailAuthRouter = router({
     }
     const deviceId = input.deviceId?.trim() || null;
     if (deviceId) {
-      const [{ c: devCount = 0 } = { c: 0 }] = await db.select({ c: sql14`COUNT(*)` }).from(users).where(eq26(users.deviceId, deviceId));
+      const [{ c: devCount = 0 } = { c: 0 }] = await db.select({ c: sql15`COUNT(*)` }).from(users).where(eq26(users.deviceId, deviceId));
       if (Number(devCount) >= 3) {
-        throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: "\u8BE5\u8BBE\u5907\u6CE8\u518C\u8D26\u53F7\u6570\u5DF2\u8FBE\u4E0A\u9650" });
+        throw new TRPCError13({ code: "TOO_MANY_REQUESTS", message: "\u8BE5\u8BBE\u5907\u6CE8\u518C\u8D26\u53F7\u6570\u5DF2\u8FBE\u4E0A\u9650" });
       }
     }
     const normalizedEmail = input.email.toLowerCase().trim();
     const openId = emailOpenId(normalizedEmail);
     const existing = await db.select().from(users).where(eq26(users.openId, openId)).limit(1);
     if (existing.length > 0) {
-      throw new TRPCError12({ code: "CONFLICT", message: "\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u8BF7\u76F4\u63A5\u767B\u5F55" });
+      throw new TRPCError13({ code: "CONFLICT", message: "\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u8BF7\u76F4\u63A5\u767B\u5F55" });
     }
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
     const role = openId === ENV.ownerOpenId ? "admin" : "user";
@@ -10230,27 +10429,27 @@ var emailAuthRouter = router({
   }),
   /** Login with email + password */
   login: publicProcedure.input(
-    z16.object({
-      email: z16.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
-      password: z16.string().min(1, "\u8BF7\u8F93\u5165\u5BC6\u7801").max(128)
+    z17.object({
+      email: z17.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
+      password: z17.string().min(1, "\u8BF7\u8F93\u5165\u5BC6\u7801").max(128)
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     const normalizedEmail = input.email.toLowerCase().trim();
     const openId = emailOpenId(normalizedEmail);
     const now = Date.now();
     const ipKey = `ip:${clientIpOf(ctx.req)}`;
     const emailKey = `email:${normalizedEmail}`;
     if (isLoginLocked(ipKey, now) || isLoginLocked(emailKey, now)) {
-      throw new TRPCError12({
+      throw new TRPCError13({
         code: "TOO_MANY_REQUESTS",
         message: "\u767B\u5F55\u5C1D\u8BD5\u8FC7\u4E8E\u9891\u7E41\uFF0C\u8BF7 15 \u5206\u949F\u540E\u518D\u8BD5"
       });
     }
     const result = await db.select().from(users).where(eq26(users.openId, openId)).limit(1);
     const user = result[0];
-    const invalidError = new TRPCError12({ code: "UNAUTHORIZED", message: "\u90AE\u7BB1\u6216\u5BC6\u7801\u9519\u8BEF" });
+    const invalidError = new TRPCError13({ code: "UNAUTHORIZED", message: "\u90AE\u7BB1\u6216\u5BC6\u7801\u9519\u8BEF" });
     if (!user || !user.passwordHash) {
       registerLoginFailure(ipKey, now);
       registerLoginFailure(emailKey, now);
@@ -10278,14 +10477,14 @@ var emailAuthRouter = router({
    * In production, integrate a real email provider (Resend, SendGrid, etc.) here.
    */
   requestPasswordReset: publicProcedure.input(
-    z16.object({
-      email: z16.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
+    z17.object({
+      email: z17.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
       /** Frontend origin (e.g. https://nexuschat.best) used to build the reset URL */
-      origin: z16.string().url().max(200)
+      origin: z17.string().url().max(200)
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     const normalizedEmail = input.email.toLowerCase().trim();
     const openId = emailOpenId(normalizedEmail);
     const result = await db.select().from(users).where(eq26(users.openId, openId)).limit(1);
@@ -10298,7 +10497,7 @@ var emailAuthRouter = router({
     await db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
       and22(
         eq26(passwordResetTokens.userId, user.id),
-        isNull4(passwordResetTokens.usedAt)
+        isNull5(passwordResetTokens.usedAt)
       )
     );
     await db.insert(passwordResetTokens).values({
@@ -10306,7 +10505,7 @@ var emailAuthRouter = router({
       token,
       expiresAt
     });
-    const resetUrl = `${input.origin}/reset-password?token=${token}`;
+    const resetUrl = `${ENV.publicOrigin}/reset-password?token=${token}`;
     const emailResult = await sendPasswordResetEmail({
       to: normalizedEmail,
       resetUrl,
@@ -10331,42 +10530,42 @@ ${resetUrl}`
     };
   }),
   /** Verify a reset token is still valid (used for page load check) */
-  verifyResetToken: publicProcedure.input(z16.object({ token: z16.string().max(200) })).query(async ({ input }) => {
+  verifyResetToken: publicProcedure.input(z17.object({ token: z17.string().max(200) })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { valid: false };
     const result = await db.select().from(passwordResetTokens).where(
       and22(
         eq26(passwordResetTokens.token, input.token),
-        isNull4(passwordResetTokens.usedAt),
-        gt5(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+        isNull5(passwordResetTokens.usedAt),
+        gt6(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )
     ).limit(1);
     return { valid: result.length > 0 };
   }),
   /** Reset password using a valid token */
   resetPassword: publicProcedure.input(
-    z16.object({
-      token: z16.string().max(200),
-      newPassword: z16.string().min(8, "\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128)
+    z17.object({
+      token: z17.string().max(200),
+      newPassword: z17.string().min(8, "\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128)
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     const tokenResult = await db.select().from(passwordResetTokens).where(
       and22(
         eq26(passwordResetTokens.token, input.token),
-        isNull4(passwordResetTokens.usedAt),
-        gt5(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+        isNull5(passwordResetTokens.usedAt),
+        gt6(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )
     ).limit(1);
     const resetToken = tokenResult[0];
     if (!resetToken) {
-      throw new TRPCError12({ code: "BAD_REQUEST", message: "\u91CD\u7F6E\u94FE\u63A5\u65E0\u6548\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u7533\u8BF7" });
+      throw new TRPCError13({ code: "BAD_REQUEST", message: "\u91CD\u7F6E\u94FE\u63A5\u65E0\u6548\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u7533\u8BF7" });
     }
     const userResult = await db.select().from(users).where(eq26(users.id, resetToken.userId)).limit(1);
     const user = userResult[0];
     if (!user) {
-      throw new TRPCError12({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
+      throw new TRPCError13({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
     const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
     await Promise.all([
@@ -10384,8 +10583,8 @@ ${resetUrl}`
 });
 
 // server/routers/voice.ts
-import { z as z17 } from "zod";
-import { TRPCError as TRPCError13 } from "@trpc/server";
+import { z as z18 } from "zod";
+import { TRPCError as TRPCError14 } from "@trpc/server";
 
 // server/_core/voiceTranscription.ts
 init_env();
@@ -10524,16 +10723,16 @@ var voiceRouter = router({
    * Upload audio blob (base64) to S3 and return URL
    * Frontend: record with MediaRecorder, convert to base64, call this
    */
-  uploadAudio: protectedProcedure.input(z17.object({
-    base64: z17.string().max(22e6),
+  uploadAudio: protectedProcedure.input(z18.object({
+    base64: z18.string().max(22e6),
     // ~16MB raw audio
-    mimeType: z17.string().default("audio/webm"),
-    durationSeconds: z17.number().optional()
+    mimeType: z18.string().default("audio/webm"),
+    durationSeconds: z18.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const buffer = Buffer.from(input.base64, "base64");
     const sizeMB = buffer.length / (1024 * 1024);
     if (sizeMB > 16) {
-      throw new TRPCError13({ code: "PAYLOAD_TOO_LARGE", message: "Audio file exceeds 16MB limit" });
+      throw new TRPCError14({ code: "PAYLOAD_TOO_LARGE", message: "Audio file exceeds 16MB limit" });
     }
     const ext = input.mimeType.split("/")[1]?.split(";")[0] ?? "webm";
     const key = `voice-messages/${ctx.user.id}/${Date.now()}.${ext}`;
@@ -10544,9 +10743,9 @@ var voiceRouter = router({
    * Transcribe audio from URL using Whisper
    * Returns transcribed text to display in chat
    */
-  transcribe: protectedProcedure.use(rateLimitStrict).input(z17.object({
-    audioUrl: z17.string().url(),
-    language: z17.string().optional()
+  transcribe: protectedProcedure.use(rateLimitStrict).input(z18.object({
+    audioUrl: z18.string().url(),
+    language: z18.string().optional()
   })).mutation(async ({ input }) => {
     const result = await transcribeAudio({
       audioUrl: input.audioUrl,
@@ -10554,7 +10753,7 @@ var voiceRouter = router({
       prompt: "Transcribe the voice message in a chat application"
     });
     if ("error" in result) {
-      throw new TRPCError13({
+      throw new TRPCError14({
         code: "INTERNAL_SERVER_ERROR",
         message: result.error
       });
@@ -10568,12 +10767,12 @@ var voiceRouter = router({
 });
 
 // server/routers/voiceRoom.ts
-import { z as z18 } from "zod";
-import { TRPCError as TRPCError14 } from "@trpc/server";
+import { z as z19 } from "zod";
+import { TRPCError as TRPCError15 } from "@trpc/server";
 init_db();
 init_schema();
 init_env();
-import { eq as eq27, and as and23, desc as desc16, sql as sql15, gte as gte5 } from "drizzle-orm";
+import { eq as eq27, and as and23, desc as desc16, sql as sql16, gte as gte5 } from "drizzle-orm";
 
 // server/_core/livekitToken.ts
 import crypto2 from "crypto";
@@ -10670,7 +10869,7 @@ function startOfMonth() {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 async function roomsThisMonth(db, userId) {
-  const [row] = await db.select({ cnt: sql15`count(*)` }).from(voiceRooms).where(and23(eq27(voiceRooms.hostUserId, userId), gte5(voiceRooms.createdAt, startOfMonth())));
+  const [row] = await db.select({ cnt: sql16`count(*)` }).from(voiceRooms).where(and23(eq27(voiceRooms.hostUserId, userId), gte5(voiceRooms.createdAt, startOfMonth())));
   return Number(row?.cnt ?? 0);
 }
 var VOICE_GIFTS = [
@@ -10683,7 +10882,7 @@ var VOICE_GIFTS = [
 ];
 async function spendAC(db, userId, cost) {
   if (cost <= 0) return true;
-  const res = await db.update(users).set({ npPoints: sql15`${users.npPoints} - ${cost}` }).where(and23(eq27(users.id, userId), sql15`${users.npPoints} >= ${cost}`));
+  const res = await db.update(users).set({ npPoints: sql16`${users.npPoints} - ${cost}` }).where(and23(eq27(users.id, userId), sql16`${users.npPoints} >= ${cost}`));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
   return affected2 > 0;
 }
@@ -10718,13 +10917,13 @@ async function allocRoomId(db) {
     const [exist] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq27(voiceRooms.roomId, candidate)).limit(1);
     if (!exist) return candidate;
   }
-  throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u623F\u95F4\u53F7\u5206\u914D\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5" });
+  throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u623F\u95F4\u53F7\u5206\u914D\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5" });
 }
 var voiceRoomRouter = router({
   /** LiveKit 是否已配置（未配置时客户端提示「即将开放」，不报错） */
   config: protectedProcedure.query(() => ({ enabled: liveKitConfigured(), wsUrl: ENV.livekitUrl })),
   /** 进行中的语音房列表 */
-  listRooms: protectedProcedure.input(z18.object({ category: z18.enum(["all", ...CATEGORIES]).default("all") }).optional()).query(async ({ input }) => {
+  listRooms: protectedProcedure.input(z19.object({ category: z19.enum(["all", ...CATEGORIES]).default("all") }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const cat = input?.category ?? "all";
@@ -10756,22 +10955,22 @@ var voiceRoomRouter = router({
     return mapped;
   }),
   /** 创建语音房（自己为房主）。返回进房所需 sig。 */
-  createRoom: protectedProcedure.use(rateLimitWrite).input(z18.object({
-    title: z18.string().trim().min(1).max(60),
-    topic: z18.string().trim().max(80).optional(),
-    category: z18.enum(CATEGORIES).default("chat"),
-    isMembersOnly: z18.boolean().default(false),
-    isPublic: z18.boolean().default(true)
+  createRoom: protectedProcedure.use(rateLimitWrite).input(z19.object({
+    title: z19.string().trim().min(1).max(60),
+    topic: z19.string().trim().max(80).optional(),
+    category: z19.enum(CATEGORIES).default("chat"),
+    isMembersOnly: z19.boolean().default(false),
+    isPublic: z19.boolean().default(true)
   })).mutation(async ({ ctx, input }) => {
-    if (!liveKitConfigured()) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: "\u8BED\u97F3\u623F\u5373\u5C06\u5F00\u653E\uFF0C\u656C\u8BF7\u671F\u5F85" });
+    if (!liveKitConfigured()) throw new TRPCError15({ code: "PRECONDITION_FAILED", message: "\u8BED\u97F3\u623F\u5373\u5C06\u5F00\u653E\uFF0C\u656C\u8BF7\u671F\u5F85" });
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const benefits = await getBenefits(db, ctx.user.id);
     const used = await roomsThisMonth(db, ctx.user.id);
     let charged = false;
     if (used >= benefits.voiceRoomFreeMonthly) {
       const ok = await spendNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `AI \u4E0D\u8DB3\uFF1A\u672C\u6708\u514D\u8D39\u5F00\u623F\u5DF2\u7528\u5B8C\uFF0C\u5355\u6B21\u5F00\u623F\u9700 ${VOICE_ROOM_COST} AI\uFF0C\u6216\u5347\u7EA7\u4F1A\u5458\u83B7\u66F4\u591A\u514D\u8D39\u6B21\u6570` });
+      if (!ok) throw new TRPCError15({ code: "FORBIDDEN", message: `AI \u4E0D\u8DB3\uFF1A\u672C\u6708\u514D\u8D39\u5F00\u623F\u5DF2\u7528\u5B8C\uFF0C\u5355\u6B21\u5F00\u623F\u9700 ${VOICE_ROOM_COST} AI\uFF0C\u6216\u5347\u7EA7\u4F1A\u5458\u83B7\u66F4\u591A\u514D\u8D39\u6B21\u6570` });
       charged = true;
     }
     const roomId = await allocRoomId(db);
@@ -10808,20 +11007,20 @@ var voiceRoomRouter = router({
     return { freeMonthly: free, used, freeRemaining: Math.max(0, free - used), cost: VOICE_ROOM_COST };
   }),
   /** 进入语音房：会员房做权限校验，返回进房 sig + 当前麦上信息。 */
-  enterRoom: protectedProcedure.input(z18.object({ id: z18.string() })).mutation(async ({ ctx, input }) => {
-    if (!liveKitConfigured()) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: "\u8BED\u97F3\u623F\u5373\u5C06\u5F00\u653E\uFF0C\u656C\u8BF7\u671F\u5F85" });
+  enterRoom: protectedProcedure.input(z19.object({ id: z19.string() })).mutation(async ({ ctx, input }) => {
+    if (!liveKitConfigured()) throw new TRPCError15({ code: "PRECONDITION_FAILED", message: "\u8BED\u97F3\u623F\u5373\u5C06\u5F00\u653E\uFF0C\u656C\u8BF7\u671F\u5F85" });
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(and23(eq27(voiceRooms.id, rid), eq27(voiceRooms.status, "live"))).limit(1);
-    if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
+    if (!room) throw new TRPCError15({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
     const isHost = room.hostUserId === ctx.user.id;
     if (room.isMembersOnly && !isHost) {
       const benefits = await getBenefits(db, ctx.user.id);
-      if (!benefits.badge) throw new TRPCError14({ code: "FORBIDDEN", message: "\u8BE5\u623F\u4E3A\u4F1A\u5458\u4E13\u5C5E\uFF0C\u5347\u7EA7 Plus/Pro \u540E\u53EF\u8FDB\u5165" });
+      if (!benefits.badge) throw new TRPCError15({ code: "FORBIDDEN", message: "\u8BE5\u623F\u4E3A\u4F1A\u5458\u4E13\u5C5E\uFF0C\u5347\u7EA7 Plus/Pro \u540E\u53EF\u8FDB\u5165" });
     }
     if (!isHost) {
-      await db.update(voiceRooms).set({ listenerCount: sql15`${voiceRooms.listenerCount} + 1` }).where(eq27(voiceRooms.id, rid));
+      await db.update(voiceRooms).set({ listenerCount: sql16`${voiceRooms.listenerCount} + 1` }).where(eq27(voiceRooms.id, rid));
     }
     const name = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237${ctx.user.id}`;
     const token = signToken(
@@ -10845,82 +11044,82 @@ var voiceRoomRouter = router({
     };
   }),
   /** 离开语音房（听众计数 -1） */
-  leaveRoom: protectedProcedure.input(z18.object({ id: z18.string() })).mutation(async ({ ctx, input }) => {
+  leaveRoom: protectedProcedure.input(z19.object({ id: z19.string() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { ok: true };
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(eq27(voiceRooms.id, rid)).limit(1);
     if (room && room.hostUserId !== ctx.user.id) {
-      await db.update(voiceRooms).set({ listenerCount: sql15`GREATEST(${voiceRooms.listenerCount} - 1, 0)` }).where(eq27(voiceRooms.id, rid));
+      await db.update(voiceRooms).set({ listenerCount: sql16`GREATEST(${voiceRooms.listenerCount} - 1, 0)` }).where(eq27(voiceRooms.id, rid));
     }
     return { ok: true };
   }),
   /** 房主结束语音房 */
-  endRoom: protectedProcedure.input(z18.object({ id: z18.string() })).mutation(async ({ ctx, input }) => {
+  endRoom: protectedProcedure.input(z19.object({ id: z19.string() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(eq27(voiceRooms.id, rid)).limit(1);
     if (!room) return { ok: true };
-    if (room.hostUserId !== ctx.user.id) throw new TRPCError14({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u7ED3\u675F\u8BED\u97F3\u623F" });
+    if (room.hostUserId !== ctx.user.id) throw new TRPCError15({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u7ED3\u675F\u8BED\u97F3\u623F" });
     await db.update(voiceRooms).set({ status: "ended", endedAt: /* @__PURE__ */ new Date() }).where(eq27(voiceRooms.id, rid));
     return { ok: true };
   }),
   /** 礼物目录（供前端礼物面板） */
   gifts: protectedProcedure.query(() => ({ gifts: VOICE_GIFTS })),
   /** 送礼：扣 AC，返回新余额。礼物动画由前端经数据通道广播给房间。 */
-  sendGift: protectedProcedure.use(rateLimitWrite).input(z18.object({ id: z18.string(), giftKey: z18.string() })).mutation(async ({ ctx, input }) => {
+  sendGift: protectedProcedure.use(rateLimitWrite).input(z19.object({ id: z19.string(), giftKey: z19.string() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const lastGift = _lastGiftAt.get(ctx.user.id) ?? 0;
     const nowGift = Date.now();
-    if (nowGift - lastGift < 600) throw new TRPCError14({ code: "TOO_MANY_REQUESTS", message: "\u9001\u793C\u592A\u5FEB\u4E86,\u6162\u4E00\u70B9~" });
+    if (nowGift - lastGift < 600) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: "\u9001\u793C\u592A\u5FEB\u4E86,\u6162\u4E00\u70B9~" });
     _lastGiftAt.set(ctx.user.id, nowGift);
     const gift = VOICE_GIFTS.find((g) => g.key === input.giftKey);
-    if (!gift) throw new TRPCError14({ code: "BAD_REQUEST", message: "\u793C\u7269\u4E0D\u5B58\u5728" });
+    if (!gift) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u793C\u7269\u4E0D\u5B58\u5728" });
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(and23(eq27(voiceRooms.id, rid), eq27(voiceRooms.status, "live"))).limit(1);
-    if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
+    if (!room) throw new TRPCError15({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
     const ok = await spendAC(db, ctx.user.id, gift.ac);
-    if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `AC \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} AC` });
+    if (!ok) throw new TRPCError15({ code: "FORBIDDEN", message: `AC \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} AC` });
     const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq27(users.id, ctx.user.id)).limit(1);
     return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
   }),
   /** 房主抱人上麦：把听众的 LiveKit canPublish 设为 true，实时生效。 */
-  grantSpeak: protectedProcedure.input(z18.object({ id: z18.string(), targetUserId: z18.number() })).mutation(async ({ ctx, input }) => {
+  grantSpeak: protectedProcedure.input(z19.object({ id: z19.string(), targetUserId: z19.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(and23(eq27(voiceRooms.id, rid), eq27(voiceRooms.status, "live"))).limit(1);
-    if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
-    if (room.hostUserId !== ctx.user.id) throw new TRPCError14({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u9080\u8BF7\u4E0A\u9EA6" });
+    if (!room) throw new TRPCError15({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
+    if (room.hostUserId !== ctx.user.id) throw new TRPCError15({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u9080\u8BF7\u4E0A\u9EA6" });
     if (input.targetUserId === room.hostUserId) return { ok: true };
-    if (room.speakerCount >= MAX_SPEAKERS) throw new TRPCError14({ code: "BAD_REQUEST", message: `\u9EA6\u4F4D\u5DF2\u6EE1\uFF08\u4E0A\u9650 ${MAX_SPEAKERS}\uFF09` });
+    if (room.speakerCount >= MAX_SPEAKERS) throw new TRPCError15({ code: "BAD_REQUEST", message: `\u9EA6\u4F4D\u5DF2\u6EE1\uFF08\u4E0A\u9650 ${MAX_SPEAKERS}\uFF09` });
     await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), true);
-    await db.update(voiceRooms).set({ speakerCount: sql15`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq27(voiceRooms.id, rid));
+    await db.update(voiceRooms).set({ speakerCount: sql16`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq27(voiceRooms.id, rid));
     return { ok: true };
   }),
   /** 房主请人下麦：canPublish=false。 */
-  revokeSpeak: protectedProcedure.input(z18.object({ id: z18.string(), targetUserId: z18.number() })).mutation(async ({ ctx, input }) => {
+  revokeSpeak: protectedProcedure.input(z19.object({ id: z19.string(), targetUserId: z19.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(and23(eq27(voiceRooms.id, rid), eq27(voiceRooms.status, "live"))).limit(1);
-    if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
-    if (room.hostUserId !== ctx.user.id) throw new TRPCError14({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u64CD\u4F5C" });
-    if (input.targetUserId === room.hostUserId) throw new TRPCError14({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8BF7\u623F\u4E3B\u4E0B\u9EA6" });
+    if (!room) throw new TRPCError15({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
+    if (room.hostUserId !== ctx.user.id) throw new TRPCError15({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u64CD\u4F5C" });
+    if (input.targetUserId === room.hostUserId) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8BF7\u623F\u4E3B\u4E0B\u9EA6" });
     await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), false);
-    await db.update(voiceRooms).set({ speakerCount: sql15`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq27(voiceRooms.id, rid));
+    await db.update(voiceRooms).set({ speakerCount: sql16`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq27(voiceRooms.id, rid));
     return { ok: true };
   })
 });
 
 // server/routers/ico.ts
-import { z as z19 } from "zod";
-import { TRPCError as TRPCError15 } from "@trpc/server";
+import { z as z20 } from "zod";
+import { TRPCError as TRPCError16 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq28, and as and24, desc as desc17, gt as gt6, asc as asc2, inArray as inArray7, sql as sql16, ne as ne4 } from "drizzle-orm";
+import { eq as eq28, and as and24, desc as desc17, gt as gt7, asc as asc2, inArray as inArray7, sql as sql17, ne as ne4 } from "drizzle-orm";
 
 // server/ico/pricing.ts
 function priceAtFraction(c, x) {
@@ -11104,26 +11303,26 @@ async function settleOrder(db, orderId, paidUsdt) {
   let result;
   await db.transaction(async (tx) => {
     const [o] = await tx.select().from(icoOrders).where(eq28(icoOrders.id, orderId)).for("update").limit(1);
-    if (!o || o.status !== "pending") throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
+    if (!o || o.status !== "pending") throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
     const [c] = await tx.select().from(icoConfig).where(eq28(icoConfig.id, 1)).for("update").limit(1);
-    if (!c || c.status !== "active") throw new TRPCError15({ code: "PRECONDITION_FAILED", message: "ICO \u672A\u5728\u8FDB\u884C" });
+    if (!c || c.status !== "active") throw new TRPCError16({ code: "PRECONDITION_FAILED", message: "ICO \u672A\u5728\u8FDB\u884C" });
     const curve = curveOf(c), sold = n(c.tokensSold);
     const usdt = paidUsdt != null ? paidUsdt : n(o.usdtAmount);
     const tokens = tokensForBudget(curve, sold, usdt);
-    if (tokens <= 0) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u989D\u5EA6\u5DF2\u552E\u7F44" });
-    if (tokens + 1e-8 < n(o.minTokens)) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u4EF7\u683C\u5DF2\u53D8\u52A8\u8D85\u51FA\u6ED1\u70B9\u4FDD\u62A4,\u8BF7\u7528\u6237\u91CD\u65B0\u4E0B\u5355" });
+    if (tokens <= 0) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u989D\u5EA6\u5DF2\u552E\u7F44" });
+    if (tokens + 1e-8 < n(o.minTokens)) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u4EF7\u683C\u5DF2\u53D8\u52A8\u8D85\u51FA\u6ED1\u70B9\u4FDD\u62A4,\u8BF7\u7528\u6237\u91CD\u65B0\u4E0B\u5355" });
     if (n(c.perWalletCap) > 0) {
       const [acc0] = await tx.select({ locked: icoAccounts.lockedTotal }).from(icoAccounts).where(eq28(icoAccounts.userId, o.userId)).limit(1);
-      if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u5355\u94B1\u5305\u8BA4\u8D2D\u4E0A\u9650" });
+      if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u5355\u94B1\u5305\u8BA4\u8D2D\u4E0A\u9650" });
     }
     const q = quote(curve, sold, tokens);
-    const [{ prevUsdt }] = await tx.select({ prevUsdt: sql16`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq28(icoPurchases.userId, o.userId));
+    const [{ prevUsdt }] = await tx.select({ prevUsdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq28(icoPurchases.userId, o.userId));
     const cumUsdt = n(prevUsdt) + usdt;
     const tier = deriveIcoTier(cumUsdt);
     const bonusPct = tier?.bonusPct ?? 0;
     const bonus = tokens * bonusPct;
     const credited = tokens + bonus;
-    await tx.update(icoConfig).set({ tokensSold: sql16`${icoConfig.tokensSold} + ${tokens}` }).where(eq28(icoConfig.id, 1));
+    await tx.update(icoConfig).set({ tokensSold: sql17`${icoConfig.tokensSold} + ${tokens}` }).where(eq28(icoConfig.id, 1));
     const [pr] = await tx.insert(icoPurchases).values({
       userId: o.userId,
       usdtAmount: String(usdt),
@@ -11139,8 +11338,8 @@ async function settleOrder(db, orderId, paidUsdt) {
       stakedBalance: String(credited),
       firstPurchaseAt: /* @__PURE__ */ new Date()
     }).onDuplicateKeyUpdate({ set: {
-      lockedTotal: sql16`${icoAccounts.lockedTotal} + ${credited}`,
-      stakedBalance: sql16`${icoAccounts.stakedBalance} + ${credited}`
+      lockedTotal: sql17`${icoAccounts.lockedTotal} + ${credited}`,
+      stakedBalance: sql17`${icoAccounts.stakedBalance} + ${credited}`
     } });
     await tx.insert(icoStakeLots).values({ userId: o.userId, amount: String(credited), stakedAt: /* @__PURE__ */ new Date(), source: "purchase" });
     if (tier) await tx.update(users).set({ icoTier: tier.level }).where(eq28(users.id, o.userId));
@@ -11165,7 +11364,7 @@ async function verifyAndSettle(db, order) {
 }
 async function settleIcoRewards(date) {
   const db = await getDb();
-  if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+  if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
   const [cfg0] = await db.select({ id: icoConfig.id }).from(icoConfig).where(eq28(icoConfig.id, 1)).limit(1);
   if (!cfg0) return { ok: true, skipped: true };
   const [exist0] = await db.select({ id: icoRewardRuns.id }).from(icoRewardRuns).where(eq28(icoRewardRuns.runDate, date)).limit(1);
@@ -11180,7 +11379,7 @@ async function settleIcoRewards(date) {
       const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
       const remaining = Math.max(0, pool - emittedSoFar);
       const now = Date.now();
-      const lotRows = await tx.select().from(icoStakeLots).where(gt6(icoStakeLots.amount, "0"));
+      const lotRows = await tx.select().from(icoStakeLots).where(gt7(icoStakeLots.amount, "0"));
       const lots = lotRows.map((l) => ({
         userId: l.userId,
         amount: n(l.amount),
@@ -11192,13 +11391,13 @@ async function settleIcoRewards(date) {
         if (reward <= 0) continue;
         const acc = accs.find((a) => a.userId === userId);
         if (acc.autoCompound) {
-          await tx.update(icoAccounts).set({ stakedBalance: sql16`${icoAccounts.stakedBalance} + ${reward}` }).where(eq28(icoAccounts.userId, userId));
+          await tx.update(icoAccounts).set({ stakedBalance: sql17`${icoAccounts.stakedBalance} + ${reward}` }).where(eq28(icoAccounts.userId, userId));
           await tx.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: /* @__PURE__ */ new Date(), source: "compound" });
         } else {
-          await tx.update(icoAccounts).set({ pendingReward: sql16`${icoAccounts.pendingReward} + ${reward}` }).where(eq28(icoAccounts.userId, userId));
+          await tx.update(icoAccounts).set({ pendingReward: sql17`${icoAccounts.pendingReward} + ${reward}` }).where(eq28(icoAccounts.userId, userId));
         }
       }
-      await tx.update(icoConfig).set({ rewardEmitted: sql16`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq28(icoConfig.id, 1));
+      await tx.update(icoConfig).set({ rewardEmitted: sql17`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq28(icoConfig.id, 1));
       await tx.insert(icoRewardRuns).values({ runDate: date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
       out = { ok: true, skipped: false, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
     });
@@ -11243,17 +11442,17 @@ var icoRouter = router({
     };
   }),
   /** 批量取用户的合伙人等级(聊天/成员列表挂徽章用,只返回有等级的)。 */
-  tiersByUsers: protectedProcedure.input(z19.object({ userIds: z19.array(z19.number().int()).max(200) })).query(async ({ input }) => {
+  tiersByUsers: protectedProcedure.input(z20.object({ userIds: z20.array(z20.number().int()).max(200) })).query(async ({ input }) => {
     const out = {};
     if (!input.userIds.length) return out;
     const db = await getDb();
     if (!db) return out;
-    const rows = await db.select({ id: users.id, t: users.icoTier }).from(users).where(and24(inArray7(users.id, input.userIds), gt6(users.icoTier, 0)));
+    const rows = await db.select({ id: users.id, t: users.icoTier }).from(users).where(and24(inArray7(users.id, input.userIds), gt7(users.icoTier, 0)));
     for (const r of rows) out[r.id] = r.t;
     return out;
   }),
   /** 报价:给定 USDT,按当前曲线能买多少枚 + 均价 + 成交后新价 */
-  quote: protectedProcedure.input(z19.object({ usdtAmount: z19.number().positive() })).query(async ({ input }) => {
+  quote: protectedProcedure.input(z20.object({ usdtAmount: z20.number().positive() })).query(async ({ input }) => {
     const db = await getDb();
     const c = db ? await loadConfig(db) : null;
     if (!c || c.status !== "active") return { tokens: 0, avgPrice: 0, priceFrom: 0, priceTo: 0 };
@@ -11263,11 +11462,11 @@ var icoRouter = router({
     return { tokens, avgPrice: q.avgPrice, priceFrom: q.priceFrom, priceTo: q.priceTo };
   }),
   /** 下单:锁定意向(USDT + 滑点最低枚数),返回充值地址 */
-  createOrder: protectedProcedure.input(z19.object({ usdtAmount: z19.number().positive().max(1e7), minTokens: z19.number().min(0).default(0) })).mutation(async ({ ctx, input }) => {
+  createOrder: protectedProcedure.input(z20.object({ usdtAmount: z20.number().positive().max(1e7), minTokens: z20.number().min(0).default(0) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const c = await loadConfig(db);
-    if (!c || c.status !== "active") throw new TRPCError15({ code: "PRECONDITION_FAILED", message: "\u8BA4\u8D2D\u672A\u5F00\u59CB\u6216\u5DF2\u7ED3\u675F" });
+    if (!c || c.status !== "active") throw new TRPCError16({ code: "PRECONDITION_FAILED", message: "\u8BA4\u8D2D\u672A\u5F00\u59CB\u6216\u5DF2\u7ED3\u675F" });
     const [res] = await db.insert(icoOrders).values({
       userId: ctx.user.id,
       usdtAmount: String(input.usdtAmount),
@@ -11278,27 +11477,27 @@ var icoRouter = router({
     return { orderId: res?.insertId ?? res?.[0]?.insertId, payAddress: USDT_DEPOSIT_ADDRESS, payChain: USDT_CHAIN, usdtAmount: input.usdtAmount };
   }),
   /** 提交链上转账哈希 */
-  submitTx: protectedProcedure.input(z19.object({ orderId: z19.number(), txHash: z19.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
+  submitTx: protectedProcedure.input(z20.object({ orderId: z20.number(), txHash: z20.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const txHash = sanitizeInput(input.txHash, 120);
     const [o] = await db.select().from(icoOrders).where(and24(eq28(icoOrders.id, input.orderId), eq28(icoOrders.userId, ctx.user.id))).limit(1);
-    if (!o || o.status !== "pending") throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
+    if (!o || o.status !== "pending") throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
     const [dup] = await db.select({ id: icoOrders.id }).from(icoOrders).where(and24(eq28(icoOrders.txHash, txHash), ne4(icoOrders.id, o.id))).limit(1);
-    if (dup) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u5176\u5B83\u8BA2\u5355,\u8BF7\u52FF\u91CD\u590D" });
+    if (dup) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u5176\u5B83\u8BA2\u5355,\u8BF7\u52FF\u91CD\u590D" });
     try {
       await db.update(icoOrders).set({ txHash }).where(eq28(icoOrders.id, input.orderId));
     } catch {
-      throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u5176\u5B83\u8BA2\u5355,\u8BF7\u52FF\u91CD\u590D" });
+      throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u5176\u5B83\u8BA2\u5355,\u8BF7\u52FF\u91CD\u590D" });
     }
     return verifyAndSettle(db, { id: o.id, txHash });
   }),
   /** 轮询:重新核验一张已填哈希的 pending 订单(确认中→确认后自动到账) */
-  verifyPayment: protectedProcedure.input(z19.object({ orderId: z19.number() })).mutation(async ({ ctx, input }) => {
+  verifyPayment: protectedProcedure.input(z20.object({ orderId: z20.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [o] = await db.select().from(icoOrders).where(and24(eq28(icoOrders.id, input.orderId), eq28(icoOrders.userId, ctx.user.id))).limit(1);
-    if (!o) throw new TRPCError15({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
+    if (!o) throw new TRPCError16({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
     if (o.status === "confirmed") return { settled: true, pending: false };
     if (o.status !== "pending" || !o.txHash) return { settled: false, pending: false, reason: "\u65E0\u5F85\u6838\u9A8C\u4ED8\u6B3E" };
     return verifyAndSettle(db, { id: o.id, txHash: o.txHash });
@@ -11323,7 +11522,7 @@ var icoRouter = router({
     const locked = n(acc.lockedTotal);
     const first = acc.firstPurchaseAt ? new Date(acc.firstPurchaseAt) : null;
     const monthsElapsed = first ? (Date.now() - first.getTime()) / (30 * 24 * 3600 * 1e3) : 0;
-    const myLots = await db.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt6(icoStakeLots.amount, "0")));
+    const myLots = await db.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt7(icoStakeLots.amount, "0")));
     let wsum = 0, asum = 0;
     const now2 = Date.now();
     for (const l of myLots) {
@@ -11332,7 +11531,7 @@ var icoRouter = router({
       asum += amt;
     }
     const currentApr = asum > 0 ? wsum / asum : n(c.aprStart);
-    const [{ usdt }] = await db.select({ usdt: sql16`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq28(icoPurchases.userId, ctx.user.id));
+    const [{ usdt }] = await db.select({ usdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq28(icoPurchases.userId, ctx.user.id));
     const subscribedUsdt = n(usdt);
     const t3 = deriveIcoTier(subscribedUsdt);
     const ng = nextTierGap(subscribedUsdt);
@@ -11359,22 +11558,22 @@ var icoRouter = router({
     };
   }),
   /** 提取已释放本金(进 AI 余额) */
-  withdraw: protectedProcedure.input(z19.object({ amount: z19.number().positive() })).mutation(async ({ ctx, input }) => {
+  withdraw: protectedProcedure.input(z20.object({ amount: z20.number().positive() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     const c = db ? await loadConfig(db) : null;
-    if (!db || !c) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db || !c) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     await db.transaction(async (tx) => {
       const [acc] = await tx.select().from(icoAccounts).where(eq28(icoAccounts.userId, ctx.user.id)).for("update").limit(1);
-      if (!acc) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u65E0\u8BA4\u8D2D\u8BB0\u5F55" });
+      if (!acc) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u65E0\u8BA4\u8D2D\u8BB0\u5F55" });
       const vested = await vestedPrincipal(tx, ctx.user.id, c);
       const withdrawable = Math.max(0, vested - n(acc.withdrawnPrincipal));
-      if (input.amount > withdrawable + 1e-8) throw new TRPCError15({ code: "BAD_REQUEST", message: `\u53EF\u63D0\u4F59\u989D\u4E0D\u8DB3,\u5F53\u524D\u53EF\u63D0 ${withdrawable.toFixed(4)}` });
+      if (input.amount > withdrawable + 1e-8) throw new TRPCError16({ code: "BAD_REQUEST", message: `\u53EF\u63D0\u4F59\u989D\u4E0D\u8DB3,\u5F53\u524D\u53EF\u63D0 ${withdrawable.toFixed(4)}` });
       await tx.update(icoAccounts).set({
-        withdrawnPrincipal: sql16`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
-        stakedBalance: sql16`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`
+        withdrawnPrincipal: sql17`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
+        stakedBalance: sql17`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`
       }).where(eq28(icoAccounts.userId, ctx.user.id));
       let toReduce = input.amount;
-      const lots = await tx.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt6(icoStakeLots.amount, "0"))).orderBy(asc2(icoStakeLots.stakedAt));
+      const lots = await tx.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt7(icoStakeLots.amount, "0"))).orderBy(asc2(icoStakeLots.stakedAt));
       for (const lot of lots) {
         if (toReduce <= 1e-9) break;
         const amt = n(lot.amount), cut = Math.min(amt, toReduce);
@@ -11382,14 +11581,14 @@ var icoRouter = router({
         toReduce -= cut;
       }
       const ok = await grantNN(tx, ctx.user.id, input.amount, { type: "ico_withdraw", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u53D1\u653E\u5931\u8D25,\u8BF7\u7A0D\u540E\u518D\u8BD5" });
+      if (!ok) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u53D1\u653E\u5931\u8D25,\u8BF7\u7A0D\u540E\u518D\u8BD5" });
     });
     return { ok: true, withdrawn: input.amount };
   }),
   /** 领取质押收益(进 AI 余额) */
   claimRewards: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     let claimed = 0;
     await db.transaction(async (tx) => {
       const [acc] = await tx.select().from(icoAccounts).where(eq28(icoAccounts.userId, ctx.user.id)).for("update").limit(1);
@@ -11397,18 +11596,18 @@ var icoRouter = router({
       if (pending <= 0) return;
       await tx.update(icoAccounts).set({
         pendingReward: "0",
-        claimedReward: sql16`${icoAccounts.claimedReward} + ${pending}`
+        claimedReward: sql17`${icoAccounts.claimedReward} + ${pending}`
       }).where(eq28(icoAccounts.userId, ctx.user.id));
       const ok = await grantNN(tx, ctx.user.id, pending, { type: "ico_reward", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u53D1\u653E\u5931\u8D25" });
+      if (!ok) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u53D1\u653E\u5931\u8D25" });
       claimed = pending;
     });
     return { ok: true, claimed };
   }),
   /** 开关:释放本金不提则自动复投 */
-  setAutoCompound: protectedProcedure.input(z19.object({ on: z19.boolean() })).mutation(async ({ ctx, input }) => {
+  setAutoCompound: protectedProcedure.input(z20.object({ on: z20.boolean() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     await db.insert(icoAccounts).values({ userId: ctx.user.id, autoCompound: input.on }).onDuplicateKeyUpdate({ set: { autoCompound: input.on } });
     return { ok: true };
   }),
@@ -11441,11 +11640,11 @@ var icoRouter = router({
     };
   }),
   /** 待确认订单(给管理员审核) */
-  adminListOrders: adminProcedure.input(z19.object({ status: z19.enum(["pending", "confirmed", "cancelled", "all"]).default("pending") }).optional()).query(async ({ input }) => {
+  adminListOrders: adminProcedure.input(z20.object({ status: z20.enum(["pending", "confirmed", "cancelled", "all"]).default("pending") }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const st = input?.status ?? "pending";
-    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq28(users.id, icoOrders.userId)).where(st === "all" ? sql16`1=1` : eq28(icoOrders.status, st)).orderBy(desc17(icoOrders.createdAt)).limit(100);
+    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq28(users.id, icoOrders.userId)).where(st === "all" ? sql17`1=1` : eq28(icoOrders.status, st)).orderBy(desc17(icoOrders.createdAt)).limit(100);
     return rows.map((r) => ({
       id: r.o.id,
       userId: r.o.userId,
@@ -11458,26 +11657,26 @@ var icoRouter = router({
     }));
   }),
   /** 配置/开关 ICO */
-  adminSetConfig: adminProcedure.input(z19.object({
-    totalTokens: z19.number().positive(),
-    startPrice: z19.number().positive(),
-    endPrice: z19.number().positive(),
-    exponent: z19.number().min(1).max(3).default(1.5),
-    listingPrice: z19.number().min(0).default(3),
-    perWalletCap: z19.number().min(0).default(0),
-    rewardPoolTotal: z19.number().min(0).default(0),
-    aprStart: z19.number().min(0).max(100).default(1),
+  adminSetConfig: adminProcedure.input(z20.object({
+    totalTokens: z20.number().positive(),
+    startPrice: z20.number().positive(),
+    endPrice: z20.number().positive(),
+    exponent: z20.number().min(1).max(3).default(1.5),
+    listingPrice: z20.number().min(0).default(3),
+    perWalletCap: z20.number().min(0).default(0),
+    rewardPoolTotal: z20.number().min(0).default(0),
+    aprStart: z20.number().min(0).max(100).default(1),
     // 起始年化(1=100%)
-    aprEnd: z19.number().min(0).max(100).default(1),
+    aprEnd: z20.number().min(0).max(100).default(1),
     // 结束年化(线性降到此值)
-    aprDeclineDays: z19.number().int().min(1).default(365),
+    aprDeclineDays: z20.number().int().min(1).default(365),
     // 递减天数
-    vestMonths: z19.number().int().min(1).default(12),
-    vestCliffMonths: z19.number().int().min(0).default(1),
-    status: z19.enum(["paused", "active", "ended"]).default("paused")
+    vestMonths: z20.number().int().min(1).default(12),
+    vestCliffMonths: z20.number().int().min(0).default(1),
+    status: z20.enum(["paused", "active", "ended"]).default("paused")
   })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const vals = {
       id: 1,
       totalTokens: String(input.totalTokens),
@@ -11499,29 +11698,29 @@ var icoRouter = router({
     return { ok: true };
   }),
   /** 确认订单 → 按当前曲线成交、锁仓进质押(含滑点+单钱包上限校验) */
-  adminConfirmOrder: adminProcedure.input(z19.object({ orderId: z19.number() })).mutation(async ({ input }) => {
+  adminConfirmOrder: adminProcedure.input(z20.object({ orderId: z20.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     return settleOrder(db, input.orderId);
   }),
   /** 取消订单 */
-  adminCancelOrder: adminProcedure.input(z19.object({ orderId: z19.number() })).mutation(async ({ input }) => {
+  adminCancelOrder: adminProcedure.input(z20.object({ orderId: z20.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     await db.update(icoOrders).set({ status: "cancelled" }).where(and24(eq28(icoOrders.id, input.orderId), eq28(icoOrders.status, "pending")));
     return { ok: true };
   }),
   /** 每日质押收益结算(幂等,按 runDate)。每笔批次各自计龄取年化 + 奖励池封顶 + 线性,自动复投/挂待领。 */
-  adminRunRewards: adminProcedure.input(z19.object({ date: z19.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).mutation(async ({ input }) => settleIcoRewards(input.date))
+  adminRunRewards: adminProcedure.input(z20.object({ date: z20.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).mutation(async ({ input }) => settleIcoRewards(input.date))
 });
 
 // server/routers/appVersion.ts
 init_db();
 init_schema();
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 import { eq as eq29 } from "drizzle-orm";
 init_env();
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 var CURRENT_APP_VERSION = "1.5.6";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
@@ -11538,9 +11737,9 @@ var appVersionRouter = router({
    * Called on app startup and from Settings page.
    */
   checkVersion: publicProcedure.input(
-    z20.object({
-      currentVersion: z20.string().max(20).default(CURRENT_APP_VERSION),
-      platform: z20.enum(["android", "ios", "web"]).default("web")
+    z21.object({
+      currentVersion: z21.string().max(20).default(CURRENT_APP_VERSION),
+      platform: z21.enum(["android", "ios", "web"]).default("web")
     })
   ).query(async ({ input, ctx }) => {
     const db = await getDb();
@@ -11593,21 +11792,21 @@ var appVersionRouter = router({
    * Admin: Update the version config (latest/min version, download URLs, etc.)
    */
   updateConfig: protectedProcedure.input(
-    z20.object({
-      latestVersion: z20.string().max(20),
-      minVersion: z20.string().max(20),
-      downloadUrlAndroid: z20.string().url().max(500).optional(),
-      downloadUrlIos: z20.string().url().max(500).optional(),
-      downloadUrlWeb: z20.string().url().max(500).optional(),
-      releaseNotes: z20.string().max(2e3).optional(),
-      isForceUpdate: z20.boolean().optional()
+    z21.object({
+      latestVersion: z21.string().max(20),
+      minVersion: z21.string().max(20),
+      downloadUrlAndroid: z21.string().url().max(500).optional(),
+      downloadUrlIos: z21.string().url().max(500).optional(),
+      downloadUrlWeb: z21.string().url().max(500).optional(),
+      releaseNotes: z21.string().max(2e3).optional(),
+      isForceUpdate: z21.boolean().optional()
     })
   ).mutation(async ({ ctx, input }) => {
     if (ctx.user.role !== "admin") {
-      throw new TRPCError16({ code: "FORBIDDEN", message: "Admin only" });
+      throw new TRPCError17({ code: "FORBIDDEN", message: "Admin only" });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR" });
     const existing = await db.select().from(appConfig).where(eq29(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
       await db.update(appConfig).set({
@@ -11638,9 +11837,9 @@ var appVersionRouter = router({
 // server/routers/consulting.ts
 init_db();
 init_schema();
-import { z as z21 } from "zod";
+import { z as z22 } from "zod";
 import { eq as eq30, desc as desc18, and as and25 } from "drizzle-orm";
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 init_logger();
 var BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
 var USDT_CONTRACT_BSC = "0x55d398326f99059fF775485246999027B3197955";
@@ -11769,13 +11968,13 @@ var consultingRouter = router({
    * Returns: reportId, summary (free preview)
    */
   createReport: protectedProcedure.use(rateLimitStrict).input(
-    z21.object({
-      queryType: z21.enum(["project", "security", "market"]),
-      queryText: z21.string().min(10).max(2e3)
+    z22.object({
+      queryType: z22.enum(["project", "security", "market"]),
+      queryText: z22.string().min(10).max(2e3)
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const cacheKey2 = `${ctx.user.id}:${input.queryType}:${input.queryText.slice(0, 100)}`;
     const [existing] = await db.select().from(consultingReports).where(eq30(consultingReports.cacheKey, cacheKey2)).limit(1);
     if (existing && existing.status !== "failed") {
@@ -11813,24 +12012,24 @@ var consultingRouter = router({
    * Step 2: User submits their wallet address and txHash after paying
    */
   submitPayment: protectedProcedure.input(
-    z21.object({
-      reportId: z21.number(),
-      walletAddress: z21.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
-      txHash: z21.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid transaction hash")
+    z22.object({
+      reportId: z22.number(),
+      walletAddress: z22.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
+      txHash: z22.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid transaction hash")
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [report] = await db.select().from(consultingReports).where(and25(eq30(consultingReports.id, input.reportId), eq30(consultingReports.userId, ctx.user.id))).limit(1);
     if (!report) {
-      throw new TRPCError17({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
+      throw new TRPCError18({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
     }
     if (report.status === "completed") {
       return { success: true, message: "\u62A5\u544A\u5DF2\u5B8C\u6210" };
     }
     const [existingPayment] = await db.select().from(consultingPayments).where(eq30(consultingPayments.txHash, input.txHash)).limit(1);
     if (existingPayment) {
-      throw new TRPCError17({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u88AB\u4F7F\u7528" });
+      throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u88AB\u4F7F\u7528" });
     }
     await db.insert(consultingPayments).values({
       reportId: input.reportId,
@@ -11850,12 +12049,12 @@ var consultingRouter = router({
   /**
    * Poll payment and report status
    */
-  getStatus: protectedProcedure.input(z21.object({ reportId: z21.number() })).query(async ({ ctx, input }) => {
+  getStatus: protectedProcedure.input(z22.object({ reportId: z22.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [report] = await db.select().from(consultingReports).where(and25(eq30(consultingReports.id, input.reportId), eq30(consultingReports.userId, ctx.user.id))).limit(1);
     if (!report) {
-      throw new TRPCError17({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
+      throw new TRPCError18({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
     }
     return {
       reportId: report.id,
@@ -11871,15 +12070,15 @@ var consultingRouter = router({
   /**
    * Get full report (only available after payment confirmed)
    */
-  getFullReport: protectedProcedure.input(z21.object({ reportId: z21.number() })).query(async ({ ctx, input }) => {
+  getFullReport: protectedProcedure.input(z22.object({ reportId: z22.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [report] = await db.select().from(consultingReports).where(and25(eq30(consultingReports.id, input.reportId), eq30(consultingReports.userId, ctx.user.id))).limit(1);
     if (!report) {
-      throw new TRPCError17({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
+      throw new TRPCError18({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
     }
     if (report.status !== "completed") {
-      throw new TRPCError17({
+      throw new TRPCError18({
         code: "FORBIDDEN",
         message: report.status === "pending_payment" ? "\u8BF7\u5148\u5B8C\u6210\u652F\u4ED8" : "\u62A5\u544A\u6B63\u5728\u751F\u6210\u4E2D\uFF0C\u8BF7\u7A0D\u5019"
       });
@@ -11897,7 +12096,7 @@ var consultingRouter = router({
   /**
    * Get user's consulting history
    */
-  getHistory: protectedProcedure.input(z21.object({ limit: z21.number().default(20) }).optional()).query(async ({ ctx, input }) => {
+  getHistory: protectedProcedure.input(z22.object({ limit: z22.number().default(20) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select({
@@ -11913,12 +12112,12 @@ var consultingRouter = router({
   /**
    * Manually retry payment verification (for cases where auto-verify failed)
    */
-  retryVerification: protectedProcedure.input(z21.object({ reportId: z21.number() })).mutation(async ({ ctx, input }) => {
+  retryVerification: protectedProcedure.input(z22.object({ reportId: z22.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [report] = await db.select().from(consultingReports).where(and25(eq30(consultingReports.id, input.reportId), eq30(consultingReports.userId, ctx.user.id))).limit(1);
-    if (!report) throw new TRPCError17({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
-    if (!report.txHash) throw new TRPCError17({ code: "BAD_REQUEST", message: "\u5C1A\u672A\u63D0\u4EA4\u4EA4\u6613\u54C8\u5E0C" });
+    if (!report) throw new TRPCError18({ code: "NOT_FOUND", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
+    if (!report.txHash) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5C1A\u672A\u63D0\u4EA4\u4EA4\u6613\u54C8\u5E0C" });
     if (report.status === "completed") return { success: true, message: "\u62A5\u544A\u5DF2\u5B8C\u6210" };
     const [payment] = await db.select().from(consultingPayments).where(eq30(consultingPayments.reportId, input.reportId)).limit(1);
     const walletAddress = payment?.walletAddress || "unknown";
@@ -11963,11 +12162,11 @@ async function verifyAndGenerateReport(reportId, txHash, walletAddress, userId) 
 }
 
 // server/routers/swap.ts
-import { z as z22 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
+import { z as z23 } from "zod";
+import { TRPCError as TRPCError19 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq31, and as and26, gte as gte6, desc as desc19, asc as asc3, sql as sql17, inArray as inArray8 } from "drizzle-orm";
+import { eq as eq31, and as and26, gte as gte6, desc as desc19, asc as asc3, sql as sql18, inArray as inArray8 } from "drizzle-orm";
 
 // server/swap/floorAmm.ts
 function spotPrice(p) {
@@ -12062,12 +12261,12 @@ function affected(r) {
   return a?.[0]?.affectedRows ?? a?.affectedRows ?? a?.rowsAffected ?? 0;
 }
 async function sumNn(d) {
-  const [r] = await d.select({ s: sql17`COALESCE(SUM(${users.nnBalance}),0)` }).from(users);
+  const [r] = await d.select({ s: sql18`COALESCE(SUM(${users.nnBalance}),0)` }).from(users);
   return Number(r?.s ?? 0);
 }
 var swapRouter = router({
   // ─── 行情:现价 + 地板价 + 储备/危机金 + 当前税/θ + 24h + OHLC K线 + 最近成交 ───────
-  getMarket: publicProcedure.input(z22.object({ interval: z22.enum(["15m", "1h", "4h", "1d"]).default("1h") }).optional()).query(async ({ input }) => {
+  getMarket: publicProcedure.input(z23.object({ interval: z23.enum(["15m", "1h", "4h", "1d"]).default("1h") }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
     const pool = await getPool(db);
@@ -12139,37 +12338,37 @@ var swapRouter = router({
     return { ai: Number(u?.ai ?? 0), usdt: Number(u?.usdt ?? 0) };
   }),
   // ─── 执行 swap(FloorAMM 逻辑;原子锁池行+用户行)─────────────────────────────────
-  execute: protectedProcedure.input(z22.object({ side: z22.enum(["buy", "sell"]), amountIn: z22.number().positive(), minOut: z22.number().min(0) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  execute: protectedProcedure.input(z23.object({ side: z23.enum(["buy", "sell"]), amountIn: z23.number().positive(), minOut: z23.number().min(0) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await getPool(db);
     const now = Date.now();
     return db.transaction(async (tx) => {
       const [row] = await tx.select().from(aiAmmPool).where(eq31(aiAmmPool.id, 1)).for("update").limit(1);
-      if (!row || !row.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u4E8C\u7EA7\u5E02\u573A\u672A\u5F00\u5E02" });
+      if (!row || !row.seeded) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u4E8C\u7EA7\u5E02\u573A\u672A\u5F00\u5E02" });
       const ps = poolFromRow(row);
       let out = 0, execPrice = 0, marketPrice = 0;
       if (input.side === "buy") {
         const usdtIn = input.amountIn;
         const q = quoteBuy(ps, usdtIn);
         const aiOut = Math.floor(q.aiOut);
-        if (aiOut <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
-        if (aiOut < input.minOut) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6ED1\u70B9\u8D85\u9650,\u8BF7\u91CD\u8BD5" });
-        if (aiOut >= ps.aiReserve) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u552E\u5E93\u5B58" });
+        if (aiOut <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+        if (aiOut < input.minOut) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6ED1\u70B9\u8D85\u9650,\u8BF7\u91CD\u8BD5" });
+        if (aiOut >= ps.aiReserve) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u552E\u5E93\u5B58" });
         const net2 = usdtIn - q.toReserve;
         await tx.update(aiAmmPool).set({
-          usdtReserve: sql17`${aiAmmPool.usdtReserve} + ${net2}`,
-          aiReserve: sql17`${aiAmmPool.aiReserve} - ${aiOut}`,
-          reserveR: sql17`${aiAmmPool.reserveR} + ${q.toReserve}`,
-          circulatingAi: sql17`${aiAmmPool.circulatingAi} + ${aiOut}`,
-          cumBoughtUsdt: sql17`${aiAmmPool.cumBoughtUsdt} + ${usdtIn}`,
-          totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${usdtIn}`
+          usdtReserve: sql18`${aiAmmPool.usdtReserve} + ${net2}`,
+          aiReserve: sql18`${aiAmmPool.aiReserve} - ${aiOut}`,
+          reserveR: sql18`${aiAmmPool.reserveR} + ${q.toReserve}`,
+          circulatingAi: sql18`${aiAmmPool.circulatingAi} + ${aiOut}`,
+          cumBoughtUsdt: sql18`${aiAmmPool.cumBoughtUsdt} + ${usdtIn}`,
+          totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${usdtIn}`
         }).where(eq31(aiAmmPool.id, 1));
         const r = await tx.update(users).set({
-          usdtBalance: sql17`${users.usdtBalance} - ${usdtIn}`,
-          nnBalance: sql17`${users.nnBalance} + ${aiOut}`
+          usdtBalance: sql18`${users.usdtBalance} - ${usdtIn}`,
+          nnBalance: sql18`${users.nnBalance} + ${aiOut}`
         }).where(and26(eq31(users.id, ctx.user.id), gte6(users.usdtBalance, usdtIn.toFixed(8))));
-        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
+        if (affected(r) < 1) throw new TRPCError19({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
         out = aiOut;
         execPrice = usdtIn / aiOut;
         marketPrice = (ps.usdtReserve + net2) / (ps.aiReserve - aiOut);
@@ -12178,36 +12377,36 @@ var swapRouter = router({
         }
       } else {
         const aiIn = Math.floor(input.amountIn);
-        if (aiIn <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+        if (aiIn <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
         const supply = await sumNn(tx);
         const q = quoteSell(ps, aiIn, now, supply);
-        if (q.usdtOut <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
-        if (q.usdtOut < input.minOut) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6ED1\u70B9\u8D85\u9650,\u8BF7\u91CD\u8BD5" });
+        if (q.usdtOut <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+        if (q.usdtOut < input.minOut) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6ED1\u70B9\u8D85\u9650,\u8BF7\u91CD\u8BD5" });
         if (q.viaFloor) {
-          if (q.usdtOut >= ps.reserveR) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u50A8\u5907\u6682\u4E0D\u8DB3,\u8BF7\u51CF\u5C11\u6570\u91CF" });
+          if (q.usdtOut >= ps.reserveR) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u50A8\u5907\u6682\u4E0D\u8DB3,\u8BF7\u51CF\u5C11\u6570\u91CF" });
           await tx.update(aiAmmPool).set({
-            reserveR: sql17`${aiAmmPool.reserveR} - ${q.usdtOut}`,
-            circulatingAi: sql17`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
-            totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${q.usdtOut}`
+            reserveR: sql18`${aiAmmPool.reserveR} - ${q.usdtOut}`,
+            circulatingAi: sql18`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
+            totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${q.usdtOut}`
           }).where(eq31(aiAmmPool.id, 1));
           marketPrice = floorPrice(ps, supply);
         } else {
-          if (q.grossUsdt >= ps.usdtReserve) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u4ED8\u989D\u5EA6" });
+          if (q.grossUsdt >= ps.usdtReserve) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u4ED8\u989D\u5EA6" });
           await tx.update(aiAmmPool).set({
-            aiReserve: sql17`${aiAmmPool.aiReserve} + ${aiIn}`,
-            usdtReserve: sql17`${aiAmmPool.usdtReserve} - ${q.grossUsdt}`,
-            circulatingAi: sql17`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
-            divPool: sql17`${aiAmmPool.divPool} + ${q.baseTax.toFixed(8)}`,
-            crisisFund: sql17`${aiAmmPool.crisisFund} + ${q.excessTax.toFixed(8)}`,
-            totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${q.grossUsdt}`
+            aiReserve: sql18`${aiAmmPool.aiReserve} + ${aiIn}`,
+            usdtReserve: sql18`${aiAmmPool.usdtReserve} - ${q.grossUsdt}`,
+            circulatingAi: sql18`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
+            divPool: sql18`${aiAmmPool.divPool} + ${q.baseTax.toFixed(8)}`,
+            crisisFund: sql18`${aiAmmPool.crisisFund} + ${q.excessTax.toFixed(8)}`,
+            totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${q.grossUsdt}`
           }).where(eq31(aiAmmPool.id, 1));
           marketPrice = (ps.usdtReserve - q.grossUsdt) / (ps.aiReserve + aiIn);
         }
         const r = await tx.update(users).set({
-          nnBalance: sql17`${users.nnBalance} - ${aiIn}`,
-          usdtBalance: sql17`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
+          nnBalance: sql18`${users.nnBalance} - ${aiIn}`,
+          usdtBalance: sql18`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
         }).where(and26(eq31(users.id, ctx.user.id), gte6(users.nnBalance, aiIn)));
-        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+        if (affected(r) < 1) throw new TRPCError19({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
         out = q.usdtOut;
         execPrice = q.usdtOut / aiIn;
       }
@@ -12222,23 +12421,23 @@ var swapRouter = router({
     });
   }),
   // ─── Admin:播种开市(募集USDT分给 AMM池 + 储备R + 危机金)+ 危机补仓 + USDT入账 ────────
-  adminSeed: adminProcedure.input(z22.object({
-    aiSeed: z22.number().positive(),
-    usdtAmm: z22.number().positive(),
-    usdtReserveR: z22.number().min(0).default(0),
-    usdtCrisis: z22.number().min(0).default(0),
-    thetaStartBps: z22.number().int().min(2e3).max(6e3).default(5200),
-    thetaEndBps: z22.number().int().min(2e3).max(6e3).default(2700),
-    thetaHalfBuyUsdt: z22.number().positive().default(1e5),
-    baseTaxBps: z22.number().int().min(0).max(1e3).default(500),
-    maxTaxBps: z22.number().int().min(500).max(5e3).default(5e3)
+  adminSeed: adminProcedure.input(z23.object({
+    aiSeed: z23.number().positive(),
+    usdtAmm: z23.number().positive(),
+    usdtReserveR: z23.number().min(0).default(0),
+    usdtCrisis: z23.number().min(0).default(0),
+    thetaStartBps: z23.number().int().min(2e3).max(6e3).default(5200),
+    thetaEndBps: z23.number().int().min(2e3).max(6e3).default(2700),
+    thetaHalfBuyUsdt: z23.number().positive().default(1e5),
+    baseTaxBps: z23.number().int().min(0).max(1e3).default(500),
+    maxTaxBps: z23.number().int().min(500).max(5e3).default(5e3)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const pool = await getPool(db);
-    if (pool.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5DF2\u5F00\u5E02,\u4E0D\u53EF\u91CD\u590D\u64AD\u79CD" });
-    if (input.thetaEndBps > input.thetaStartBps) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u03B8 end \u4E0D\u80FD\u5927\u4E8E start" });
-    if (input.maxTaxBps <= input.baseTaxBps) throw new TRPCError18({ code: "BAD_REQUEST", message: "max \u7A0E\u987B\u5927\u4E8E base" });
+    if (pool.seeded) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u5DF2\u5F00\u5E02,\u4E0D\u53EF\u91CD\u590D\u64AD\u79CD" });
+    if (input.thetaEndBps > input.thetaStartBps) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u03B8 end \u4E0D\u80FD\u5927\u4E8E start" });
+    if (input.maxTaxBps <= input.baseTaxBps) throw new TRPCError19({ code: "BAD_REQUEST", message: "max \u7A0E\u987B\u5927\u4E8E base" });
     const openPrice = input.usdtAmm / input.aiSeed;
     await db.update(aiAmmPool).set({
       aiReserve: input.aiSeed.toFixed(8),
@@ -12258,106 +12457,106 @@ var swapRouter = router({
     return { ok: true, openPrice };
   }),
   // 危机补仓:深跌(现价≤峰值30% 或 ≤1.1地板)时把危机金的一部分注入储备 R(抬地板)
-  adminDeployCrisis: adminProcedure.input(z22.object({ amount: z22.number().positive() })).mutation(async ({ input }) => {
+  adminDeployCrisis: adminProcedure.input(z23.object({ amount: z23.number().positive() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const now = Date.now();
     return db.transaction(async (tx) => {
       const [row] = await tx.select().from(aiAmmPool).where(eq31(aiAmmPool.id, 1)).for("update").limit(1);
-      if (!row || !row.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02" });
+      if (!row || !row.seeded) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02" });
       const ps = poolFromRow(row);
       const supply = await sumNn(tx);
       const spot = spotPrice(ps), peak = effectivePeak(ps, now), F = floorPrice(ps, supply);
       const trigger = peak > 0 && spot <= peak * 0.3 || F > 0 && F < spot && spot <= F * 1.1;
-      if (!trigger) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u8FBE\u5371\u673A\u89E6\u53D1(\u73B0\u4EF7>\u5CF0\u503C30%\u4E14>1.1\u5730\u677F)" });
-      if (input.amount > ps.crisisFund) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
-      if (input.amount > ps.crisisFund / 3 + 1e-6) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5355\u6B21\u2264\u5371\u673A\u91D1 1/3" });
+      if (!trigger) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u8FBE\u5371\u673A\u89E6\u53D1(\u73B0\u4EF7>\u5CF0\u503C30%\u4E14>1.1\u5730\u677F)" });
+      if (input.amount > ps.crisisFund) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
+      if (input.amount > ps.crisisFund / 3 + 1e-6) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u5355\u6B21\u2264\u5371\u673A\u91D1 1/3" });
       await tx.update(aiAmmPool).set({
-        crisisFund: sql17`${aiAmmPool.crisisFund} - ${input.amount.toFixed(8)}`,
-        reserveR: sql17`${aiAmmPool.reserveR} + ${input.amount.toFixed(8)}`
+        crisisFund: sql18`${aiAmmPool.crisisFund} - ${input.amount.toFixed(8)}`,
+        reserveR: sql18`${aiAmmPool.reserveR} + ${input.amount.toFixed(8)}`
       }).where(eq31(aiAmmPool.id, 1));
       return { ok: true };
     });
   }),
   // ─── 底池注资:开市后**可重复**向底池加钱(解决 adminSeed 一次性、首次播种后不可再加)─────────────
   //   储备R=抬地板后备;危机金=深跌补仓弹药;AMM流动性=按现价配比加 USDT+AI,加深盘口、价格不变。
-  adminTopUp: adminProcedure.input(z22.object({
-    addReserveR: z22.number().min(0).max(1e8).default(0),
-    addCrisis: z22.number().min(0).max(1e8).default(0),
-    addLiquidityUsdt: z22.number().min(0).max(1e8).default(0)
+  adminTopUp: adminProcedure.input(z23.object({
+    addReserveR: z23.number().min(0).max(1e8).default(0),
+    addCrisis: z23.number().min(0).max(1e8).default(0),
+    addLiquidityUsdt: z23.number().min(0).max(1e8).default(0)
     // 注资 AMM,自动按现价配比补 AI 保持价格不变
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     if (input.addReserveR + input.addCrisis + input.addLiquidityUsdt <= 0)
-      throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u586B\u4EFB\u4F55\u6CE8\u8D44\u9879" });
+      throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u586B\u4EFB\u4F55\u6CE8\u8D44\u9879" });
     return db.transaction(async (tx) => {
       const [row] = await tx.select().from(aiAmmPool).where(eq31(aiAmmPool.id, 1)).for("update").limit(1);
-      if (!row || !row.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02,\u8BF7\u5148 adminSeed \u64AD\u79CD" });
+      if (!row || !row.seeded) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02,\u8BF7\u5148 adminSeed \u64AD\u79CD" });
       const ps = poolFromRow(row);
       const set = {};
-      if (input.addReserveR > 0) set.reserveR = sql17`${aiAmmPool.reserveR} + ${input.addReserveR.toFixed(8)}`;
-      if (input.addCrisis > 0) set.crisisFund = sql17`${aiAmmPool.crisisFund} + ${input.addCrisis.toFixed(8)}`;
+      if (input.addReserveR > 0) set.reserveR = sql18`${aiAmmPool.reserveR} + ${input.addReserveR.toFixed(8)}`;
+      if (input.addCrisis > 0) set.crisisFund = sql18`${aiAmmPool.crisisFund} + ${input.addCrisis.toFixed(8)}`;
       let addAi = 0;
       if (input.addLiquidityUsdt > 0) {
         const price = spotPrice(ps);
-        if (price <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6C60\u4EF7\u5F02\u5E38,\u65E0\u6CD5\u914D\u6BD4\u6CE8\u8D44" });
+        if (price <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6C60\u4EF7\u5F02\u5E38,\u65E0\u6CD5\u914D\u6BD4\u6CE8\u8D44" });
         addAi = input.addLiquidityUsdt / price;
-        set.usdtReserve = sql17`${aiAmmPool.usdtReserve} + ${input.addLiquidityUsdt.toFixed(8)}`;
-        set.aiReserve = sql17`${aiAmmPool.aiReserve} + ${addAi.toFixed(8)}`;
+        set.usdtReserve = sql18`${aiAmmPool.usdtReserve} + ${input.addLiquidityUsdt.toFixed(8)}`;
+        set.aiReserve = sql18`${aiAmmPool.aiReserve} + ${addAi.toFixed(8)}`;
       }
       await tx.update(aiAmmPool).set(set).where(eq31(aiAmmPool.id, 1));
       return { ok: true, addReserveR: input.addReserveR, addCrisis: input.addCrisis, addLiquidityUsdt: input.addLiquidityUsdt, addAi };
     });
   }),
   // ─── 底池提取:把储备R/危机金的一部分撤回国库(开市后可逆,夹断不穿负;不动 AMM 流动性,避免影响盘口)──
-  adminWithdrawPool: adminProcedure.input(z22.object({
-    fromReserveR: z22.number().min(0).max(1e8).default(0),
-    fromCrisis: z22.number().min(0).max(1e8).default(0)
+  adminWithdrawPool: adminProcedure.input(z23.object({
+    fromReserveR: z23.number().min(0).max(1e8).default(0),
+    fromCrisis: z23.number().min(0).max(1e8).default(0)
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    if (input.fromReserveR + input.fromCrisis <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u586B\u4EFB\u4F55\u63D0\u53D6\u9879" });
+    if (input.fromReserveR + input.fromCrisis <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u586B\u4EFB\u4F55\u63D0\u53D6\u9879" });
     return db.transaction(async (tx) => {
       const [row] = await tx.select().from(aiAmmPool).where(eq31(aiAmmPool.id, 1)).for("update").limit(1);
-      if (!row || !row.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02" });
+      if (!row || !row.seeded) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02" });
       const ps = poolFromRow(row);
-      if (input.fromReserveR > ps.reserveR + 1e-9) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u50A8\u5907R\u4E0D\u8DB3" });
-      if (input.fromCrisis > ps.crisisFund + 1e-9) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
+      if (input.fromReserveR > ps.reserveR + 1e-9) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u50A8\u5907R\u4E0D\u8DB3" });
+      if (input.fromCrisis > ps.crisisFund + 1e-9) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
       const set = {};
-      if (input.fromReserveR > 0) set.reserveR = sql17`GREATEST(${aiAmmPool.reserveR} - ${input.fromReserveR.toFixed(8)}, 0)`;
-      if (input.fromCrisis > 0) set.crisisFund = sql17`GREATEST(${aiAmmPool.crisisFund} - ${input.fromCrisis.toFixed(8)}, 0)`;
+      if (input.fromReserveR > 0) set.reserveR = sql18`GREATEST(${aiAmmPool.reserveR} - ${input.fromReserveR.toFixed(8)}, 0)`;
+      if (input.fromCrisis > 0) set.crisisFund = sql18`GREATEST(${aiAmmPool.crisisFund} - ${input.fromCrisis.toFixed(8)}, 0)`;
       await tx.update(aiAmmPool).set(set).where(eq31(aiAmmPool.id, 1));
       return { ok: true, fromReserveR: input.fromReserveR, fromCrisis: input.fromCrisis };
     });
   }),
-  adminCreditUsdt: adminProcedure.input(z22.object({ userId: z22.number(), amount: z22.number().positive() })).mutation(async ({ input }) => {
+  adminCreditUsdt: adminProcedure.input(z23.object({ userId: z23.number(), amount: z23.number().positive() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    await db.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${input.amount}` }).where(eq31(users.id, input.userId));
+    await db.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${input.amount}` }).where(eq31(users.id, input.userId));
     return { ok: true };
   }),
   // ─── USDT 出入金(充值=转账+回填哈希待确认;提现=申请即冻结余额待打款)─────────────────
   depositInfo: publicProcedure.query(() => ({ payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN })),
-  requestDeposit: protectedProcedure.input(z22.object({ amount: z22.number().positive().max(1e6), txHash: z22.string().min(6).max(120) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  requestDeposit: protectedProcedure.input(z23.object({ amount: z23.number().positive().max(1e6), txHash: z23.string().min(6).max(120) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const txHash = sanitizeInput(input.txHash, 120);
     const [dup] = await db.select({ id: usdtDeposits.id }).from(usdtDeposits).where(eq31(usdtDeposits.txHash, txHash)).limit(1);
-    if (dup) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u63D0\u4EA4\u8FC7,\u8BF7\u52FF\u91CD\u590D" });
+    if (dup) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u63D0\u4EA4\u8FC7,\u8BF7\u52FF\u91CD\u590D" });
     try {
       await db.insert(usdtDeposits).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), txHash });
     } catch {
-      throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u63D0\u4EA4\u8FC7,\u8BF7\u52FF\u91CD\u590D" });
+      throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u63D0\u4EA4\u8FC7,\u8BF7\u52FF\u91CD\u590D" });
     }
     return { ok: true };
   }),
-  requestWithdraw: protectedProcedure.input(z22.object({ amount: z22.number().positive().max(1e6), address: z22.string().min(6).max(80) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  requestWithdraw: protectedProcedure.input(z23.object({ amount: z23.number().positive().max(1e6), address: z23.string().min(6).max(80) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
-      const r = await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} - ${input.amount.toFixed(8)}` }).where(and26(eq31(users.id, ctx.user.id), gte6(users.usdtBalance, input.amount.toFixed(8))));
-      if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
+      const r = await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} - ${input.amount.toFixed(8)}` }).where(and26(eq31(users.id, ctx.user.id), gte6(users.usdtBalance, input.amount.toFixed(8))));
+      if (affected(r) < 1) throw new TRPCError19({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
       await tx.insert(usdtWithdrawals).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), address: sanitizeInput(input.address, 80) });
       return { ok: true };
     });
@@ -12371,74 +12570,74 @@ var swapRouter = router({
     ]);
     return { deposits, withdrawals };
   }),
-  adminListDeposits: adminProcedure.input(z22.object({ status: z22.enum(["pending", "confirmed", "rejected"]).optional() }).optional()).query(async ({ input }) => {
+  adminListDeposits: adminProcedure.input(z23.object({ status: z23.enum(["pending", "confirmed", "rejected"]).optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq31(usdtDeposits.status, input.status)] : [];
     return db.select().from(usdtDeposits).where(conds.length ? and26(...conds) : void 0).orderBy(desc19(usdtDeposits.createdAt)).limit(100);
   }),
-  adminConfirmDeposit: adminProcedure.input(z22.object({ id: z22.number(), amount: z22.number().positive().max(1e6).optional() })).mutation(async ({ input }) => {
+  adminConfirmDeposit: adminProcedure.input(z23.object({ id: z23.number(), amount: z23.number().positive().max(1e6).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
       const [d] = await tx.select().from(usdtDeposits).where(eq31(usdtDeposits.id, input.id)).for("update").limit(1);
-      if (!d || d.status !== "pending") throw new TRPCError18({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
+      if (!d || d.status !== "pending") throw new TRPCError19({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
       const credit = (input.amount ?? Number(d.amount)).toFixed(8);
       await tx.update(usdtDeposits).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), amount: credit }).where(eq31(usdtDeposits.id, input.id));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${credit}` }).where(eq31(users.id, d.userId));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${credit}` }).where(eq31(users.id, d.userId));
       return { ok: true, credited: Number(credit) };
     });
   }),
-  adminRejectDeposit: adminProcedure.input(z22.object({ id: z22.number() })).mutation(async ({ input }) => {
+  adminRejectDeposit: adminProcedure.input(z23.object({ id: z23.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.update(usdtDeposits).set({ status: "rejected", confirmedAt: /* @__PURE__ */ new Date() }).where(and26(eq31(usdtDeposits.id, input.id), eq31(usdtDeposits.status, "pending")));
     return { ok: true };
   }),
-  adminListWithdrawals: adminProcedure.input(z22.object({ status: z22.enum(["pending", "done", "rejected"]).optional() }).optional()).query(async ({ input }) => {
+  adminListWithdrawals: adminProcedure.input(z23.object({ status: z23.enum(["pending", "done", "rejected"]).optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq31(usdtWithdrawals.status, input.status)] : [];
     return db.select().from(usdtWithdrawals).where(conds.length ? and26(...conds) : void 0).orderBy(desc19(usdtWithdrawals.createdAt)).limit(100);
   }),
-  adminCompleteWithdrawal: adminProcedure.input(z22.object({ id: z22.number(), txHash: z22.string().min(6).max(120) })).mutation(async ({ input }) => {
+  adminCompleteWithdrawal: adminProcedure.input(z23.object({ id: z23.number(), txHash: z23.string().min(6).max(120) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.update(usdtWithdrawals).set({ status: "done", txHash: sanitizeInput(input.txHash, 120), processedAt: /* @__PURE__ */ new Date() }).where(and26(eq31(usdtWithdrawals.id, input.id), eq31(usdtWithdrawals.status, "pending")));
     return { ok: true };
   }),
-  adminRejectWithdrawal: adminProcedure.input(z22.object({ id: z22.number() })).mutation(async ({ input }) => {
+  adminRejectWithdrawal: adminProcedure.input(z23.object({ id: z23.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
       const [w] = await tx.select().from(usdtWithdrawals).where(eq31(usdtWithdrawals.id, input.id)).for("update").limit(1);
-      if (!w || w.status !== "pending") throw new TRPCError18({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
+      if (!w || w.status !== "pending") throw new TRPCError19({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
       await tx.update(usdtWithdrawals).set({ status: "rejected", processedAt: /* @__PURE__ */ new Date() }).where(eq31(usdtWithdrawals.id, input.id));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${w.amount}` }).where(eq31(users.id, w.userId));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${w.amount}` }).where(eq31(users.id, w.userId));
       return { ok: true };
     });
   }),
   // ─── 分红分配(🔴 合规闸门:USDT 持币分红=Howey,默认关,律师结论后 admin 开)──────────
-  adminSetDividendClaims: adminProcedure.input(z22.object({ enabled: z22.boolean() })).mutation(async ({ input }) => {
+  adminSetDividendClaims: adminProcedure.input(z23.object({ enabled: z23.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await getPool(db);
     await db.update(aiAmmPool).set({ dividendClaimsEnabled: input.enabled }).where(eq31(aiAmmPool.id, 1));
     return { ok: true };
   }),
-  adminDistributeDividends: adminProcedure.input(z22.object({ teamUserId: z22.number() })).mutation(async ({ input }) => {
+  adminDistributeDividends: adminProcedure.input(z23.object({ teamUserId: z23.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
       const [row] = await tx.select().from(aiAmmPool).where(eq31(aiAmmPool.id, 1)).for("update").limit(1);
-      if (!row) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6C60\u4E0D\u5B58\u5728" });
-      if (!row.dividendClaimsEnabled) throw new TRPCError18({ code: "FORBIDDEN", message: "\u5206\u7EA2\u672A\u5F00\u95F8(\u9700\u5408\u89C4\u7ED3\u8BBA)" });
+      if (!row) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u6C60\u4E0D\u5B58\u5728" });
+      if (!row.dividendClaimsEnabled) throw new TRPCError19({ code: "FORBIDDEN", message: "\u5206\u7EA2\u672A\u5F00\u95F8(\u9700\u5408\u89C4\u7ED3\u8BBA)" });
       const divPool = Number(row.divPool);
-      if (divPool <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u65E0\u53EF\u5206\u914D\u5206\u7EA2" });
+      if (divPool <= 0) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u65E0\u53EF\u5206\u914D\u5206\u7EA2" });
       const tierRatio = { 1: 0.2, 2: 0.24, 3: 0.3 };
       const all = await tx.select({ id: users.id, tier: users.icoTier }).from(users).where(inArray8(users.icoTier, [1, 2, 3]));
       const ids = all.map((m) => m.id);
-      const subs = ids.length ? await tx.select({ uid: icoPurchases.userId, usdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(inArray8(icoPurchases.userId, ids)).groupBy(icoPurchases.userId) : [];
+      const subs = ids.length ? await tx.select({ uid: icoPurchases.userId, usdt: sql18`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(inArray8(icoPurchases.userId, ids)).groupBy(icoPurchases.userId) : [];
       const subMap = new Map(subs.map((s) => [s.uid, Number(s.usdt)]));
       const byTier = { 1: [], 2: [], 3: [] };
       for (const m of all) {
@@ -12460,7 +12659,7 @@ var swapRouter = router({
         for (const m of members) {
           const share = Number((tierAmount * (m.w / totalW)).toFixed(8));
           if (share > 0) {
-            await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq31(users.id, m.id));
+            await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq31(users.id, m.id));
             paid += share;
           }
         }
@@ -12468,19 +12667,19 @@ var swapRouter = router({
         summary.push({ tier, members: members.length, amount: paid });
       }
       const tech = Number((divPool * 0.26).toFixed(8));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq31(users.id, input.teamUserId));
-      if (unclaimed > 1e-9) await tx.update(aiAmmPool).set({ crisisFund: sql17`${aiAmmPool.crisisFund} + ${unclaimed.toFixed(8)}` }).where(eq31(aiAmmPool.id, 1));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq31(users.id, input.teamUserId));
+      if (unclaimed > 1e-9) await tx.update(aiAmmPool).set({ crisisFund: sql18`${aiAmmPool.crisisFund} + ${unclaimed.toFixed(8)}` }).where(eq31(aiAmmPool.id, 1));
       const drained = paidToPartners + tech + unclaimed;
-      await tx.update(aiAmmPool).set({ divPool: sql17`GREATEST(${aiAmmPool.divPool} - ${drained.toFixed(8)}, 0)` }).where(eq31(aiAmmPool.id, 1));
+      await tx.update(aiAmmPool).set({ divPool: sql18`GREATEST(${aiAmmPool.divPool} - ${drained.toFixed(8)}, 0)` }).where(eq31(aiAmmPool.id, 1));
       return { ok: true, distributed: drained, paidToPartners, tech, unclaimedToCrisis: unclaimed, summary };
     });
   })
 });
 
 // server/routers/ai.ts
-import { z as z23 } from "zod";
-import { and as and27, desc as desc20, eq as eq32, sql as sql18 } from "drizzle-orm";
-import { TRPCError as TRPCError19 } from "@trpc/server";
+import { z as z24 } from "zod";
+import { and as and27, desc as desc20, eq as eq32, sql as sql19 } from "drizzle-orm";
+import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
 function todayStr() {
@@ -12494,7 +12693,7 @@ async function getAiUsedToday(db, userId) {
 }
 async function incrAiUsedToday(db, userId) {
   const day = todayStr();
-  const res = await db.update(aiDailyUsage).set({ count: sql18`${aiDailyUsage.count} + 1` }).where(and27(eq32(aiDailyUsage.userId, userId), eq32(aiDailyUsage.day, day)));
+  const res = await db.update(aiDailyUsage).set({ count: sql19`${aiDailyUsage.count} + 1` }).where(and27(eq32(aiDailyUsage.userId, userId), eq32(aiDailyUsage.day, day)));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
   if (!affected2) {
     try {
@@ -12640,13 +12839,13 @@ async function execTool(name, args, userId) {
 var aiRouter = router({
   // 会话式 AI 分析 Agent：可调工具（查价 / 自选 / 到价提醒）
   chat: protectedProcedure.use(rateLimitWrite).input(
-    z23.object({
-      message: z23.string().min(1).max(2e3),
-      history: z23.array(z23.object({ role: z23.enum(["user", "assistant"]), content: z23.string().max(4e3) })).max(20).optional()
+    z24.object({
+      message: z24.string().min(1).max(2e3),
+      history: z24.array(z24.object({ role: z24.enum(["user", "assistant"]), content: z24.string().max(4e3) })).max(20).optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     const cost = await getAiChatCost();
     const benefits = await getBenefits(db, ctx.user.id);
     const usedToday = await getAiUsedToday(db, ctx.user.id);
@@ -12746,9 +12945,9 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989
     return { cost: await getAiChatCost() };
   }),
   // 管理员设置 AI 单价（写入 app_config，立即生效）
-  setCost: adminProcedure.input(z23.object({ cost: z23.number().int().min(0).max(1e3) })).mutation(async ({ input }) => {
+  setCost: adminProcedure.input(z24.object({ cost: z24.number().int().min(0).max(1e3) })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq32(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
       await db.update(appConfig).set({ aiChatCost: input.cost }).where(eq32(appConfig.platform, "all"));
@@ -12775,24 +12974,24 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989
     }).from(consultingReports).where(eq32(consultingReports.userId, ctx.user.id)).orderBy(desc20(consultingReports.createdAt)).limit(50);
   }),
   // 研报详情（仅本人可看全文）
-  getReport: protectedProcedure.input(z23.object({ reportId: z23.number() })).query(async ({ ctx, input }) => {
+  getReport: protectedProcedure.input(z24.object({ reportId: z24.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [r] = await db.select().from(consultingReports).where(eq32(consultingReports.id, input.reportId)).limit(1);
-    if (!r || r.userId !== ctx.user.id) throw new TRPCError19({ code: "FORBIDDEN", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
+    if (!r || r.userId !== ctx.user.id) throw new TRPCError20({ code: "FORBIDDEN", message: "\u62A5\u544A\u4E0D\u5B58\u5728" });
     return r;
   }),
   // 下单生成研报：扣 AI → 调 LLM 生成 → 完成；失败退款
-  createReport: protectedProcedure.input(z23.object({
-    queryType: z23.enum(["project", "security", "market"]),
-    queryText: z23.string().min(2).max(200)
+  createReport: protectedProcedure.input(z24.object({
+    queryType: z24.enum(["project", "security", "market"]),
+    queryText: z24.string().min(2).max(200)
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const type = getReportType(input.queryType);
-    if (!type) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u77E5\u62A5\u544A\u7C7B\u578B" });
+    if (!type) throw new TRPCError20({ code: "BAD_REQUEST", message: "\u672A\u77E5\u62A5\u544A\u7C7B\u578B" });
     const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-    if (!ok) throw new TRPCError19({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+    if (!ok) throw new TRPCError20({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
     const [ins] = await db.insert(consultingReports).values({
       userId: ctx.user.id,
       queryType: input.queryType,
@@ -12820,17 +13019,17 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989
     } catch (err) {
       await db.update(consultingReports).set({ status: "failed" }).where(eq32(consultingReports.id, reportId));
       await grantNN(db, ctx.user.id, type.priceNN, { type: "report_refund", refType: "report", refId: reportId, memo: "\u751F\u6210\u5931\u8D25\u9000\u6B3E" });
-      throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u62A5\u544A\u751F\u6210\u5931\u8D25\uFF0C\u5DF2\u9000\u8FD8 AI" });
+      throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "\u62A5\u544A\u751F\u6210\u5931\u8D25\uFF0C\u5DF2\u9000\u8FD8 AI" });
     }
   })
 });
 
 // server/routers/calls.ts
-import { z as z24 } from "zod";
-import { TRPCError as TRPCError20 } from "@trpc/server";
+import { z as z25 } from "zod";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq33, and as and28, desc as desc21, sql as sql19, count as count5, gte as gte7 } from "drizzle-orm";
+import { eq as eq33, and as and28, desc as desc21, sql as sql20, count as count5, gte as gte7 } from "drizzle-orm";
 var HORIZONS = [24, 72, 168, 720];
 var DAILY_CALL_LIMIT = 5;
 var MIN_STAKE = 10;
@@ -12840,27 +13039,27 @@ function ymdUtc3(d = /* @__PURE__ */ new Date()) {
 }
 var callsRouter = router({
   // ─── 发一条 Call ─────────────────────────────────────────────────────────────
-  create: protectedProcedure.input(z24.object({
-    tokenSymbol: z24.string().min(1).max(20),
-    direction: z24.enum(["long", "short"]),
-    horizonHours: z24.number().refine((h) => HORIZONS.includes(h), "\u65E0\u6548\u7684\u65F6\u95F4\u7A97"),
-    note: z24.string().max(280).optional()
+  create: protectedProcedure.input(z25.object({
+    tokenSymbol: z25.string().min(1).max(20),
+    direction: z25.enum(["long", "short"]),
+    horizonHours: z25.number().refine((h) => HORIZONS.includes(h), "\u65E0\u6548\u7684\u65F6\u95F4\u7A97"),
+    note: z25.string().max(280).optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     if (!await isReferralBound(db, ctx.user.id)) {
-      throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53D1 Call" });
+      throw new TRPCError21({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53D1 Call" });
     }
     const ymd = ymdUtc3();
     const [{ c = 0 } = { c: 0 }] = await db.select({ c: count5() }).from(calls).where(and28(eq33(calls.userId, ctx.user.id), eq33(calls.createdYmd, ymd)));
     if (Number(c) >= DAILY_CALL_LIMIT) {
-      throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u53D1 ${DAILY_CALL_LIMIT} \u6761 Call` });
+      throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u53D1 ${DAILY_CALL_LIMIT} \u6761 Call` });
     }
     const symbol = input.tokenSymbol.trim().toUpperCase();
     const token = await fetchTokenData(symbol);
     const price = token?.price;
     if (!price || price <= 0) {
-      throw new TRPCError20({ code: "BAD_REQUEST", message: "\u65E0\u6CD5\u83B7\u53D6\u8BE5\u4EE3\u5E01\u4EF7\u683C\uFF0C\u8BF7\u786E\u8BA4\u6807\u7684" });
+      throw new TRPCError21({ code: "BAD_REQUEST", message: "\u65E0\u6CD5\u83B7\u53D6\u8BE5\u4EE3\u5E01\u4EF7\u683C\uFF0C\u8BF7\u786E\u8BA4\u6807\u7684" });
     }
     const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1e3);
     const [result] = await db.insert(calls).values({
@@ -12876,22 +13075,22 @@ var callsRouter = router({
     return { callId: result.insertId, entryPrice: price, resolveAt: resolveAt.toISOString() };
   }),
   // ─── 我的 Call 列表 ──────────────────────────────────────────────────────────
-  listMine: protectedProcedure.input(z24.object({ limit: z24.number().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
+  listMine: protectedProcedure.input(z25.object({ limit: z25.number().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(calls).where(eq33(calls.userId, ctx.user.id)).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 50);
   }),
   // ─── 战绩榜（按胜场排序，达最低样本量才上榜）──────────────────────────────────
-  leaderboard: publicProcedure.input(z24.object({ limit: z24.number().min(1).max(50).default(20) }).optional()).query(async ({ input }) => {
+  leaderboard: publicProcedure.input(z25.object({ limit: z25.number().min(1).max(50).default(20) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const rows = await db.select({
       userId: calls.userId,
       userName: users.name,
       avatar: users.avatar,
-      wins: sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`,
-      loses: sql19`SUM(CASE WHEN ${calls.status} = 'lose' THEN 1 ELSE 0 END)`
-    }).from(calls).leftJoin(users, eq33(calls.userId, users.id)).where(sql19`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc21(sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
+      wins: sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`,
+      loses: sql20`SUM(CASE WHEN ${calls.status} = 'lose' THEN 1 ELSE 0 END)`
+    }).from(calls).leftJoin(users, eq33(calls.userId, users.id)).where(sql20`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc21(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
     return rows.map((r) => {
       const wins = Number(r.wins ?? 0);
       const loses = Number(r.loses ?? 0);
@@ -12921,7 +13120,7 @@ var callsRouter = router({
     return { wins, loses, pending, winRate: total > 0 ? Math.round(wins / total * 100) : 0 };
   }),
   // ─── 广场 Call 流（待结算的公开 Call，供策展质押）──────────────────────────────
-  feed: protectedProcedure.input(z24.object({ limit: z24.number().min(1).max(50).default(30) }).optional()).query(async ({ ctx, input }) => {
+  feed: protectedProcedure.input(z25.object({ limit: z25.number().min(1).max(50).default(30) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const rows = await db.select({
@@ -12936,9 +13135,9 @@ var callsRouter = router({
       note: calls.note,
       createdAt: calls.createdAt,
       resolveAt: calls.resolveAt,
-      stakerCount: sql19`(SELECT COUNT(*) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
-      totalStaked: sql19`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
-      myStake: sql19`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`
+      stakerCount: sql20`(SELECT COUNT(*) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
+      totalStaked: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
+      myStake: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`
     }).from(calls).leftJoin(users, eq33(calls.userId, users.id)).where(eq33(calls.status, "pending")).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 30);
     return rows.map((r) => ({
       ...r,
@@ -12950,22 +13149,22 @@ var callsRouter = router({
     }));
   }),
   // ─── 策展质押：押某条 Call 会命中（命中 +30%，未中质押销毁）────────────────────
-  stake: protectedProcedure.input(z24.object({ callId: z24.number(), amount: z24.number().int().min(MIN_STAKE).max(MAX_STAKE) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  stake: protectedProcedure.input(z25.object({ callId: z25.number(), amount: z25.number().int().min(MIN_STAKE).max(MAX_STAKE) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     if (!await isReferralBound(db, ctx.user.id)) {
-      throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u8D28\u62BC" });
+      throw new TRPCError21({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u8D28\u62BC" });
     }
     const [c] = await db.select({ userId: calls.userId, status: calls.status }).from(calls).where(eq33(calls.id, input.callId)).limit(1);
-    if (!c) throw new TRPCError20({ code: "NOT_FOUND", message: "Call \u4E0D\u5B58\u5728" });
-    if (c.status !== "pending") throw new TRPCError20({ code: "BAD_REQUEST", message: "\u8BE5 Call \u5DF2\u7ED3\u7B97\uFF0C\u65E0\u6CD5\u8D28\u62BC" });
-    if (c.userId === ctx.user.id) throw new TRPCError20({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8D28\u62BC\u81EA\u5DF1\u7684 Call" });
+    if (!c) throw new TRPCError21({ code: "NOT_FOUND", message: "Call \u4E0D\u5B58\u5728" });
+    if (c.status !== "pending") throw new TRPCError21({ code: "BAD_REQUEST", message: "\u8BE5 Call \u5DF2\u7ED3\u7B97\uFF0C\u65E0\u6CD5\u8D28\u62BC" });
+    if (c.userId === ctx.user.id) throw new TRPCError21({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8D28\u62BC\u81EA\u5DF1\u7684 Call" });
     const [existing] = await db.select({ id: curationStakes.id }).from(curationStakes).where(and28(eq33(curationStakes.stakerId, ctx.user.id), eq33(curationStakes.callId, input.callId))).limit(1);
-    if (existing) throw new TRPCError20({ code: "BAD_REQUEST", message: "\u4F60\u5DF2\u8D28\u62BC\u8FC7\u8FD9\u6761 Call" });
+    if (existing) throw new TRPCError21({ code: "BAD_REQUEST", message: "\u4F60\u5DF2\u8D28\u62BC\u8FC7\u8FD9\u6761 Call" });
     await db.transaction(async (tx) => {
-      const res = await tx.update(users).set({ npPoints: sql19`npPoints - ${input.amount}` }).where(and28(eq33(users.id, ctx.user.id), gte7(users.npPoints, input.amount)));
+      const res = await tx.update(users).set({ npPoints: sql20`npPoints - ${input.amount}` }).where(and28(eq33(users.id, ctx.user.id), gte7(users.npPoints, input.amount)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError20({ code: "BAD_REQUEST", message: "AC \u4F59\u989D\u4E0D\u8DB3" });
+      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: "AC \u4F59\u989D\u4E0D\u8DB3" });
       await tx.insert(curationStakes).values({ stakerId: ctx.user.id, callId: input.callId, amount: input.amount });
     });
     return { ok: true };
@@ -12989,11 +13188,11 @@ var callsRouter = router({
 });
 
 // server/routers/npStore.ts
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError22 } from "@trpc/server";
 init_db();
 init_schema();
 import { eq as eq34, and as and29, gte as gte8 } from "drizzle-orm";
-import { sql as sql20 } from "drizzle-orm";
+import { sql as sql21 } from "drizzle-orm";
 var TRIAL_NP_COST = 3e3;
 var TRIAL_DAYS = 3;
 var npStoreRouter = router({
@@ -13003,13 +13202,13 @@ var npStoreRouter = router({
     if (!db) throw new Error("Database not available");
     const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq34(users.id, ctx.user.id)).limit(1);
     if (effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null) !== "free") {
-      throw new TRPCError21({ code: "BAD_REQUEST", message: "\u4F60\u5DF2\u662F\u4F1A\u5458\uFF0C\u65E0\u9700\u4F53\u9A8C\u5238" });
+      throw new TRPCError22({ code: "BAD_REQUEST", message: "\u4F60\u5DF2\u662F\u4F1A\u5458\uFF0C\u65E0\u9700\u4F53\u9A8C\u5238" });
     }
     const proUntil = new Date(Date.now() + TRIAL_DAYS * 24 * 3600 * 1e3);
     await db.transaction(async (tx) => {
-      const res = await tx.update(users).set({ npPoints: sql20`npPoints - ${TRIAL_NP_COST}` }).where(and29(eq34(users.id, ctx.user.id), gte8(users.npPoints, TRIAL_NP_COST)));
+      const res = await tx.update(users).set({ npPoints: sql21`npPoints - ${TRIAL_NP_COST}` }).where(and29(eq34(users.id, ctx.user.id), gte8(users.npPoints, TRIAL_NP_COST)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `AC \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
+      if (affected2 < 1) throw new TRPCError22({ code: "BAD_REQUEST", message: `AC \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
       await tx.update(users).set({ proTier: "plus", proUntil }).where(eq34(users.id, ctx.user.id));
     });
     return { ok: true, tier: "plus", proUntil: proUntil.toISOString(), cost: TRIAL_NP_COST };
@@ -13021,11 +13220,11 @@ var npStoreRouter = router({
 });
 
 // server/routers/tge.ts
-import { z as z25 } from "zod";
-import { TRPCError as TRPCError22 } from "@trpc/server";
+import { z as z26 } from "zod";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq35, and as and30, sql as sql21 } from "drizzle-orm";
+import { eq as eq35, and as and30, sql as sql22 } from "drizzle-orm";
 async function loadConfig2(db) {
   const [c] = await db.select().from(tgeConfig).where(eq35(tgeConfig.id, 1)).limit(1);
   return c ?? null;
@@ -13058,39 +13257,39 @@ var tgeRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const cfg = await loadConfig2(db);
-    if (!cfg?.enabled) throw new TRPCError22({ code: "FORBIDDEN", message: "TGE \u5C1A\u672A\u5F00\u542F" });
+    if (!cfg?.enabled) throw new TRPCError23({ code: "FORBIDDEN", message: "TGE \u5C1A\u672A\u5F00\u542F" });
     const [claim] = await db.select().from(tgeClaims).where(eq35(tgeClaims.userId, ctx.user.id)).limit(1);
-    if (!claim) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u4F60\u6CA1\u6709 TGE \u5FEB\u7167\uFF08\u5FEB\u7167\u540E\u624D\u6709 AC \u53EF\u5151\u6362\uFF09" });
-    if (claim.claimed) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
+    if (!claim) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u4F60\u6CA1\u6709 TGE \u5FEB\u7167\uFF08\u5FEB\u7167\u540E\u624D\u6709 AC \u53EF\u5151\u6362\uFF09" });
+    if (claim.claimed) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
     const nn = estimateNn(cfg.nnPool, claim.npSnapshot, cfg.totalNpSnapshot);
     await db.transaction(async (tx) => {
       const res = await tx.update(tgeClaims).set({ claimed: true, nnAmount: nn, claimedAt: /* @__PURE__ */ new Date() }).where(and30(eq35(tgeClaims.id, claim.id), eq35(tgeClaims.claimed, false)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
+      if (affected2 < 1) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
       const ok = await grantNN(tx, ctx.user.id, nn, { type: "tge_claim", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError22({ code: "PRECONDITION_FAILED", message: "\u91D1\u5E93\u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u53D1\u653E" });
-      await tx.update(users).set({ npPoints: sql21`GREATEST(0, npPoints - ${claim.npSnapshot})` }).where(eq35(users.id, ctx.user.id));
+      if (!ok) throw new TRPCError23({ code: "PRECONDITION_FAILED", message: "\u91D1\u5E93\u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u53D1\u653E" });
+      await tx.update(users).set({ npPoints: sql22`GREATEST(0, npPoints - ${claim.npSnapshot})` }).where(eq35(users.id, ctx.user.id));
     });
     return { ok: true, nn };
   }),
   // ─── 管理员：拍快照（记录每人 AC + 全站总 AC）────────────────────────────────────
-  adminSnapshot: adminProcedure.input(z25.object({ nnPool: z25.number().int().min(0) })).mutation(async ({ input }) => {
+  adminSnapshot: adminProcedure.input(z26.object({ nnPool: z26.number().int().min(0) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const cfg = await loadConfig2(db);
-    if (cfg?.enabled) throw new TRPCError22({ code: "BAD_REQUEST", message: "TGE \u8FDB\u884C\u4E2D\uFF0C\u8BF7\u5148\u5173\u95ED\u518D\u91CD\u62CD\u5FEB\u7167" });
+    if (cfg?.enabled) throw new TRPCError23({ code: "BAD_REQUEST", message: "TGE \u8FDB\u884C\u4E2D\uFF0C\u8BF7\u5148\u5173\u95ED\u518D\u91CD\u62CD\u5FEB\u7167" });
     const [claimed] = await db.select({ id: tgeClaims.id }).from(tgeClaims).where(eq35(tgeClaims.claimed, true)).limit(1);
-    if (claimed) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u6709\u7528\u6237\u9886\u53D6\u8FC7 AI\uFF0C\u7981\u6B62\u91CD\u62CD\u5FEB\u7167\uFF08\u4F1A\u5BFC\u81F4\u91CD\u590D\u53D1\u653E\uFF09" });
+    if (claimed) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u6709\u7528\u6237\u9886\u53D6\u8FC7 AI\uFF0C\u7981\u6B62\u91CD\u62CD\u5FEB\u7167\uFF08\u4F1A\u5BFC\u81F4\u91CD\u590D\u53D1\u653E\uFF09" });
     const maxPool = NN_TOTAL_SUPPLY - await getCirculating(db);
-    if (input.nnPool > maxPool) throw new TRPCError22({ code: "BAD_REQUEST", message: `\u5956\u52B1\u6C60(${input.nnPool})\u8D85\u8FC7\u91D1\u5E93\u53EF\u7528\u4F59\u989D,\u6700\u591A ${maxPool}` });
-    const [{ total = 0 } = { total: 0 }] = await db.select({ total: sql21`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
+    if (input.nnPool > maxPool) throw new TRPCError23({ code: "BAD_REQUEST", message: `\u5956\u52B1\u6C60(${input.nnPool})\u8D85\u8FC7\u91D1\u5E93\u53EF\u7528\u4F59\u989D,\u6700\u591A ${maxPool}` });
+    const [{ total = 0 } = { total: 0 }] = await db.select({ total: sql22`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
     await db.delete(tgeClaims);
-    await db.execute(sql21`INSERT INTO tge_claims (userId, npSnapshot) SELECT id, npPoints FROM users WHERE npPoints > 0`);
+    await db.execute(sql22`INSERT INTO tge_claims (userId, npSnapshot) SELECT id, npPoints FROM users WHERE npPoints > 0`);
     await db.insert(tgeConfig).values({ id: 1, nnPool: input.nnPool, totalNpSnapshot: Number(total), snapshotAt: /* @__PURE__ */ new Date(), enabled: false }).onDuplicateKeyUpdate({ set: { nnPool: input.nnPool, totalNpSnapshot: Number(total), snapshotAt: /* @__PURE__ */ new Date() } });
     return { ok: true, totalNpSnapshot: Number(total), nnPool: input.nnPool };
   }),
   // ─── 管理员：开启/关闭 TGE 兑换 ────────────────────────────────────────────────
-  adminSetEnabled: adminProcedure.input(z25.object({ enabled: z25.boolean() })).mutation(async ({ input }) => {
+  adminSetEnabled: adminProcedure.input(z26.object({ enabled: z26.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.insert(tgeConfig).values({ id: 1, enabled: input.enabled }).onDuplicateKeyUpdate({ set: { enabled: input.enabled } });
@@ -13099,16 +13298,16 @@ var tgeRouter = router({
 });
 
 // server/routers/partner.ts
-import { z as z26 } from "zod";
-import { TRPCError as TRPCError23 } from "@trpc/server";
+import { z as z27 } from "zod";
+import { TRPCError as TRPCError24 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and32, eq as eq37, desc as desc23, sql as sql23 } from "drizzle-orm";
+import { and as and32, eq as eq37, desc as desc23, sql as sql24 } from "drizzle-orm";
 
 // server/partner.ts
 init_db();
 init_schema();
-import { and as and31, eq as eq36, sql as sql22, desc as desc22, inArray as inArray9, gte as gte9, lt as lt3, isNotNull } from "drizzle-orm";
+import { and as and31, eq as eq36, sql as sql23, desc as desc22, inArray as inArray9, gte as gte9, lt as lt3, isNotNull } from "drizzle-orm";
 var REVENUE_POOL_PCT = 20;
 var REVENUE_TYPES = ["membership", "report", "promote", "bot_sub", "package", "ai_chat"];
 var BONUS_PERIODS = 6;
@@ -13200,7 +13399,7 @@ function tierOrder(key) {
   return i === -1 ? 0 : i + 1;
 }
 async function listConfirmedPartners(db) {
-  const rows = await db.select({ id: users.id, tier: users.partnerTier, stake: users.partnerStakeUsdt }).from(users).where(and31(isNotNull(users.partnerTier), sql22`${users.partnerStakeUsdt} > 0`));
+  const rows = await db.select({ id: users.id, tier: users.partnerTier, stake: users.partnerStakeUsdt }).from(users).where(and31(isNotNull(users.partnerTier), sql23`${users.partnerStakeUsdt} > 0`));
   return rows.filter((r) => r.tier && getPartnerTier(r.tier)).map((r) => ({ id: r.id, tier: r.tier, stake: Number(r.stake) }));
 }
 async function distribute(db, members, totalNN, kind, ymd, weightOf) {
@@ -13250,9 +13449,9 @@ async function runPartnerSettlement(now = /* @__PURE__ */ new Date()) {
   }
   try {
     await db.insert(partnerSettleRuns).values({ ymd, kind: "revenue", poolNN: 0 });
-    const [r] = await db.select({ s: sql22`COALESCE(SUM(-${nnTransactions.amount}), 0)` }).from(nnTransactions).where(and31(
+    const [r] = await db.select({ s: sql23`COALESCE(SUM(-${nnTransactions.amount}), 0)` }).from(nnTransactions).where(and31(
       inArray9(nnTransactions.type, REVENUE_TYPES),
-      sql22`${nnTransactions.amount} < 0`,
+      sql23`${nnTransactions.amount} < 0`,
       gte9(nnTransactions.createdAt, dayStart),
       lt3(nnTransactions.createdAt, dayEnd)
     ));
@@ -13270,7 +13469,7 @@ async function runPartnerSettlement(now = /* @__PURE__ */ new Date()) {
   return { fee: feePaid, revenue: revPaid };
 }
 async function getMyEarnings(db, userId) {
-  const agg = await db.select({ kind: partnerEarnings.kind, total: sql22`COALESCE(SUM(${partnerEarnings.amountNN}), 0)` }).from(partnerEarnings).where(eq36(partnerEarnings.userId, userId)).groupBy(partnerEarnings.kind);
+  const agg = await db.select({ kind: partnerEarnings.kind, total: sql23`COALESCE(SUM(${partnerEarnings.amountNN}), 0)` }).from(partnerEarnings).where(eq36(partnerEarnings.userId, userId)).groupBy(partnerEarnings.kind);
   const recent = await db.select().from(partnerEarnings).where(eq36(partnerEarnings.userId, userId)).orderBy(desc22(partnerEarnings.createdAt)).limit(30);
   let fee = 0;
   let revenue = 0;
@@ -13286,7 +13485,7 @@ async function getMyEarnings(db, userId) {
   };
 }
 async function getSeatUsage(db) {
-  const rows = await db.select({ tier: users.partnerTier, c: sql22`COUNT(*)` }).from(users).where(isNotNull(users.partnerTier)).groupBy(users.partnerTier);
+  const rows = await db.select({ tier: users.partnerTier, c: sql23`COUNT(*)` }).from(users).where(isNotNull(users.partnerTier)).groupBy(users.partnerTier);
   const out = {};
   for (const r of rows) if (r.tier) out[r.tier] = Number(r.c);
   return out;
@@ -13327,17 +13526,17 @@ var partnerRouter = router({
     };
   }),
   // ─── 认购下单（档内自定义金额） ──────────────────────────────────────────────
-  createOrder: protectedProcedure.input(z26.object({ tier: z26.enum(["partner", "super", "founder"]), usdtAmount: z26.number().int().min(3e3).max(1e5) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  createOrder: protectedProcedure.input(z27.object({ tier: z27.enum(["partner", "super", "founder"]), usdtAmount: z27.number().int().min(3e3).max(1e5) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const tier = getPartnerTier(input.tier);
-    if (!tier) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u672A\u77E5\u6863\u4F4D" });
+    if (!tier) throw new TRPCError24({ code: "BAD_REQUEST", message: "\u672A\u77E5\u6863\u4F4D" });
     if (input.usdtAmount < tier.minUsdt || input.usdtAmount > tier.maxUsdt) {
-      throw new TRPCError23({ code: "BAD_REQUEST", message: `${tier.name}\u8BA4\u8D2D\u989D\u9700\u5728 ${tier.minUsdt.toLocaleString()}\u2013${tier.maxUsdt.toLocaleString()} USDT \u4E4B\u95F4` });
+      throw new TRPCError24({ code: "BAD_REQUEST", message: `${tier.name}\u8BA4\u8D2D\u989D\u9700\u5728 ${tier.minUsdt.toLocaleString()}\u2013${tier.maxUsdt.toLocaleString()} USDT \u4E4B\u95F4` });
     }
     const seats = await getSeatUsage(db);
     if ((seats[tier.key] ?? 0) >= tier.seats) {
-      throw new TRPCError23({ code: "BAD_REQUEST", message: `${tier.name}\u5E2D\u4F4D\u5DF2\u6EE1` });
+      throw new TRPCError24({ code: "BAD_REQUEST", message: `${tier.name}\u5E2D\u4F4D\u5DF2\u6EE1` });
     }
     const nnAmount = input.usdtAmount * tier.nnPerUsdt;
     const [res] = await db.insert(nnNodeOrders).values({
@@ -13357,12 +13556,12 @@ var partnerRouter = router({
     };
   }),
   // 回填链上转账哈希
-  submitTx: protectedProcedure.input(z26.object({ orderId: z26.number(), txHash: z26.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
+  submitTx: protectedProcedure.input(z27.object({ orderId: z27.number(), txHash: z27.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [o] = await db.select().from(nnNodeOrders).where(eq37(nnNodeOrders.id, input.orderId)).limit(1);
-    if (!o || o.userId !== ctx.user.id) throw new TRPCError23({ code: "FORBIDDEN", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
-    if (o.status !== "pending") throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u72B6\u6001\u4E0D\u53EF\u4FEE\u6539" });
+    if (!o || o.userId !== ctx.user.id) throw new TRPCError24({ code: "FORBIDDEN", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
+    if (o.status !== "pending") throw new TRPCError24({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u72B6\u6001\u4E0D\u53EF\u4FEE\u6539" });
     await db.update(nnNodeOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq37(nnNodeOrders.id, input.orderId));
     return { ok: true };
   }),
@@ -13417,14 +13616,14 @@ var partnerRouter = router({
     };
   }),
   // ─── 领取某期 USDT 奖励 → 生成打款申请 ──────────────────────────────────────
-  claimBonus: protectedProcedure.input(z26.object({ bonusId: z26.number(), period: z26.number().int().min(1).max(24), address: z26.string().min(10).max(120) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  claimBonus: protectedProcedure.input(z27.object({ bonusId: z27.number(), period: z27.number().int().min(1).max(24), address: z27.string().min(10).max(120) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [b] = await db.select().from(partnerBonuses).where(eq37(partnerBonuses.id, input.bonusId)).limit(1);
-    if (!b || b.userId !== ctx.user.id) throw new TRPCError23({ code: "FORBIDDEN", message: "\u5956\u52B1\u4E0D\u5B58\u5728" });
-    if (input.period > b.periods) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u671F\u6570\u65E0\u6548" });
+    if (!b || b.userId !== ctx.user.id) throw new TRPCError24({ code: "FORBIDDEN", message: "\u5956\u52B1\u4E0D\u5B58\u5728" });
+    if (input.period > b.periods) throw new TRPCError24({ code: "BAD_REQUEST", message: "\u671F\u6570\u65E0\u6548" });
     if (periodUnlockAt(b.startAt, input.period).getTime() > Date.now()) {
-      throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BE5\u671F\u5C1A\u672A\u89E3\u9501" });
+      throw new TRPCError24({ code: "BAD_REQUEST", message: "\u8BE5\u671F\u5C1A\u672A\u89E3\u9501" });
     }
     const [u] = await db.select({ ymd: users.lastSigninYmd, lastSignedIn: users.lastSignedIn }).from(users).where(eq37(users.id, ctx.user.id)).limit(1);
     const lastActive = Math.max(
@@ -13432,7 +13631,7 @@ var partnerRouter = router({
       u?.ymd ? (/* @__PURE__ */ new Date(`${u.ymd}T00:00:00.000Z`)).getTime() : 0
     );
     if (Date.now() - lastActive > 30 * 24 * 3600 * 1e3) {
-      throw new TRPCError23({ code: "BAD_REQUEST", message: "\u9700\u4FDD\u6301\u6D3B\u8DC3\uFF08\u8FD1 30 \u5929\u5185\u767B\u5F55\uFF09\u65B9\u53EF\u9886\u53D6" });
+      throw new TRPCError24({ code: "BAD_REQUEST", message: "\u9700\u4FDD\u6301\u6D3B\u8DC3\uFF08\u8FD1 30 \u5929\u5185\u767B\u5F55\uFF09\u65B9\u53EF\u9886\u53D6" });
     }
     const amount = periodAmount(b.totalUsdt, b.periods, input.period);
     try {
@@ -13444,32 +13643,32 @@ var partnerRouter = router({
         address: sanitizeInput(input.address, 120)
       });
     } catch {
-      throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BE5\u671F\u5DF2\u7533\u8BF7\u8FC7\u9886\u53D6" });
+      throw new TRPCError24({ code: "BAD_REQUEST", message: "\u8BE5\u671F\u5DF2\u7533\u8BF7\u8FC7\u9886\u53D6" });
     }
     await db.update(partnerBonuses).set({
-      claimedPeriods: sql23`${partnerBonuses.claimedPeriods} + 1`,
-      claimedUsdt: sql23`${partnerBonuses.claimedUsdt} + ${amount}`
+      claimedPeriods: sql24`${partnerBonuses.claimedPeriods} + 1`,
+      claimedUsdt: sql24`${partnerBonuses.claimedUsdt} + ${amount}`
     }).where(eq37(partnerBonuses.id, b.id));
     return { ok: true, amountUsdt: amount };
   }),
   // ─── 运营：确认到账（发 AI 配额 + 身份 + USDT 奖励 + 赠 Pro） ────────────────
-  adminConfirmOrder: adminProcedure.input(z26.object({ orderId: z26.number() })).mutation(async ({ input }) => {
+  adminConfirmOrder: adminProcedure.input(z27.object({ orderId: z27.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [o] = await db.select().from(nnNodeOrders).where(eq37(nnNodeOrders.id, input.orderId)).limit(1);
-    if (!o) throw new TRPCError23({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
-    if (o.status !== "pending") throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u5DF2\u5904\u7406" });
+    if (!o) throw new TRPCError24({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
+    if (o.status !== "pending") throw new TRPCError24({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u5DF2\u5904\u7406" });
     const tier = getPartnerTier(o.tier);
-    if (!tier) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u975E\u5408\u4F19\u4EBA\u8BA2\u5355\uFF0C\u8BF7\u7528\u65E7\u8282\u70B9\u786E\u8BA4\u5165\u53E3" });
+    if (!tier) throw new TRPCError24({ code: "BAD_REQUEST", message: "\u975E\u5408\u4F19\u4EBA\u8BA2\u5355\uFF0C\u8BF7\u7528\u65E7\u8282\u70B9\u786E\u8BA4\u5165\u53E3" });
     const res = await db.update(nnNodeOrders).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date() }).where(and32(eq37(nnNodeOrders.id, o.id), eq37(nnNodeOrders.status, "pending")));
     const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-    if (!affected2) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u5DF2\u5904\u7406" });
+    if (!affected2) throw new TRPCError24({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u5DF2\u5904\u7406" });
     const nnNow = o.usdtAmount * tier.nnPerUsdt;
     if (nnNow !== o.nnAmount) {
       await db.update(nnNodeOrders).set({ nnAmount: nnNow }).where(eq37(nnNodeOrders.id, o.id));
     }
     await createVesting(db, o.userId, "partner", o.id, nnNow, tier.cliffMonths, tier.durationMonths);
-    await db.update(users).set({ partnerStakeUsdt: sql23`${users.partnerStakeUsdt} + ${o.usdtAmount}` }).where(eq37(users.id, o.userId));
+    await db.update(users).set({ partnerStakeUsdt: sql24`${users.partnerStakeUsdt} + ${o.usdtAmount}` }).where(eq37(users.id, o.userId));
     const [u] = await db.select({ stake: users.partnerStakeUsdt, cur: users.partnerTier, proUntil: users.proUntil }).from(users).where(eq37(users.id, o.userId)).limit(1);
     const newTier = tierForStake(Number(u?.stake ?? 0));
     const effectiveTier2 = newTier && tierOrder(newTier.key) > tierOrder(u?.cur ?? null) ? newTier : u?.cur ? getPartnerTier(u.cur) : newTier;
@@ -13496,17 +13695,17 @@ var partnerRouter = router({
     return { ok: true, nnVesting: nnNow, bonusUsdt, tier: bonusTier.key };
   }),
   // 运营：取消订单
-  adminCancelOrder: adminProcedure.input(z26.object({ orderId: z26.number() })).mutation(async ({ input }) => {
+  adminCancelOrder: adminProcedure.input(z27.object({ orderId: z27.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [o] = await db.select().from(nnNodeOrders).where(eq37(nnNodeOrders.id, input.orderId)).limit(1);
-    if (!o) throw new TRPCError23({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
-    if (o.status === "confirmed") throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u786E\u8BA4\u8BA2\u5355\u4E0D\u53EF\u53D6\u6D88" });
+    if (!o) throw new TRPCError24({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
+    if (o.status === "confirmed") throw new TRPCError24({ code: "BAD_REQUEST", message: "\u5DF2\u786E\u8BA4\u8BA2\u5355\u4E0D\u53EF\u53D6\u6D88" });
     await db.update(nnNodeOrders).set({ status: "cancelled" }).where(eq37(nnNodeOrders.id, o.id));
     return { ok: true };
   }),
   // 运营：USDT 打款申请列表
-  adminListPayouts: adminProcedure.input(z26.object({ status: z26.enum(["pending", "paid", "rejected"]).optional() }).optional()).query(async ({ input }) => {
+  adminListPayouts: adminProcedure.input(z27.object({ status: z27.enum(["pending", "paid", "rejected"]).optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq37(partnerPayouts.status, input.status)] : [];
@@ -13514,12 +13713,12 @@ var partnerRouter = router({
     return rows;
   }),
   // 运营：标记打款完成 / 驳回
-  adminResolvePayout: adminProcedure.input(z26.object({ payoutId: z26.number(), action: z26.enum(["paid", "rejected"]), txHash: z26.string().max(120).optional() })).mutation(async ({ input }) => {
+  adminResolvePayout: adminProcedure.input(z27.object({ payoutId: z27.number(), action: z27.enum(["paid", "rejected"]), txHash: z27.string().max(120).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const [p] = await db.select().from(partnerPayouts).where(eq37(partnerPayouts.id, input.payoutId)).limit(1);
-    if (!p) throw new TRPCError23({ code: "NOT_FOUND", message: "\u7533\u8BF7\u4E0D\u5B58\u5728" });
-    if (p.status !== "pending") throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u5904\u7406" });
+    if (!p) throw new TRPCError24({ code: "NOT_FOUND", message: "\u7533\u8BF7\u4E0D\u5B58\u5728" });
+    if (p.status !== "pending") throw new TRPCError24({ code: "BAD_REQUEST", message: "\u5DF2\u5904\u7406" });
     await db.transaction(async (tx) => {
       const res = await tx.update(partnerPayouts).set({
         status: input.action,
@@ -13527,11 +13726,11 @@ var partnerRouter = router({
         paidAt: input.action === "paid" ? /* @__PURE__ */ new Date() : null
       }).where(and32(eq37(partnerPayouts.id, p.id), eq37(partnerPayouts.status, "pending")));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u5904\u7406" });
+      if (affected2 < 1) throw new TRPCError24({ code: "BAD_REQUEST", message: "\u5DF2\u5904\u7406" });
       if (input.action === "rejected") {
         await tx.update(partnerBonuses).set({
-          claimedPeriods: sql23`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
-          claimedUsdt: sql23`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`
+          claimedPeriods: sql24`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
+          claimedUsdt: sql24`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`
         }).where(eq37(partnerBonuses.id, p.bonusId));
         await tx.delete(partnerPayouts).where(eq37(partnerPayouts.id, p.id));
       }
@@ -13542,166 +13741,6 @@ var partnerRouter = router({
   adminRunSettle: adminProcedure.mutation(async () => {
     const r = await runPartnerSettlement();
     return { ok: true, ...r ?? { fee: 0, revenue: 0 } };
-  })
-});
-
-// server/routers/adminMaintenance.ts
-init_db();
-import { z as z27 } from "zod";
-import { sql as sql24 } from "drizzle-orm";
-import { TRPCError as TRPCError24 } from "@trpc/server";
-import mysql from "mysql2/promise";
-var WIPE_ALL = [
-  // 聊天(机器人+真实用户)
-  "messages",
-  "message_reactions",
-  "message_read_receipts",
-  "group_unread_counts",
-  "conversation_prefs",
-  "red_packets",
-  "red_packet_claims",
-  "group_files",
-  "voice_rooms",
-  "group_join_requests",
-  "group_invite_links",
-  "group_mutes",
-  // 广场
-  "posts",
-  "post_comments",
-  "post_likes",
-  "promo_banners",
-  // 用户从属/社交
-  "notifications",
-  "friend_requests",
-  "contact_metadata",
-  "user_follows",
-  "user_blocklist",
-  "user_settings",
-  "user_tasks",
-  "user_daily_np",
-  "user_watchlist",
-  "user_api_keys",
-  "password_reset_tokens",
-  "device_push_tokens",
-  "push_subscriptions",
-  "price_alerts",
-  "ai_daily_usage",
-  "feedback",
-  "content_violations",
-  // 推荐关系(重新绑定)
-  "referrals",
-  "referral_milestones",
-  // AI 生成内容
-  "consulting_reports",
-  "consulting_payments",
-  "research_reports",
-  // 财务/经济流水(决策:一并清)
-  "calls",
-  "curation_stakes",
-  "nn_transactions",
-  "nn_vesting",
-  "nn_node_orders",
-  "nn_pool_orders",
-  "swap_history",
-  "ai_swap_trades",
-  "usdt_deposits",
-  "usdt_withdrawals",
-  "ico_orders",
-  "ico_purchases",
-  "ico_accounts",
-  "ico_stake_lots",
-  "ico_reward_runs",
-  "tge_claims",
-  "partner_bonuses",
-  "partner_earnings",
-  "partner_payouts",
-  "partner_settle_runs",
-  "platform_fee_ledger",
-  "rank_agg_run",
-  // 未上线金融模块残留
-  "trading_positions",
-  "trading_strategies",
-  "copy_traders",
-  "copy_trader_follows"
-];
-var BACKUP_TABLES = ["users", "usdt_deposits", "usdt_withdrawals", "ico_purchases", "ico_orders", "nn_transactions", "referrals"];
-async function rawRows(db, query) {
-  const res = await db.execute(sql24.raw(query));
-  if (Array.isArray(res)) return Array.isArray(res[0]) ? res[0] : res;
-  return [];
-}
-async function countRows(db, table) {
-  const rows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`${table}\``);
-  return Number(rows[0]?.c ?? 0);
-}
-var adminMaintenanceRouter = router({
-  resetOperationalData: adminProcedure.input(z27.object({
-    mode: z27.enum(["dryRun", "execute"]),
-    confirm: z27.string().optional()
-  })).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const keepRows = await rawRows(db, `SELECT id, isBot, role FROM users WHERE isBot = 1 OR role = 'admin'`);
-    const keepIds = keepRows.map((r) => Number(r.id)).filter((n2) => Number.isFinite(n2));
-    const botCount = keepRows.filter((r) => Number(r.isBot) === 1).length;
-    const adminCount = keepRows.filter((r) => String(r.role) === "admin").length;
-    if (adminCount === 0 || !keepIds.includes(ctx.user.id)) {
-      throw new TRPCError24({ code: "PRECONDITION_FAILED", message: "\u4FDD\u7559\u540D\u5355\u6821\u9A8C\u5931\u8D25(\u65E0\u7BA1\u7406\u5458),\u5DF2\u4E2D\u6B62" });
-    }
-    const idList = keepIds.join(",");
-    const usersTotal = await countRows(db, "users");
-    const usersToDelete = usersTotal - keepIds.length;
-    const gmRows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`group_members\` WHERE userId NOT IN (${idList})`);
-    const groupMembersToDelete = Number(gmRows[0]?.c ?? 0);
-    const tables = [];
-    for (const t3 of WIPE_ALL) tables.push({ name: t3, rows: await countRows(db, t3) });
-    const totalRows = tables.reduce((s, t3) => s + t3.rows, 0) + usersToDelete + groupMembersToDelete;
-    const report = {
-      mode: input.mode,
-      keep: { bots: botCount, admins: adminCount },
-      usersToDelete,
-      groupMembersToDelete,
-      tables,
-      totalRows
-    };
-    if (input.mode === "dryRun") return { ...report, backups: [] };
-    if (input.confirm !== "\u6E05\u96F6") {
-      throw new TRPCError24({ code: "BAD_REQUEST", message: "\u786E\u8BA4\u53E3\u4EE4\u4E0D\u7B26:\u9700\u8F93\u5165\u300C\u6E05\u96F6\u300D\u4E8C\u5B57" });
-    }
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "\u7F3A\u5C11 DATABASE_URL" });
-    const ts = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    const backups = [];
-    const conn = await mysql.createConnection(url);
-    try {
-      for (const b of BACKUP_TABLES) {
-        const bk = `bk${ts}_${b}`;
-        await conn.query(`DROP TABLE IF EXISTS \`${bk}\``);
-        await conn.query(`CREATE TABLE \`${bk}\` LIKE \`${b}\``);
-        await conn.query(`INSERT INTO \`${bk}\` SELECT * FROM \`${b}\``);
-        backups.push(bk);
-      }
-      await conn.beginTransaction();
-      for (const t3 of WIPE_ALL) {
-        await conn.query(`DELETE FROM \`${t3}\``);
-      }
-      await conn.query(`DELETE FROM \`group_members\` WHERE userId NOT IN (${idList})`);
-      await conn.query(`DELETE FROM \`users\` WHERE id NOT IN (${idList})`);
-      await conn.query(`UPDATE \`chat_groups\` SET creatorId = ${ctx.user.id} WHERE creatorId NOT IN (${idList})`);
-      await conn.query(`UPDATE \`group_announcements\` SET createdBy = ${ctx.user.id} WHERE createdBy NOT IN (${idList})`);
-      await conn.query(`UPDATE \`chat_groups\` SET memberCount = (SELECT COUNT(*) FROM \`group_members\` gm WHERE gm.groupId = chat_groups.id)`);
-      await conn.query(`UPDATE \`ai_amm_pool\` SET aiReserve=0, usdtReserve=0, reserveR=0, circulatingAi=0, crisisFund=0, divPool=0, cumBoughtUsdt=0, totalVolUsdt=0, peakPrice=0, peakUpdatedAt=NULL, seeded=0, dividendClaimsEnabled=0`);
-      await conn.commit();
-    } catch (e) {
-      try {
-        await conn.rollback();
-      } catch {
-      }
-      throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: `\u6E05\u96F6\u5931\u8D25(\u5DF2\u56DE\u6EDA,\u6570\u636E\u672A\u53D8\u52A8):${e.message}` });
-    } finally {
-      await conn.end();
-    }
-    return { ...report, backups };
   })
 });
 
@@ -13739,6 +13778,7 @@ var appRouter = router({
   copyTrading: copyTradingRouter,
   settings: settingsRouter,
   referral: referralRouter,
+  adminMaintenance: adminMaintenanceRouter,
   emailAuth: emailAuthRouter,
   webPush: webPushRouter,
   voice: voiceRouter,
@@ -13746,8 +13786,7 @@ var appRouter = router({
   ico: icoRouter,
   appVersion: appVersionRouter,
   consulting: consultingRouter,
-  swap: swapRouter,
-  adminMaintenance: adminMaintenanceRouter
+  swap: swapRouter
 });
 
 // server/_core/context.ts

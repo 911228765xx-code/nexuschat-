@@ -3,14 +3,18 @@ import { Server as HttpServer } from "http";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { getDb } from "./db";
-import { messages, users, groupMembers, conversationPrefs } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { messages, users, groupMembers, conversationPrefs, groupMutes } from "../drizzle/schema";
+import { eq, and, or, isNull, gt } from "drizzle-orm";
 import logger from "./utils/logger";
 import { sdk } from "./_core/sdk";
 import { isAllowedOrigin } from "./_core/corsOrigin";
 import { sendPushToUser } from "./routers/webPush";
 import { triggerBotAutoReply } from "./botAutoReply";
 import { runInteractBot } from "./groupBots";
+// Socket 路径必须与 tRPC(saveMessage/sendDM)走同样的准入:否则客户端直接发 socket 事件即绕过禁言/拉黑/好友限制/内容审核。
+import { sanitizeInput } from "./utils/sanitize";
+import { enforceContent } from "./moderation";
+import { assertCanDM } from "./utils/relations";
 
 interface AuthedUser {
   id: number;
@@ -192,17 +196,28 @@ export function initSocketIO(httpServer: HttpServer) {
           return;
         }
 
+        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+
         // Authorization: sender must be a member of the target group.
         if (!(await isGroupMember(db, data.groupId, userId))) {
           socket.emit("error", { message: "Not a member of this group" });
           return;
         }
 
+        // 禁言检查:被 owner/admin 禁言的成员不能发言(tRPC saveMessage 有,socket 之前漏了→禁言形同虚设)
+        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes)
+          .where(and(eq(groupMutes.groupId, data.groupId), eq(groupMutes.userId, senderIdNum),
+            or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, new Date())))).limit(1);
+        if (muted) { socket.emit("error", { message: "你已被禁言，无法发言" }); return; }
+        // 文本内容审核(涉黄涉赌等):违规抛出 → 落到下面 catch 被拒绝
+        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "group");
+        const safeContent = sanitizeInput(data.content, 5000);
+
         // Save to database
         const [result] = await db.insert(messages).values({
           groupId: data.groupId,
-          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          content: data.content,
+          senderId: senderIdNum,
+          content: safeContent,
           messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
           mediaUrl: data.mediaUrl ?? undefined,
         });
@@ -228,7 +243,7 @@ export function initSocketIO(httpServer: HttpServer) {
           senderName: senderDisplayName,
           senderAvatar: userAvatar ?? null,
           senderRole,
-          content: data.content,
+          content: safeContent,
           messageType: data.messageType || "text",
           mediaUrl: data.mediaUrl,
           createdAt: timestamp,
@@ -261,10 +276,14 @@ export function initSocketIO(httpServer: HttpServer) {
           return;
         }
         const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
+        // 好友才能私信 + 拉黑校验(socket 之前完全绕过 → 可给拉黑自己/非好友的人发信);违规抛出 → 落到 catch 被拒绝
+        await assertCanDM(db, senderIdNum, data.receiverId);
+        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "dm");
+        const safeContent = sanitizeInput(data.content, 5000);
         const [result] = await db.insert(messages).values({
           senderId: senderIdNum,
           receiverId: data.receiverId,
-          content: data.content,
+          content: safeContent,
           messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
           mediaUrl: data.mediaUrl ?? undefined,
         });
@@ -274,7 +293,7 @@ export function initSocketIO(httpServer: HttpServer) {
           senderId: senderIdNum,
           receiverId: data.receiverId,
           senderName: userName,
-          content: data.content,
+          content: safeContent,
           messageType: data.messageType || "text",
           mediaUrl: data.mediaUrl,
           createdAt: new Date(),
@@ -290,7 +309,7 @@ export function initSocketIO(httpServer: HttpServer) {
           if (!muted) {
             sendPushToUser(data.receiverId, {
               title: `${userName} 发来消息`,
-              body: data.content.length > 80 ? data.content.slice(0, 80) + "..." : data.content,
+              body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
               url: `/app/dm/${senderIdNum}`,
             }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
           }

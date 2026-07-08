@@ -15,6 +15,7 @@ import { watchlistRouter } from "./routers/watchlist";
 import { copyTradingRouter } from "./routers/copyTrading";
 import { settingsRouter } from "./routers/settings";
 import { referralRouter } from "./routers/referral";
+import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 import { emailAuthRouter } from "./routers/emailAuth";
 import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
@@ -28,7 +29,6 @@ import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
 import { tgeRouter } from "./routers/tge";
 import { partnerRouter } from "./routers/partner";
-import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 
 export const appRouter = router({
   system: systemRouter,
@@ -64,6 +64,7 @@ export const appRouter = router({
   copyTrading: copyTradingRouter,
   settings: settingsRouter,
   referral: referralRouter,
+  adminMaintenance: adminMaintenanceRouter,
   emailAuth: emailAuthRouter,
   webPush: webPushRouter,
   voice: voiceRouter,
@@ -72,7 +73,6 @@ export const appRouter = router({
   appVersion: appVersionRouter,
   consulting: consultingRouter,
   swap: swapRouter,
-  adminMaintenance: adminMaintenanceRouter,
 });
 
 export type AppRouter = typeof appRouter;

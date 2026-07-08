@@ -193,7 +193,15 @@ export const referralRouter = router({
 
       // Create referral record + award AC to both atomically, so a partial failure
       // can't leave a referral without its rewards (or one side rewarded but not the other).
-      await db.transaction(async (tx) => {
+      // 并发双铸防护:上面事务外的 existing 检查是 TOCTOU——同一 invitee 的 N 个并发请求会全部
+      // 通过检查、全部插入、全部发奖(100·N / 200·N AC,可经 TGE 变现)。这里在事务内锁 invitee
+      // 用户行串行化,并在锁内重查 referrals,已存在则中止,保证每人只能被邀请一次。
+      const outcome = await db.transaction(async (tx) => {
+        // 锁 invitee 用户行:同一 invitee 的并发 recordReferral 在此排队串行
+        await tx.select({ id: users.id }).from(users).where(eq(users.id, inviteeId)).for("update").limit(1);
+        // 锁内重查:已被邀请则中止(双铸的第二+条请求走这里)
+        const [dup] = await tx.select({ id: referrals.id }).from(referrals).where(eq(referrals.inviteeId, inviteeId)).limit(1);
+        if (dup) return "dup" as const;
         await tx.insert(referrals).values({
           referrerId: referrer.id,
           inviteeId,
@@ -210,8 +218,10 @@ export const referralRouter = router({
           .update(users)
           .set({ npPoints: sql`${users.npPoints} + ${INVITEE_REWARD}` })
           .where(eq(users.id, inviteeId));
+        return "ok" as const;
       });
 
+      if (outcome === "dup") return { success: false, message: "Already referred" };
       return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
     }),
 });

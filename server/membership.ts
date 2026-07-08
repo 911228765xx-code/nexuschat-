@@ -113,18 +113,26 @@ export async function buyMembership(db: Db, userId: number, tierKey: ProTier, mo
   const tier = getTier(tierKey);
   if (tier.key === "free" || tier.monthlyNN <= 0) throw new Error("invalid tier");
   const cost = membershipCost(tier.monthlyNN, months);
-  const ok = await spendNN(db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
-  if (!ok) throw new Error("insufficient_nn");
 
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq(users.id, userId)).limit(1);
-  const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
-  // 续同档：在现有有效期上叠加；升档或过期：从现在起算
-  const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
-  const base = sameActiveTier ? u!.proUntil!.getTime() : Date.now();
-  const proUntil = new Date(base + months * 30 * 24 * 3600 * 1000);
-  await db.update(users).set({ proTier: tierKey, proUntil }).where(eq(users.id, userId));
+  // 并发双扣防护:原实现"扣费(原子) → 读 proUntil → 算 → 写 proUntil"非原子,两个并发请求
+  // (双击/客户端重试)会各扣一次 AI(共 2×cost),却都读到同一旧 proUntil、都写 base+months →
+  // last-write-wins 只延一次期 = 用户白扣一倍。这里事务包全流程 + 锁用户行串行化,扣费/读/续期
+  // 都在锁内完成,并发被排队,proUntil 正确累积(不再丢失已扣的会期)。
+  const proUntil = await db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1);
+    const ok = await spendNN(tx as unknown as Db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
+    if (!ok) throw new Error("insufficient_nn");
+    const [u] = await tx.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq(users.id, userId)).limit(1);
+    const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
+    // 续同档：在现有有效期上叠加；升档或过期：从现在起算
+    const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
+    const base = sameActiveTier ? u!.proUntil!.getTime() : Date.now();
+    const until = new Date(base + months * 30 * 24 * 3600 * 1000);
+    await tx.update(users).set({ proTier: tierKey, proUntil: until }).where(eq(users.id, userId));
+    return until;
+  });
 
-  // 裂变奖励：消费分成（每次续费）+ 首次开会员里程碑奖（一次性），给直接邀请人
+  // 裂变奖励：消费分成（每次续费）+ 首次开会员里程碑奖（一次性），给直接邀请人(事务外,失败不回滚主流程)
   void awardMembershipShare(db, userId, tierKey);
   void awardReferrerMilestone(db, userId, `membership_${tierKey}`, tierKey === "pro" ? 2000 : 800);
 

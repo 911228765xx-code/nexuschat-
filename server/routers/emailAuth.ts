@@ -321,7 +321,10 @@ export const emailAuthRouter = router({
         expiresAt,
       });
 
-      const resetUrl = `${input.origin}/reset-password?token=${token}`;
+      // 安全:重置链接 host 必须用服务端配置的 ENV.publicOrigin,绝不能用 client 传的 input.origin。
+      // 否则攻击者对受害者邮箱发起重置、传 origin=https://evil.com,受害者会收到一封指向 evil.com、
+      // 携带真实 token 的"官方"重置邮件,点击即把有效 token 泄漏给攻击者 → 账号接管。input.origin 已忽略。
+      const resetUrl = `${ENV.publicOrigin}/reset-password?token=${token}`;
 
       // Try to send email via Resend; fall back to returning the URL directly
       const emailResult = await sendPasswordResetEmail({
