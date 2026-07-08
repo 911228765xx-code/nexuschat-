@@ -46,7 +46,8 @@ export const NN_NAME = "AIChat 治理代币";
 
 /**
  * 代币分配模型（DAO 私募认购）。比例可调，需合计 100%。
- * 三大主轴：合伙人认购 / 质押挖矿 / 流动性共建，外加 DAO 金库、团队(锁仓)、社区。
+ * 四档(2026-07-08 调整)：ICO 曲线认购 15% / 质押挖矿 70% / 流动性共建 10% / 社区空投 5%。
+ * (原生态建设 15% + DAO 国库 10% 已取消，比例并入质押挖矿。)
  */
 export interface AllocationBucket {
   key: string;
@@ -59,10 +60,8 @@ export interface AllocationBucket {
 
 const ALLOCATION_PCT: Omit<AllocationBucket, "amount">[] = [
   { key: "ico",       name: "ICO 曲线认购", pct: 15, desc: "曲线定价认购(0.8U 起/2U 封顶)，认购即全额锁仓进二池质押", vesting: "首月悬崖 + 12 月曲线释放" },
-  { key: "staking",   name: "质押挖矿",     pct: 40, desc: "质押挖矿奖励池：每笔资金各自计龄，起步年化沿曲线递减", vesting: "随挖矿逐步产出·奖励池封顶" },
-  { key: "liquidity", name: "流动性共建",   pct: 15, desc: "DEX/做市流动性池，社区共建交易深度", vesting: "随流动性投放释放" },
-  { key: "ecosystem", name: "生态建设",     pct: 15, desc: "生态激励、合作伙伴、开发者扶持与市场拓展", vesting: "按生态计划逐步释放" },
-  { key: "treasury",  name: "DAO 国库",     pct: 10, desc: "治理提案、运营储备与风险准备金", vesting: "DAO 治理解锁" },
+  { key: "staking",   name: "质押挖矿",     pct: 70, desc: "质押挖矿奖励池：每笔资金各自计龄，起步年化沿曲线递减", vesting: "随挖矿逐步产出·奖励池封顶" },
+  { key: "liquidity", name: "流动性共建",   pct: 10, desc: "DEX/做市流动性池，社区共建交易深度", vesting: "随流动性投放释放" },
   { key: "community", name: "社区/空投",    pct: 5,  desc: "早期用户激励、任务空投", vesting: "活动逐步释放" },
 ];
 
@@ -172,8 +171,8 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
 }
 
 // ─── AI 底池（流动性共建 · 用户从底池购买 AI） ──────────────────────────────────
-/** 底池初始储备 = 流动性共建桶 15% = 3,150,000 AI */
-export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 15) / 100);
+/** 底池初始储备 = 流动性共建桶 10% = 2,100,000 AI（随分配模型 2026-07-08 调整同步）*/
+export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 10) / 100);
 
 /**
  * 底池兑换：AI 与 USDT 1:1 锚定（rate = 每 1 USDT 兑换的 AI 数量）。

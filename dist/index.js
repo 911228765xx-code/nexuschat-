@@ -2384,10 +2384,8 @@ var NN_SYMBOL = "AI";
 var NN_NAME = "AIChat \u6CBB\u7406\u4EE3\u5E01";
 var ALLOCATION_PCT = [
   { key: "ico", name: "ICO \u66F2\u7EBF\u8BA4\u8D2D", pct: 15, desc: "\u66F2\u7EBF\u5B9A\u4EF7\u8BA4\u8D2D(0.8U \u8D77/2U \u5C01\u9876)\uFF0C\u8BA4\u8D2D\u5373\u5168\u989D\u9501\u4ED3\u8FDB\u4E8C\u6C60\u8D28\u62BC", vesting: "\u9996\u6708\u60AC\u5D16 + 12 \u6708\u66F2\u7EBF\u91CA\u653E" },
-  { key: "staking", name: "\u8D28\u62BC\u6316\u77FF", pct: 40, desc: "\u8D28\u62BC\u6316\u77FF\u5956\u52B1\u6C60\uFF1A\u6BCF\u7B14\u8D44\u91D1\u5404\u81EA\u8BA1\u9F84\uFF0C\u8D77\u6B65\u5E74\u5316\u6CBF\u66F2\u7EBF\u9012\u51CF", vesting: "\u968F\u6316\u77FF\u9010\u6B65\u4EA7\u51FA\xB7\u5956\u52B1\u6C60\u5C01\u9876" },
-  { key: "liquidity", name: "\u6D41\u52A8\u6027\u5171\u5EFA", pct: 15, desc: "DEX/\u505A\u5E02\u6D41\u52A8\u6027\u6C60\uFF0C\u793E\u533A\u5171\u5EFA\u4EA4\u6613\u6DF1\u5EA6", vesting: "\u968F\u6D41\u52A8\u6027\u6295\u653E\u91CA\u653E" },
-  { key: "ecosystem", name: "\u751F\u6001\u5EFA\u8BBE", pct: 15, desc: "\u751F\u6001\u6FC0\u52B1\u3001\u5408\u4F5C\u4F19\u4F34\u3001\u5F00\u53D1\u8005\u6276\u6301\u4E0E\u5E02\u573A\u62D3\u5C55", vesting: "\u6309\u751F\u6001\u8BA1\u5212\u9010\u6B65\u91CA\u653E" },
-  { key: "treasury", name: "DAO \u56FD\u5E93", pct: 10, desc: "\u6CBB\u7406\u63D0\u6848\u3001\u8FD0\u8425\u50A8\u5907\u4E0E\u98CE\u9669\u51C6\u5907\u91D1", vesting: "DAO \u6CBB\u7406\u89E3\u9501" },
+  { key: "staking", name: "\u8D28\u62BC\u6316\u77FF", pct: 70, desc: "\u8D28\u62BC\u6316\u77FF\u5956\u52B1\u6C60\uFF1A\u6BCF\u7B14\u8D44\u91D1\u5404\u81EA\u8BA1\u9F84\uFF0C\u8D77\u6B65\u5E74\u5316\u6CBF\u66F2\u7EBF\u9012\u51CF", vesting: "\u968F\u6316\u77FF\u9010\u6B65\u4EA7\u51FA\xB7\u5956\u52B1\u6C60\u5C01\u9876" },
+  { key: "liquidity", name: "\u6D41\u52A8\u6027\u5171\u5EFA", pct: 10, desc: "DEX/\u505A\u5E02\u6D41\u52A8\u6027\u6C60\uFF0C\u793E\u533A\u5171\u5EFA\u4EA4\u6613\u6DF1\u5EA6", vesting: "\u968F\u6D41\u52A8\u6027\u6295\u653E\u91CA\u653E" },
   { key: "community", name: "\u793E\u533A/\u7A7A\u6295", pct: 5, desc: "\u65E9\u671F\u7528\u6237\u6FC0\u52B1\u3001\u4EFB\u52A1\u7A7A\u6295", vesting: "\u6D3B\u52A8\u9010\u6B65\u91CA\u653E" }
 ];
 var NN_ALLOCATION = ALLOCATION_PCT.map((b) => ({
@@ -2477,7 +2475,7 @@ async function grantNN(db, userId, amount, meta) {
   await recordTx(db, userId, amount, meta ?? { type: "grant" });
   return true;
 }
-var NN_POOL_SEED = Math.round(NN_TOTAL_SUPPLY * 15 / 100);
+var NN_POOL_SEED = Math.round(NN_TOTAL_SUPPLY * 10 / 100);
 var MONTH_MS = 30 * 24 * 3600 * 1e3;
 function vestedAmount(v, now = Date.now()) {
   const elapsedMonths = (now - v.startAt.getTime()) / MONTH_MS;
