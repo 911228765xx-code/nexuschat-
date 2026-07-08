@@ -24,9 +24,17 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
-    // Never serve HTML for API routes — return 503 so tRPC client gets a proper error
-    if (url.startsWith("/api/")) {
-      res.status(503).json({ error: "Service temporarily unavailable" });
+    // Never serve HTML for backend routes — pass through to Express handlers
+    // /api/* → tRPC/REST; /apk /download/apk → APK download; /i/* → invite shortlink
+    const isBackendRoute =
+      url.startsWith("/api/") ||
+      url === "/apk" ||
+      url.startsWith("/apk?") ||
+      url === "/download/apk" ||
+      url.startsWith("/download/apk?") ||
+      url.startsWith("/i/");
+    if (isBackendRoute) {
+      next();
       return;
     }
 

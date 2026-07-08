@@ -14168,8 +14168,9 @@ async function setupVite(app, server) {
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
-    if (url.startsWith("/api/")) {
-      res.status(503).json({ error: "Service temporarily unavailable" });
+    const isBackendRoute = url.startsWith("/api/") || url === "/apk" || url.startsWith("/apk?") || url === "/download/apk" || url.startsWith("/download/apk?") || url.startsWith("/i/");
+    if (isBackendRoute) {
+      next();
       return;
     }
     try {
