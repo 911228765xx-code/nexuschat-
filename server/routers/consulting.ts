@@ -14,7 +14,7 @@ import { z } from "zod";
 import { eq, desc, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { consultingReports, consultingPayments } from "../../drizzle/schema";
+import { consultingReports, consultingPayments, users } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { rateLimitStrict } from "../rateLimit";
@@ -55,6 +55,12 @@ async function verifyBscUsdtPayment(
 
     const tx = txData.result;
     if (!tx) return { confirmed: false, error: "Transaction not found" };
+
+    // 校验发起方:tx.from 必须等于声明的付款钱包(与 submitPayment 绑定的用户钱包一致),
+    // 否则可拿任意历史转账 hash 冒用付款(收款地址公开,能查到别人的转账)。
+    if (tx.from?.toLowerCase() !== fromAddress.toLowerCase()) {
+      return { confirmed: false, error: "付款地址与链上交易发起方不符" };
+    }
 
     // Verify it's a USDT transfer to our address
     // ERC-20 transfer method ID: 0xa9059cbb
@@ -269,6 +275,16 @@ export const consultingRouter = router({
 
       if (report.status === "completed") {
         return { success: true, message: "报告已完成" };
+      }
+
+      // 付款钱包必须是用户「已绑定」的钱包:否则攻击者可用收款地址上任意一笔他人历史 ≥10U 转账的 hash
+      // (设 walletAddress=该转账真实发送方)通过验证,白嫖 10U 的付费报告。绑定后 tx.from 只能是本人钱包。
+      const [meRow] = await db.select({ w: users.walletAddress }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      if (!meRow?.w) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "请先在「绑定钱包」绑定你的 BSC 钱包，并用该钱包付款" });
+      }
+      if (meRow.w.toLowerCase() !== input.walletAddress.toLowerCase()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "付款钱包需与你已绑定的钱包一致" });
       }
 
       // Check if txHash already used

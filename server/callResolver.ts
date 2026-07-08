@@ -88,9 +88,13 @@ export async function resolveDueCalls(db: Db): Promise<number> {
         status = (c.direction === "long" && up) || (c.direction === "short" && !up) ? "win" : "lose";
       }
 
-      await db.update(calls)
+      const upd = await db.update(calls)
         .set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: new Date() })
-        .where(eq(calls.id, c.id));
+        .where(and(eq(calls.id, c.id), eq(calls.status, "pending")));
+      // 幂等门闩:更新条件加 status='pending'。并发 tick(或将来新增手动触发)若已结算过这条,
+      // affectedRows=0 → 跳过,不重复发 AC/声誉/质押返还。
+      const changed = Number((upd as any)?.[0]?.affectedRows ?? (upd as any)?.rowsAffected ?? 0);
+      if (changed < 1) continue;
 
       if (status === "win") {
         await db.update(users)

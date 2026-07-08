@@ -120,12 +120,18 @@ export async function buyMembership(db: Db, userId: number, tierKey: ProTier, mo
   // 都在锁内完成,并发被排队,proUntil 正确累积(不再丢失已扣的会期)。
   const proUntil = await db.transaction(async (tx) => {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1);
-    const ok = await spendNN(tx as unknown as Db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
-    if (!ok) throw new Error("insufficient_nn");
+    // 先读当前档位(扣费前):拦截"高档生效期内买低档"——原实现会把 proUntil 重置为 base=now 丢失
+    // 剩余高档时长、却仍按低档扣费(用户净损失)。让其到期降级,而不是花钱降级。
     const [u] = await tx.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq(users.id, userId)).limit(1);
     const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
+    const active = !!(u?.proUntil && u.proUntil.getTime() > Date.now());
+    if (active && curEff !== "free" && getTier(curEff).monthlyNN > tier.monthlyNN) {
+      throw new Error("你有更高等级会员正在生效，到期后再购买该等级（避免剩余时长被清空）");
+    }
+    const ok = await spendNN(tx as unknown as Db, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
+    if (!ok) throw new Error("insufficient_nn");
     // 续同档：在现有有效期上叠加；升档或过期：从现在起算
-    const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
+    const sameActiveTier = curEff === tierKey && active;
     const base = sameActiveTier ? u!.proUntil!.getTime() : Date.now();
     const until = new Date(base + months * 30 * 24 * 3600 * 1000);
     await tx.update(users).set({ proTier: tierKey, proUntil: until }).where(eq(users.id, userId));
