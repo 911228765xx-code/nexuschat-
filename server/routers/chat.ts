@@ -829,6 +829,7 @@ export const chatRouter = router({
           isPublic: chatGroups.isPublic, category: chatGroups.category,
           isTokenGated: chatGroups.isTokenGated, tokenGateAmount: chatGroups.tokenGateAmount,
           joinApproval: chatGroups.joinApproval,
+          creatorId: chatGroups.creatorId, // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
         })
         .from(chatGroups)
         .where(eq(chatGroups.id, input.groupId))
@@ -1199,10 +1200,10 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // Verify membership
+      // 只有 owner/admin 可创建邀请链接(与客户端入口一致):否则普通成员能造永久链接把外部人拉进私密群,绕过群主管控
       const member = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
-      if (!member[0]) throw new Error("Not a member");
+      if (!member[0] || (member[0].role !== "owner" && member[0].role !== "admin")) throw new Error("只有群主或管理员可创建邀请链接");
       const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
       const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 3600_000) : undefined;
       await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
@@ -1391,6 +1392,8 @@ export const chatRouter = router({
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId))).limit(1);
       if (!target[0]) throw new Error("User not in group");
       if (target[0].role === "owner") throw new Error("Cannot kick the owner");
+      // admin 只能踢普通成员;踢其他 admin 需 owner(防单个失陷/恶意 admin 踢光其他管理员独占群)
+      if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("管理员不能移除其他管理员");
       await db.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId)));
       await db.update(chatGroups).set({ memberCount: sql`GREATEST(memberCount - 1, 0)` }).where(eq(chatGroups.id, input.groupId));
       return { ok: true };
@@ -1404,6 +1407,12 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // 校验 target 角色(kickMember 有、muteMember 之前漏了):不能禁言群主;admin 不能禁言其他 admin
+      const mt = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId))).limit(1);
+      if (!mt[0]) throw new Error("User not in group");
+      if (mt[0].role === "owner") throw new Error("不能禁言群主");
+      if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("管理员不能禁言其他管理员");
       const expiresAt = new Date(Date.now() + input.durationHours * 3600_000);
       // Upsert mute
       const existing = await db.select({ id: groupMutes.id }).from(groupMutes)
@@ -1436,12 +1445,17 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
+      // 转给自己会让群变无主:set owner(自己,无变化)→ set member(自己自降)→ 0 个 owner,群永久无人可管
+      if (input.newOwnerId === ctx.user.id) throw new Error("不能把群主转让给自己");
       // The new owner must already be a member, otherwise the group would be left with no owner.
       const target = await db.select({ id: groupMembers.id }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId))).limit(1);
       if (!target[0]) throw new Error("New owner must be a member of the group");
-      await db.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
-      await db.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      // 两条 update 包进事务:否则部分失败会产生"双 owner"或"无 owner"
+      await db.transaction(async (tx) => {
+        await tx.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
+        await tx.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      });
       return { ok: true };
     }),
 
@@ -1514,6 +1528,10 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // isPublic/joinApproval 是 owner 级设置——admin 把私密群改公开会让全部历史消息对任意人可浏览(getMessages 对公开群放开)。admin 仅可改 name/desc/avatar/forbidAddFriend。
+      if (actor[0].role !== "owner" && (input.isPublic !== undefined || input.joinApproval !== undefined)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅群主可修改群的公开/入群审批设置" });
+      }
       // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
       if (input.isPublic === true) {
         const benefits = await getBenefits(db, ctx.user.id);

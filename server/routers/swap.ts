@@ -326,7 +326,9 @@ export const swapRouter = router({
     }),
 
   requestWithdraw: protectedProcedure
-    .input(z.object({ amount: z.number().positive().max(1_000_000), address: z.string().min(6).max(80) }))
+    // 服务端权威校验地址格式:原来 min(6) 形同没校验,畸形/错链地址会被接受→余额已冻结→运营打款到无效地址钱永久丢失。
+    // 项目 USDT 为 BSC BEP20(EVM),与 wallet.ts 绑定地址同款正则。
+    .input(z.object({ amount: z.number().positive().max(1_000_000), address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "无效的提现地址：需 0x 开头的 42 位 EVM 地址") }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
