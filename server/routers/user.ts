@@ -315,14 +315,18 @@ export const userRouter = router({
         .orderBy(desc(users.npPoints))
         .limit(limit);
 
-      return rows.map((u, idx) => ({
-        ...u,
-        rank: idx + 1,
-        displayName: u.name ?? u.username ?? `User #${u.id}`,
-        shortAddress: u.walletAddress
-          ? `${u.walletAddress.slice(0, 6)}...${u.walletAddress.slice(-4)}`
-          : null,
-      }));
+      return rows.map((u, idx) => {
+        // walletAddress 只用来算 shortAddress,不能经 ...u 泄漏完整地址给匿名调用者(publicProcedure)
+        const { walletAddress, ...pub } = u;
+        return {
+          ...pub,
+          rank: idx + 1,
+          displayName: pub.name ?? pub.username ?? `User #${u.id}`,
+          shortAddress: walletAddress
+            ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+            : null,
+        };
+      });
     }),
 
   // ─── Get current user's rank ───────────────────────────────────────────────

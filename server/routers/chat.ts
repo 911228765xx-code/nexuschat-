@@ -820,8 +820,16 @@ export const chatRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
+      // 只投影预览所需的安全字段:原来 select() 全字段(public 接口、无 gate),把私有群的
+      // tokenGateContract(合约地址)/creatorId/内部开关都泄漏给了非成员。
       const rows = await db
-        .select()
+        .select({
+          id: chatGroups.id, name: chatGroups.name, description: chatGroups.description,
+          avatar: chatGroups.avatar, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers,
+          isPublic: chatGroups.isPublic, category: chatGroups.category,
+          isTokenGated: chatGroups.isTokenGated, tokenGateAmount: chatGroups.tokenGateAmount,
+          joinApproval: chatGroups.joinApproval,
+        })
         .from(chatGroups)
         .where(eq(chatGroups.id, input.groupId))
         .limit(1);
@@ -1017,21 +1025,21 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const rows = await db
-        .select({ senderId: messages.senderId })
+        .select({ senderId: messages.senderId, groupId: messages.groupId })
         .from(messages)
         .where(eq(messages.id, input.messageId))
         .limit(1);
       if (!rows[0]) throw new Error("Message not found");
       const isSender = rows[0].senderId === ctx.user.id;
       if (!isSender) {
-        // Allow group admin/owner to delete any message
-        if (input.groupId) {
-          const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
-            .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
-          if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
-        } else {
-          throw new Error("Not authorized");
-        }
+        // 管理员可删本群内他人消息 —— 但必须按【消息真实所属群】校验,不能用 client 传的 input.groupId。
+        // 原实现拿 input.groupId 查角色:攻击者建一个自己当 owner 的群、传该 groupId + 任意 messageId,
+        // 即可软删全站任意消息(含别人 DM),全局越权。DM(groupId 为空)非发送者一律不可删。
+        const realGroupId = rows[0].groupId;
+        if (realGroupId == null) throw new Error("Not authorized");
+        const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
+          .where(and(eq(groupMembers.groupId, realGroupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+        if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
       }
       await db
         .update(messages)
@@ -1126,9 +1134,10 @@ export const chatRouter = router({
 
   getPinnedMessages: protectedProcedure
     .input(z.object({ groupId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      await assertGroupMember(db, input.groupId, ctx.user.id); // 兄弟接口(getGroupFiles/Media/Stats)都校验了,这里漏了→非成员可读私有群置顶(最敏感公告)
       return db.select({
         id: messages.id, content: messages.content, messageType: messages.messageType,
         senderId: messages.senderId, senderName: users.name, createdAt: messages.createdAt,

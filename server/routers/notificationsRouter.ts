@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { notifications, users } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { sendPushToUser } from "./webPush";
+import { sanitizeInput } from "../utils/sanitize";
 
 export const notificationsRouter = router({
   // ─── Get notifications for current user ─────────────────────────────────────
@@ -99,7 +100,9 @@ export const notificationsRouter = router({
     .input(
       z.object({
         targetUserId: z.number(),
-        type: z.enum(["like", "comment", "follow", "mention", "system"]),
+        // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+        // system 类通知只能由服务端 createNotification() 内部发起。
+        type: z.enum(["like", "comment", "follow", "mention"]),
         content: z.string().max(500),
         postId: z.number().optional(),
       })
@@ -119,7 +122,7 @@ export const notificationsRouter = router({
         fromUserName: ctx.user.name ?? "Anonymous",
         fromUserAvatar: ctx.user.avatar ?? "🦊",
         postId: input.postId,
-        content: input.content,
+        content: sanitizeInput(input.content, 500), // 之前未净化,存原始 markup 再回显
         isRead: false,
       });
 
