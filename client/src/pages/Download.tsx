@@ -39,6 +39,7 @@ export default function DownloadPage() {
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const [copied, setCopied] = useState(false);
   const [guideOpen, setGuideOpen] = useState(inAppBrowser); // 微信/QQ 打开即引导
+  const [dlProgress, setDlProgress] = useState<number | null>(null); // 下载进度 0..1;null=未在下载
 
   useEffect(() => {
     // 公开端点,免登录:拿最新版本号 + 更新日志(与 App 内检查更新同一数据源)
@@ -64,12 +65,45 @@ export default function DownloadPage() {
     }
   }
 
-  function onDownloadClick(e: React.MouseEvent) {
-    if (inAppBrowser) {
-      e.preventDefault();
-      setGuideOpen(true); // 微信/QQ 拦 APK:引导去系统浏览器
+  async function onDownloadClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
+    if (dlProgress !== null) return; // 正在下
+
+    // 关键:服务端 /apk 对【非 Range 完整请求】会崩(返回网页,装不上);带 Range 的分片通道稳定返回真 APK。
+    // 浏览器点链接是非 Range,所以改用 JS 主动带 Range 拉取,再打包成文件下载,绕开那条坏路径。
+    try {
+      setDlProgress(0);
+      const res = await fetch("/apk", { headers: { Range: "bytes=0-" } });
+      if (!res.ok && res.status !== 206) throw new Error(`bad status ${res.status}`);
+      const cr = res.headers.get("content-range"); // "bytes 0-N/TOTAL"
+      const total = cr ? Number(cr.split("/")[1]) : Number(res.headers.get("content-length") || 0);
+      if (!res.body) throw new Error("no body");
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (total > 0) setDlProgress(Math.min(0.999, received / total));
+      }
+      const blob = new Blob(chunks as BlobPart[], { type: "application/vnd.android.package-archive" });
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `AIChat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+      setDlProgress(null);
+    } catch {
+      // 兜底:JS 拉取失败(内存不足/网络)→ 退回原生直链(仍可能慢,但比卡死强)
+      setDlProgress(null);
+      window.location.href = "/apk";
     }
-    // 正常浏览器:交给 <a href="/apk"> 原生下载(短链服务端已带规范文件名/断点续传)
   }
 
   const versionLabel = ver ? `v${ver.latestVersion}` : "";
@@ -198,10 +232,21 @@ export default function DownloadPage() {
               <a
                 href="/apk"
                 onClick={onDownloadClick}
-                className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-base font-bold hover:opacity-90 transition-opacity"
+                aria-disabled={dlProgress !== null}
+                className="relative w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-base font-bold hover:opacity-90 transition-opacity overflow-hidden"
               >
-                <Download size={18} />
-                下载 Android 版{versionLabel ? ` ${versionLabel}` : ""}
+                {dlProgress !== null && (
+                  <span
+                    className="absolute left-0 top-0 bottom-0 bg-white/25 transition-[width] duration-200"
+                    style={{ width: `${Math.round(dlProgress * 100)}%` }}
+                  />
+                )}
+                <span className="relative inline-flex items-center gap-2">
+                  <Download size={18} />
+                  {dlProgress !== null
+                    ? `下载中 ${Math.round(dlProgress * 100)}%`
+                    : `下载 Android 版${versionLabel ? ` ${versionLabel}` : ""}`}
+                </span>
               </a>
 
               {/* 直链(复制发给好友/下载器) */}
