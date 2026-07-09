@@ -1680,7 +1680,7 @@ function generateInviteCode(userId, _name) {
   return `AI${tail}`;
 }
 function normalizeInviteCode(raw) {
-  return raw.replace(/[\s-]/g, "").toUpperCase();
+  return raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 }
 async function ensureInviteCode(db, userId, name) {
   const code = generateInviteCode(userId, name ?? "USER");
@@ -1873,8 +1873,9 @@ var SDKServer = class {
     };
   }
   async authenticateRequest(req) {
+    const headerToken = typeof req.headers["x-app-session"] === "string" ? req.headers["x-app-session"].trim() : "";
     const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
+    const sessionCookie = headerToken || cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
     if (!session) {
       throw ForbiddenError("Invalid session cookie");

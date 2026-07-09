@@ -31,9 +31,13 @@ export function generateInviteCode(userId: number, _name?: string | null): strin
   return `AI${tail}`;
 }
 
-/** 输入容错:去空格/连字符、转大写 —— "ai-7kq2"、"AI 7KQ2" 都命中 AI7KQ2 */
+/**
+ * 输入容错:去掉一切非字母数字的分隔符、转大写 —— "ai-7kq2"、"AI 7KQ2"、展示态 "AI·7KQ2"
+ * (中点 U+00B7)都命中 AI7KQ2。原来只去 [\s-] 漏了中点,而邀请页复制/分享的正是 "AI·XXXX",
+ * 导致对方填进去绑定必报"邀请码无效"。旧码 NEXUS-XXXXXX-YYYY 仍由 recordReferral 的 rawUpper 分支精确匹配。
+ */
 export function normalizeInviteCode(raw: string): string {
-  return raw.replace(/[\s-]/g, "").toUpperCase();
+  return raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 }
 
 /**
