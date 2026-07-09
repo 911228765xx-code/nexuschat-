@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { researchReports, priceAlerts, posts, users } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
+import { consumeUserAiBudget } from "../userAiBudget";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { sanitizeInput } from "../utils/sanitize";
@@ -296,6 +297,8 @@ export const researchRouter = router({
         ? "你是一位经验丰富的加密货币交易员，擅长快速研判市场机会。你的分析风格直接、果断，不回避给出明确方向。回复使用中文。"
         : "你是一位顶级加密货币研究机构的首席分析师，擅长多维度深度分析。你的报告以数据驱动、逻辑严密、观点鲜明著称。回复使用中文。";
 
+      // 全局每日 AI 预算天花板(免费但防成本失控):达上限当天拒绝,不烧大模型
+      if (!consumeUserAiBudget()) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "AI 今日繁忙，请稍后再试" });
       const llmResponse = await invokeLLM({
         messages: [
           { role: "system" as const, content: systemMessage },
