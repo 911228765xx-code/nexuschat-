@@ -5822,7 +5822,8 @@ var chatRouter = router({
       messageType: messages.messageType,
       createdAt: messages.createdAt,
       senderId: messages.senderId,
-      receiverId: messages.receiverId
+      receiverId: messages.receiverId,
+      recalledAt: messages.recalledAt
     }).from(messages).where(
       and11(
         or5(
@@ -5861,8 +5862,9 @@ var chatRouter = router({
       userId: u.id,
       name: u.name ?? u.username ?? "User",
       avatar: u.avatar,
-      lastMessage: convMap.get(u.id)?.content ?? "",
-      lastMessageType: convMap.get(u.id)?.messageType ?? "text",
+      lastMessage: convMap.get(u.id)?.recalledAt ? "[\u6D88\u606F\u5DF2\u64A4\u56DE]" : convMap.get(u.id)?.content ?? "",
+      // 撤回后预览不露原文
+      lastMessageType: convMap.get(u.id)?.recalledAt ? "text" : convMap.get(u.id)?.messageType ?? "text",
       lastMessageAt: convMap.get(u.id)?.createdAt ?? /* @__PURE__ */ new Date(),
       isMine: convMap.get(u.id)?.senderId === myId,
       unreadCount: unreadMap.get(u.id) ?? 0
@@ -5895,6 +5897,7 @@ var chatRouter = router({
         content: messages.content,
         messageType: messages.messageType,
         createdAt: messages.createdAt,
+        recalledAt: messages.recalledAt,
         senderName: users.name,
         senderUsername: users.username
       }).from(messages).innerJoin(latest, eq15(messages.id, latest.maxId)).leftJoin(users, eq15(messages.senderId, users.id));
@@ -5906,8 +5909,9 @@ var chatRouter = router({
       const m = latestByGroup.get(g.id);
       return {
         ...g,
-        lastMessage: m?.content ?? g.description ?? "",
-        lastMessageType: m?.messageType ?? "text",
+        lastMessage: m?.recalledAt ? "[\u6D88\u606F\u5DF2\u64A4\u56DE]" : m?.content ?? g.description ?? "",
+        // 撤回后列表预览显示"已撤回",不再露原文
+        lastMessageType: m?.recalledAt ? "text" : m?.messageType ?? "text",
         lastMessageAt: m?.createdAt ?? g.updatedAt,
         lastSender: m?.senderName ?? m?.senderUsername ?? null
       };
