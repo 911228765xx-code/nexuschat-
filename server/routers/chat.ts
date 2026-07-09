@@ -734,7 +734,7 @@ export const chatRouter = router({
     // Fetch latest message for all groups in ONE pass (avoid N+1).
     // 1) max(id) per group  2) join back to get its content/sender.
     const groupIds = groups.map((g) => g.id);
-    const latestByGroup = new Map<number, { content: string; messageType: string; createdAt: Date; senderName: string | null; senderUsername: string | null }>();
+    const latestByGroup = new Map<number, { content: string; messageType: string; createdAt: Date; recalledAt: Date | null; senderName: string | null; senderUsername: string | null }>();
     if (groupIds.length > 0) {
       const latest = db
         .select({
