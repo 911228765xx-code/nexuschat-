@@ -1359,6 +1359,9 @@ var init_env = __esm({
        */
       publicOrigin: (process.env.PUBLIC_ORIGIN ?? "https://nexuschat.best").replace(/\/+$/, "")
     };
+    if (ENV.isProduction && (!ENV.cookieSecret || ENV.cookieSecret.length < 16)) {
+      throw new Error("[FATAL] JWT_SECRET \u672A\u914D\u7F6E\u6216\u8FC7\u77ED(\u9700 \u226516 \u5B57\u8282):\u4F1A\u8BDD\u7B7E\u540D\u5BC6\u94A5\u7F3A\u5931\u4F1A\u5BFC\u81F4\u4F1A\u8BDD\u53EF\u88AB\u4F2A\u9020,\u62D2\u7EDD\u542F\u52A8\u3002");
+    }
   }
 });
 
@@ -2004,10 +2007,15 @@ function registerStorageProxy(app) {
         return;
       }
       res.status(upstream.status);
-      for (const h of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
+      for (const h of ["content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
         const v = upstream.headers.get(h);
         if (v) res.setHeader(h, v);
       }
+      const ctype = upstream.headers.get("content-type") || "application/octet-stream";
+      const dangerous = /html|svg|xml|javascript|ecmascript/i.test(ctype);
+      res.setHeader("Content-Type", dangerous ? "application/octet-stream" : ctype);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (dangerous) res.setHeader("Content-Disposition", "attachment");
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       if (!upstream.body) {
         res.end();
@@ -2665,11 +2673,15 @@ async function buyMembership(db, userId, tierKey, months) {
   const cost = membershipCost(tier.monthlyNN, months);
   const proUntil = await db.transaction(async (tx) => {
     await tx.select({ id: users.id }).from(users).where(eq5(users.id, userId)).for("update").limit(1);
-    const ok = await spendNN(tx, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
-    if (!ok) throw new Error("insufficient_nn");
     const [u] = await tx.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq5(users.id, userId)).limit(1);
     const curEff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
-    const sameActiveTier = curEff === tierKey && u?.proUntil && u.proUntil.getTime() > Date.now();
+    const active = !!(u?.proUntil && u.proUntil.getTime() > Date.now());
+    if (active && curEff !== "free" && getTier(curEff).monthlyNN > tier.monthlyNN) {
+      throw new Error("\u4F60\u6709\u66F4\u9AD8\u7B49\u7EA7\u4F1A\u5458\u6B63\u5728\u751F\u6548\uFF0C\u5230\u671F\u540E\u518D\u8D2D\u4E70\u8BE5\u7B49\u7EA7\uFF08\u907F\u514D\u5269\u4F59\u65F6\u957F\u88AB\u6E05\u7A7A\uFF09");
+    }
+    const ok = await spendNN(tx, userId, cost, { type: "membership", refType: "user", refId: userId, memo: `${tier.key}x${months}` });
+    if (!ok) throw new Error("insufficient_nn");
+    const sameActiveTier = curEff === tierKey && active;
     const base = sameActiveTier ? u.proUntil.getTime() : Date.now();
     const until = new Date(base + months * 30 * 24 * 3600 * 1e3);
     await tx.update(users).set({ proTier: tierKey, proUntil: until }).where(eq5(users.id, userId));
@@ -3038,9 +3050,9 @@ var userRouter = router({
     if (!db) return null;
     const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq7(users.id, ctx.user.id)).limit(1);
     if (!me) return null;
-    const [{ count: count6 }] = await db.select({ count: sql4`COUNT(*)` }).from(users).where(sql4`npPoints > ${me.npPoints}`);
+    const [{ count: count7 }] = await db.select({ count: sql4`COUNT(*)` }).from(users).where(sql4`npPoints > ${me.npPoints}`);
     return {
-      rank: Number(count6) + 1,
+      rank: Number(count7) + 1,
       npPoints: me.npPoints
     };
   }),
@@ -3056,6 +3068,11 @@ var userRouter = router({
     if (input.userId === ctx.user.id) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u5C01\u7981\u81EA\u5DF1" });
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (input.banned) {
+      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq7(users.id, input.userId)).limit(1);
+      if (!target) throw new TRPCError4({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
+      if (target.role === "admin" || target.isBot) throw new TRPCError4({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
+    }
     await db.update(users).set({ isBanned: input.banned }).where(eq7(users.id, input.userId));
     return { success: true, banned: input.banned };
   }),
@@ -4027,7 +4044,8 @@ async function sendPushToUser(userId, payload) {
   const notificationPayload = JSON.stringify({
     title: payload.title,
     body: payload.body,
-    url: payload.url || "/app/chat",
+    url: payload.url || "/(tabs)",
+    // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
     icon: payload.icon || "/icons/icon-192x192.png",
     badge: "/icons/icon-72x72.png"
   });
@@ -5178,7 +5196,7 @@ function initSocketIO(httpServer) {
           socket.emit("error", { message: "\u4F60\u5DF2\u88AB\u7981\u8A00\uFF0C\u65E0\u6CD5\u53D1\u8A00" });
           return;
         }
-        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "group");
+        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "group");
         const safeContent = sanitizeInput(data.content, 5e3);
         const [result] = await db.insert(messages).values({
           groupId: data.groupId,
@@ -5232,7 +5250,7 @@ function initSocketIO(httpServer) {
         }
         const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
         await assertCanDM(db, senderIdNum, data.receiverId);
-        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "dm");
+        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "dm");
         const safeContent = sanitizeInput(data.content, 5e3);
         const [result] = await db.insert(messages).values({
           senderId: senderIdNum,
@@ -5261,7 +5279,8 @@ function initSocketIO(httpServer) {
             sendPushToUser(data.receiverId, {
               title: `${userName} \u53D1\u6765\u6D88\u606F`,
               body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
-              url: `/app/dm/${senderIdNum}`
+              url: `/direct-message?userId=${senderIdNum}`
+              // RN 路由(原 /app/dm/ 是 web 路由,原生点开跳空白 Unmatched Route)
             }).catch((err) => logger_default.warn({ err }, "Socket: Web Push failed"));
           }
         }
@@ -5364,10 +5383,12 @@ var chatRouter = router({
   adminDeleteGroup: adminProcedure.input(z5.object({ groupId: z5.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    await db.delete(messages).where(eq15(messages.groupId, input.groupId));
-    await db.delete(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
-    await db.delete(groupAnnouncements).where(eq15(groupAnnouncements.groupId, input.groupId));
-    await db.delete(chatGroups).where(eq15(chatGroups.id, input.groupId));
+    await db.transaction(async (tx) => {
+      await tx.delete(messages).where(eq15(messages.groupId, input.groupId));
+      await tx.delete(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
+      await tx.delete(groupAnnouncements).where(eq15(groupAnnouncements.groupId, input.groupId));
+      await tx.delete(chatGroups).where(eq15(chatGroups.id, input.groupId));
+    });
     return { success: true };
   }),
   // Create a group
@@ -5510,7 +5531,8 @@ var chatRouter = router({
       const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq15(messages.id, input.replyToId)).limit(1);
       if (!rep || rep.groupId !== input.groupId) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5F15\u7528\u7684\u6D88\u606F\u65E0\u6548" });
     }
-    if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
+    const hasTextContent = !!input.content && input.content.trim().length > 0;
+    if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "group");
     const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1e3) : null;
     const [result] = await db.insert(messages).values({
       groupId: input.groupId,
@@ -5545,9 +5567,9 @@ var chatRouter = router({
       });
     } catch {
     }
+    if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
     if (input.messageType === "text") {
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
-      void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       void awardTaskEvent(db, ctx.user.id, "first_message");
     }
     return { messageId };
@@ -5565,7 +5587,8 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await assertCanDM(db, ctx.user.id, input.receiverId);
-    if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
+    const hasTextContent = !!input.content && input.content.trim().length > 0;
+    if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "dm");
     if (input.replyToId) {
       const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId }).from(messages).where(eq15(messages.id, input.replyToId)).limit(1);
       const inThisDM = rep && !rep.groupId && (rep.senderId === ctx.user.id && rep.receiverId === input.receiverId || rep.senderId === input.receiverId && rep.receiverId === ctx.user.id);
@@ -5594,10 +5617,8 @@ var chatRouter = router({
       durationSeconds: input.durationSeconds ?? null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
-    if (input.messageType === "text") {
-      void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-      void awardTaskEvent(db, ctx.user.id, "first_message");
-    }
+    if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+    if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
     return { messageId };
   }),
   // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
@@ -5936,7 +5957,9 @@ var chatRouter = router({
       category: chatGroups.category,
       isTokenGated: chatGroups.isTokenGated,
       tokenGateAmount: chatGroups.tokenGateAmount,
-      joinApproval: chatGroups.joinApproval
+      joinApproval: chatGroups.joinApproval,
+      creatorId: chatGroups.creatorId
+      // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
     }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
     return rows[0] ?? null;
   }),
@@ -6221,7 +6244,7 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
-    if (!member[0]) throw new Error("Not a member");
+    if (!member[0] || member[0].role !== "owner" && member[0].role !== "admin") throw new Error("\u53EA\u6709\u7FA4\u4E3B\u6216\u7BA1\u7406\u5458\u53EF\u521B\u5EFA\u9080\u8BF7\u94FE\u63A5");
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 36e5) : void 0;
     await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
@@ -6350,6 +6373,7 @@ var chatRouter = router({
     const target = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId))).limit(1);
     if (!target[0]) throw new Error("User not in group");
     if (target[0].role === "owner") throw new Error("Cannot kick the owner");
+    if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u79FB\u9664\u5176\u4ED6\u7BA1\u7406\u5458");
     await db.delete(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId)));
     await db.update(chatGroups).set({ memberCount: sql8`GREATEST(memberCount - 1, 0)` }).where(eq15(chatGroups.id, input.groupId));
     return { ok: true };
@@ -6359,6 +6383,10 @@ var chatRouter = router({
     if (!db) throw new Error("DB unavailable");
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
+    const mt = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId))).limit(1);
+    if (!mt[0]) throw new Error("User not in group");
+    if (mt[0].role === "owner") throw new Error("\u4E0D\u80FD\u7981\u8A00\u7FA4\u4E3B");
+    if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u7981\u8A00\u5176\u4ED6\u7BA1\u7406\u5458");
     const expiresAt = new Date(Date.now() + input.durationHours * 36e5);
     const existing = await db.select({ id: groupMutes.id }).from(groupMutes).where(and11(eq15(groupMutes.groupId, input.groupId), eq15(groupMutes.userId, input.targetUserId))).limit(1);
     if (existing[0]) {
@@ -6381,10 +6409,13 @@ var chatRouter = router({
     if (!db) throw new Error("DB unavailable");
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
+    if (input.newOwnerId === ctx.user.id) throw new Error("\u4E0D\u80FD\u628A\u7FA4\u4E3B\u8F6C\u8BA9\u7ED9\u81EA\u5DF1");
     const target = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.newOwnerId))).limit(1);
     if (!target[0]) throw new Error("New owner must be a member of the group");
-    await db.update(groupMembers).set({ role: "owner" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.newOwnerId)));
-    await db.update(groupMembers).set({ role: "member" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id)));
+    await db.transaction(async (tx) => {
+      await tx.update(groupMembers).set({ role: "owner" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.newOwnerId)));
+      await tx.update(groupMembers).set({ role: "member" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id)));
+    });
     return { ok: true };
   }),
   // 群主设置/取消管理员
@@ -6434,6 +6465,9 @@ var chatRouter = router({
     if (!db) throw new Error("DB unavailable");
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
+    if (actor[0].role !== "owner" && (input.isPublic !== void 0 || input.joinApproval !== void 0)) {
+      throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B\u53EF\u4FEE\u6539\u7FA4\u7684\u516C\u5F00/\u5165\u7FA4\u5BA1\u6279\u8BBE\u7F6E" });
+    }
     if (input.isPublic === true) {
       const benefits = await getBenefits(db, ctx.user.id);
       if (!benefits.publicGroups) {
@@ -7126,6 +7160,27 @@ import { TRPCError as TRPCError9 } from "@trpc/server";
 init_db();
 init_schema();
 import { eq as eq16, and as and12, desc as desc7 } from "drizzle-orm";
+
+// server/userAiBudget.ts
+var DAILY_CAP2 = Math.max(0, Number(process.env.USER_AI_LLM_DAILY_CAP || 8e3));
+var dayKey2 = "";
+var count3 = 0;
+function todayKey2() {
+  const d = /* @__PURE__ */ new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+function consumeUserAiBudget() {
+  const t3 = todayKey2();
+  if (t3 !== dayKey2) {
+    dayKey2 = t3;
+    count3 = 0;
+  }
+  if (count3 >= DAILY_CAP2) return false;
+  count3++;
+  return true;
+}
+
+// server/routers/research.ts
 async function fetchTokenData(symbol) {
   const cacheKey2 = `token:search:${symbol.toLowerCase()}`;
   const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
@@ -7388,6 +7443,7 @@ var researchRouter = router({
     const symbol = input.tokenSymbol.toUpperCase();
     const prompt = input.mode === "quick" ? buildQuickPrompt(symbol, marketContext) : buildDeepPrompt(symbol, marketContext);
     const systemMessage = input.mode === "quick" ? "\u4F60\u662F\u4E00\u4F4D\u7ECF\u9A8C\u4E30\u5BCC\u7684\u52A0\u5BC6\u8D27\u5E01\u4EA4\u6613\u5458\uFF0C\u64C5\u957F\u5FEB\u901F\u7814\u5224\u5E02\u573A\u673A\u4F1A\u3002\u4F60\u7684\u5206\u6790\u98CE\u683C\u76F4\u63A5\u3001\u679C\u65AD\uFF0C\u4E0D\u56DE\u907F\u7ED9\u51FA\u660E\u786E\u65B9\u5411\u3002\u56DE\u590D\u4F7F\u7528\u4E2D\u6587\u3002" : "\u4F60\u662F\u4E00\u4F4D\u9876\u7EA7\u52A0\u5BC6\u8D27\u5E01\u7814\u7A76\u673A\u6784\u7684\u9996\u5E2D\u5206\u6790\u5E08\uFF0C\u64C5\u957F\u591A\u7EF4\u5EA6\u6DF1\u5EA6\u5206\u6790\u3002\u4F60\u7684\u62A5\u544A\u4EE5\u6570\u636E\u9A71\u52A8\u3001\u903B\u8F91\u4E25\u5BC6\u3001\u89C2\u70B9\u9C9C\u660E\u8457\u79F0\u3002\u56DE\u590D\u4F7F\u7528\u4E2D\u6587\u3002";
+    if (!consumeUserAiBudget()) throw new TRPCError9({ code: "TOO_MANY_REQUESTS", message: "AI \u4ECA\u65E5\u7E41\u5FD9\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5" });
     const llmResponse = await invokeLLM({
       messages: [
         { role: "system", content: systemMessage },
@@ -7514,6 +7570,8 @@ ${summary}${summary.length >= 150 ? "..." : ""}
   getReportPublic: publicProcedure.input(z6.object({ reportId: z6.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
+    const [shared] = await db.select({ id: posts.id }).from(posts).where(eq16(posts.reportId, input.reportId)).limit(1);
+    if (!shared) return null;
     const [report] = await db.select({
       id: researchReports.id,
       tokenSymbol: researchReports.tokenSymbol,
@@ -7707,7 +7765,9 @@ var postsRouter = router({
     }).from(posts).leftJoin(users, eq18(posts.authorId, users.id)).orderBy(
       desc9(sql10`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
       desc9(posts.isPinned),
-      desc9(posts.createdAt)
+      desc9(posts.createdAt),
+      desc9(posts.id)
+      // 稳定 tie-breaker:多帖 createdAt 同一秒时,不加它跨页(不同 offset)顺序不稳→重复/静默跳过
     ).limit(limit + 1).offset(offset);
     const hasMore = rows.length > limit;
     const data = rows.slice(0, limit);
@@ -7855,15 +7915,22 @@ var postsRouter = router({
   toggleLike: protectedProcedure.input(z8.object({ postId: z8.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(postLikes).where(and14(eq18(postLikes.postId, input.postId), eq18(postLikes.userId, ctx.user.id))).limit(1);
-    if (existing.length > 0) {
-      await db.delete(postLikes).where(and14(eq18(postLikes.postId, input.postId), eq18(postLikes.userId, ctx.user.id)));
-      await db.update(posts).set({ likeCount: sql10`GREATEST(likeCount - 1, 0)` }).where(eq18(posts.id, input.postId));
-      return { liked: false };
-    } else {
-      await db.insert(postLikes).values({ postId: input.postId, userId: ctx.user.id });
-      await db.update(posts).set({ likeCount: sql10`likeCount + 1` }).where(eq18(posts.id, input.postId));
-      const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq18(posts.id, input.postId)).limit(1);
+    const result = await db.transaction(async (tx) => {
+      const [p] = await tx.select({ authorId: posts.authorId }).from(posts).where(eq18(posts.id, input.postId)).for("update").limit(1);
+      if (!p) throw new Error("Post not found");
+      const existing = await tx.select({ id: postLikes.id }).from(postLikes).where(and14(eq18(postLikes.postId, input.postId), eq18(postLikes.userId, ctx.user.id))).limit(1);
+      if (existing.length > 0) {
+        await tx.delete(postLikes).where(and14(eq18(postLikes.postId, input.postId), eq18(postLikes.userId, ctx.user.id)));
+        await tx.update(posts).set({ likeCount: sql10`GREATEST(likeCount - 1, 0)` }).where(eq18(posts.id, input.postId));
+        return { liked: false, authorId: p.authorId };
+      }
+      await tx.insert(postLikes).values({ postId: input.postId, userId: ctx.user.id });
+      await tx.update(posts).set({ likeCount: sql10`likeCount + 1` }).where(eq18(posts.id, input.postId));
+      return { liked: true, authorId: p.authorId };
+    });
+    if (!result.liked) return { liked: false };
+    {
+      const post = { authorId: result.authorId };
       if (post && post.authorId !== ctx.user.id) {
         const [seen] = await db.select({ id: notifications.id }).from(notifications).where(and14(
           eq18(notifications.userId, post.authorId),
@@ -7958,7 +8025,7 @@ var postsRouter = router({
     }
     await db.update(posts).set({ commentCount: sql10`commentCount + 1` }).where(eq18(posts.id, input.postId));
     const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq18(posts.id, input.postId)).limit(1);
-    if (post) {
+    if (post && post.authorId !== ctx.user.id) {
       const [commenter] = await db.select({ name: users.name, avatar: users.avatar }).from(users).where(eq18(users.id, ctx.user.id)).limit(1);
       await createNotification({
         db,
@@ -8618,7 +8685,7 @@ var tradingRouter = router({
 import { z as z10 } from "zod";
 init_db();
 init_schema();
-import { eq as eq20, and as and16, count as count3 } from "drizzle-orm";
+import { eq as eq20, and as and16, count as count4 } from "drizzle-orm";
 async function createFollowNotification(db, fromUser, toUserId) {
   if (!db || fromUser.id === toUserId) return;
   await db.insert(notifications).values({
@@ -8688,8 +8755,8 @@ var followRouter = router({
     const db = await getDb();
     if (!db) return { followers: 0, following: 0 };
     const [followerResult, followingResult] = await Promise.all([
-      db.select({ cnt: count3() }).from(userFollows).where(eq20(userFollows.followingId, input.userId)),
-      db.select({ cnt: count3() }).from(userFollows).where(eq20(userFollows.followerId, input.userId))
+      db.select({ cnt: count4() }).from(userFollows).where(eq20(userFollows.followingId, input.userId)),
+      db.select({ cnt: count4() }).from(userFollows).where(eq20(userFollows.followerId, input.userId))
     ]);
     return {
       followers: followerResult[0]?.cnt ?? 0,
@@ -9420,7 +9487,7 @@ var settingsRouter = router({
 import { z as z15 } from "zod";
 init_db();
 init_schema();
-import { eq as eq25, and as and21, or as or7, desc as desc15, count as count4, sql as sql13 } from "drizzle-orm";
+import { eq as eq25, and as and21, or as or7, desc as desc15, count as count5, sql as sql13 } from "drizzle-orm";
 init_env();
 var REFERRER_REWARD = 100;
 var INVITEE_REWARD = 200;
@@ -9439,8 +9506,8 @@ var referralRouter = router({
     const userId = ctx.user.id;
     const userName = ctx.user.name ?? "USER";
     const inviteCode = await ensureInviteCode(db, userId, userName);
-    const [totalResult] = await db.select({ cnt: count4() }).from(referrals).where(eq25(referrals.referrerId, userId));
-    const [activeResult] = await db.select({ cnt: count4() }).from(referrals).where(and21(eq25(referrals.referrerId, userId), eq25(referrals.status, "active")));
+    const [totalResult] = await db.select({ cnt: count5() }).from(referrals).where(eq25(referrals.referrerId, userId));
+    const [activeResult] = await db.select({ cnt: count5() }).from(referrals).where(and21(eq25(referrals.referrerId, userId), eq25(referrals.status, "active")));
     const [rewardResult] = await db.select({ total: sql13`COALESCE(SUM(${referrals.referrerReward}), 0)` }).from(referrals).where(eq25(referrals.referrerId, userId));
     const totalInvited = totalResult?.cnt ?? 0;
     const activeInvited = activeResult?.cnt ?? 0;
@@ -9513,7 +9580,7 @@ var referralRouter = router({
         return { success: false, message: "Cannot bind same-device account" };
       }
       if (pair?.a) {
-        const [{ c: boundCount = 0 } = { c: 0 }] = await db.select({ c: count4() }).from(referrals).innerJoin(users, eq25(referrals.inviteeId, users.id)).where(and21(eq25(users.deviceId, pair.a), eq25(referrals.status, "active")));
+        const [{ c: boundCount = 0 } = { c: 0 }] = await db.select({ c: count5() }).from(referrals).innerJoin(users, eq25(referrals.inviteeId, users.id)).where(and21(eq25(users.deviceId, pair.a), eq25(referrals.status, "active")));
         if (Number(boundCount) >= 3) {
           return { success: false, message: "Device referral limit reached" };
         }
@@ -10788,7 +10855,8 @@ function genLiveKitToken(apiKey, apiSecret, grant) {
     sub: grant.identity,
     nbf: now,
     exp: now + ttl,
-    jti: grant.identity,
+    jti: crypto2.randomUUID(),
+    // 唯一随机(原来=userId 可预测且复用);每次签发不同,缩短被盗/复用窗口
     ...grant.name ? { name: grant.name } : {},
     video: {
       room: grant.room,
@@ -10803,6 +10871,9 @@ function genLiveKitToken(apiKey, apiSecret, grant) {
   const sig = b64url(crypto2.createHmac("sha256", apiSecret).update(`${head}.${body}`).digest());
   return `${head}.${body}.${sig}`;
 }
+
+// server/routers/voiceRoom.ts
+init_logger();
 
 // server/_core/livekitService.ts
 init_env();
@@ -10847,6 +10918,9 @@ async function setParticipantCanPublish(room, identity, canPublish) {
     identity,
     permission: { canPublish, canSubscribe: true, canPublishData: true }
   });
+}
+async function deleteRoom(room) {
+  await callRoomService("DeleteRoom", room, { room });
 }
 async function listParticipantCount(room) {
   try {
@@ -10973,20 +11047,27 @@ var voiceRoomRouter = router({
       if (!ok) throw new TRPCError15({ code: "FORBIDDEN", message: `AI \u4E0D\u8DB3\uFF1A\u672C\u6708\u514D\u8D39\u5F00\u623F\u5DF2\u7528\u5B8C\uFF0C\u5355\u6B21\u5F00\u623F\u9700 ${VOICE_ROOM_COST} AI\uFF0C\u6216\u5347\u7EA7\u4F1A\u5458\u83B7\u66F4\u591A\u514D\u8D39\u6B21\u6570` });
       charged = true;
     }
-    const roomId = await allocRoomId(db);
-    await db.insert(voiceRooms).values({
-      roomId,
-      title: sanitizeInput(input.title),
-      topic: input.topic ? sanitizeInput(input.topic) : null,
-      category: input.category,
-      hostUserId: ctx.user.id,
-      isMembersOnly: input.isMembersOnly,
-      isPublic: input.isPublic,
-      status: "live",
-      speakerCount: 1,
-      listenerCount: 0
-    });
-    const [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq27(voiceRooms.roomId, roomId)).limit(1);
+    let roomId;
+    let row;
+    try {
+      roomId = await allocRoomId(db);
+      await db.insert(voiceRooms).values({
+        roomId,
+        title: sanitizeInput(input.title),
+        topic: input.topic ? sanitizeInput(input.topic) : null,
+        category: input.category,
+        hostUserId: ctx.user.id,
+        isMembersOnly: input.isMembersOnly,
+        isPublic: input.isPublic,
+        status: "live",
+        speakerCount: 1,
+        listenerCount: 0
+      });
+      [row] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(eq27(voiceRooms.roomId, roomId)).limit(1);
+    } catch (e) {
+      if (charged) await grantNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id, memo: "refund:create_failed" });
+      throw e;
+    }
     const name = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237${ctx.user.id}`;
     const token = signToken(
       ctx.user.id,
@@ -11063,6 +11144,7 @@ var voiceRoomRouter = router({
     if (!room) return { ok: true };
     if (room.hostUserId !== ctx.user.id) throw new TRPCError15({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u7ED3\u675F\u8BED\u97F3\u623F" });
     await db.update(voiceRooms).set({ status: "ended", endedAt: /* @__PURE__ */ new Date() }).where(eq27(voiceRooms.id, rid));
+    void deleteRoom(roomName(room.roomId)).catch((err) => logger_default.warn({ err }, "endRoom: LiveKit DeleteRoom \u5931\u8D25"));
     return { ok: true };
   }),
   /** 礼物目录（供前端礼物面板） */
@@ -11485,6 +11567,8 @@ var icoRouter = router({
     if (!o || o.status !== "pending") throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
     const [dup] = await db.select({ id: icoOrders.id }).from(icoOrders).where(and24(eq28(icoOrders.txHash, txHash), ne4(icoOrders.id, o.id))).limit(1);
     if (dup) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u5176\u5B83\u8BA2\u5355,\u8BF7\u52FF\u91CD\u590D" });
+    const [depDup] = await db.select({ id: usdtDeposits.id }).from(usdtDeposits).where(eq28(usdtDeposits.txHash, txHash)).limit(1);
+    if (depDup) throw new TRPCError16({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E\u94B1\u5305\u5145\u503C,\u8BF7\u52FF\u91CD\u590D" });
     try {
       await db.update(icoOrders).set({ txHash }).where(eq28(icoOrders.id, input.orderId));
     } catch {
@@ -11860,6 +11944,9 @@ async function verifyBscUsdtPayment(txHash, fromAddress) {
     }
     const tx = txData.result;
     if (!tx) return { confirmed: false, error: "Transaction not found" };
+    if (tx.from?.toLowerCase() !== fromAddress.toLowerCase()) {
+      return { confirmed: false, error: "\u4ED8\u6B3E\u5730\u5740\u4E0E\u94FE\u4E0A\u4EA4\u6613\u53D1\u8D77\u65B9\u4E0D\u7B26" };
+    }
     const methodId = tx.input?.slice(0, 10);
     if (methodId !== "0xa9059cbb") {
       return { confirmed: false, error: "Not a token transfer" };
@@ -12026,6 +12113,13 @@ var consultingRouter = router({
     }
     if (report.status === "completed") {
       return { success: true, message: "\u62A5\u544A\u5DF2\u5B8C\u6210" };
+    }
+    const [meRow] = await db.select({ w: users.walletAddress }).from(users).where(eq30(users.id, ctx.user.id)).limit(1);
+    if (!meRow?.w) {
+      throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8BF7\u5148\u5728\u300C\u7ED1\u5B9A\u94B1\u5305\u300D\u7ED1\u5B9A\u4F60\u7684 BSC \u94B1\u5305\uFF0C\u5E76\u7528\u8BE5\u94B1\u5305\u4ED8\u6B3E" });
+    }
+    if (meRow.w.toLowerCase() !== input.walletAddress.toLowerCase()) {
+      throw new TRPCError18({ code: "BAD_REQUEST", message: "\u4ED8\u6B3E\u94B1\u5305\u9700\u4E0E\u4F60\u5DF2\u7ED1\u5B9A\u7684\u94B1\u5305\u4E00\u81F4" });
     }
     const [existingPayment] = await db.select().from(consultingPayments).where(eq30(consultingPayments.txHash, input.txHash)).limit(1);
     if (existingPayment) {
@@ -12530,7 +12624,7 @@ var swapRouter = router({
       return { ok: true, fromReserveR: input.fromReserveR, fromCrisis: input.fromCrisis };
     });
   }),
-  adminCreditUsdt: adminProcedure.input(z23.object({ userId: z23.number(), amount: z23.number().positive() })).mutation(async ({ input }) => {
+  adminCreditUsdt: adminProcedure.input(z23.object({ userId: z23.number(), amount: z23.number().positive().max(1e6) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await db.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${input.amount}` }).where(eq31(users.id, input.userId));
@@ -12544,6 +12638,8 @@ var swapRouter = router({
     const txHash = sanitizeInput(input.txHash, 120);
     const [dup] = await db.select({ id: usdtDeposits.id }).from(usdtDeposits).where(eq31(usdtDeposits.txHash, txHash)).limit(1);
     if (dup) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u63D0\u4EA4\u8FC7,\u8BF7\u52FF\u91CD\u590D" });
+    const [icoDup] = await db.select({ id: icoOrders.id }).from(icoOrders).where(eq31(icoOrders.txHash, txHash)).limit(1);
+    if (icoDup) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u8BE5\u4EA4\u6613\u54C8\u5E0C\u5DF2\u7528\u4E8E ICO \u8BA4\u8D2D,\u8BF7\u52FF\u91CD\u590D" });
     try {
       await db.insert(usdtDeposits).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), txHash });
     } catch {
@@ -12551,7 +12647,7 @@ var swapRouter = router({
     }
     return { ok: true };
   }),
-  requestWithdraw: protectedProcedure.input(z23.object({ amount: z23.number().positive().max(1e6), address: z23.string().min(6).max(80) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  requestWithdraw: protectedProcedure.input(z23.object({ amount: z23.number().positive().max(1e6), address: z23.string().regex(/^0x[a-fA-F0-9]{40}$/, "\u65E0\u6548\u7684\u63D0\u73B0\u5730\u5740\uFF1A\u9700 0x \u5F00\u5934\u7684 42 \u4F4D EVM \u5730\u5740") })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
@@ -13029,7 +13125,7 @@ import { z as z25 } from "zod";
 import { TRPCError as TRPCError21 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq33, and as and28, desc as desc21, sql as sql20, count as count5, gte as gte7 } from "drizzle-orm";
+import { eq as eq33, and as and28, desc as desc21, sql as sql20, count as count6, gte as gte7 } from "drizzle-orm";
 var HORIZONS = [24, 72, 168, 720];
 var DAILY_CALL_LIMIT = 5;
 var MIN_STAKE = 10;
@@ -13051,10 +13147,6 @@ var callsRouter = router({
       throw new TRPCError21({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53D1 Call" });
     }
     const ymd = ymdUtc3();
-    const [{ c = 0 } = { c: 0 }] = await db.select({ c: count5() }).from(calls).where(and28(eq33(calls.userId, ctx.user.id), eq33(calls.createdYmd, ymd)));
-    if (Number(c) >= DAILY_CALL_LIMIT) {
-      throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u53D1 ${DAILY_CALL_LIMIT} \u6761 Call` });
-    }
     const symbol = input.tokenSymbol.trim().toUpperCase();
     const token = await fetchTokenData(symbol);
     const price = token?.price;
@@ -13062,17 +13154,29 @@ var callsRouter = router({
       throw new TRPCError21({ code: "BAD_REQUEST", message: "\u65E0\u6CD5\u83B7\u53D6\u8BE5\u4EE3\u5E01\u4EF7\u683C\uFF0C\u8BF7\u786E\u8BA4\u6807\u7684" });
     }
     const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1e3);
-    const [result] = await db.insert(calls).values({
-      userId: ctx.user.id,
-      tokenSymbol: symbol,
-      direction: input.direction,
-      horizonHours: input.horizonHours,
-      entryPrice: String(price),
-      note: input.note ? sanitizeInput(input.note, 280) : void 0,
-      createdYmd: ymd,
-      resolveAt
+    const insertId = await db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq33(users.id, ctx.user.id)).for("update").limit(1);
+      const [{ c = 0 } = { c: 0 }] = await tx.select({ c: count6() }).from(calls).where(and28(eq33(calls.userId, ctx.user.id), eq33(calls.createdYmd, ymd)));
+      if (Number(c) >= DAILY_CALL_LIMIT) {
+        throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u53D1 ${DAILY_CALL_LIMIT} \u6761 Call` });
+      }
+      const [openSame] = await tx.select({ id: calls.id }).from(calls).where(and28(eq33(calls.userId, ctx.user.id), eq33(calls.tokenSymbol, symbol), eq33(calls.status, "pending"))).limit(1);
+      if (openSame) {
+        throw new TRPCError21({ code: "BAD_REQUEST", message: "\u8BE5\u6807\u7684\u4F60\u5DF2\u6709\u672A\u7ED3\u7B97\u7684 Call\uFF0C\u7ED3\u7B97\u540E\u518D\u53D1" });
+      }
+      const [result] = await tx.insert(calls).values({
+        userId: ctx.user.id,
+        tokenSymbol: symbol,
+        direction: input.direction,
+        horizonHours: input.horizonHours,
+        entryPrice: String(price),
+        note: input.note ? sanitizeInput(input.note, 280) : void 0,
+        createdYmd: ymd,
+        resolveAt
+      });
+      return result.insertId;
     });
-    return { callId: result.insertId, entryPrice: price, resolveAt: resolveAt.toISOString() };
+    return { callId: insertId, entryPrice: price, resolveAt: resolveAt.toISOString() };
   }),
   // ─── 我的 Call 列表 ──────────────────────────────────────────────────────────
   listMine: protectedProcedure.input(z25.object({ limit: z25.number().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
@@ -13109,7 +13213,7 @@ var callsRouter = router({
   myStats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return { wins: 0, loses: 0, pending: 0, winRate: 0 };
-    const rows = await db.select({ status: calls.status, c: count5() }).from(calls).where(eq33(calls.userId, ctx.user.id)).groupBy(calls.status);
+    const rows = await db.select({ status: calls.status, c: count6() }).from(calls).where(eq33(calls.userId, ctx.user.id)).groupBy(calls.status);
     let wins = 0, loses = 0, pending = 0;
     for (const r of rows) {
       if (r.status === "win") wins = Number(r.c);
@@ -14658,7 +14762,9 @@ async function resolveDueCalls(db) {
         const up = changeBp > 0;
         status = c.direction === "long" && up || c.direction === "short" && !up ? "win" : "lose";
       }
-      await db.update(calls).set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(eq40(calls.id, c.id));
+      const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and36(eq40(calls.id, c.id), eq40(calls.status, "pending")));
+      const changed = Number(upd?.[0]?.affectedRows ?? upd?.rowsAffected ?? 0);
+      if (changed < 1) continue;
       if (status === "win") {
         await db.update(users).set({ npPoints: sql25`npPoints + ${WIN_NP}`, reputation: sql25`reputation + ${WIN_REP}` }).where(eq40(users.id, c.userId));
       } else if (status === "lose") {
@@ -14794,6 +14900,11 @@ async function handleTokenChatStream(req, res) {
 `);
   };
   try {
+    if (!consumeUserAiBudget()) {
+      sendEvent(JSON.stringify({ error: "AI \u4ECA\u65E5\u7E41\u5FD9\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5" }));
+      res.end();
+      return;
+    }
     const tokenContext = await fetchTokenContext(token);
     const systemPrompt = `\u4F60\u662F NexusChat \u7684 AI \u5206\u6790\u52A9\u624B\uFF0C\u4E13\u6CE8\u4E8E\u52A0\u5BC6\u8D27\u5E01\u5206\u6790\u3002
 \u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5B9E\u65F6\u5E02\u573A\u6570\u636E\u56DE\u7B54\u7528\u6237\u95EE\u9898\uFF1A
@@ -15104,6 +15215,12 @@ async function authUser(req, res) {
 async function handleChunkStart(req, res) {
   const user = await authUser(req, res);
   if (!user) return;
+  let userSessions = 0;
+  for (const s of Array.from(sessions.values())) if (s.userId === user.id) userSessions++;
+  if (userSessions >= 3) {
+    res.status(429).json({ error: "\u5E76\u53D1\u4E0A\u4F20\u8FC7\u591A\uFF0C\u8BF7\u7B49\u5F53\u524D\u4E0A\u4F20\u5B8C\u6210\u518D\u8BD5" });
+    return;
+  }
   const kind = req.body?.kind === "file" ? "file" : "video";
   const mime = typeof req.body?.mime === "string" ? req.body.mime.split(";")[0] : kind === "video" ? "video/mp4" : "application/octet-stream";
   const name = typeof req.body?.name === "string" ? req.body.name.slice(-100) : "file";
@@ -15463,6 +15580,11 @@ async function handleResearchStream(req, res) {
     }
   };
   try {
+    if (!consumeUserAiBudget()) {
+      sendEvent(JSON.stringify({ error: "AI \u4ECA\u65E5\u7E41\u5FD9\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5" }));
+      res.end();
+      return;
+    }
     const [token, market] = await Promise.all([
       fetchTokenData2(tokenSymbol),
       fetchMarketData()

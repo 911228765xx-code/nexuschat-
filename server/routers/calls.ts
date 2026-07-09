@@ -43,15 +43,7 @@ export const callsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再发 Call" });
       }
 
-      // 当日限频
       const ymd = ymdUtc();
-      const [{ c = 0 } = { c: 0 }] = await db
-        .select({ c: count() }).from(calls)
-        .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
-      if (Number(c) >= DAILY_CALL_LIMIT) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多发 ${DAILY_CALL_LIMIT} 条 Call` });
-      }
-
       const symbol = input.tokenSymbol.trim().toUpperCase();
       const token = await fetchTokenData(symbol);
       const price = token?.price;
@@ -60,17 +52,35 @@ export const callsRouter = router({
       }
 
       const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1000);
-      const [result] = await db.insert(calls).values({
-        userId: ctx.user.id,
-        tokenSymbol: symbol,
-        direction: input.direction,
-        horizonHours: input.horizonHours,
-        entryPrice: String(price),
-        note: input.note ? sanitizeInput(input.note, 280) : undefined,
-        createdYmd: ymd,
-        resolveAt,
+      // 事务内锁用户行,防刷分:① 原来"count→insert"非原子,并发发 Call 可绕过每日上限;
+      // ② 禁止同标的并存未结算 Call——否则同标的同时发 long+short 对冲,行情一动必有一条判对稳拿 AC
+      // (AC 可经 TGE 兑换成 AI/真金),farmable。
+      const insertId = await db.transaction(async (tx) => {
+        await tx.select({ id: users.id }).from(users).where(eq(users.id, ctx.user.id)).for("update").limit(1);
+        const [{ c = 0 } = { c: 0 }] = await tx
+          .select({ c: count() }).from(calls)
+          .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
+        if (Number(c) >= DAILY_CALL_LIMIT) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多发 ${DAILY_CALL_LIMIT} 条 Call` });
+        }
+        const [openSame] = await tx.select({ id: calls.id }).from(calls)
+          .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
+        if (openSame) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "该标的你已有未结算的 Call，结算后再发" });
+        }
+        const [result] = await tx.insert(calls).values({
+          userId: ctx.user.id,
+          tokenSymbol: symbol,
+          direction: input.direction,
+          horizonHours: input.horizonHours,
+          entryPrice: String(price),
+          note: input.note ? sanitizeInput(input.note, 280) : undefined,
+          createdYmd: ymd,
+          resolveAt,
+        });
+        return (result as any).insertId as number;
       });
-      return { callId: (result as any).insertId as number, entryPrice: price, resolveAt: resolveAt.toISOString() };
+      return { callId: insertId, entryPrice: price, resolveAt: resolveAt.toISOString() };
     }),
 
   // ─── 我的 Call 列表 ──────────────────────────────────────────────────────────

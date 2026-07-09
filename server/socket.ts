@@ -209,8 +209,8 @@ export function initSocketIO(httpServer: HttpServer) {
           .where(and(eq(groupMutes.groupId, data.groupId), eq(groupMutes.userId, senderIdNum),
             or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, new Date())))).limit(1);
         if (muted) { socket.emit("error", { message: "你已被禁言，无法发言" }); return; }
-        // 文本内容审核(涉黄涉赌等):违规抛出 → 落到下面 catch 被拒绝
-        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "group");
+        // 内容审核(涉黄涉赌等):基于 content 而非 messageType,防塞进 image/file 类型绕过;违规抛出→下面 catch 拒绝
+        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "group");
         const safeContent = sanitizeInput(data.content, 5000);
 
         // Save to database
@@ -278,7 +278,7 @@ export function initSocketIO(httpServer: HttpServer) {
         const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
         // 好友才能私信 + 拉黑校验(socket 之前完全绕过 → 可给拉黑自己/非好友的人发信);违规抛出 → 落到 catch 被拒绝
         await assertCanDM(db, senderIdNum, data.receiverId);
-        if ((data.messageType || "text") === "text") await enforceContent(db, senderIdNum, data.content, "dm");
+        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "dm"); // 基于 content 非 messageType,防绕过
         const safeContent = sanitizeInput(data.content, 5000);
         const [result] = await db.insert(messages).values({
           senderId: senderIdNum,
@@ -310,7 +310,8 @@ export function initSocketIO(httpServer: HttpServer) {
             sendPushToUser(data.receiverId, {
               title: `${userName} 发来消息`,
               body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
-              url: `/app/dm/${senderIdNum}`,
+              url: `/direct-message?userId=${senderIdNum}`, // RN 路由(原 /app/dm/ 是 web 路由,原生点开跳空白 Unmatched Route)
+
             }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
           }
         }

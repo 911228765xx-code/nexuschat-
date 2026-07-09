@@ -66,6 +66,7 @@ export const postsRouter = router({
           desc(sql`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
           desc(posts.isPinned),
           desc(posts.createdAt),
+          desc(posts.id), // 稳定 tie-breaker:多帖 createdAt 同一秒时,不加它跨页(不同 offset)顺序不稳→重复/静默跳过
         )
         .limit(limit + 1)
         .offset(offset);
@@ -262,35 +263,29 @@ export const postsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const existing = await db
-        .select()
-        .from(postLikes)
-        .where(and(eq(postLikes.postId, input.postId), eq(postLikes.userId, ctx.user.id)))
-        .limit(1);
+      // 事务内锁 post 行,串行化同一帖的并发点赞。原来"SELECT existing→INSERT+likeCount+1"无事务、
+      // post_likes 无唯一键:并发双请求各读到 existing 为空→各插一条 like 行、likeCount+2;之后取消赞
+      // DELETE 全部重复行但 likeCount 只 -1 → 计数与真实 like 数永久漂移多 1。
+      const result = await db.transaction(async (tx) => {
+        const [p] = await tx.select({ authorId: posts.authorId }).from(posts)
+          .where(eq(posts.id, input.postId)).for("update").limit(1);
+        if (!p) throw new Error("Post not found");
+        const existing = await tx.select({ id: postLikes.id }).from(postLikes)
+          .where(and(eq(postLikes.postId, input.postId), eq(postLikes.userId, ctx.user.id))).limit(1);
+        if (existing.length > 0) {
+          await tx.delete(postLikes).where(and(eq(postLikes.postId, input.postId), eq(postLikes.userId, ctx.user.id)));
+          await tx.update(posts).set({ likeCount: sql`GREATEST(likeCount - 1, 0)` }).where(eq(posts.id, input.postId));
+          return { liked: false as const, authorId: p.authorId };
+        }
+        await tx.insert(postLikes).values({ postId: input.postId, userId: ctx.user.id });
+        await tx.update(posts).set({ likeCount: sql`likeCount + 1` }).where(eq(posts.id, input.postId));
+        return { liked: true as const, authorId: p.authorId };
+      });
 
-      if (existing.length > 0) {
-        // Unlike
-        await db
-          .delete(postLikes)
-          .where(and(eq(postLikes.postId, input.postId), eq(postLikes.userId, ctx.user.id)));
-        await db
-          .update(posts)
-          .set({ likeCount: sql`GREATEST(likeCount - 1, 0)` })
-          .where(eq(posts.id, input.postId));
-        return { liked: false };
-      } else {
-        // Like
-        await db.insert(postLikes).values({ postId: input.postId, userId: ctx.user.id });
-        await db
-          .update(posts)
-          .set({ likeCount: sql`likeCount + 1` })
-          .where(eq(posts.id, input.postId));
-        // Notify post author
-        const [post] = await db
-          .select({ authorId: posts.authorId })
-          .from(posts)
-          .where(eq(posts.id, input.postId))
-          .limit(1);
+      if (!result.liked) return { liked: false };
+      {
+        const post = { authorId: result.authorId };
+        // Notify post author(事务外,自带去重,失败不影响点赞)
         if (post && post.authorId !== ctx.user.id) {
           // 防刷：同一人对同一帖只发一次奖/通知（取消再点赞不重复）。用历史 like 通知做去重。
           const [seen] = await db
@@ -440,7 +435,7 @@ export const postsRouter = router({
         .from(posts)
         .where(eq(posts.id, input.postId))
         .limit(1);
-      if (post) {
+      if (post && post.authorId !== ctx.user.id) { // 评论自己的帖子不该给自己发通知(点赞已有此判断,评论漏了)
         const [commenter] = await db
           .select({ name: users.name, avatar: users.avatar })
           .from(users)

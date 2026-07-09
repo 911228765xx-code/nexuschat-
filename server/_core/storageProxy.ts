@@ -53,10 +53,17 @@ export function registerStorageProxy(app: Express) {
         return;
       }
       res.status(upstream.status);
-      for (const h of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
+      for (const h of ["content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
         const v = upstream.headers.get(h);
         if (v) res.setHeader(h, v);
       }
+      // 防主域名存储型 XSS:上传不校验类型 + 原样内联回源,恶意 evil.html/SVG 会在与会话同源的主域名执行脚本、
+      // 带凭证打 /api/trpc/*。可执行类型强制下载为 octet-stream,并统一 nosniff 禁浏览器类型嗅探;安全媒体仍内联。
+      const ctype = upstream.headers.get("content-type") || "application/octet-stream";
+      const dangerous = /html|svg|xml|javascript|ecmascript/i.test(ctype);
+      res.setHeader("Content-Type", dangerous ? "application/octet-stream" : ctype);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (dangerous) res.setHeader("Content-Disposition", "attachment");
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       if (!upstream.body) { res.end(); return; }
       Readable.fromWeb(upstream.body as any).pipe(res);

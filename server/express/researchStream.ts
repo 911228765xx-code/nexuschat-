@@ -8,6 +8,7 @@
 import type { Request, Response } from "express";
 import { sdk } from "../_core/sdk";
 import { ENV } from "../_core/env";
+import { consumeUserAiBudget } from "../userAiBudget";
 
 // Rate limiting: 5 requests per 60 seconds per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -320,6 +321,12 @@ export async function handleResearchStream(req: Request, res: Response) {
   };
 
   try {
+    // 全局每日 AI 预算天花板(免费但防成本失控):达上限当天拒绝,不进行 LLM 调用
+    if (!consumeUserAiBudget()) {
+      sendEvent(JSON.stringify({ error: "AI 今日繁忙，请稍后再试" }));
+      res.end();
+      return;
+    }
     // Fetch all data in parallel
     const [token, market] = await Promise.all([
       fetchTokenData(tokenSymbol),

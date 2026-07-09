@@ -8,7 +8,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, users } from "../../drizzle/schema";
+import { icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, users, usdtDeposits } from "../../drizzle/schema";
 import { eq, and, desc, gt, asc, inArray, sql, ne } from "drizzle-orm";
 import { USDT_DEPOSIT_ADDRESS, USDT_CHAIN, grantNN } from "../token";
 import { sanitizeInput } from "../utils/sanitize";
@@ -248,6 +248,9 @@ export const icoRouter = router({
       // 同一链上 txHash 全局唯一:杜绝一笔转账填到多张订单各自确认 = 凭空多发认购代币
       const [dup] = await db.select({ id: icoOrders.id }).from(icoOrders).where(and(eq(icoOrders.txHash, txHash), ne(icoOrders.id, o.id))).limit(1);
       if (dup) throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已用于其它订单,请勿重复" });
+      // 跨路径去重(M1):同一链上 txHash 若已用于 Swap 钱包充值,禁止再拿来 ICO 认购,否则一笔钱两处入账(ICO 铸币 + 充值加余额)
+      const [depDup] = await db.select({ id: usdtDeposits.id }).from(usdtDeposits).where(eq(usdtDeposits.txHash, txHash)).limit(1);
+      if (depDup) throw new TRPCError({ code: "BAD_REQUEST", message: "该交易哈希已用于钱包充值,请勿重复" });
       try {
         await db.update(icoOrders).set({ txHash }).where(eq(icoOrders.id, input.orderId));
       } catch {

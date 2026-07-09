@@ -143,10 +143,13 @@ export const chatRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      await db.delete(messages).where(eq(messages.groupId, input.groupId));
-      await db.delete(groupMembers).where(eq(groupMembers.groupId, input.groupId));
-      await db.delete(groupAnnouncements).where(eq(groupAnnouncements.groupId, input.groupId));
-      await db.delete(chatGroups).where(eq(chatGroups.id, input.groupId));
+      // 4 条级联删除包进事务:原来非事务,中途失败会留孤儿(如消息删了但群还在,或群删了但成员残留)
+      await db.transaction(async (tx) => {
+        await tx.delete(messages).where(eq(messages.groupId, input.groupId));
+        await tx.delete(groupMembers).where(eq(groupMembers.groupId, input.groupId));
+        await tx.delete(groupAnnouncements).where(eq(groupAnnouncements.groupId, input.groupId));
+        await tx.delete(chatGroups).where(eq(chatGroups.id, input.groupId));
+      });
       return { success: true };
     }),
 
@@ -342,8 +345,10 @@ export const chatRouter = router({
         const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq(messages.id, input.replyToId)).limit(1);
         if (!rep || rep.groupId !== input.groupId) throw new TRPCError({ code: "BAD_REQUEST", message: "引用的消息无效" });
       }
-      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
-      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "group");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号。
+      // 基于 content 本身而非 messageType:否则把违禁文本塞进 image/file/voice 类型的 content 即可绕过全部审核。
+      const hasTextContent = !!input.content && input.content.trim().length > 0;
+      if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "group");
       const expiresAt = input.ttlSeconds && input.ttlSeconds > 0 ? new Date(Date.now() + input.ttlSeconds * 1000) : null;
       const [result] = await db.insert(messages).values({
         groupId: input.groupId,
@@ -379,12 +384,12 @@ export const chatRouter = router({
           createdAt: new Date().toISOString(),
         });
       } catch { /* 广播失败不影响落库 */ }
+      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）：任何带非空 content 的消息都过,与类型解耦防绕过
+      if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
           .catch((err) => logger.warn({ err }, "manage bot failed"));
-        // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
-        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
         // AC 产出：首次发消息里程碑
         void awardTaskEvent(db, ctx.user.id, "first_message");
       }
@@ -407,8 +412,9 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await assertCanDM(db, ctx.user.id, input.receiverId); // 仅好友可私信 + 拉黑校验
-      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号
-      if (input.messageType === "text") await enforceContent(db, ctx.user.id, input.content, "dm");
+      // 内容审核：违禁(毒品/赌博/贩卖)内容拦截 + 累犯封号。基于 content 而非 messageType,防塞进媒体类型绕过。
+      const hasTextContent = !!input.content && input.content.trim().length > 0;
+      if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "dm");
       // 引用鉴权:被引用消息必须属于本私信会话(双方之间),防止引用别处消息带出无权内容
       if (input.replyToId) {
         const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId })
@@ -444,12 +450,10 @@ export const chatRouter = router({
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
-      // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）
-      if (input.messageType === "text") {
-        void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-        // AC 产出：首次发消息里程碑
-        void awardTaskEvent(db, ctx.user.id, "first_message");
-      }
+      // 异步 AI 内容审核:任何带非空 content 的消息都过(与类型解耦防绕过)
+      if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
+      // AC 产出：首次发消息里程碑(文本语义,保持原样)
+      if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
       return { messageId };
     }),
 
@@ -829,6 +833,7 @@ export const chatRouter = router({
           isPublic: chatGroups.isPublic, category: chatGroups.category,
           isTokenGated: chatGroups.isTokenGated, tokenGateAmount: chatGroups.tokenGateAmount,
           joinApproval: chatGroups.joinApproval,
+          creatorId: chatGroups.creatorId, // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
         })
         .from(chatGroups)
         .where(eq(chatGroups.id, input.groupId))
@@ -1199,10 +1204,10 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // Verify membership
+      // 只有 owner/admin 可创建邀请链接(与客户端入口一致):否则普通成员能造永久链接把外部人拉进私密群,绕过群主管控
       const member = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
-      if (!member[0]) throw new Error("Not a member");
+      if (!member[0] || (member[0].role !== "owner" && member[0].role !== "admin")) throw new Error("只有群主或管理员可创建邀请链接");
       const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
       const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 3600_000) : undefined;
       await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
@@ -1391,6 +1396,8 @@ export const chatRouter = router({
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId))).limit(1);
       if (!target[0]) throw new Error("User not in group");
       if (target[0].role === "owner") throw new Error("Cannot kick the owner");
+      // admin 只能踢普通成员;踢其他 admin 需 owner(防单个失陷/恶意 admin 踢光其他管理员独占群)
+      if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("管理员不能移除其他管理员");
       await db.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId)));
       await db.update(chatGroups).set({ memberCount: sql`GREATEST(memberCount - 1, 0)` }).where(eq(chatGroups.id, input.groupId));
       return { ok: true };
@@ -1404,6 +1411,12 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // 校验 target 角色(kickMember 有、muteMember 之前漏了):不能禁言群主;admin 不能禁言其他 admin
+      const mt = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId))).limit(1);
+      if (!mt[0]) throw new Error("User not in group");
+      if (mt[0].role === "owner") throw new Error("不能禁言群主");
+      if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("管理员不能禁言其他管理员");
       const expiresAt = new Date(Date.now() + input.durationHours * 3600_000);
       // Upsert mute
       const existing = await db.select({ id: groupMutes.id }).from(groupMutes)
@@ -1436,12 +1449,17 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
+      // 转给自己会让群变无主:set owner(自己,无变化)→ set member(自己自降)→ 0 个 owner,群永久无人可管
+      if (input.newOwnerId === ctx.user.id) throw new Error("不能把群主转让给自己");
       // The new owner must already be a member, otherwise the group would be left with no owner.
       const target = await db.select({ id: groupMembers.id }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId))).limit(1);
       if (!target[0]) throw new Error("New owner must be a member of the group");
-      await db.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
-      await db.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      // 两条 update 包进事务:否则部分失败会产生"双 owner"或"无 owner"
+      await db.transaction(async (tx) => {
+        await tx.update(groupMembers).set({ role: "owner" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.newOwnerId)));
+        await tx.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      });
       return { ok: true };
     }),
 
@@ -1514,6 +1532,10 @@ export const chatRouter = router({
       const actor = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
+      // isPublic/joinApproval 是 owner 级设置——admin 把私密群改公开会让全部历史消息对任意人可浏览(getMessages 对公开群放开)。admin 仅可改 name/desc/avatar/forbidAddFriend。
+      if (actor[0].role !== "owner" && (input.isPublic !== undefined || input.joinApproval !== undefined)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅群主可修改群的公开/入群审批设置" });
+      }
       // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
       if (input.isPublic === true) {
         const benefits = await getBenefits(db, ctx.user.id);

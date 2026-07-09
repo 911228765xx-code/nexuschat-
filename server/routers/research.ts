@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { researchReports, priceAlerts, posts, users } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
+import { consumeUserAiBudget } from "../userAiBudget";
 
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { sanitizeInput } from "../utils/sanitize";
@@ -296,6 +297,8 @@ export const researchRouter = router({
         ? "你是一位经验丰富的加密货币交易员，擅长快速研判市场机会。你的分析风格直接、果断，不回避给出明确方向。回复使用中文。"
         : "你是一位顶级加密货币研究机构的首席分析师，擅长多维度深度分析。你的报告以数据驱动、逻辑严密、观点鲜明著称。回复使用中文。";
 
+      // 全局每日 AI 预算天花板(免费但防成本失控):达上限当天拒绝,不烧大模型
+      if (!consumeUserAiBudget()) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "AI 今日繁忙，请稍后再试" });
       const llmResponse = await invokeLLM({
         messages: [
           { role: "system" as const, content: systemMessage },
@@ -481,6 +484,10 @@ export const researchRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
+      // 只返回「已分享到广场」(有 post 引用该 reportId)的报告。原来 publicProcedure 按自增 reportId
+      // 直接返回任意报告全文 → 任何人(无需登录)遍历 id 即可拖走全站私有研报。收口为仅公开分享的报告。
+      const [shared] = await db.select({ id: posts.id }).from(posts).where(eq(posts.reportId, input.reportId)).limit(1);
+      if (!shared) return null;
       const [report] = await db
         .select({
           id: researchReports.id,

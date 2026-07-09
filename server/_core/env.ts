@@ -27,3 +27,9 @@ export const ENV = {
    */
   publicOrigin: (process.env.PUBLIC_ORIGIN ?? "https://nexuschat.best").replace(/\/+$/, ""),
 };
+
+// 安全断言:JWT_SECRET 是整个会话签名的根密钥。原来缺失时静默退化为空 HMAC key → 任何人可用空密钥
+// 自签 {openId: 任意/admin/ownerOpenId} 会话冒充任意用户、接管后台。生产必须配置且足够长,否则拒绝启动。
+if (ENV.isProduction && (!ENV.cookieSecret || ENV.cookieSecret.length < 16)) {
+  throw new Error("[FATAL] JWT_SECRET 未配置或过短(需 ≥16 字节):会话签名密钥缺失会导致会话可被伪造,拒绝启动。");
+}

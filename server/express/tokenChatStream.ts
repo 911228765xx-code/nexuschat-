@@ -8,6 +8,7 @@
 import type { Request, Response } from "express";
 import { sdk } from "../_core/sdk";
 import { ENV } from "../_core/env";
+import { consumeUserAiBudget } from "../userAiBudget";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 
 // Rate limiting: 10 requests per 60 seconds per user
@@ -112,6 +113,12 @@ export async function handleTokenChatStream(req: Request, res: Response) {
   };
 
   try {
+    // 全局每日 AI 预算天花板(免费但防成本失控):达上限当天拒绝,不进行 LLM 调用
+    if (!consumeUserAiBudget()) {
+      sendEvent(JSON.stringify({ error: "AI 今日繁忙，请稍后再试" }));
+      res.end();
+      return;
+    }
     // Fetch token context
     const tokenContext = await fetchTokenContext(token);
 
