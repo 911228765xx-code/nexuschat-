@@ -40,6 +40,14 @@ export default function DownloadPage() {
   const [copied, setCopied] = useState(false);
   const [guideOpen, setGuideOpen] = useState(inAppBrowser); // 微信/QQ 打开即引导
   const [dlProgress, setDlProgress] = useState<number | null>(null); // 下载进度 0..1;null=未在下载
+  // 邀请短链 /i/CODE 会 302 到 /download?ref=CODE。旧版本这里直接丢了 ref → 装完 App 不知道填啥码,
+  // 推荐关系断掉("邀请链接无效")。这里接住并展示,引导装后手动填(sideload 无 Play 安装来源,web/native 存储不通,展示+手填是可靠路径)。
+  const [inviteRef] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    const r = new URLSearchParams(window.location.search).get("ref") || "";
+    return r.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 30);
+  });
+  const [refCopied, setRefCopied] = useState(false);
 
   useEffect(() => {
     // 公开端点,免登录:拿最新版本号 + 更新日志(与 App 内检查更新同一数据源)
@@ -63,6 +71,14 @@ export default function DownloadPage() {
       const el = document.getElementById("apk-link-input") as HTMLInputElement | null;
       el?.select();
     }
+  }
+
+  async function copyRef() {
+    try {
+      await navigator.clipboard.writeText(inviteRef);
+      setRefCopied(true);
+      setTimeout(() => setRefCopied(false), 1800);
+    } catch { /* 剪贴板不可用则忽略,用户可手抄横幅上的码 */ }
   }
 
   async function onDownloadClick(e: React.MouseEvent) {
@@ -191,6 +207,29 @@ export default function DownloadPage() {
           </p>
         </motion.div>
       </section>
+
+      {/* 邀请码横幅:从 /i/CODE 短链进来时展示邀请人的码,引导装后手动填(否则 ref 丢失=邀请无效) */}
+      {inviteRef && (
+        <section className="px-4 -mt-6 mb-2">
+          <div className="max-w-md mx-auto rounded-2xl border border-[#a855f7]/30 bg-[#a855f7]/10 p-4 text-center">
+            <p className="text-sm text-muted-foreground mb-3">
+              🎁 好友邀请你加入！安装后在 App「我的 → 邀请好友」填入下方邀请码，双方各得 AC 奖励
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-2xl font-black tracking-[0.2em] bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">
+                {inviteRef}
+              </span>
+              <button
+                onClick={copyRef}
+                className="flex items-center gap-1 rounded-lg bg-white/10 border border-white/20 px-3 py-1.5 text-sm hover:bg-white/20 transition-colors"
+              >
+                {refCopied ? <Check size={14} /> : <Copy size={14} />}
+                {refCopied ? "已复制" : "复制"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Platform Tabs */}
       <section className="max-w-4xl mx-auto px-4 pb-20">
