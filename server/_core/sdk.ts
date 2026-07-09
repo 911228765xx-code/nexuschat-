@@ -258,9 +258,14 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
+    // Regular authentication flow.
+    // 优先读显式头 x-app-session:RN(OkHttp)登录时会把服务器 Set-Cookie 存进自带 cookie jar,
+    // 多账号切换时 jar 里残留的上次登录 cookie 会盖过手动设的 Cookie 头,导致切号后请求仍是旧账号
+    // (getMe 返回错账号 → 前端判定"登录已过期",切号失效)。RN 改用不进 jar 的自定义头传 token,
+    // 服务器优先认它;无该头时回退 cookie(web 端不受影响,向后兼容)。
+    const headerToken = typeof req.headers["x-app-session"] === "string" ? (req.headers["x-app-session"] as string).trim() : "";
     const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
+    const sessionCookie = headerToken || cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
