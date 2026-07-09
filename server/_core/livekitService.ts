@@ -54,6 +54,11 @@ export async function removeParticipant(room: string, identity: string): Promise
   await callRoomService("RemoveParticipant", room, { room, identity });
 }
 
+/** 强制删除 LiveKit 房间(房主结束语音房时清场):断开所有参与者,残留/断线重连的 token 失去落点。 */
+export async function deleteRoom(room: string): Promise<void> {
+  await callRoomService("DeleteRoom", room, { room });
+}
+
 /** 房间真实在线人数（LiveKit ListParticipants）。用于列表对账 DB 计数漂移；失败/超时返回 null。 */
 export async function listParticipantCount(room: string): Promise<number | null> {
   try {

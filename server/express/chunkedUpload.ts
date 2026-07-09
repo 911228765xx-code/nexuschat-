@@ -53,6 +53,11 @@ async function authUser(req: Request, res: Response): Promise<{ id: number } | n
 export async function handleChunkStart(req: Request, res: Response): Promise<void> {
   const user = await authUser(req, res);
   if (!user) return;
+  // DoS 护栏:限制单用户并发上传会话数。原来无上限,可狂刷 /start 生成海量 0 字节临时文件 + 撑大内存 sessions Map,
+  // 或并发开 N 个会话各写到接近 HARD_MAX(N×500MB)灌满 os.tmpdir()。
+  let userSessions = 0;
+  for (const s of Array.from(sessions.values())) if (s.userId === user.id) userSessions++;
+  if (userSessions >= 3) { res.status(429).json({ error: "并发上传过多，请等当前上传完成再试" }); return; }
   const kind: Kind = req.body?.kind === "file" ? "file" : "video";
   const mime = typeof req.body?.mime === "string" ? req.body.mime.split(";")[0] : (kind === "video" ? "video/mp4" : "application/octet-stream");
   const name = typeof req.body?.name === "string" ? req.body.name.slice(-100) : "file";

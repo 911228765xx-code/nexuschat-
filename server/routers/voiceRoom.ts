@@ -15,7 +15,8 @@ import { getBenefits } from "../membership";
 import { spendNN, grantNN } from "../token";
 import { rateLimitWrite } from "../rateLimit";
 import { sanitizeInput } from "../utils/sanitize";
-import { setParticipantCanPublish, listParticipantCount } from "../_core/livekitService";
+import logger from "../utils/logger";
+import { setParticipantCanPublish, listParticipantCount, deleteRoom } from "../_core/livekitService";
 
 const CATEGORIES = ["trade", "study", "project", "chat"] as const;
 const VOICE_ROOM_COST = 10; // 超出会员免费额度后，单次开房消耗 AI
@@ -271,6 +272,8 @@ export const voiceRoomRouter = router({
       if (!room) return { ok: true };
       if (room.hostUserId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只有房主可以结束语音房" });
       await db.update(voiceRooms).set({ status: "ended", endedAt: new Date() }).where(eq(voiceRooms.id, rid));
+      // 强制清场:不依赖客户端自觉退出。否则残留/断线重连的 token 在 emptyTimeout 前仍能通话(结束不彻底)。
+      void deleteRoom(roomName(room.roomId)).catch((err) => logger.warn({ err }, "endRoom: LiveKit DeleteRoom 失败"));
       return { ok: true };
     }),
 

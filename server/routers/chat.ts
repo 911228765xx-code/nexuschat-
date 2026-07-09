@@ -143,10 +143,13 @@ export const chatRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      await db.delete(messages).where(eq(messages.groupId, input.groupId));
-      await db.delete(groupMembers).where(eq(groupMembers.groupId, input.groupId));
-      await db.delete(groupAnnouncements).where(eq(groupAnnouncements.groupId, input.groupId));
-      await db.delete(chatGroups).where(eq(chatGroups.id, input.groupId));
+      // 4 条级联删除包进事务:原来非事务,中途失败会留孤儿(如消息删了但群还在,或群删了但成员残留)
+      await db.transaction(async (tx) => {
+        await tx.delete(messages).where(eq(messages.groupId, input.groupId));
+        await tx.delete(groupMembers).where(eq(groupMembers.groupId, input.groupId));
+        await tx.delete(groupAnnouncements).where(eq(groupAnnouncements.groupId, input.groupId));
+        await tx.delete(chatGroups).where(eq(chatGroups.id, input.groupId));
+      });
       return { success: true };
     }),
 
