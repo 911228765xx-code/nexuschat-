@@ -617,6 +617,8 @@ export const userSettings = mysqlTable(
     showNFTs: boolean("showNFTs").default(true).notNull(),
     readReceipts: boolean("readReceipts").default(true).notNull(),
     profileVisible: boolean("profileVisible").default(true).notNull(),
+    // 仅好友可私信我(默认关=任意人可私信,兼顾拉新;开=陌生人私信被拒)。线上列由 schemaPatches 启动时幂等补齐
+    dmOnlyFriends: boolean("dmOnlyFriends").default(false).notNull(),
     twoFAEnabled: boolean("twoFAEnabled").default(false).notNull(),
     biometricEnabled: boolean("biometricEnabled").default(false).notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

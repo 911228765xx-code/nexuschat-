@@ -16,6 +16,7 @@ import { startRankAggregation } from "../rankEngine";
 import { startCallResolver } from "../callResolver";
 import { startPartnerSettlement } from "../partner";
 import { startIcoRewardScheduler } from "../icoRewardScheduler";
+import { applySchemaPatches } from "../schemaPatches";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleApkDownload } from "../express/apkDownload";
 import { handleVideoUpload } from "../express/videoUpload";
@@ -129,6 +130,8 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 
+  // 幂等 schema 补丁(平台 Publish 不跑迁移,新增列在这补;失败不阻断)
+  void applySchemaPatches();
   // Start background price alert checker (runs every 2 min)
   startPriceAlertChecker();
   // Start Bot scheduler (posts at 09:00 and 21:00 daily)
