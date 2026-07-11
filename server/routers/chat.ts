@@ -16,6 +16,7 @@ import { nnNodeOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
 import { awardReferrerMilestone } from "../referralRewards";
 import { awardTaskEvent } from "./user";
+import { createNotification } from "./notificationsRouter";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 import { assertCanDM } from "../utils/relations";
 import { BOT_PERSONAS } from "../botAutoReply";
@@ -329,6 +330,7 @@ export const chatRouter = router({
       durationSeconds: z.number().int().min(0).max(600).optional(),
       replyToId: z.number().int().optional(),
       ttlSeconds: z.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
+      mentionedUserIds: z.array(z.number().int()).max(20).optional(), // 被 @ 的成员 id,后端据此发提及通知
     }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
@@ -386,6 +388,26 @@ export const chatRouter = router({
       } catch { /* 广播失败不影响落库 */ }
       // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）：任何带非空 content 的消息都过,与类型解耦防绕过
       if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
+      // @提及:给被 @ 的群成员发通知(通知中心+离线推送)。校验确为本群成员、去重、排除自己;不阻塞发送
+      if (input.mentionedUserIds?.length) {
+        const targets = Array.from(new Set(input.mentionedUserIds)).filter((id) => id !== ctx.user.id).slice(0, 20);
+        if (targets.length) {
+          void db.select({ userId: groupMembers.userId }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, input.groupId), inArray(groupMembers.userId, targets)))
+            .then((rows) => {
+              const fromName = ctx.user.name ?? ctx.user.username ?? `用户 #${ctx.user.id}`;
+              const preview = sanitizeInput(input.content, 120);
+              for (const r of rows) {
+                void createNotification({
+                  db, targetUserId: r.userId, fromUserId: ctx.user.id,
+                  fromUserName: fromName, fromUserAvatar: (ctx.user as any).avatar ?? "",
+                  type: "mention", content: preview,
+                });
+              }
+            })
+            .catch((err) => logger.warn({ err }, "mention notify failed"));
+        }
+      }
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
         void runManageBot(db, input.groupId, input.content)
@@ -847,6 +869,21 @@ export const chatRouter = router({
         .where(eq(chatGroups.id, input.groupId))
         .limit(1);
       return rows[0] ?? null;
+    }),
+
+  // 我在某群的禁言态:客户端进群据此禁用输入框 + 顶部横幅提示,而非打字发出去才被后端拒
+  getMyMuteState: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { muted: false, until: null as Date | null };
+      const [m] = await db.select({ expiresAt: groupMutes.expiresAt }).from(groupMutes)
+        .where(and(
+          eq(groupMutes.groupId, input.groupId),
+          eq(groupMutes.userId, ctx.user.id),
+          or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, new Date())),
+        )).limit(1);
+      return { muted: !!m, until: m?.expiresAt ?? null };
     }),
 
   // Get user info by userId (for DM partner display)

@@ -3915,11 +3915,11 @@ var walletRouter = router({
 });
 
 // server/routers/chat.ts
-import { z as z5 } from "zod";
+import { z as z6 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq15, and as and11, desc as desc6, lt as lt2, sql as sql8, or as or5, gt as gt4, like, inArray as inArray6, isNull as isNull4 } from "drizzle-orm";
+import { eq as eq16, and as and12, desc as desc7, lt as lt2, sql as sql9, or as or5, gt as gt4, like, inArray as inArray6, isNull as isNull4 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 // server/socket.ts
@@ -5260,27 +5260,153 @@ init_logger();
 init_schema();
 init_schema();
 
+// server/routers/notificationsRouter.ts
+import { z as z5 } from "zod";
+init_db();
+init_schema();
+import { eq as eq14, and as and10, desc as desc6, sql as sql8 } from "drizzle-orm";
+var notificationsRouter = router({
+  // ─── Get notifications for current user ─────────────────────────────────────
+  list: protectedProcedure.input(
+    z5.object({
+      limit: z5.number().min(1).max(50).default(20),
+      unreadOnly: z5.boolean().default(false)
+    }).optional()
+  ).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return { notifications: [], unreadCount: 0 };
+    const limit = input?.limit ?? 20;
+    const unreadOnly = input?.unreadOnly ?? false;
+    const conditions = [eq14(notifications.userId, ctx.user.id)];
+    if (unreadOnly) {
+      conditions.push(eq14(notifications.isRead, false));
+    }
+    const rows = await db.select().from(notifications).where(and10(...conditions)).orderBy(desc6(notifications.createdAt)).limit(limit);
+    const [unreadRow] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and10(eq14(notifications.userId, ctx.user.id), eq14(notifications.isRead, false)));
+    return {
+      notifications: rows,
+      unreadCount: Number(unreadRow?.count ?? 0)
+    };
+  }),
+  // ─── Get unread count only (for badge) ──────────────────────────────────────
+  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { count: 0 };
+    const [row] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and10(eq14(notifications.userId, ctx.user.id), eq14(notifications.isRead, false)));
+    return { count: Number(row?.count ?? 0) };
+  }),
+  // ─── Mark notification(s) as read ───────────────────────────────────────────
+  markRead: protectedProcedure.input(
+    z5.object({
+      notificationId: z5.number().optional()
+      // if omitted, mark all as read
+    }).optional()
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (input?.notificationId) {
+      await db.update(notifications).set({ isRead: true }).where(
+        and10(
+          eq14(notifications.id, input.notificationId),
+          eq14(notifications.userId, ctx.user.id)
+        )
+      );
+    } else {
+      await db.update(notifications).set({ isRead: true }).where(eq14(notifications.userId, ctx.user.id));
+    }
+    return { success: true };
+  }),
+  // ─── Create notification (internal helper, called by other routers) ─────────
+  // This is a protected procedure so only authenticated users can trigger it
+  // In practice, call createNotification() helper from other routers
+  create: protectedProcedure.input(
+    z5.object({
+      targetUserId: z5.number(),
+      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+      // system 类通知只能由服务端 createNotification() 内部发起。
+      type: z5.enum(["like", "comment", "follow", "mention"]),
+      content: z5.string().max(500),
+      postId: z5.number().optional()
+    })
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    if (input.targetUserId === ctx.user.id) return { success: true };
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.insert(notifications).values({
+      userId: input.targetUserId,
+      type: input.type,
+      fromUserId: ctx.user.id,
+      fromUserName: ctx.user.name ?? "Anonymous",
+      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
+      postId: input.postId,
+      content: sanitizeInput(input.content, 500),
+      // 之前未净化,存原始 markup 再回显
+      isRead: false
+    });
+    return { success: true };
+  }),
+  // ─── Delete a notification ───────────────────────────────────────────────────
+  delete: protectedProcedure.input(z5.object({ notificationId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(notifications).where(
+      and10(
+        eq14(notifications.id, input.notificationId),
+        eq14(notifications.userId, ctx.user.id)
+      )
+    );
+    return { success: true };
+  })
+});
+async function createNotification(params) {
+  if (!params.db) return;
+  if (params.targetUserId === params.fromUserId) return;
+  await params.db.insert(notifications).values({
+    userId: params.targetUserId,
+    type: params.type,
+    fromUserId: params.fromUserId,
+    fromUserName: params.fromUserName,
+    fromUserAvatar: params.fromUserAvatar,
+    postId: params.postId,
+    content: params.content,
+    isRead: false
+  });
+  const titleMap = {
+    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
+    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
+    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
+    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
+    system: "AIChat \u901A\u77E5"
+  };
+  void sendPushToUser(params.targetUserId, {
+    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
+    body: params.content,
+    url: "/notifications"
+  }).catch(() => {
+  });
+}
+
 // server/utils/relations.ts
 init_schema();
-import { and as and10, eq as eq14, or as or4 } from "drizzle-orm";
+import { and as and11, eq as eq15, or as or4 } from "drizzle-orm";
 import { TRPCError as TRPCError7 } from "@trpc/server";
 async function areFriends(db, a, b) {
   if (a === b) return true;
-  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and10(eq14(friendRequests.status, "accepted"), or4(
-    and10(eq14(friendRequests.senderId, a), eq14(friendRequests.receiverId, b)),
-    and10(eq14(friendRequests.senderId, b), eq14(friendRequests.receiverId, a))
+  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and11(eq15(friendRequests.status, "accepted"), or4(
+    and11(eq15(friendRequests.senderId, a), eq15(friendRequests.receiverId, b)),
+    and11(eq15(friendRequests.senderId, b), eq15(friendRequests.receiverId, a))
   ))).limit(1);
   return !!r;
 }
 async function isBlockedEither(db, a, b) {
   const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(or4(
-    and10(eq14(userBlocklist.blockerId, a), eq14(userBlocklist.blockedId, b)),
-    and10(eq14(userBlocklist.blockerId, b), eq14(userBlocklist.blockedId, a))
+    and11(eq15(userBlocklist.blockerId, a), eq15(userBlocklist.blockedId, b)),
+    and11(eq15(userBlocklist.blockerId, b), eq15(userBlocklist.blockedId, a))
   )).limit(1);
   return !!r;
 }
 async function hasBlocked(db, blocker, blocked) {
-  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and10(eq14(userBlocklist.blockerId, blocker), eq14(userBlocklist.blockedId, blocked))).limit(1);
+  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and11(eq15(userBlocklist.blockerId, blocker), eq15(userBlocklist.blockedId, blocked))).limit(1);
   return !!r;
 }
 async function assertCanDM(db, from, to) {
@@ -5291,7 +5417,7 @@ async function assertCanDM(db, from, to) {
 
 // server/routers/chat.ts
 async function assertGroupMember(db, groupId, userId) {
-  const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, groupId), eq15(groupMembers.userId, userId))).limit(1);
+  const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, groupId), eq16(groupMembers.userId, userId))).limit(1);
   if (!m) throw new TRPCError8({ code: "FORBIDDEN", message: "Not a member of this group" });
 }
 async function filterReadableMessageIds(db, messageIds, userId) {
@@ -5301,7 +5427,7 @@ async function filterReadableMessageIds(db, messageIds, userId) {
   const groupIds = Array.from(new Set(msgs.map((m) => m.groupId).filter((g) => g != null)));
   let memberGroupIds = /* @__PURE__ */ new Set();
   if (groupIds.length > 0) {
-    const memberships = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(and11(eq15(groupMembers.userId, userId), inArray6(groupMembers.groupId, groupIds)));
+    const memberships = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(and12(eq16(groupMembers.userId, userId), inArray6(groupMembers.groupId, groupIds)));
     memberGroupIds = new Set(memberships.map((r) => r.groupId));
   }
   return msgs.filter(
@@ -5309,30 +5435,30 @@ async function filterReadableMessageIds(db, messageIds, userId) {
   ).map((m) => m.id);
 }
 async function getClearedBeforeId(db, userId, convKey) {
-  const [p] = await db.select({ c: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(and11(eq15(conversationPrefs.userId, userId), eq15(conversationPrefs.convKey, convKey))).limit(1);
+  const [p] = await db.select({ c: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(and12(eq16(conversationPrefs.userId, userId), eq16(conversationPrefs.convKey, convKey))).limit(1);
   return p?.c ?? 0;
 }
 async function spendNP(db, userId, cost) {
   if (cost <= 0) return true;
-  const res = await db.update(users).set({ npPoints: sql8`${users.npPoints} - ${cost}` }).where(and11(eq15(users.id, userId), sql8`${users.npPoints} >= ${cost}`));
+  const res = await db.update(users).set({ npPoints: sql9`${users.npPoints} - ${cost}` }).where(and12(eq16(users.id, userId), sql9`${users.npPoints} >= ${cost}`));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
   return affected2 > 0;
 }
 var chatRouter = router({
   // List public groups
   listGroups: publicProcedure.input(
-    z5.object({
-      limit: z5.number().min(1).max(50).default(20),
-      offset: z5.number().min(0).default(0),
-      category: z5.string().optional(),
-      search: z5.string().max(50).optional()
+    z6.object({
+      limit: z6.number().min(1).max(50).default(20),
+      offset: z6.number().min(0).default(0),
+      category: z6.string().optional(),
+      search: z6.string().max(50).optional()
     }).optional()
   ).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const conditions = [eq15(chatGroups.isPublic, true)];
+    const conditions = [eq16(chatGroups.isPublic, true)];
     if (input?.category && input.category !== "all") {
-      conditions.push(eq15(chatGroups.category, input.category));
+      conditions.push(eq16(chatGroups.category, input.category));
     }
     const q = input?.search?.trim();
     if (q) {
@@ -5340,43 +5466,43 @@ var chatRouter = router({
       const match = or5(like(chatGroups.name, term), like(chatGroups.description, term));
       if (match) conditions.push(match);
     }
-    return db.select().from(chatGroups).where(and11(...conditions)).orderBy(desc6(chatGroups.memberCount)).limit(input?.limit ?? 20).offset(input?.offset ?? 0);
+    return db.select().from(chatGroups).where(and12(...conditions)).orderBy(desc7(chatGroups.memberCount)).limit(input?.limit ?? 20).offset(input?.offset ?? 0);
   }),
   // ─── 管理员：列出所有群（含私有），用于平台管理 ─────────────────────────
-  adminListGroups: adminProcedure.input(z5.object({ limit: z5.number().min(1).max(50).default(30), offset: z5.number().min(0).default(0), search: z5.string().max(50).optional() }).optional()).query(async ({ input }) => {
+  adminListGroups: adminProcedure.input(z6.object({ limit: z6.number().min(1).max(50).default(30), offset: z6.number().min(0).default(0), search: z6.string().max(50).optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const conds = [];
     const q = input?.search?.trim();
     if (q) conds.push(like(chatGroups.name, `%${q}%`));
-    return db.select({ id: chatGroups.id, name: chatGroups.name, memberCount: chatGroups.memberCount, isPublic: chatGroups.isPublic, category: chatGroups.category, creatorId: chatGroups.creatorId, createdAt: chatGroups.createdAt }).from(chatGroups).where(conds.length ? and11(...conds) : void 0).orderBy(desc6(chatGroups.createdAt)).limit(input?.limit ?? 30).offset(input?.offset ?? 0);
+    return db.select({ id: chatGroups.id, name: chatGroups.name, memberCount: chatGroups.memberCount, isPublic: chatGroups.isPublic, category: chatGroups.category, creatorId: chatGroups.creatorId, createdAt: chatGroups.createdAt }).from(chatGroups).where(conds.length ? and12(...conds) : void 0).orderBy(desc7(chatGroups.createdAt)).limit(input?.limit ?? 30).offset(input?.offset ?? 0);
   }),
   // ─── 管理员：删除群（连带成员/消息/公告）─────────────────────────────
-  adminDeleteGroup: adminProcedure.input(z5.object({ groupId: z5.number() })).mutation(async ({ input }) => {
+  adminDeleteGroup: adminProcedure.input(z6.object({ groupId: z6.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     await db.transaction(async (tx) => {
-      await tx.delete(messages).where(eq15(messages.groupId, input.groupId));
-      await tx.delete(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
-      await tx.delete(groupAnnouncements).where(eq15(groupAnnouncements.groupId, input.groupId));
-      await tx.delete(chatGroups).where(eq15(chatGroups.id, input.groupId));
+      await tx.delete(messages).where(eq16(messages.groupId, input.groupId));
+      await tx.delete(groupMembers).where(eq16(groupMembers.groupId, input.groupId));
+      await tx.delete(groupAnnouncements).where(eq16(groupAnnouncements.groupId, input.groupId));
+      await tx.delete(chatGroups).where(eq16(chatGroups.id, input.groupId));
     });
     return { success: true };
   }),
   // Create a group
-  createGroup: protectedProcedure.input(z5.object({
-    name: z5.string().min(2).max(100),
-    description: z5.string().max(500).optional(),
-    isPublic: z5.boolean().default(true),
-    isTokenGated: z5.boolean().default(false),
-    tokenGateAmount: z5.string().optional(),
-    tokenGateContract: z5.string().optional(),
-    category: z5.string().max(30).optional().default("community")
+  createGroup: protectedProcedure.input(z6.object({
+    name: z6.string().min(2).max(100),
+    description: z6.string().max(500).optional(),
+    isPublic: z6.boolean().default(true),
+    isTokenGated: z6.boolean().default(false),
+    tokenGateAmount: z6.string().optional(),
+    tokenGateContract: z6.string().optional(),
+    category: z6.string().max(30).optional().default("community")
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const benefits = await getBenefits(db, ctx.user.id);
-    const [owned] = await db.select({ c: sql8`COUNT(*)` }).from(chatGroups).where(eq15(chatGroups.creatorId, ctx.user.id));
+    const [owned] = await db.select({ c: sql9`COUNT(*)` }).from(chatGroups).where(eq16(chatGroups.creatorId, ctx.user.id));
     if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
       throw new TRPCError8({ code: "FORBIDDEN", message: `\u5F53\u524D\u4F1A\u5458\u6700\u591A\u53EF\u521B\u5EFA ${benefits.maxGroups} \u4E2A\u7FA4\uFF0C\u5347\u7EA7\u4F1A\u5458\u53EF\u63D0\u5347\u4E0A\u9650` });
     }
@@ -5405,12 +5531,12 @@ var chatRouter = router({
     return { groupId };
   }),
   // Join a group
-  joinGroup: protectedProcedure.input(z5.object({ groupId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  joinGroup: protectedProcedure.input(z6.object({ groupId: z6.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const existing = await db.select().from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (existing.length > 0) return { success: true, alreadyMember: true };
-    const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, isPublic: chatGroups.isPublic }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
+    const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, isPublic: chatGroups.isPublic }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
     if (grp && !grp.isPublic) {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u8BE5\u7FA4\u4E3A\u79C1\u5BC6\u7FA4\uFF0C\u9700\u901A\u8FC7\u7FA4\u6210\u5458\u9080\u8BF7\u6216\u4E8C\u7EF4\u7801\u52A0\u5165" });
     }
@@ -5418,7 +5544,7 @@ var chatRouter = router({
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
     }
     if (grp?.joinApproval) {
-      const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and11(eq15(groupJoinRequests.groupId, input.groupId), eq15(groupJoinRequests.userId, ctx.user.id), eq15(groupJoinRequests.status, "pending"))).limit(1);
+      const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and12(eq16(groupJoinRequests.groupId, input.groupId), eq16(groupJoinRequests.userId, ctx.user.id), eq16(groupJoinRequests.status, "pending"))).limit(1);
       if (pending.length === 0) {
         await db.insert(groupJoinRequests).values({ groupId: input.groupId, userId: ctx.user.id });
       }
@@ -5430,27 +5556,27 @@ var chatRouter = router({
       role: "member"
     });
     await db.update(chatGroups).set({
-      memberCount: sql8`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
-    }).where(eq15(chatGroups.id, input.groupId));
+      memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+    }).where(eq16(chatGroups.id, input.groupId));
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
     return { success: true, alreadyMember: false };
   }),
   // Get messages for a group
-  getMessages: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    limit: z5.number().default(50),
-    before: z5.number().optional()
+  getMessages: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    limit: z6.number().default(50),
+    before: z6.number().optional()
     // message id cursor
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const [grp] = await db.select({ isPublic: chatGroups.isPublic }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
+    const [grp] = await db.select({ isPublic: chatGroups.isPublic }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
     if (!grp) return [];
     if (!grp.isPublic) await assertGroupMember(db, input.groupId, ctx.user.id);
     const conditions = [
-      eq15(messages.groupId, input.groupId),
-      eq15(messages.isDeleted, false),
-      sql8`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+      eq16(messages.groupId, input.groupId),
+      eq16(messages.isDeleted, false),
+      sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
     if (clearedG > 0) conditions.push(gt4(messages.id, clearedG));
@@ -5471,36 +5597,38 @@ var chatRouter = router({
       createdAt: messages.createdAt,
       expiresAt: messages.expiresAt,
       senderId: messages.senderId,
-      senderName: sql8`COALESCE(${groupMembers.alias}, ${users.name})`,
+      senderName: sql9`COALESCE(${groupMembers.alias}, ${users.name})`,
       senderAvatar: users.avatar,
       senderRole: groupMembers.role,
       replyContent: repliedMsg.content,
       replyType: repliedMsg.messageType,
       replySenderName: repliedUser.name
-    }).from(messages).leftJoin(users, eq15(messages.senderId, users.id)).leftJoin(groupMembers, and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, messages.senderId))).leftJoin(repliedMsg, eq15(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq15(repliedUser.id, repliedMsg.senderId)).where(and11(...conditions)).orderBy(desc6(messages.id)).limit(input.limit);
+    }).from(messages).leftJoin(users, eq16(messages.senderId, users.id)).leftJoin(groupMembers, and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, messages.senderId))).leftJoin(repliedMsg, eq16(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq16(repliedUser.id, repliedMsg.senderId)).where(and12(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
     return rows.reverse();
   }),
   // Save a message (called from socket handler via REST fallback)
-  saveMessage: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    content: z5.string().min(1).max(4e3),
-    messageType: z5.enum(["text", "image", "file", "voice", "video"]).default("text"),
-    mediaUrl: z5.string().optional(),
-    durationSeconds: z5.number().int().min(0).max(600).optional(),
-    replyToId: z5.number().int().optional(),
-    ttlSeconds: z5.number().int().min(0).max(60 * 60 * 24 * 90).optional()
+  saveMessage: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    content: z6.string().min(1).max(4e3),
+    messageType: z6.enum(["text", "image", "file", "voice", "video"]).default("text"),
+    mediaUrl: z6.string().optional(),
+    durationSeconds: z6.number().int().min(0).max(600).optional(),
+    replyToId: z6.number().int().optional(),
+    ttlSeconds: z6.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
+    mentionedUserIds: z6.array(z6.number().int()).max(20).optional()
+    // 被 @ 的成员 id,后端据此发提及通知
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await assertGroupMember(db, input.groupId, ctx.user.id);
-    const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and11(
-      eq15(groupMutes.groupId, input.groupId),
-      eq15(groupMutes.userId, ctx.user.id),
+    const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and12(
+      eq16(groupMutes.groupId, input.groupId),
+      eq16(groupMutes.userId, ctx.user.id),
       or5(isNull4(groupMutes.expiresAt), gt4(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
     )).limit(1);
     if (muted) throw new TRPCError8({ code: "FORBIDDEN", message: "\u4F60\u5DF2\u88AB\u7981\u8A00,\u6682\u65F6\u65E0\u6CD5\u53D1\u8A00" });
     if (input.replyToId) {
-      const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq15(messages.id, input.replyToId)).limit(1);
+      const [rep] = await db.select({ groupId: messages.groupId }).from(messages).where(eq16(messages.id, input.replyToId)).limit(1);
       if (!rep || rep.groupId !== input.groupId) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5F15\u7528\u7684\u6D88\u606F\u65E0\u6548" });
     }
     const hasTextContent = !!input.content && input.content.trim().length > 0;
@@ -5519,7 +5647,7 @@ var chatRouter = router({
     const messageId = result.insertId;
     let displayName = ctx.user.name ?? ctx.user.username ?? null;
     try {
-      const [mr] = await db.select({ alias: groupMembers.alias }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+      const [mr] = await db.select({ alias: groupMembers.alias }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
       if (mr?.alias) displayName = mr.alias;
     } catch {
     }
@@ -5540,6 +5668,26 @@ var chatRouter = router({
     } catch {
     }
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
+    if (input.mentionedUserIds?.length) {
+      const targets = Array.from(new Set(input.mentionedUserIds)).filter((id) => id !== ctx.user.id).slice(0, 20);
+      if (targets.length) {
+        void db.select({ userId: groupMembers.userId }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), inArray6(groupMembers.userId, targets))).then((rows) => {
+          const fromName = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237 #${ctx.user.id}`;
+          const preview = sanitizeInput(input.content, 120);
+          for (const r of rows) {
+            void createNotification({
+              db,
+              targetUserId: r.userId,
+              fromUserId: ctx.user.id,
+              fromUserName: fromName,
+              fromUserAvatar: ctx.user.avatar ?? "",
+              type: "mention",
+              content: preview
+            });
+          }
+        }).catch((err) => logger_default.warn({ err }, "mention notify failed"));
+      }
+    }
     if (input.messageType === "text") {
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
       void awardTaskEvent(db, ctx.user.id, "first_message");
@@ -5547,14 +5695,14 @@ var chatRouter = router({
     return { messageId };
   }),
   // ─── DM: Send a direct message ─────────────────────────────────────────────
-  sendDM: protectedProcedure.input(z5.object({
-    receiverId: z5.number(),
-    content: z5.string().min(1).max(4e3),
-    messageType: z5.enum(["text", "image", "file", "voice", "video"]).default("text"),
-    mediaUrl: z5.string().optional(),
-    durationSeconds: z5.number().int().min(0).max(600).optional(),
-    replyToId: z5.number().int().optional(),
-    ttlSeconds: z5.number().int().min(0).max(60 * 60 * 24 * 90).optional()
+  sendDM: protectedProcedure.input(z6.object({
+    receiverId: z6.number(),
+    content: z6.string().min(1).max(4e3),
+    messageType: z6.enum(["text", "image", "file", "voice", "video"]).default("text"),
+    mediaUrl: z6.string().optional(),
+    durationSeconds: z6.number().int().min(0).max(600).optional(),
+    replyToId: z6.number().int().optional(),
+    ttlSeconds: z6.number().int().min(0).max(60 * 60 * 24 * 90).optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -5562,7 +5710,7 @@ var chatRouter = router({
     const hasTextContent = !!input.content && input.content.trim().length > 0;
     if (hasTextContent) await enforceContent(db, ctx.user.id, input.content, "dm");
     if (input.replyToId) {
-      const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId }).from(messages).where(eq15(messages.id, input.replyToId)).limit(1);
+      const [rep] = await db.select({ groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId }).from(messages).where(eq16(messages.id, input.replyToId)).limit(1);
       const inThisDM = rep && !rep.groupId && (rep.senderId === ctx.user.id && rep.receiverId === input.receiverId || rep.senderId === input.receiverId && rep.receiverId === ctx.user.id);
       if (!inThisDM) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5F15\u7528\u7684\u6D88\u606F\u65E0\u6548" });
     }
@@ -5601,16 +5749,16 @@ var chatRouter = router({
   }),
   // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
   //   名片内容由服务端按 contactUserId 现取(权威,防客户端伪造他人名片)。
-  shareContact: protectedProcedure.input(z5.object({
-    contactUserId: z5.number().int().positive(),
-    targetGroupId: z5.number().int().positive().optional(),
-    targetReceiverId: z5.number().int().positive().optional()
+  shareContact: protectedProcedure.input(z6.object({
+    contactUserId: z6.number().int().positive(),
+    targetGroupId: z6.number().int().positive().optional(),
+    targetReceiverId: z6.number().int().positive().optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     if (!input.targetGroupId === !input.targetReceiverId)
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BF7\u9009\u62E9\u4E14\u4EC5\u9009\u62E9\u4E00\u4E2A\u53D1\u9001\u76EE\u6807" });
-    const [c] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar, bio: users.bio }).from(users).where(eq15(users.id, input.contactUserId)).limit(1);
+    const [c] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar, bio: users.bio }).from(users).where(eq16(users.id, input.contactUserId)).limit(1);
     if (!c) throw new TRPCError8({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
     const card = JSON.stringify({
       // 防御性净化:name/bio 是自由文本(注册路径未必 stripHtml),入库前清一遍
@@ -5670,11 +5818,11 @@ var chatRouter = router({
     return { messageId };
   }),
   // ─── 分享语音房:发一条可点进房的 voiceroom 消息到群或私信 ────────────────────
-  shareVoiceRoom: protectedProcedure.input(z5.object({
-    roomId: z5.string().min(1).max(80),
-    title: z5.string().max(60).default(""),
-    targetGroupId: z5.number().int().positive().optional(),
-    targetReceiverId: z5.number().int().positive().optional()
+  shareVoiceRoom: protectedProcedure.input(z6.object({
+    roomId: z6.string().min(1).max(80),
+    title: z6.string().max(60).default(""),
+    targetGroupId: z6.number().int().positive().optional(),
+    targetReceiverId: z6.number().int().positive().optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -5734,10 +5882,10 @@ var chatRouter = router({
     return { messageId };
   }),
   // ─── DM: Get message history between two users ────────────────────────────
-  getDMHistory: protectedProcedure.input(z5.object({
-    otherUserId: z5.number(),
-    limit: z5.number().default(50),
-    before: z5.number().optional()
+  getDMHistory: protectedProcedure.input(z6.object({
+    otherUserId: z6.number(),
+    limit: z6.number().default(50),
+    before: z6.number().optional()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -5745,11 +5893,11 @@ var chatRouter = router({
     const otherId = input.otherUserId;
     const conditions = [
       or5(
-        and11(eq15(messages.senderId, myId), eq15(messages.receiverId, otherId)),
-        and11(eq15(messages.senderId, otherId), eq15(messages.receiverId, myId))
+        and12(eq16(messages.senderId, myId), eq16(messages.receiverId, otherId)),
+        and12(eq16(messages.senderId, otherId), eq16(messages.receiverId, myId))
       ),
-      eq15(messages.isDeleted, false),
-      sql8`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+      eq16(messages.isDeleted, false),
+      sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedD = await getClearedBeforeId(db, myId, `dm:${otherId}`);
     if (clearedD > 0) conditions.push(gt4(messages.id, clearedD));
@@ -5774,14 +5922,14 @@ var chatRouter = router({
       replyContent: repliedMsg.content,
       replyType: repliedMsg.messageType,
       replySenderName: repliedUser.name
-    }).from(messages).leftJoin(users, eq15(messages.senderId, users.id)).leftJoin(repliedMsg, eq15(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq15(repliedUser.id, repliedMsg.senderId)).where(and11(...conditions)).orderBy(desc6(messages.id)).limit(input.limit);
+    }).from(messages).leftJoin(users, eq16(messages.senderId, users.id)).leftJoin(repliedMsg, eq16(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq16(repliedUser.id, repliedMsg.senderId)).where(and12(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
     try {
       await db.update(messages).set({ isRead: true }).where(
-        and11(
-          eq15(messages.senderId, otherId),
-          eq15(messages.receiverId, myId),
-          eq15(messages.isRead, false),
-          sql8`${messages.groupId} IS NULL`
+        and12(
+          eq16(messages.senderId, otherId),
+          eq16(messages.receiverId, myId),
+          eq16(messages.isRead, false),
+          sql9`${messages.groupId} IS NULL`
         )
       );
     } catch (err) {
@@ -5803,17 +5951,17 @@ var chatRouter = router({
       receiverId: messages.receiverId,
       recalledAt: messages.recalledAt
     }).from(messages).where(
-      and11(
+      and12(
         or5(
-          eq15(messages.senderId, myId),
-          eq15(messages.receiverId, myId)
+          eq16(messages.senderId, myId),
+          eq16(messages.receiverId, myId)
         ),
-        eq15(messages.isDeleted, false),
-        sql8`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+        eq16(messages.isDeleted, false),
+        sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
         // DM messages have no groupId
-        sql8`${messages.groupId} IS NULL`
+        sql9`${messages.groupId} IS NULL`
       )
-    ).orderBy(desc6(messages.createdAt)).limit(200);
+    ).orderBy(desc7(messages.createdAt)).limit(200);
     const convMap = /* @__PURE__ */ new Map();
     for (const msg of dmMessages) {
       const partnerId = msg.senderId === myId ? msg.receiverId : msg.senderId;
@@ -5821,17 +5969,17 @@ var chatRouter = router({
     }
     if (convMap.size === 0) return [];
     const partnerIds = Array.from(convMap.keys());
-    const partnerUsers = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(sql8`${users.id} IN (${sql8.join(partnerIds.map((id) => sql8`${id}`), sql8`, `)})`);
-    const unreadRows = await db.select({ senderId: messages.senderId, cnt: sql8`COUNT(*)` }).from(messages).where(
-      and11(
-        eq15(messages.receiverId, myId),
-        eq15(messages.isRead, false),
-        eq15(messages.isDeleted, false),
-        sql8`${messages.groupId} IS NULL`
+    const partnerUsers = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(sql9`${users.id} IN (${sql9.join(partnerIds.map((id) => sql9`${id}`), sql9`, `)})`);
+    const unreadRows = await db.select({ senderId: messages.senderId, cnt: sql9`COUNT(*)` }).from(messages).where(
+      and12(
+        eq16(messages.receiverId, myId),
+        eq16(messages.isRead, false),
+        eq16(messages.isDeleted, false),
+        sql9`${messages.groupId} IS NULL`
       )
     ).groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map((r) => [r.senderId, Number(r.cnt)]));
-    const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq15(conversationPrefs.userId, myId));
+    const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq16(conversationPrefs.userId, myId));
     const clearedMap = /* @__PURE__ */ new Map();
     for (const p of prefRows) {
       if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
@@ -5862,14 +6010,14 @@ var chatRouter = router({
       isPublic: chatGroups.isPublic,
       role: groupMembers.role,
       updatedAt: chatGroups.updatedAt
-    }).from(groupMembers).innerJoin(chatGroups, eq15(groupMembers.groupId, chatGroups.id)).where(eq15(groupMembers.userId, ctx.user.id)).orderBy(desc6(chatGroups.updatedAt));
+    }).from(groupMembers).innerJoin(chatGroups, eq16(groupMembers.groupId, chatGroups.id)).where(eq16(groupMembers.userId, ctx.user.id)).orderBy(desc7(chatGroups.updatedAt));
     const groupIds = groups.map((g) => g.id);
     const latestByGroup = /* @__PURE__ */ new Map();
     if (groupIds.length > 0) {
       const latest = db.select({
         groupId: messages.groupId,
-        maxId: sql8`MAX(${messages.id})`.as("max_id")
-      }).from(messages).where(and11(inArray6(messages.groupId, groupIds), eq15(messages.isDeleted, false))).groupBy(messages.groupId).as("latest");
+        maxId: sql9`MAX(${messages.id})`.as("max_id")
+      }).from(messages).where(and12(inArray6(messages.groupId, groupIds), eq16(messages.isDeleted, false))).groupBy(messages.groupId).as("latest");
       const latestRows = await db.select({
         groupId: messages.groupId,
         content: messages.content,
@@ -5878,7 +6026,7 @@ var chatRouter = router({
         recalledAt: messages.recalledAt,
         senderName: users.name,
         senderUsername: users.username
-      }).from(messages).innerJoin(latest, eq15(messages.id, latest.maxId)).leftJoin(users, eq15(messages.senderId, users.id));
+      }).from(messages).innerJoin(latest, eq16(messages.id, latest.maxId)).leftJoin(users, eq16(messages.senderId, users.id));
       for (const r of latestRows) {
         if (r.groupId != null) latestByGroup.set(r.groupId, r);
       }
@@ -5897,35 +6045,35 @@ var chatRouter = router({
     return result.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }),
   // Get members of a group
-  getGroupMembers: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getGroupMembers: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const [me] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const [me] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!me) return [];
     return db.select({
       id: users.id,
       username: users.username,
-      name: sql8`COALESCE(${groupMembers.alias}, ${users.name})`,
+      name: sql9`COALESCE(${groupMembers.alias}, ${users.name})`,
       alias: groupMembers.alias,
       avatar: users.avatar,
       role: groupMembers.role,
       joinedAt: groupMembers.joinedAt,
       isBot: users.isBot
       // 供前端把机器人/静默填充号从 @提及 候选里排除
-    }).from(groupMembers).innerJoin(users, eq15(groupMembers.userId, users.id)).where(eq15(groupMembers.groupId, input.groupId)).orderBy(groupMembers.role, groupMembers.joinedAt).limit(200);
+    }).from(groupMembers).innerJoin(users, eq16(groupMembers.userId, users.id)).where(eq16(groupMembers.groupId, input.groupId)).orderBy(groupMembers.role, groupMembers.joinedAt).limit(200);
   }),
   // 设置/清除自己在某群的群昵称(仅本人,空字符串=清除回全局名)
-  setGroupAlias: protectedProcedure.input(z5.object({ groupId: z5.number(), alias: z5.string().max(50) })).mutation(async ({ ctx, input }) => {
+  setGroupAlias: protectedProcedure.input(z6.object({ groupId: z6.number(), alias: z6.string().max(50) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const aliasVal = sanitizeInput(input.alias, 50).trim();
-    const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!m) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u4F60\u4E0D\u5728\u8BE5\u7FA4" });
-    await db.update(groupMembers).set({ alias: aliasVal || null }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id)));
+    await db.update(groupMembers).set({ alias: aliasVal || null }).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id)));
     return { ok: true, alias: aliasVal || null };
   }),
   // Get group info (name, description, memberCount, avatar)
-  getGroupInfo: publicProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ input }) => {
+  getGroupInfo: publicProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
     const rows = await db.select({
@@ -5942,11 +6090,22 @@ var chatRouter = router({
       joinApproval: chatGroups.joinApproval,
       creatorId: chatGroups.creatorId
       // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
-    }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
+    }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
     return rows[0] ?? null;
   }),
+  // 我在某群的禁言态:客户端进群据此禁用输入框 + 顶部横幅提示,而非打字发出去才被后端拒
+  getMyMuteState: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return { muted: false, until: null };
+    const [m] = await db.select({ expiresAt: groupMutes.expiresAt }).from(groupMutes).where(and12(
+      eq16(groupMutes.groupId, input.groupId),
+      eq16(groupMutes.userId, ctx.user.id),
+      or5(isNull4(groupMutes.expiresAt), gt4(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+    )).limit(1);
+    return { muted: !!m, until: m?.expiresAt ?? null };
+  }),
   // Get user info by userId (for DM partner display)
-  getUserInfo: protectedProcedure.input(z5.object({ userId: z5.number() })).query(async ({ input }) => {
+  getUserInfo: protectedProcedure.input(z6.object({ userId: z6.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
     const rows = await db.select({
@@ -5954,14 +6113,14 @@ var chatRouter = router({
       name: users.name,
       username: users.username,
       avatar: users.avatar
-    }).from(users).where(eq15(users.id, input.userId)).limit(1);
+    }).from(users).where(eq16(users.id, input.userId)).limit(1);
     return rows[0] ?? null;
   }),
   // Upload chat image to S3
-  uploadChatImage: protectedProcedure.input(z5.object({
-    base64: z5.string().max(22e6),
+  uploadChatImage: protectedProcedure.input(z6.object({
+    base64: z6.string().max(22e6),
     // ~16MB raw file (base64 is ~33% larger)
-    mimeType: z5.string().default("image/jpeg")
+    mimeType: z6.string().default("image/jpeg")
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
     const { downscaleImage: downscaleImage2 } = await Promise.resolve().then(() => (init_image(), image_exports));
@@ -5973,10 +6132,10 @@ var chatRouter = router({
     return { url };
   }),
   // Upload chat video to S3 (short clips; stays under the 50MB JSON body limit)
-  uploadChatVideo: protectedProcedure.input(z5.object({
-    base64: z5.string().max(4e7),
+  uploadChatVideo: protectedProcedure.input(z6.object({
+    base64: z6.string().max(4e7),
     // ~30MB raw file (base64 ~33% larger)
-    mimeType: z5.string().default("video/mp4")
+    mimeType: z6.string().default("video/mp4")
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
     const buffer = Buffer.from(input.base64, "base64");
@@ -5989,11 +6148,11 @@ var chatRouter = router({
     return { url };
   }),
   // Upload an arbitrary chat file (documents) to S3
-  uploadChatFile: protectedProcedure.input(z5.object({
-    base64: z5.string().max(2e7),
+  uploadChatFile: protectedProcedure.input(z6.object({
+    base64: z6.string().max(2e7),
     // ~15MB raw
-    mimeType: z5.string().default("application/octet-stream"),
-    fileName: z5.string().max(200).default("file")
+    mimeType: z6.string().default("application/octet-stream"),
+    fileName: z6.string().max(200).default("file")
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
     const db0 = await getDb();
@@ -6008,12 +6167,12 @@ var chatRouter = router({
     return { url };
   }),
   // ─── Mark group as read (update lastReadMessageId) ──────────────────────────
-  markGroupRead: protectedProcedure.input(z5.object({ groupId: z5.number(), lastMessageId: z5.number() })).mutation(async ({ ctx, input }) => {
+  markGroupRead: protectedProcedure.input(z6.object({ groupId: z6.number(), lastMessageId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { ok: true };
-    const existing = await db.select({ id: groupUnreadCounts.id }).from(groupUnreadCounts).where(and11(eq15(groupUnreadCounts.userId, ctx.user.id), eq15(groupUnreadCounts.groupId, input.groupId))).limit(1);
+    const existing = await db.select({ id: groupUnreadCounts.id }).from(groupUnreadCounts).where(and12(eq16(groupUnreadCounts.userId, ctx.user.id), eq16(groupUnreadCounts.groupId, input.groupId))).limit(1);
     if (existing.length > 0) {
-      await db.update(groupUnreadCounts).set({ lastReadMessageId: input.lastMessageId }).where(and11(eq15(groupUnreadCounts.userId, ctx.user.id), eq15(groupUnreadCounts.groupId, input.groupId)));
+      await db.update(groupUnreadCounts).set({ lastReadMessageId: input.lastMessageId }).where(and12(eq16(groupUnreadCounts.userId, ctx.user.id), eq16(groupUnreadCounts.groupId, input.groupId)));
     } else {
       await db.insert(groupUnreadCounts).values({
         userId: ctx.user.id,
@@ -6027,24 +6186,24 @@ var chatRouter = router({
   getUnreadCounts: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return {};
-    const joinedGroups = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(eq15(groupMembers.userId, ctx.user.id));
+    const joinedGroups = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(eq16(groupMembers.userId, ctx.user.id));
     if (joinedGroups.length === 0) return {};
     const groupIds = joinedGroups.map((g) => g.groupId);
     const result = {};
     for (const id of groupIds) result[id] = 0;
     const rows = await db.select({
       groupId: messages.groupId,
-      count: sql8`count(*)`
+      count: sql9`count(*)`
     }).from(messages).leftJoin(
       groupUnreadCounts,
-      and11(
-        eq15(groupUnreadCounts.groupId, messages.groupId),
-        eq15(groupUnreadCounts.userId, ctx.user.id)
+      and12(
+        eq16(groupUnreadCounts.groupId, messages.groupId),
+        eq16(groupUnreadCounts.userId, ctx.user.id)
       )
-    ).where(and11(
+    ).where(and12(
       inArray6(messages.groupId, groupIds),
-      eq15(messages.isDeleted, false),
-      gt4(messages.id, sql8`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
+      eq16(messages.isDeleted, false),
+      gt4(messages.id, sql9`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
     )).groupBy(messages.groupId);
     for (const r of rows) {
       if (r.groupId != null) result[r.groupId] = Number(r.count);
@@ -6055,48 +6214,48 @@ var chatRouter = router({
   autoJoinSampleGroups: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return { joined: 0 };
-    const sampleGroups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq15(chatGroups.isPublic, true)).orderBy(chatGroups.id).limit(4);
+    const sampleGroups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq16(chatGroups.isPublic, true)).orderBy(chatGroups.id).limit(4);
     let joined = 0;
     for (const group of sampleGroups) {
-      const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, group.id), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+      const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, group.id), eq16(groupMembers.userId, ctx.user.id))).limit(1);
       if (existing.length > 0) continue;
       await db.insert(groupMembers).values({
         groupId: group.id,
         userId: ctx.user.id,
         role: "member"
       });
-      await db.update(chatGroups).set({ memberCount: sql8`memberCount + 1` }).where(eq15(chatGroups.id, group.id));
+      await db.update(chatGroups).set({ memberCount: sql9`memberCount + 1` }).where(eq16(chatGroups.id, group.id));
       joined++;
     }
     return { joined };
   }),
   // Soft-delete a message (only sender can delete)
-  deleteMessage: protectedProcedure.input(z5.object({ messageId: z5.number(), groupId: z5.number().optional() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  deleteMessage: protectedProcedure.input(z6.object({ messageId: z6.number(), groupId: z6.number().optional() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const rows = await db.select({ senderId: messages.senderId, groupId: messages.groupId }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
+    const rows = await db.select({ senderId: messages.senderId, groupId: messages.groupId }).from(messages).where(eq16(messages.id, input.messageId)).limit(1);
     if (!rows[0]) throw new Error("Message not found");
     const isSender = rows[0].senderId === ctx.user.id;
     if (!isSender) {
       const realGroupId = rows[0].groupId;
       if (realGroupId == null) throw new Error("Not authorized");
-      const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, realGroupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+      const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, realGroupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
       if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
     }
-    await db.update(messages).set({ isDeleted: true }).where(eq15(messages.id, input.messageId));
+    await db.update(messages).set({ isDeleted: true }).where(eq16(messages.id, input.messageId));
     return { ok: true };
   }),
   // ─── 撤回消息（2 分钟内，仅发送者）────────────────────────────────────────
-  recallMessage: protectedProcedure.input(z5.object({ messageId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  recallMessage: protectedProcedure.input(z6.object({ messageId: z6.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt, groupId: messages.groupId, receiverId: messages.receiverId }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
+    const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt, groupId: messages.groupId, receiverId: messages.receiverId }).from(messages).where(eq16(messages.id, input.messageId)).limit(1);
     if (!m) throw new TRPCError8({ code: "NOT_FOUND", message: "\u6D88\u606F\u4E0D\u5B58\u5728" });
     if (m.senderId !== ctx.user.id) throw new TRPCError8({ code: "FORBIDDEN", message: "\u53EA\u80FD\u64A4\u56DE\u81EA\u5DF1\u7684\u6D88\u606F" });
     if (Date.now() - new Date(m.createdAt).getTime() > 2 * 60 * 1e3) {
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8D85\u8FC7 2 \u5206\u949F\uFF0C\u65E0\u6CD5\u64A4\u56DE" });
     }
-    await db.update(messages).set({ recalledAt: /* @__PURE__ */ new Date(), isPinned: false }).where(eq15(messages.id, input.messageId));
+    await db.update(messages).set({ recalledAt: /* @__PURE__ */ new Date(), isPinned: false }).where(eq16(messages.id, input.messageId));
     if (m.groupId) {
       getSocketIO()?.to(`group:${m.groupId}`).emit("message_recall", { messageId: input.messageId, groupId: m.groupId });
     } else if (m.receiverId) {
@@ -6105,10 +6264,10 @@ var chatRouter = router({
     return { ok: true };
   }),
   // ─── 转发消息（到群或私信）───────────────────────────────────────────────
-  forwardMessage: protectedProcedure.input(z5.object({
-    messageId: z5.number(),
-    targetGroupId: z5.number().optional(),
-    targetReceiverId: z5.number().optional()
+  forwardMessage: protectedProcedure.input(z6.object({
+    messageId: z6.number(),
+    targetGroupId: z6.number().optional(),
+    targetReceiverId: z6.number().optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
@@ -6123,7 +6282,7 @@ var chatRouter = router({
       groupId: messages.groupId,
       senderId: messages.senderId,
       receiverId: messages.receiverId
-    }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
+    }).from(messages).where(eq16(messages.id, input.messageId)).limit(1);
     if (!src || src.isDeleted || src.recalledAt) throw new TRPCError8({ code: "NOT_FOUND", message: "\u539F\u6D88\u606F\u4E0D\u53EF\u7528" });
     if (src.messageType === "redpacket") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E0D\u80FD\u8F6C\u53D1" });
     if (src.messageType === "contact" || src.messageType === "voiceroom") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BE5\u6D88\u606F\u4E0D\u652F\u6301\u8F6C\u53D1" });
@@ -6171,17 +6330,17 @@ var chatRouter = router({
     return { messageId };
   }),
   // ─── 置顶消息（群主/管理员）─────────────────────────────────────────────
-  pinMessage: protectedProcedure.input(z5.object({ messageId: z5.number(), groupId: z5.number(), pinned: z5.boolean() })).mutation(async ({ ctx, input }) => {
+  pinMessage: protectedProcedure.input(z6.object({ messageId: z6.number(), groupId: z6.number(), pinned: z6.boolean() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u7F6E\u9876\u6D88\u606F" });
     }
-    await db.update(messages).set({ isPinned: input.pinned }).where(and11(eq15(messages.id, input.messageId), eq15(messages.groupId, input.groupId)));
+    await db.update(messages).set({ isPinned: input.pinned }).where(and12(eq16(messages.id, input.messageId), eq16(messages.groupId, input.groupId)));
     return { ok: true };
   }),
-  getPinnedMessages: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getPinnedMessages: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     await assertGroupMember(db, input.groupId, ctx.user.id);
@@ -6192,31 +6351,31 @@ var chatRouter = router({
       senderId: messages.senderId,
       senderName: users.name,
       createdAt: messages.createdAt
-    }).from(messages).leftJoin(users, eq15(messages.senderId, users.id)).where(and11(
-      eq15(messages.groupId, input.groupId),
-      eq15(messages.isPinned, true),
-      eq15(messages.isDeleted, false),
-      sql8`${messages.recalledAt} IS NULL`
-    )).orderBy(desc6(messages.id)).limit(10);
+    }).from(messages).leftJoin(users, eq16(messages.senderId, users.id)).where(and12(
+      eq16(messages.groupId, input.groupId),
+      eq16(messages.isPinned, true),
+      eq16(messages.isDeleted, false),
+      sql9`${messages.recalledAt} IS NULL`
+    )).orderBy(desc7(messages.id)).limit(10);
   }),
   // ─── Reactions ────────────────────────────────────────────────────────────
-  toggleReaction: protectedProcedure.input(z5.object({ messageId: z5.number(), emoji: z5.string().max(10) })).mutation(async ({ ctx, input }) => {
+  toggleReaction: protectedProcedure.input(z6.object({ messageId: z6.number(), emoji: z6.string().max(10) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const existing = await db.select({ id: messageReactions.id }).from(messageReactions).where(and11(eq15(messageReactions.messageId, input.messageId), eq15(messageReactions.userId, ctx.user.id), eq15(messageReactions.emoji, input.emoji))).limit(1);
+    const existing = await db.select({ id: messageReactions.id }).from(messageReactions).where(and12(eq16(messageReactions.messageId, input.messageId), eq16(messageReactions.userId, ctx.user.id), eq16(messageReactions.emoji, input.emoji))).limit(1);
     if (existing.length > 0) {
-      await db.delete(messageReactions).where(eq15(messageReactions.id, existing[0].id));
+      await db.delete(messageReactions).where(eq16(messageReactions.id, existing[0].id));
       return { action: "removed" };
     } else {
       await db.insert(messageReactions).values({ messageId: input.messageId, userId: ctx.user.id, emoji: input.emoji });
       return { action: "added" };
     }
   }),
-  getReactions: protectedProcedure.input(z5.object({ messageIds: z5.array(z5.number()) })).query(async ({ ctx, input }) => {
+  getReactions: protectedProcedure.input(z6.object({ messageIds: z6.array(z6.number()) })).query(async ({ ctx, input }) => {
     if (input.messageIds.length === 0) return {};
     const db = await getDb();
     if (!db) return {};
-    const rows = await db.select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId }).from(messageReactions).where(sql8`${messageReactions.messageId} IN (${sql8.join(input.messageIds.map((id) => sql8`${id}`), sql8`, `)})`);
+    const rows = await db.select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId }).from(messageReactions).where(sql9`${messageReactions.messageId} IN (${sql9.join(input.messageIds.map((id) => sql9`${id}`), sql9`, `)})`);
     const result = {};
     for (const row of rows) {
       const mid = row.messageId;
@@ -6228,72 +6387,72 @@ var chatRouter = router({
     return result;
   }),
   // ─── Invite Links ─────────────────────────────────────────────────────────
-  createInviteLink: protectedProcedure.input(z5.object({ groupId: z5.number(), maxUses: z5.number().default(0), expiresInHours: z5.number().optional() })).mutation(async ({ ctx, input }) => {
+  createInviteLink: protectedProcedure.input(z6.object({ groupId: z6.number(), maxUses: z6.number().default(0), expiresInHours: z6.number().optional() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!member[0] || member[0].role !== "owner" && member[0].role !== "admin") throw new Error("\u53EA\u6709\u7FA4\u4E3B\u6216\u7BA1\u7406\u5458\u53EF\u521B\u5EFA\u9080\u8BF7\u94FE\u63A5");
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 36e5) : void 0;
     await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
     return { token, url: `${input.groupId}/invite/${token}` };
   }),
-  useInviteLink: protectedProcedure.input(z5.object({ token: z5.string() })).mutation(async ({ ctx, input }) => {
+  useInviteLink: protectedProcedure.input(z6.object({ token: z6.string() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const link = await db.select().from(groupInviteLinks).where(and11(eq15(groupInviteLinks.token, input.token), eq15(groupInviteLinks.isActive, true))).limit(1);
+    const link = await db.select().from(groupInviteLinks).where(and12(eq16(groupInviteLinks.token, input.token), eq16(groupInviteLinks.isActive, true))).limit(1);
     if (!link[0]) throw new Error("Invalid or expired invite link");
     const l = link[0];
     if (l.expiresAt && l.expiresAt < /* @__PURE__ */ new Date()) throw new Error("Invite link has expired");
     if (l.maxUses > 0 && l.useCount >= l.maxUses) throw new Error("Invite link has reached max uses");
-    const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, l.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, l.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
-    const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups).where(eq15(chatGroups.id, l.groupId)).limit(1);
+    const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups).where(eq16(chatGroups.id, l.groupId)).limit(1);
     if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
     }
     if (cap?.joinApproval) {
-      const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and11(eq15(groupJoinRequests.groupId, l.groupId), eq15(groupJoinRequests.userId, ctx.user.id), eq15(groupJoinRequests.status, "pending"))).limit(1);
+      const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and12(eq16(groupJoinRequests.groupId, l.groupId), eq16(groupJoinRequests.userId, ctx.user.id), eq16(groupJoinRequests.status, "pending"))).limit(1);
       if (!pending[0]) await db.insert(groupJoinRequests).values({ groupId: l.groupId, userId: ctx.user.id });
       return { groupId: l.groupId, alreadyMember: false, pending: true };
     }
     if (l.maxUses > 0) {
-      const upd = await db.update(groupInviteLinks).set({ useCount: sql8`useCount + 1` }).where(and11(eq15(groupInviteLinks.id, l.id), sql8`${groupInviteLinks.useCount} < ${groupInviteLinks.maxUses}`));
+      const upd = await db.update(groupInviteLinks).set({ useCount: sql9`useCount + 1` }).where(and12(eq16(groupInviteLinks.id, l.id), sql9`${groupInviteLinks.useCount} < ${groupInviteLinks.maxUses}`));
       const aff = upd?.[0]?.affectedRows ?? upd?.affectedRows ?? upd?.rowsAffected ?? 0;
       if (aff < 1) throw new TRPCError8({ code: "FORBIDDEN", message: "\u9080\u8BF7\u94FE\u63A5\u5DF2\u8FBE\u4F7F\u7528\u4E0A\u9650" });
     } else {
-      await db.update(groupInviteLinks).set({ useCount: sql8`useCount + 1` }).where(eq15(groupInviteLinks.id, l.id));
+      await db.update(groupInviteLinks).set({ useCount: sql9`useCount + 1` }).where(eq16(groupInviteLinks.id, l.id));
     }
     await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
-    await db.update(chatGroups).set({ memberCount: sql8`memberCount + 1` }).where(eq15(chatGroups.id, l.groupId));
+    await db.update(chatGroups).set({ memberCount: sql9`memberCount + 1` }).where(eq16(chatGroups.id, l.groupId));
     const newMemberName = ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB";
     void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger_default.warn({ err }, "growth bot failed"));
     void runWelcomeBot(db, l.groupId, newMemberName).catch((err) => logger_default.warn({ err }, "welcome bot failed"));
     return { groupId: l.groupId, alreadyMember: false };
   }),
-  getGroupInviteLinks: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getGroupInviteLinks: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!member[0]) return [];
-    return db.select().from(groupInviteLinks).where(and11(eq15(groupInviteLinks.groupId, input.groupId), eq15(groupInviteLinks.isActive, true))).orderBy(desc6(groupInviteLinks.createdAt)).limit(5);
+    return db.select().from(groupInviteLinks).where(and12(eq16(groupInviteLinks.groupId, input.groupId), eq16(groupInviteLinks.isActive, true))).orderBy(desc7(groupInviteLinks.createdAt)).limit(5);
   }),
   // ─── File Upload ──────────────────────────────────────────────────────────
-  saveGroupFile: protectedProcedure.input(z5.object({ groupId: z5.number(), messageId: z5.number().optional(), fileName: z5.string(), fileSize: z5.number(), mimeType: z5.string(), fileKey: z5.string(), url: z5.string() })).mutation(async ({ ctx, input }) => {
+  saveGroupFile: protectedProcedure.input(z6.object({ groupId: z6.number(), messageId: z6.number().optional(), fileName: z6.string(), fileSize: z6.number(), mimeType: z6.string(), fileKey: z6.string(), url: z6.string() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await assertGroupMember(db, input.groupId, ctx.user.id);
     const [result] = await db.insert(groupFiles).values({ groupId: input.groupId, uploaderId: ctx.user.id, messageId: input.messageId, fileName: input.fileName, fileSize: input.fileSize, mimeType: input.mimeType, fileKey: input.fileKey, url: input.url });
     return { id: result.insertId, url: input.url };
   }),
-  getGroupFiles: protectedProcedure.input(z5.object({ groupId: z5.number(), limit: z5.number().default(20) })).query(async ({ ctx, input }) => {
+  getGroupFiles: protectedProcedure.input(z6.object({ groupId: z6.number(), limit: z6.number().default(20) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     await assertGroupMember(db, input.groupId, ctx.user.id);
-    return db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name }).from(groupFiles).leftJoin(users, eq15(groupFiles.uploaderId, users.id)).where(eq15(groupFiles.groupId, input.groupId)).orderBy(desc6(groupFiles.createdAt)).limit(input.limit);
+    return db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name }).from(groupFiles).leftJoin(users, eq16(groupFiles.uploaderId, users.id)).where(eq16(groupFiles.groupId, input.groupId)).orderBy(desc7(groupFiles.createdAt)).limit(input.limit);
   }),
   // ─── 群文件库：直接列出群内已发的 图片/视频/文件 消息 ──────────────────────
-  getGroupMedia: protectedProcedure.input(z5.object({ groupId: z5.number(), limit: z5.number().default(60) })).query(async ({ ctx, input }) => {
+  getGroupMedia: protectedProcedure.input(z6.object({ groupId: z6.number(), limit: z6.number().default(60) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     await assertGroupMember(db, input.groupId, ctx.user.id);
@@ -6305,23 +6464,23 @@ var chatRouter = router({
       durationSeconds: messages.durationSeconds,
       createdAt: messages.createdAt,
       senderName: users.name
-    }).from(messages).leftJoin(users, eq15(messages.senderId, users.id)).where(and11(
-      eq15(messages.groupId, input.groupId),
-      eq15(messages.isDeleted, false),
-      sql8`${messages.recalledAt} IS NULL`,
+    }).from(messages).leftJoin(users, eq16(messages.senderId, users.id)).where(and12(
+      eq16(messages.groupId, input.groupId),
+      eq16(messages.isDeleted, false),
+      sql9`${messages.recalledAt} IS NULL`,
       inArray6(messages.messageType, ["image", "video", "file"])
-    )).orderBy(desc6(messages.id)).limit(input.limit);
+    )).orderBy(desc7(messages.id)).limit(input.limit);
   }),
   // ─── Read Receipts ────────────────────────────────────────────────────────
-  markMessagesRead: protectedProcedure.input(z5.object({ groupId: z5.number(), messageIds: z5.array(z5.number()) })).mutation(async ({ ctx, input }) => {
+  markMessagesRead: protectedProcedure.input(z6.object({ groupId: z6.number(), messageIds: z6.array(z6.number()) })).mutation(async ({ ctx, input }) => {
     if (input.messageIds.length === 0) return { ok: true };
     const db = await getDb();
     if (!db) return { ok: true };
     await assertGroupMember(db, input.groupId, ctx.user.id);
-    const existing = await db.select({ messageId: messageReadReceipts.messageId }).from(messageReadReceipts).where(and11(
-      eq15(messageReadReceipts.userId, ctx.user.id),
-      eq15(messageReadReceipts.groupId, input.groupId),
-      sql8`${messageReadReceipts.messageId} IN (${sql8.join(input.messageIds.map((id) => sql8`${id}`), sql8`, `)})`
+    const existing = await db.select({ messageId: messageReadReceipts.messageId }).from(messageReadReceipts).where(and12(
+      eq16(messageReadReceipts.userId, ctx.user.id),
+      eq16(messageReadReceipts.groupId, input.groupId),
+      sql9`${messageReadReceipts.messageId} IN (${sql9.join(input.messageIds.map((id) => sql9`${id}`), sql9`, `)})`
     ));
     const existingIds = new Set(existing.map((r) => r.messageId));
     const toInsert = input.messageIds.filter((id) => !existingIds.has(id));
@@ -6330,17 +6489,17 @@ var chatRouter = router({
     }
     return { ok: true };
   }),
-  getReadCounts: protectedProcedure.input(z5.object({ messageIds: z5.array(z5.number()) })).query(async ({ ctx, input }) => {
+  getReadCounts: protectedProcedure.input(z6.object({ messageIds: z6.array(z6.number()) })).query(async ({ ctx, input }) => {
     if (input.messageIds.length === 0) return {};
     const db = await getDb();
     if (!db) return {};
     const allowedIds = await filterReadableMessageIds(db, input.messageIds, ctx.user.id);
     if (allowedIds.length === 0) return {};
-    const rows = await db.select({ messageId: messageReadReceipts.messageId, count: sql8`COUNT(*)` }).from(messageReadReceipts).where(inArray6(messageReadReceipts.messageId, allowedIds)).groupBy(messageReadReceipts.messageId);
+    const rows = await db.select({ messageId: messageReadReceipts.messageId, count: sql9`COUNT(*)` }).from(messageReadReceipts).where(inArray6(messageReadReceipts.messageId, allowedIds)).groupBy(messageReadReceipts.messageId);
     return Object.fromEntries(rows.map((r) => [r.messageId, r.count]));
   }),
   // Returns up to 5 readers (with avatar) for a specific message
-  getReadReceipts: protectedProcedure.input(z5.object({ messageId: z5.number() })).query(async ({ ctx, input }) => {
+  getReadReceipts: protectedProcedure.input(z6.object({ messageId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const allowedIds = await filterReadableMessageIds(db, [input.messageId], ctx.user.id);
@@ -6349,109 +6508,109 @@ var chatRouter = router({
       userId: messageReadReceipts.userId,
       name: users.name,
       avatar: users.avatar
-    }).from(messageReadReceipts).innerJoin(users, eq15(users.id, messageReadReceipts.userId)).where(eq15(messageReadReceipts.messageId, input.messageId)).limit(5);
+    }).from(messageReadReceipts).innerJoin(users, eq16(users.id, messageReadReceipts.userId)).where(eq16(messageReadReceipts.messageId, input.messageId)).limit(5);
     return rows.map((r) => ({ userId: r.userId, name: r.name ?? "User", avatar: r.avatar ?? null }));
   }),
   // ─── Group Management ─────────────────────────────────────────────────────
-  kickMember: protectedProcedure.input(z5.object({ groupId: z5.number(), targetUserId: z5.number() })).mutation(async ({ ctx, input }) => {
+  kickMember: protectedProcedure.input(z6.object({ groupId: z6.number(), targetUserId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-    const target = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId))).limit(1);
+    const target = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.targetUserId))).limit(1);
     if (!target[0]) throw new Error("User not in group");
     if (target[0].role === "owner") throw new Error("Cannot kick the owner");
     if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u79FB\u9664\u5176\u4ED6\u7BA1\u7406\u5458");
-    await db.delete(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId)));
-    await db.update(chatGroups).set({ memberCount: sql8`GREATEST(memberCount - 1, 0)` }).where(eq15(chatGroups.id, input.groupId));
+    await db.delete(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.targetUserId)));
+    await db.update(chatGroups).set({ memberCount: sql9`GREATEST(memberCount - 1, 0)` }).where(eq16(chatGroups.id, input.groupId));
     return { ok: true };
   }),
-  muteMember: protectedProcedure.input(z5.object({ groupId: z5.number(), targetUserId: z5.number(), durationHours: z5.number().default(24) })).mutation(async ({ ctx, input }) => {
+  muteMember: protectedProcedure.input(z6.object({ groupId: z6.number(), targetUserId: z6.number(), durationHours: z6.number().default(24) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-    const mt = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.targetUserId))).limit(1);
+    const mt = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.targetUserId))).limit(1);
     if (!mt[0]) throw new Error("User not in group");
     if (mt[0].role === "owner") throw new Error("\u4E0D\u80FD\u7981\u8A00\u7FA4\u4E3B");
     if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u7981\u8A00\u5176\u4ED6\u7BA1\u7406\u5458");
     const expiresAt = new Date(Date.now() + input.durationHours * 36e5);
-    const existing = await db.select({ id: groupMutes.id }).from(groupMutes).where(and11(eq15(groupMutes.groupId, input.groupId), eq15(groupMutes.userId, input.targetUserId))).limit(1);
+    const existing = await db.select({ id: groupMutes.id }).from(groupMutes).where(and12(eq16(groupMutes.groupId, input.groupId), eq16(groupMutes.userId, input.targetUserId))).limit(1);
     if (existing[0]) {
-      await db.update(groupMutes).set({ expiresAt, mutedBy: ctx.user.id }).where(eq15(groupMutes.id, existing[0].id));
+      await db.update(groupMutes).set({ expiresAt, mutedBy: ctx.user.id }).where(eq16(groupMutes.id, existing[0].id));
     } else {
       await db.insert(groupMutes).values({ groupId: input.groupId, userId: input.targetUserId, mutedBy: ctx.user.id, expiresAt });
     }
     return { ok: true, expiresAt };
   }),
-  unmuteMember: protectedProcedure.input(z5.object({ groupId: z5.number(), targetUserId: z5.number() })).mutation(async ({ ctx, input }) => {
+  unmuteMember: protectedProcedure.input(z6.object({ groupId: z6.number(), targetUserId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-    await db.delete(groupMutes).where(and11(eq15(groupMutes.groupId, input.groupId), eq15(groupMutes.userId, input.targetUserId)));
+    await db.delete(groupMutes).where(and12(eq16(groupMutes.groupId, input.groupId), eq16(groupMutes.userId, input.targetUserId)));
     return { ok: true };
   }),
-  transferOwnership: protectedProcedure.input(z5.object({ groupId: z5.number(), newOwnerId: z5.number() })).mutation(async ({ ctx, input }) => {
+  transferOwnership: protectedProcedure.input(z6.object({ groupId: z6.number(), newOwnerId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner") throw new Error("Only owner can transfer");
     if (input.newOwnerId === ctx.user.id) throw new Error("\u4E0D\u80FD\u628A\u7FA4\u4E3B\u8F6C\u8BA9\u7ED9\u81EA\u5DF1");
-    const target = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.newOwnerId))).limit(1);
+    const target = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.newOwnerId))).limit(1);
     if (!target[0]) throw new Error("New owner must be a member of the group");
     await db.transaction(async (tx) => {
-      await tx.update(groupMembers).set({ role: "owner" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.newOwnerId)));
-      await tx.update(groupMembers).set({ role: "member" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id)));
+      await tx.update(groupMembers).set({ role: "owner" }).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.newOwnerId)));
+      await tx.update(groupMembers).set({ role: "member" }).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id)));
     });
     return { ok: true };
   }),
   // 群主设置/取消管理员
-  setMemberRole: protectedProcedure.input(z5.object({ groupId: z5.number(), userId: z5.number(), makeAdmin: z5.boolean() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  setMemberRole: protectedProcedure.input(z6.object({ groupId: z6.number(), userId: z6.number(), makeAdmin: z6.boolean() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner") throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B\u53EF\u8BBE\u7F6E\u7BA1\u7406\u5458" });
-    const [target] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.userId))).limit(1);
+    const [target] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.userId))).limit(1);
     if (!target) throw new TRPCError8({ code: "NOT_FOUND", message: "\u8BE5\u7528\u6237\u4E0D\u5728\u7FA4\u91CC" });
     if (target.role === "owner") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u4FEE\u6539\u7FA4\u4E3B\u89D2\u8272" });
-    await db.update(groupMembers).set({ role: input.makeAdmin ? "admin" : "member" }).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, input.userId)));
+    await db.update(groupMembers).set({ role: input.makeAdmin ? "admin" : "member" }).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.userId)));
     return { ok: true, role: input.makeAdmin ? "admin" : "member" };
   }),
-  getMutedMembers: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getMutedMembers: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") return [];
     const now = /* @__PURE__ */ new Date();
-    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq15(groupMutes.userId, users.id)).where(and11(eq15(groupMutes.groupId, input.groupId), gt4(groupMutes.expiresAt, now)));
+    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq16(groupMutes.userId, users.id)).where(and12(eq16(groupMutes.groupId, input.groupId), gt4(groupMutes.expiresAt, now)));
   }),
   // ─── Leave Group ──────────────────────────────────────────────────────────
-  leaveGroup: protectedProcedure.input(z5.object({ groupId: z5.number() })).mutation(async ({ ctx, input }) => {
+  leaveGroup: protectedProcedure.input(z6.object({ groupId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!member[0]) throw new Error("Not a member");
     if (member[0].role === "owner") throw new Error("Owner cannot leave. Transfer ownership first.");
     await db.delete(groupMembers).where(
-      and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))
+      and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))
     );
-    await db.update(chatGroups).set({ memberCount: sql8`GREATEST(${chatGroups.memberCount} - 1, 0)` }).where(eq15(chatGroups.id, input.groupId));
+    await db.update(chatGroups).set({ memberCount: sql9`GREATEST(${chatGroups.memberCount} - 1, 0)` }).where(eq16(chatGroups.id, input.groupId));
     return { ok: true };
   }),
   // ─── Update Group Info (owner/admin only) ────────────────────────────────
-  updateGroupInfo: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    name: z5.string().min(1).max(100).optional(),
-    description: z5.string().max(500).optional(),
-    avatar: z5.string().max(500).optional(),
-    isPublic: z5.boolean().optional(),
-    joinApproval: z5.boolean().optional(),
-    forbidAddFriend: z5.boolean().optional()
+  updateGroupInfo: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    name: z6.string().min(1).max(100).optional(),
+    description: z6.string().max(500).optional(),
+    avatar: z6.string().max(500).optional(),
+    isPublic: z6.boolean().optional(),
+    joinApproval: z6.boolean().optional(),
+    forbidAddFriend: z6.boolean().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
     if (actor[0].role !== "owner" && (input.isPublic !== void 0 || input.joinApproval !== void 0)) {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B\u53EF\u4FEE\u6539\u7FA4\u7684\u516C\u5F00/\u5165\u7FA4\u5BA1\u6279\u8BBE\u7F6E" });
@@ -6470,7 +6629,7 @@ var chatRouter = router({
     if (input.joinApproval !== void 0) updates.joinApproval = input.joinApproval;
     if (input.forbidAddFriend !== void 0) updates.forbidAddFriend = input.forbidAddFriend;
     if (Object.keys(updates).length === 0) return { ok: true };
-    await db.update(chatGroups).set(updates).where(eq15(chatGroups.id, input.groupId));
+    await db.update(chatGroups).set(updates).where(eq16(chatGroups.id, input.groupId));
     return { ok: true };
   }),
   // ─── 会话偏好：免打扰 / 置顶 / 清除历史 ──────────────────────────────────
@@ -6481,58 +6640,58 @@ var chatRouter = router({
       convKey: conversationPrefs.convKey,
       isMuted: conversationPrefs.isMuted,
       isPinned: conversationPrefs.isPinned
-    }).from(conversationPrefs).where(eq15(conversationPrefs.userId, ctx.user.id));
+    }).from(conversationPrefs).where(eq16(conversationPrefs.userId, ctx.user.id));
     const map = {};
     for (const r of rows) map[r.convKey] = { isMuted: r.isMuted, isPinned: r.isPinned };
     return map;
   }),
-  setConversationPref: protectedProcedure.input(z5.object({
-    convKey: z5.string().max(40),
-    isMuted: z5.boolean().optional(),
-    isPinned: z5.boolean().optional()
+  setConversationPref: protectedProcedure.input(z6.object({
+    convKey: z6.string().max(40),
+    isMuted: z6.boolean().optional(),
+    isPinned: z6.boolean().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const [existing] = await db.select({ id: conversationPrefs.id }).from(conversationPrefs).where(and11(eq15(conversationPrefs.userId, ctx.user.id), eq15(conversationPrefs.convKey, input.convKey))).limit(1);
+    const [existing] = await db.select({ id: conversationPrefs.id }).from(conversationPrefs).where(and12(eq16(conversationPrefs.userId, ctx.user.id), eq16(conversationPrefs.convKey, input.convKey))).limit(1);
     const patch = {};
     if (input.isMuted !== void 0) patch.isMuted = input.isMuted;
     if (input.isPinned !== void 0) patch.isPinned = input.isPinned;
     if (existing) {
-      if (Object.keys(patch).length > 0) await db.update(conversationPrefs).set(patch).where(eq15(conversationPrefs.id, existing.id));
+      if (Object.keys(patch).length > 0) await db.update(conversationPrefs).set(patch).where(eq16(conversationPrefs.id, existing.id));
     } else {
       await db.insert(conversationPrefs).values({ userId: ctx.user.id, convKey: input.convKey, ...patch });
     }
     return { ok: true };
   }),
-  clearConversationHistory: protectedProcedure.input(z5.object({ convKey: z5.string().max(40) })).mutation(async ({ ctx, input }) => {
+  clearConversationHistory: protectedProcedure.input(z6.object({ convKey: z6.string().max(40) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     let maxId = 0;
     if (input.convKey.startsWith("group:")) {
       const gid = parseInt(input.convKey.slice(6), 10);
-      const [m] = await db.select({ id: messages.id }).from(messages).where(eq15(messages.groupId, gid)).orderBy(desc6(messages.id)).limit(1);
+      const [m] = await db.select({ id: messages.id }).from(messages).where(eq16(messages.groupId, gid)).orderBy(desc7(messages.id)).limit(1);
       maxId = m?.id ?? 0;
     } else if (input.convKey.startsWith("dm:")) {
       const other = parseInt(input.convKey.slice(3), 10);
       const [m] = await db.select({ id: messages.id }).from(messages).where(or5(
-        and11(eq15(messages.senderId, ctx.user.id), eq15(messages.receiverId, other)),
-        and11(eq15(messages.senderId, other), eq15(messages.receiverId, ctx.user.id))
-      )).orderBy(desc6(messages.id)).limit(1);
+        and12(eq16(messages.senderId, ctx.user.id), eq16(messages.receiverId, other)),
+        and12(eq16(messages.senderId, other), eq16(messages.receiverId, ctx.user.id))
+      )).orderBy(desc7(messages.id)).limit(1);
       maxId = m?.id ?? 0;
     }
-    const [existing] = await db.select({ id: conversationPrefs.id }).from(conversationPrefs).where(and11(eq15(conversationPrefs.userId, ctx.user.id), eq15(conversationPrefs.convKey, input.convKey))).limit(1);
+    const [existing] = await db.select({ id: conversationPrefs.id }).from(conversationPrefs).where(and12(eq16(conversationPrefs.userId, ctx.user.id), eq16(conversationPrefs.convKey, input.convKey))).limit(1);
     if (existing) {
-      await db.update(conversationPrefs).set({ clearedBeforeId: maxId }).where(eq15(conversationPrefs.id, existing.id));
+      await db.update(conversationPrefs).set({ clearedBeforeId: maxId }).where(eq16(conversationPrefs.id, existing.id));
     } else {
       await db.insert(conversationPrefs).values({ userId: ctx.user.id, convKey: input.convKey, clearedBeforeId: maxId });
     }
     return { ok: true, clearedBeforeId: maxId };
   }),
   // ─── 进群审批 ────────────────────────────────────────────────────────────
-  listJoinRequests: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  listJoinRequests: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") return [];
     return db.select({
       id: groupJoinRequests.id,
@@ -6541,38 +6700,38 @@ var chatRouter = router({
       name: users.name,
       username: users.username,
       avatar: users.avatar
-    }).from(groupJoinRequests).leftJoin(users, eq15(users.id, groupJoinRequests.userId)).where(and11(eq15(groupJoinRequests.groupId, input.groupId), eq15(groupJoinRequests.status, "pending"))).orderBy(desc6(groupJoinRequests.id));
+    }).from(groupJoinRequests).leftJoin(users, eq16(users.id, groupJoinRequests.userId)).where(and12(eq16(groupJoinRequests.groupId, input.groupId), eq16(groupJoinRequests.status, "pending"))).orderBy(desc7(groupJoinRequests.id));
   }),
-  reviewJoinRequest: protectedProcedure.input(z5.object({ requestId: z5.number(), approve: z5.boolean() })).mutation(async ({ ctx, input }) => {
+  reviewJoinRequest: protectedProcedure.input(z6.object({ requestId: z6.number(), approve: z6.boolean() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const [req] = await db.select().from(groupJoinRequests).where(eq15(groupJoinRequests.id, input.requestId)).limit(1);
+    const [req] = await db.select().from(groupJoinRequests).where(eq16(groupJoinRequests.id, input.requestId)).limit(1);
     if (!req || req.status !== "pending") throw new TRPCError8({ code: "NOT_FOUND", message: "\u7533\u8BF7\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, req.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, req.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u5BA1\u6279" });
     }
-    await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(eq15(groupJoinRequests.id, input.requestId));
+    await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(eq16(groupJoinRequests.id, input.requestId));
     if (input.approve) {
-      const already = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, req.groupId), eq15(groupMembers.userId, req.userId))).limit(1);
+      const already = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, req.groupId), eq16(groupMembers.userId, req.userId))).limit(1);
       if (already.length === 0) {
         await db.insert(groupMembers).values({ groupId: req.groupId, userId: req.userId, role: "member" });
         await db.update(chatGroups).set({
-          memberCount: sql8`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
-        }).where(eq15(chatGroups.id, req.groupId));
+          memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
+        }).where(eq16(chatGroups.id, req.groupId));
       }
     }
     return { ok: true };
   }),
   // ─── Red Packet: Send (扣 AC 积分发群红包) ───────────────────────────────
-  sendRedPacket: protectedProcedure.input(z5.object({
-    groupId: z5.number().optional(),
-    receiverId: z5.number().optional(),
+  sendRedPacket: protectedProcedure.input(z6.object({
+    groupId: z6.number().optional(),
+    receiverId: z6.number().optional(),
     // 私信红包接收者（与 groupId 二选一）
-    totalAmount: z5.number().int().min(1).max(1e6),
-    totalShares: z5.number().int().min(1).max(100).default(1),
-    isRandom: z5.boolean().default(true),
-    blessing: z5.string().max(100).optional()
+    totalAmount: z6.number().int().min(1).max(1e6),
+    totalShares: z6.number().int().min(1).max(100).default(1),
+    isRandom: z6.boolean().default(true),
+    blessing: z6.string().max(100).optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
@@ -6590,7 +6749,7 @@ var chatRouter = router({
     const blessing = sanitizeInput(input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229", 100);
     let messageId = 0;
     await db.transaction(async (tx) => {
-      const deduct = await tx.update(users).set({ npPoints: sql8`npPoints - ${input.totalAmount}` }).where(and11(eq15(users.id, ctx.user.id), sql8`npPoints >= ${input.totalAmount}`));
+      const deduct = await tx.update(users).set({ npPoints: sql9`npPoints - ${input.totalAmount}` }).where(and12(eq16(users.id, ctx.user.id), sql9`npPoints >= ${input.totalAmount}`));
       const affected2 = deduct?.[0]?.affectedRows ?? deduct?.affectedRows ?? 0;
       if (!affected2) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u79EF\u5206\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u53D1\u7EA2\u5305" });
       const [msg] = await tx.insert(messages).values({
@@ -6630,21 +6789,21 @@ var chatRouter = router({
     return { messageId, totalAmount: input.totalAmount, totalShares };
   }),
   // ─── Red Packet: Claim (抢红包，随机/均分发放并入账) ───────────────────────
-  claimRedPacket: protectedProcedure.input(z5.object({
-    messageId: z5.number(),
-    groupId: z5.number().optional()
+  claimRedPacket: protectedProcedure.input(z6.object({
+    messageId: z6.number(),
+    groupId: z6.number().optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     let result = { ok: false, reason: "not_found", amount: 0 };
     await db.transaction(async (tx) => {
-      const [rp] = await tx.select().from(redPackets).where(eq15(redPackets.messageId, input.messageId)).for("update").limit(1);
+      const [rp] = await tx.select().from(redPackets).where(eq16(redPackets.messageId, input.messageId)).for("update").limit(1);
       if (!rp) {
         result = { ok: false, reason: "not_found", amount: 0 };
         return;
       }
       if (rp.groupId) {
-        const [m] = await tx.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, rp.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+        const [m] = await tx.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, rp.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
         if (!m) {
           result = { ok: false, reason: "not_member", amount: 0 };
           return;
@@ -6653,7 +6812,7 @@ var chatRouter = router({
         result = { ok: false, reason: "not_recipient", amount: 0 };
         return;
       }
-      const existing = await tx.select({ amount: redPacketClaims.amount }).from(redPacketClaims).where(and11(eq15(redPacketClaims.messageId, input.messageId), eq15(redPacketClaims.claimedBy, ctx.user.id))).limit(1);
+      const existing = await tx.select({ amount: redPacketClaims.amount }).from(redPacketClaims).where(and12(eq16(redPacketClaims.messageId, input.messageId), eq16(redPacketClaims.claimedBy, ctx.user.id))).limit(1);
       if (existing.length > 0) {
         result = { ok: false, reason: "already_claimed", amount: existing[0].amount };
         return;
@@ -6679,20 +6838,20 @@ var chatRouter = router({
         claimedBy: ctx.user.id,
         amount
       });
-      await tx.update(redPackets).set({ remainingAmount: sql8`remainingAmount - ${amount}`, remainingShares: sql8`remainingShares - 1` }).where(eq15(redPackets.id, rp.id));
-      await tx.update(users).set({ npPoints: sql8`npPoints + ${amount}` }).where(eq15(users.id, ctx.user.id));
+      await tx.update(redPackets).set({ remainingAmount: sql9`remainingAmount - ${amount}`, remainingShares: sql9`remainingShares - 1` }).where(eq16(redPackets.id, rp.id));
+      await tx.update(users).set({ npPoints: sql9`npPoints + ${amount}` }).where(eq16(users.id, ctx.user.id));
       result = { ok: true, reason: "", amount };
     });
     return result;
   }),
   // ─── Red Packet: Get status (含金额与领取明细) ───────────────────────────
-  getRedPacketStatus: protectedProcedure.input(z5.object({ messageId: z5.number() })).query(async ({ ctx, input }) => {
+  getRedPacketStatus: protectedProcedure.input(z6.object({ messageId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [rp] = await db.select().from(redPackets).where(eq15(redPackets.messageId, input.messageId)).limit(1);
+    const [rp] = await db.select().from(redPackets).where(eq16(redPackets.messageId, input.messageId)).limit(1);
     if (!rp) return null;
     if (rp.groupId) {
-      const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, rp.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+      const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, rp.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
       if (!m) return null;
     } else if (rp.receiverId && rp.receiverId !== ctx.user.id && rp.senderId !== ctx.user.id) {
       return null;
@@ -6703,7 +6862,7 @@ var chatRouter = router({
       claimedAt: redPacketClaims.claimedAt,
       name: users.name,
       avatar: users.avatar
-    }).from(redPacketClaims).leftJoin(users, eq15(users.id, redPacketClaims.claimedBy)).where(eq15(redPacketClaims.messageId, input.messageId)).orderBy(desc6(redPacketClaims.claimedAt));
+    }).from(redPacketClaims).leftJoin(users, eq16(users.id, redPacketClaims.claimedBy)).where(eq16(redPacketClaims.messageId, input.messageId)).orderBy(desc7(redPacketClaims.claimedAt));
     const mine = claims.find((c) => c.claimedBy === ctx.user.id);
     return {
       messageId: input.messageId,
@@ -6721,30 +6880,30 @@ var chatRouter = router({
     };
   }),
   // ─── Group Announcements: Get ─────────────────────────────────────────────
-  getAnnouncement: publicProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ input }) => {
+  getAnnouncement: publicProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const ann = await db.select().from(groupAnnouncements).where(and11(eq15(groupAnnouncements.groupId, input.groupId), eq15(groupAnnouncements.isPinned, true))).orderBy(desc6(groupAnnouncements.updatedAt)).limit(1);
+    const ann = await db.select().from(groupAnnouncements).where(and12(eq16(groupAnnouncements.groupId, input.groupId), eq16(groupAnnouncements.isPinned, true))).orderBy(desc7(groupAnnouncements.updatedAt)).limit(1);
     return ann[0] ?? null;
   }),
   // ─── Group Announcements: Set (owner/admin only) ──────────────────────────
-  setAnnouncement: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    content: z5.string().min(1).max(1e3)
+  setAnnouncement: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    content: z6.string().min(1).max(1e3)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-    await db.delete(groupAnnouncements).where(and11(eq15(groupAnnouncements.groupId, input.groupId), eq15(groupAnnouncements.isPinned, true)));
+    await db.delete(groupAnnouncements).where(and12(eq16(groupAnnouncements.groupId, input.groupId), eq16(groupAnnouncements.isPinned, true)));
     await db.insert(groupAnnouncements).values({
       groupId: input.groupId,
       content: sanitizeInput(input.content),
       createdBy: ctx.user.id,
       isPinned: true
     });
-    const [groupInfo] = await db.select({ name: chatGroups.name }).from(chatGroups).where(eq15(chatGroups.id, input.groupId)).limit(1);
-    const members = await db.select({ userId: groupMembers.userId }).from(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
+    const [groupInfo] = await db.select({ name: chatGroups.name }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
+    const members = await db.select({ userId: groupMembers.userId }).from(groupMembers).where(eq16(groupMembers.groupId, input.groupId));
     const senderName = ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`;
     const groupName = groupInfo?.name ?? `Group #${input.groupId}`;
     const safeContent = sanitizeInput(input.content);
@@ -6762,16 +6921,16 @@ var chatRouter = router({
     return { ok: true };
   }),
   // ─── Group Announcements: Delete (owner/admin only) ───────────────────────
-  deleteAnnouncement: protectedProcedure.input(z5.object({ groupId: z5.number() })).mutation(async ({ ctx, input }) => {
+  deleteAnnouncement: protectedProcedure.input(z6.object({ groupId: z6.number() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
-    await db.delete(groupAnnouncements).where(and11(eq15(groupAnnouncements.groupId, input.groupId), eq15(groupAnnouncements.isPinned, true)));
+    await db.delete(groupAnnouncements).where(and12(eq16(groupAnnouncements.groupId, input.groupId), eq16(groupAnnouncements.isPinned, true)));
     return { ok: true };
   }),
   // ─── 群数据看板（群成员可看；数据机器人解锁周报，但实时数据对成员开放） ──────
-  getGroupStats: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getGroupStats: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await assertGroupMember(db, input.groupId, ctx.user.id);
@@ -6779,22 +6938,22 @@ var chatRouter = router({
     const dayAgo = new Date(now - 24 * 3600 * 1e3);
     const weekAgo = new Date(now - 7 * 24 * 3600 * 1e3);
     const prevWeekAgo = new Date(now - 14 * 24 * 3600 * 1e3);
-    const [memberCount] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(eq15(groupMembers.groupId, input.groupId));
-    const [newWeek] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), gt4(groupMembers.joinedAt, weekAgo)));
-    const [msgToday] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, dayAgo)));
-    const [msgWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
-    const [msgPrevWeek] = await db.select({ c: sql8`COUNT(*)` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
-    const [activeWeek] = await db.select({ c: sql8`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
+    const [memberCount] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq16(groupMembers.groupId, input.groupId));
+    const [newWeek] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), gt4(groupMembers.joinedAt, weekAgo)));
+    const [msgToday] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, dayAgo)));
+    const [msgWeek] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
+    const [msgPrevWeek] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
+    const [activeWeek] = await db.select({ c: sql9`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
     const daily = await db.select({
-      day: sql8`DATE(${messages.createdAt})`,
-      c: sql8`COUNT(*)`
-    }).from(messages).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(sql8`DATE(${messages.createdAt})`).orderBy(sql8`DATE(${messages.createdAt})`);
+      day: sql9`DATE(${messages.createdAt})`,
+      c: sql9`COUNT(*)`
+    }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(sql9`DATE(${messages.createdAt})`).orderBy(sql9`DATE(${messages.createdAt})`);
     const topRows = await db.select({
       userId: messages.senderId,
       name: users.name,
       avatar: users.avatar,
-      c: sql8`COUNT(*)`
-    }).from(messages).leftJoin(users, eq15(users.id, messages.senderId)).where(and11(eq15(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc6(sql8`COUNT(*)`)).limit(5);
+      c: sql9`COUNT(*)`
+    }).from(messages).leftJoin(users, eq16(users.id, messages.senderId)).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc7(sql9`COUNT(*)`)).limit(5);
     const total = Number(memberCount?.c ?? 0);
     const active = Number(activeWeek?.c ?? 0);
     const mw = Number(msgWeek?.c ?? 0);
@@ -6821,35 +6980,35 @@ var chatRouter = router({
     };
   }),
   // ─── 群机器人：目录 + 套餐 + 本群状态 ──────────────────────────────────────
-  getGroupBots: protectedProcedure.input(z5.object({ groupId: z5.number() })).query(async ({ ctx, input }) => {
+  getGroupBots: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     await assertGroupMember(db, input.groupId, ctx.user.id);
-    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     const canManage = !!me && (me.role === "owner" || me.role === "admin");
     const bots = await listGroupBots(db, input.groupId);
     return { canManage, bots, packages: BOT_PACKAGES };
   }),
   // 开通/续费/关闭/改设置（owner/admin；开通按月扣 AC）
-  setGroupBot: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    botType: z5.enum(["welcome", "manage", "price", "activity", "stats", "interact", "growth"]),
-    enabled: z5.boolean().optional(),
+  setGroupBot: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    botType: z6.enum(["welcome", "manage", "price", "activity", "stats", "interact", "growth"]),
+    enabled: z6.boolean().optional(),
     // 开/关
-    months: z5.number().int().min(0).max(12).optional(),
+    months: z6.number().int().min(0).max(12).optional(),
     // >0 表示订阅/续费月数（扣费）
-    config: z5.record(z5.string(), z5.any()).optional()
+    config: z6.record(z6.string(), z6.any()).optional()
     // 机器人设置
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!me || me.role !== "owner" && me.role !== "admin") {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u8BBE\u7F6E\u673A\u5668\u4EBA" });
     }
     const meta = getBotMeta(input.botType);
     if (!meta) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u672A\u77E5\u673A\u5668\u4EBA" });
-    const [existing] = await db.select().from(groupBots).where(and11(eq15(groupBots.groupId, input.groupId), eq15(groupBots.botType, input.botType))).limit(1);
+    const [existing] = await db.select().from(groupBots).where(and12(eq16(groupBots.groupId, input.groupId), eq16(groupBots.botType, input.botType))).limit(1);
     let expiresAt = void 0;
     const months = input.months ?? 0;
     if (months > 0 && meta.monthlyNN > 0) {
@@ -6875,7 +7034,7 @@ var chatRouter = router({
       setFields.config = JSON.stringify(merged);
     }
     if (existing) {
-      await db.update(groupBots).set(setFields).where(eq15(groupBots.id, existing.id));
+      await db.update(groupBots).set(setFields).where(eq16(groupBots.id, existing.id));
     } else {
       await db.insert(groupBots).values({
         groupId: input.groupId,
@@ -6885,18 +7044,18 @@ var chatRouter = router({
         config: setFields.config ?? JSON.stringify(meta.defaultConfig)
       });
     }
-    const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq15(users.id, ctx.user.id)).limit(1);
+    const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq16(users.id, ctx.user.id)).limit(1);
     return { ok: true, nnBalance: Number(bal?.nn ?? 0) };
   }),
   // 开通机器人套餐：按套餐折扣价一次性扣 AI，激活套餐内全部机器人
-  buyBotPackage: protectedProcedure.input(z5.object({
-    groupId: z5.number(),
-    packageKey: z5.string(),
-    months: z5.number().int().min(1).max(12).default(1)
+  buyBotPackage: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    packageKey: z6.string(),
+    months: z6.number().int().min(1).max(12).default(1)
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and11(eq15(groupMembers.groupId, input.groupId), eq15(groupMembers.userId, ctx.user.id))).limit(1);
+    const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!me || me.role !== "owner" && me.role !== "admin") {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u5F00\u901A\u5957\u9910" });
     }
@@ -6915,13 +7074,13 @@ var chatRouter = router({
       const meta = getBotMeta(bt);
       if (!meta) continue;
       const isFree = meta.monthlyNN === 0;
-      const [existing] = await db.select().from(groupBots).where(and11(eq15(groupBots.groupId, input.groupId), eq15(groupBots.botType, bt))).limit(1);
+      const [existing] = await db.select().from(groupBots).where(and12(eq16(groupBots.groupId, input.groupId), eq16(groupBots.botType, bt))).limit(1);
       let expiresAt = isFree ? null : paidExpiry;
       if (!isFree && existing?.expiresAt && existing.expiresAt.getTime() > Date.now()) {
         expiresAt = new Date(existing.expiresAt.getTime() + input.months * 30 * 24 * 3600 * 1e3);
       }
       if (existing) {
-        await db.update(groupBots).set({ enabled: true, expiresAt, updatedAt: /* @__PURE__ */ new Date() }).where(eq15(groupBots.id, existing.id));
+        await db.update(groupBots).set({ enabled: true, expiresAt, updatedAt: /* @__PURE__ */ new Date() }).where(eq16(groupBots.id, existing.id));
       } else {
         await db.insert(groupBots).values({
           groupId: input.groupId,
@@ -6932,7 +7091,7 @@ var chatRouter = router({
         });
       }
     }
-    const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq15(users.id, ctx.user.id)).limit(1);
+    const [bal] = await db.select({ nn: users.nnBalance }).from(users).where(eq16(users.id, ctx.user.id)).limit(1);
     return { ok: true, nnBalance: Number(bal?.nn ?? 0), bots: pkg.bots };
   }),
   // ─── AI 治理代币 ──────────────────────────────────────────────────────────
@@ -6944,7 +7103,7 @@ var chatRouter = router({
   // 代币经济（总量 + 分配模型，公开）
   getTokenomics: publicProcedure.query(() => getTokenomics()),
   // 发放 AI（空投/运营，管理员）。amount 上限受金库余额约束。
-  adminGrantNN: adminProcedure.input(z5.object({ userId: z5.number(), amount: z5.number().int().min(1).max(NN_TOTAL_SUPPLY) })).mutation(async ({ input }) => {
+  adminGrantNN: adminProcedure.input(z6.object({ userId: z6.number(), amount: z6.number().int().min(1).max(NN_TOTAL_SUPPLY) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const ok = await grantNN(db, input.userId, input.amount, { type: "grant", refType: "admin" });
@@ -6957,7 +7116,7 @@ var chatRouter = router({
     if (!db) throw new Error("DB unavailable");
     return getMembership(db, ctx.user.id);
   }),
-  buyMembership: protectedProcedure.input(z5.object({ tier: z5.enum(["plus", "pro"]), months: z5.number().int().min(1).max(12).default(1) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  buyMembership: protectedProcedure.input(z6.object({ tier: z6.enum(["plus", "pro"]), months: z6.number().int().min(1).max(12).default(1) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     try {
@@ -6975,7 +7134,7 @@ var chatRouter = router({
     return getMyVesting(db, ctx.user.id);
   }),
   // 领取当前可解锁的 AI
-  claimVesting: protectedProcedure.input(z5.object({ vestingId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  claimVesting: protectedProcedure.input(z6.object({ vestingId: z6.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const r = await claimVesting(db, ctx.user.id, input.vestingId);
@@ -6990,16 +7149,16 @@ var chatRouter = router({
   }),
   // 运营：机器人订阅统计 + AI 营收 + 节点订单概览
   // ─── 运营增长:一键填公开群人数 + 一键扩充互动机器人(替代服务器脚本)──────────────
-  adminFillGroupMembers: adminProcedure.input(z5.object({
-    targetMin: z5.number().int().min(1).max(5e3).default(220),
-    targetMax: z5.number().int().min(1).max(5e3).default(480),
-    maxPerCall: z5.number().int().min(1).max(2e3).default(800)
+  adminFillGroupMembers: adminProcedure.input(z6.object({
+    targetMin: z6.number().int().min(1).max(5e3).default(220),
+    targetMax: z6.number().int().min(1).max(5e3).default(480),
+    maxPerCall: z6.number().int().min(1).max(2e3).default(800)
     // 单次最多新增,防 HTTP 超时;不够再点一次
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const lo = Math.min(input.targetMin, input.targetMax), hi = Math.max(input.targetMin, input.targetMax);
-    const groups = await db.select({ id: chatGroups.id, name: chatGroups.name }).from(chatGroups).where(eq15(chatGroups.isPublic, true)).limit(60);
+    const groups = await db.select({ id: chatGroups.id, name: chatGroups.name }).from(chatGroups).where(eq16(chatGroups.isPublic, true)).limit(60);
     const PRE = ["0x", "Crypto", "Web3", "DeFi", "Chain", "Block", "Token", "NFT", "Eth", "BTC", "Sol", "Ape", "Degen", "Meta", "Zk", "Layer"];
     const SUF = ["Whale", "Degen", "Hodler", "Maxi", "Anon", "Dev", "Trader", "Farmer", "Bull", "Bear", "Ape", "Fren", "Chad", "Wizard", "Ninja", "Guru"];
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -7007,7 +7166,7 @@ var chatRouter = router({
     let added = 0, remaining = 0, ctr = Date.now() * 1e3;
     const summary = [];
     for (const g of groups) {
-      const [cnt] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(eq15(groupMembers.groupId, g.id));
+      const [cnt] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq16(groupMembers.groupId, g.id));
       const have = Number(cnt?.c ?? 0);
       const target = lo + Math.floor(Math.random() * (hi - lo + 1));
       const want = target - have;
@@ -7031,8 +7190,8 @@ var chatRouter = router({
         await db.insert(groupMembers).values(Array.from({ length: n2 }, (_, i) => ({ groupId: g.id, userId: Number(firstId) + i, role: "member", joinedAt: pastDate(60) })));
         done += n2;
       }
-      const [c2] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(eq15(groupMembers.groupId, g.id));
-      await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq15(chatGroups.id, g.id));
+      const [c2] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq16(groupMembers.groupId, g.id));
+      await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq16(chatGroups.id, g.id));
       added += done;
       if (want > done) remaining += want - done;
       summary.push({ group: g.name, from: have, to: Number(c2?.c ?? 0) });
@@ -7052,23 +7211,23 @@ var chatRouter = router({
     ];
     let created = 0;
     for (const b of NEW_BOTS) {
-      const [ex] = await db.select({ id: users.id }).from(users).where(eq15(users.openId, b.openId)).limit(1);
+      const [ex] = await db.select({ id: users.id }).from(users).where(eq16(users.openId, b.openId)).limit(1);
       if (ex) continue;
       await db.insert(users).values({ openId: b.openId, name: b.name, loginMethod: "bot", role: "user", username: b.username, isBot: true, lastSignedIn: /* @__PURE__ */ new Date() });
       created++;
     }
     const bots = await db.select({ id: users.id }).from(users).where(inArray6(users.openId, Object.values(BOT_PERSONAS).map((p) => p.openId)));
-    const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq15(chatGroups.isPublic, true)).limit(60);
+    const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq16(chatGroups.isPublic, true)).limit(60);
     let joins = 0;
     for (const g of groups) {
       for (const bot of bots) {
-        const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, g.id), eq15(groupMembers.userId, bot.id))).limit(1);
+        const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, g.id), eq16(groupMembers.userId, bot.id))).limit(1);
         if (m) continue;
         await db.insert(groupMembers).values({ groupId: g.id, userId: bot.id, role: "member" });
         joins++;
       }
-      const [c2] = await db.select({ c: sql8`COUNT(*)` }).from(groupMembers).where(eq15(groupMembers.groupId, g.id));
-      await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq15(chatGroups.id, g.id));
+      const [c2] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq16(groupMembers.groupId, g.id));
+      await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq16(chatGroups.id, g.id));
     }
     return { createdBots: created, totalBots: bots.length, groups: groups.length, joins };
   }),
@@ -7076,11 +7235,11 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const now = /* @__PURE__ */ new Date();
-    const active = await db.select({ botType: groupBots.botType, c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), or5(isNull4(groupBots.expiresAt), gt4(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
+    const active = await db.select({ botType: groupBots.botType, c: sql9`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), or5(isNull4(groupBots.expiresAt), gt4(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
     const soon = new Date(now.getTime() + 7 * 24 * 3600 * 1e3);
-    const [expiring] = await db.select({ c: sql8`COUNT(*)` }).from(groupBots).where(and11(eq15(groupBots.enabled, true), gt4(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
+    const [expiring] = await db.select({ c: sql9`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), gt4(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
     const revenue = await getNNRevenue(db);
-    const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql8`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
+    const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql9`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
     const token = await getTokenInfo(db);
     return {
       activeBots: active.map((a) => ({ botType: a.botType, count: Number(a.c) })),
@@ -7094,37 +7253,37 @@ var chatRouter = router({
   // 节点等级 + 收款地址（公开）
   getNodeTiers: publicProcedure.query(() => ({ tiers: NN_NODE_TIERS, payAddress: USDT_DEPOSIT_ADDRESS, chain: USDT_CHAIN })),
   // 下单认购：创建待支付订单，返回收款地址与应付金额
-  createNodeOrder: protectedProcedure.input(z5.object({ tier: z5.enum(["genesis", "super", "standard"]) })).use(rateLimitWrite).mutation(async () => {
+  createNodeOrder: protectedProcedure.input(z6.object({ tier: z6.enum(["genesis", "super", "standard"]) })).use(rateLimitWrite).mutation(async () => {
     throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8282\u70B9\u8BA4\u8D2D\u5DF2\u5347\u7EA7\u4E3A\u300C\u5408\u4F19\u4EBA\u62DB\u52DF\u300D\uFF0C\u8BF7\u524D\u5F80\u4EE3\u5E01\u9875 \u2192 \u5408\u4F19\u4EBA\u62DB\u52DF\u8BA4\u8D2D" });
   }),
   // 回填链上转账哈希（用户支付后提交，等待运营确认）
-  submitNodeTx: protectedProcedure.input(z5.object({ orderId: z5.number(), txHash: z5.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
+  submitNodeTx: protectedProcedure.input(z6.object({ orderId: z6.number(), txHash: z6.string().min(6).max(120) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const [o] = await db.select().from(nnNodeOrders).where(eq15(nnNodeOrders.id, input.orderId)).limit(1);
+    const [o] = await db.select().from(nnNodeOrders).where(eq16(nnNodeOrders.id, input.orderId)).limit(1);
     if (!o || o.userId !== ctx.user.id) throw new TRPCError8({ code: "FORBIDDEN", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
     if (o.status !== "pending") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u72B6\u6001\u4E0D\u53EF\u4FEE\u6539" });
-    await db.update(nnNodeOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq15(nnNodeOrders.id, input.orderId));
+    await db.update(nnNodeOrders).set({ txHash: sanitizeInput(input.txHash, 120) }).where(eq16(nnNodeOrders.id, input.orderId));
     return { ok: true };
   }),
   // 我的节点订单
   getMyNodeOrders: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(nnNodeOrders).where(eq15(nnNodeOrders.userId, ctx.user.id)).orderBy(desc6(nnNodeOrders.createdAt)).limit(50);
+    return db.select().from(nnNodeOrders).where(eq16(nnNodeOrders.userId, ctx.user.id)).orderBy(desc7(nnNodeOrders.createdAt)).limit(50);
   }),
   // 运营：列订单（可按状态）
-  adminListNodeOrders: adminProcedure.input(z5.object({ status: z5.enum(["pending", "confirmed", "cancelled"]).optional() }).optional()).query(async ({ input }) => {
+  adminListNodeOrders: adminProcedure.input(z6.object({ status: z6.enum(["pending", "confirmed", "cancelled"]).optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const conds = input?.status ? [eq15(nnNodeOrders.status, input.status)] : [];
-    return db.select().from(nnNodeOrders).where(conds.length ? and11(...conds) : void 0).orderBy(desc6(nnNodeOrders.createdAt)).limit(100);
+    const conds = input?.status ? [eq16(nnNodeOrders.status, input.status)] : [];
+    return db.select().from(nnNodeOrders).where(conds.length ? and12(...conds) : void 0).orderBy(desc7(nnNodeOrders.createdAt)).limit(100);
   }),
   // 运营：确认到账 → 发放 AI（从金库/节点池），订单置为已确认
-  adminConfirmNodeOrder: adminProcedure.input(z5.object({ orderId: z5.number() })).mutation(async ({ input }) => {
+  adminConfirmNodeOrder: adminProcedure.input(z6.object({ orderId: z6.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const [o] = await db.select().from(nnNodeOrders).where(eq15(nnNodeOrders.id, input.orderId)).limit(1);
+    const [o] = await db.select().from(nnNodeOrders).where(eq16(nnNodeOrders.id, input.orderId)).limit(1);
     if (!o) throw new TRPCError8({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
     if (o.status !== "pending") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BA2\u5355\u5DF2\u5904\u7406" });
     if (getNodeTier(o.tier)) {
@@ -7133,23 +7292,23 @@ var chatRouter = router({
     throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BF7\u4F7F\u7528\u5408\u4F19\u4EBA\u786E\u8BA4\u5165\u53E3\u5904\u7406\u8BE5\u8BA2\u5355" });
   }),
   // 运营：取消订单
-  adminCancelNodeOrder: adminProcedure.input(z5.object({ orderId: z5.number() })).mutation(async ({ input }) => {
+  adminCancelNodeOrder: adminProcedure.input(z6.object({ orderId: z6.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    const [o] = await db.select().from(nnNodeOrders).where(eq15(nnNodeOrders.id, input.orderId)).limit(1);
+    const [o] = await db.select().from(nnNodeOrders).where(eq16(nnNodeOrders.id, input.orderId)).limit(1);
     if (!o) throw new TRPCError8({ code: "NOT_FOUND", message: "\u8BA2\u5355\u4E0D\u5B58\u5728" });
     if (o.status === "confirmed") throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5DF2\u786E\u8BA4\u8BA2\u5355\u4E0D\u53EF\u53D6\u6D88" });
-    await db.update(nnNodeOrders).set({ status: "cancelled" }).where(eq15(nnNodeOrders.id, o.id));
+    await db.update(nnNodeOrders).set({ status: "cancelled" }).where(eq16(nnNodeOrders.id, o.id));
     return { ok: true };
   })
 });
 
 // server/routers/research.ts
-import { z as z6 } from "zod";
+import { z as z7 } from "zod";
 import { TRPCError as TRPCError9 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq16, and as and12, desc as desc7 } from "drizzle-orm";
+import { eq as eq17, and as and13, desc as desc8 } from "drizzle-orm";
 
 // server/userAiBudget.ts
 var DAILY_CAP2 = Math.max(0, Number(process.env.USER_AI_LLM_DAILY_CAP || 8e3));
@@ -7416,11 +7575,11 @@ function extractRiskLevel(content) {
 }
 var researchRouter = router({
   // Generate AI research report (supports quick / deep modes)
-  generate: protectedProcedure.use(rateLimitStrict).input(z6.object({
-    tokenSymbol: z6.string().min(1).max(20),
-    contractAddress: z6.string().optional(),
-    chain: z6.string().default("BSC"),
-    mode: z6.enum(["quick", "deep"]).default("deep")
+  generate: protectedProcedure.use(rateLimitStrict).input(z7.object({
+    tokenSymbol: z7.string().min(1).max(20),
+    contractAddress: z7.string().optional(),
+    chain: z7.string().default("BSC"),
+    mode: z7.enum(["quick", "deep"]).default("deep")
   })).mutation(async ({ ctx, input }) => {
     if (!ctx.user) throw new TRPCError9({ code: "UNAUTHORIZED" });
     const db = await getDb();
@@ -7469,24 +7628,24 @@ var researchRouter = router({
     };
   }),
   // List user's reports
-  myReports: protectedProcedure.input(z6.object({ limit: z6.number().default(10) }).optional()).query(async ({ ctx, input }) => {
+  myReports: protectedProcedure.input(z7.object({ limit: z7.number().default(10) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(researchReports).where(eq16(researchReports.userId, ctx.user.id)).orderBy(desc7(researchReports.createdAt)).limit(input?.limit ?? 10);
+    return db.select().from(researchReports).where(eq17(researchReports.userId, ctx.user.id)).orderBy(desc8(researchReports.createdAt)).limit(input?.limit ?? 10);
   }),
   // Get a single report
-  getReport: protectedProcedure.input(z6.object({ reportId: z6.number() })).query(async ({ ctx, input }) => {
+  getReport: protectedProcedure.input(z7.object({ reportId: z7.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return null;
-    const result = await db.select().from(researchReports).where(and12(eq16(researchReports.id, input.reportId), eq16(researchReports.userId, ctx.user.id))).limit(1);
+    const result = await db.select().from(researchReports).where(and13(eq17(researchReports.id, input.reportId), eq17(researchReports.userId, ctx.user.id))).limit(1);
     return result[0] ?? null;
   }),
   // Price alerts
-  createAlert: protectedProcedure.use(rateLimitWrite).input(z6.object({
-    tokenSymbol: z6.string().max(20),
-    tokenId: z6.string().max(100),
-    targetPrice: z6.string().max(30),
-    condition: z6.enum(["above", "below"])
+  createAlert: protectedProcedure.use(rateLimitWrite).input(z7.object({
+    tokenSymbol: z7.string().max(20),
+    tokenId: z7.string().max(100),
+    targetPrice: z7.string().max(30),
+    condition: z7.enum(["above", "below"])
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -7499,26 +7658,26 @@ var researchRouter = router({
   myAlerts: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(priceAlerts).where(eq16(priceAlerts.userId, ctx.user.id)).orderBy(desc7(priceAlerts.createdAt));
+    return db.select().from(priceAlerts).where(eq17(priceAlerts.userId, ctx.user.id)).orderBy(desc8(priceAlerts.createdAt));
   }),
   // Get user's research report history
-  getHistory: protectedProcedure.input(z6.object({ limit: z6.number().default(20) }).optional()).query(async ({ ctx, input }) => {
+  getHistory: protectedProcedure.input(z7.object({ limit: z7.number().default(20) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(researchReports).where(eq16(researchReports.userId, ctx.user.id)).orderBy(desc7(researchReports.createdAt)).limit(input?.limit ?? 20);
+    return db.select().from(researchReports).where(eq17(researchReports.userId, ctx.user.id)).orderBy(desc8(researchReports.createdAt)).limit(input?.limit ?? 20);
   }),
   // Fetch live price from CoinGecko (public)
-  getPrice: publicProcedure.input(z6.object({ symbol: z6.string().max(20) })).query(async ({ input }) => {
+  getPrice: publicProcedure.input(z7.object({ symbol: z7.string().max(20) })).query(async ({ input }) => {
     return fetchTokenData(input.symbol);
   }),
   // ─── Share report to community feed ─────────────────────────────────────
-  shareToFeed: protectedProcedure.input(z6.object({
-    reportId: z6.number(),
-    comment: z6.string().max(500).optional()
+  shareToFeed: protectedProcedure.input(z7.object({
+    reportId: z7.number(),
+    comment: z7.string().max(500).optional()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [report] = await db.select().from(researchReports).where(eq16(researchReports.id, input.reportId)).limit(1);
+    const [report] = await db.select().from(researchReports).where(eq17(researchReports.id, input.reportId)).limit(1);
     if (!report) throw new Error("Report not found");
     if (report.userId !== ctx.user.id) throw new Error("Not authorized");
     const sentimentEmoji = report.sentiment === "bullish" ? "\u{1F7E2}" : report.sentiment === "bearish" ? "\u{1F534}" : "\u{1F7E1}";
@@ -7557,10 +7716,10 @@ ${summary}${summary.length >= 150 ? "..." : ""}
     };
   }),
   // ─── Get report by ID (public, for viewing shared reports) ─────────────
-  getReportPublic: publicProcedure.input(z6.object({ reportId: z6.number() })).query(async ({ input }) => {
+  getReportPublic: publicProcedure.input(z7.object({ reportId: z7.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [shared] = await db.select({ id: posts.id }).from(posts).where(eq16(posts.reportId, input.reportId)).limit(1);
+    const [shared] = await db.select({ id: posts.id }).from(posts).where(eq17(posts.reportId, input.reportId)).limit(1);
     if (!shared) return null;
     const [report] = await db.select({
       id: researchReports.id,
@@ -7574,7 +7733,7 @@ ${summary}${summary.length >= 150 ? "..." : ""}
       createdAt: researchReports.createdAt,
       authorName: users.name,
       authorAvatar: users.avatar
-    }).from(researchReports).leftJoin(users, eq16(researchReports.userId, users.id)).where(eq16(researchReports.id, input.reportId)).limit(1);
+    }).from(researchReports).leftJoin(users, eq17(researchReports.userId, users.id)).where(eq17(researchReports.id, input.reportId)).limit(1);
     return report ?? null;
   })
 });
@@ -7585,134 +7744,6 @@ init_db();
 init_schema();
 import { eq as eq18, and as and14, desc as desc9, sql as sql10, gt as gt5 } from "drizzle-orm";
 init_storage();
-
-// server/routers/notificationsRouter.ts
-import { z as z7 } from "zod";
-init_db();
-init_schema();
-import { eq as eq17, and as and13, desc as desc8, sql as sql9 } from "drizzle-orm";
-var notificationsRouter = router({
-  // ─── Get notifications for current user ─────────────────────────────────────
-  list: protectedProcedure.input(
-    z7.object({
-      limit: z7.number().min(1).max(50).default(20),
-      unreadOnly: z7.boolean().default(false)
-    }).optional()
-  ).query(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) return { notifications: [], unreadCount: 0 };
-    const limit = input?.limit ?? 20;
-    const unreadOnly = input?.unreadOnly ?? false;
-    const conditions = [eq17(notifications.userId, ctx.user.id)];
-    if (unreadOnly) {
-      conditions.push(eq17(notifications.isRead, false));
-    }
-    const rows = await db.select().from(notifications).where(and13(...conditions)).orderBy(desc8(notifications.createdAt)).limit(limit);
-    const [unreadRow] = await db.select({ count: sql9`COUNT(*)` }).from(notifications).where(and13(eq17(notifications.userId, ctx.user.id), eq17(notifications.isRead, false)));
-    return {
-      notifications: rows,
-      unreadCount: Number(unreadRow?.count ?? 0)
-    };
-  }),
-  // ─── Get unread count only (for badge) ──────────────────────────────────────
-  unreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { count: 0 };
-    const [row] = await db.select({ count: sql9`COUNT(*)` }).from(notifications).where(and13(eq17(notifications.userId, ctx.user.id), eq17(notifications.isRead, false)));
-    return { count: Number(row?.count ?? 0) };
-  }),
-  // ─── Mark notification(s) as read ───────────────────────────────────────────
-  markRead: protectedProcedure.input(
-    z7.object({
-      notificationId: z7.number().optional()
-      // if omitted, mark all as read
-    }).optional()
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    if (input?.notificationId) {
-      await db.update(notifications).set({ isRead: true }).where(
-        and13(
-          eq17(notifications.id, input.notificationId),
-          eq17(notifications.userId, ctx.user.id)
-        )
-      );
-    } else {
-      await db.update(notifications).set({ isRead: true }).where(eq17(notifications.userId, ctx.user.id));
-    }
-    return { success: true };
-  }),
-  // ─── Create notification (internal helper, called by other routers) ─────────
-  // This is a protected procedure so only authenticated users can trigger it
-  // In practice, call createNotification() helper from other routers
-  create: protectedProcedure.input(
-    z7.object({
-      targetUserId: z7.number(),
-      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
-      // system 类通知只能由服务端 createNotification() 内部发起。
-      type: z7.enum(["like", "comment", "follow", "mention"]),
-      content: z7.string().max(500),
-      postId: z7.number().optional()
-    })
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    if (input.targetUserId === ctx.user.id) return { success: true };
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.insert(notifications).values({
-      userId: input.targetUserId,
-      type: input.type,
-      fromUserId: ctx.user.id,
-      fromUserName: ctx.user.name ?? "Anonymous",
-      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
-      postId: input.postId,
-      content: sanitizeInput(input.content, 500),
-      // 之前未净化,存原始 markup 再回显
-      isRead: false
-    });
-    return { success: true };
-  }),
-  // ─── Delete a notification ───────────────────────────────────────────────────
-  delete: protectedProcedure.input(z7.object({ notificationId: z7.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.delete(notifications).where(
-      and13(
-        eq17(notifications.id, input.notificationId),
-        eq17(notifications.userId, ctx.user.id)
-      )
-    );
-    return { success: true };
-  })
-});
-async function createNotification(params) {
-  if (!params.db) return;
-  if (params.targetUserId === params.fromUserId) return;
-  await params.db.insert(notifications).values({
-    userId: params.targetUserId,
-    type: params.type,
-    fromUserId: params.fromUserId,
-    fromUserName: params.fromUserName,
-    fromUserAvatar: params.fromUserAvatar,
-    postId: params.postId,
-    content: params.content,
-    isRead: false
-  });
-  const titleMap = {
-    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
-    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
-    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
-    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
-    system: "AIChat \u901A\u77E5"
-  };
-  void sendPushToUser(params.targetUserId, {
-    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
-    body: params.content,
-    url: "/notifications"
-  }).catch(() => {
-  });
-}
-
-// server/routers/posts.ts
 import { TRPCError as TRPCError10 } from "@trpc/server";
 var PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 \u5929" },
