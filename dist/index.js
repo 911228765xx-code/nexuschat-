@@ -3928,7 +3928,7 @@ import { parse as parseCookie } from "cookie";
 init_db();
 init_schema();
 init_logger();
-import { eq as eq14, and as and10, or as or4, isNull as isNull3, gt as gt3 } from "drizzle-orm";
+import { eq as eq13, and as and9, or as or3, isNull as isNull3, gt as gt3 } from "drizzle-orm";
 
 // server/_core/corsOrigin.ts
 init_env();
@@ -5041,41 +5041,12 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
   }
 }
 
-// server/utils/relations.ts
-init_schema();
-import { and as and9, eq as eq13, or as or3 } from "drizzle-orm";
-import { TRPCError as TRPCError7 } from "@trpc/server";
-async function areFriends(db, a, b) {
-  if (a === b) return true;
-  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and9(eq13(friendRequests.status, "accepted"), or3(
-    and9(eq13(friendRequests.senderId, a), eq13(friendRequests.receiverId, b)),
-    and9(eq13(friendRequests.senderId, b), eq13(friendRequests.receiverId, a))
-  ))).limit(1);
-  return !!r;
-}
-async function isBlockedEither(db, a, b) {
-  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(or3(
-    and9(eq13(userBlocklist.blockerId, a), eq13(userBlocklist.blockedId, b)),
-    and9(eq13(userBlocklist.blockerId, b), eq13(userBlocklist.blockedId, a))
-  )).limit(1);
-  return !!r;
-}
-async function hasBlocked(db, blocker, blocked) {
-  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and9(eq13(userBlocklist.blockerId, blocker), eq13(userBlocklist.blockedId, blocked))).limit(1);
-  return !!r;
-}
-async function assertCanDM(db, from, to) {
-  if (from === to) return;
-  if (await isBlockedEither(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u53D1\u9001(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
-  if (!await areFriends(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u4EC5\u597D\u53CB\u53EF\u79C1\u4FE1,\u8BF7\u5148\u52A0\u4E3A\u597D\u53CB" });
-}
-
 // server/socket.ts
 async function isConversationMuted(userId, convKey) {
   try {
     const db = await getDb();
     if (!db) return false;
-    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and10(eq14(conversationPrefs.userId, userId), eq14(conversationPrefs.convKey, convKey))).limit(1);
+    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and9(eq13(conversationPrefs.userId, userId), eq13(conversationPrefs.convKey, convKey))).limit(1);
     return !!p?.isMuted;
   } catch {
     return false;
@@ -5098,12 +5069,12 @@ async function authenticateSocket(socket) {
   if (!session) return null;
   const db = await getDb();
   if (!db) return null;
-  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq14(users.openId, session.openId)).limit(1);
+  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq13(users.openId, session.openId)).limit(1);
   if (!row) return null;
   return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
 }
 async function isGroupMember(db, groupId, userId) {
-  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and10(eq14(groupMembers.groupId, groupId), eq14(groupMembers.userId, userId))).limit(1);
+  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and9(eq13(groupMembers.groupId, groupId), eq13(groupMembers.userId, userId))).limit(1);
   return !!row;
 }
 var _io = null;
@@ -5117,6 +5088,23 @@ function emitToUser(userId, event, data) {
   if (!sids || sids.size === 0) return;
   for (const sid of Array.from(sids)) {
     _io.to(sid).emit(event, data);
+  }
+}
+function isUserOnline(userId) {
+  const sids = userSockets.get(userId);
+  return !!sids && sids.size > 0;
+}
+async function notifyDmOffline(receiverId, senderId, title, body) {
+  try {
+    if (isUserOnline(receiverId)) return;
+    if (await isConversationMuted(receiverId, `dm:${senderId}`)) return;
+    await sendPushToUser(receiverId, {
+      title,
+      body: body.length > 80 ? body.slice(0, 80) + "..." : body,
+      url: `/direct-message?userId=${senderId}`
+    });
+  } catch (err) {
+    logger_default.warn({ err, receiverId }, "notifyDmOffline failed");
   }
 }
 function initSocketIO(httpServer) {
@@ -5188,10 +5176,10 @@ function initSocketIO(httpServer) {
           socket.emit("error", { message: "Not a member of this group" });
           return;
         }
-        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and10(
-          eq14(groupMutes.groupId, data.groupId),
-          eq14(groupMutes.userId, senderIdNum),
-          or4(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and9(
+          eq13(groupMutes.groupId, data.groupId),
+          eq13(groupMutes.userId, senderIdNum),
+          or3(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
         )).limit(1);
         if (muted) {
           socket.emit("error", { message: "\u4F60\u5DF2\u88AB\u7981\u8A00\uFF0C\u65E0\u6CD5\u53D1\u8A00" });
@@ -5212,7 +5200,7 @@ function initSocketIO(httpServer) {
         let senderDisplayName = userName;
         try {
           const senderIdNum2 = typeof userId === "number" ? userId : parseInt(String(userId));
-          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and10(eq14(groupMembers.groupId, data.groupId), eq14(groupMembers.userId, senderIdNum2))).limit(1);
+          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and9(eq13(groupMembers.groupId, data.groupId), eq13(groupMembers.userId, senderIdNum2))).limit(1);
           if (memberRow) {
             senderRole = memberRow.role;
             if (memberRow.alias) senderDisplayName = memberRow.alias;
@@ -5240,54 +5228,6 @@ function initSocketIO(httpServer) {
       } catch (err) {
         logger_default.error({ err }, "Socket.io: Error saving message");
         socket.emit("error", { message: "Failed to send message" });
-      }
-    });
-    socket.on("send_dm", async (data) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-        await assertCanDM(db, senderIdNum, data.receiverId);
-        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "dm");
-        const safeContent = sanitizeInput(data.content, 5e3);
-        const [result] = await db.insert(messages).values({
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl ?? void 0
-        });
-        const messageId = result.insertId;
-        const outgoingMessage = {
-          id: messageId,
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          senderName: userName,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: /* @__PURE__ */ new Date()
-        };
-        emitToUser(data.receiverId, "new_dm", outgoingMessage);
-        socket.emit("dm_sent", outgoingMessage);
-        const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId).size > 0;
-        if (!receiverOnline) {
-          const muted = await isConversationMuted(data.receiverId, `dm:${senderIdNum}`);
-          if (!muted) {
-            sendPushToUser(data.receiverId, {
-              title: `${userName} \u53D1\u6765\u6D88\u606F`,
-              body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
-              url: `/direct-message?userId=${senderIdNum}`
-              // RN 路由(原 /app/dm/ 是 web 路由,原生点开跳空白 Unmatched Route)
-            }).catch((err) => logger_default.warn({ err }, "Socket: Web Push failed"));
-          }
-        }
-      } catch (err) {
-        logger_default.error({ err }, "Socket.io: Error saving DM");
-        socket.emit("error", { message: "Failed to send DM" });
       }
     });
     socket.on("typing", (data) => {
@@ -5319,6 +5259,37 @@ function initSocketIO(httpServer) {
 init_logger();
 init_schema();
 init_schema();
+
+// server/utils/relations.ts
+init_schema();
+import { and as and10, eq as eq14, or as or4 } from "drizzle-orm";
+import { TRPCError as TRPCError7 } from "@trpc/server";
+async function areFriends(db, a, b) {
+  if (a === b) return true;
+  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and10(eq14(friendRequests.status, "accepted"), or4(
+    and10(eq14(friendRequests.senderId, a), eq14(friendRequests.receiverId, b)),
+    and10(eq14(friendRequests.senderId, b), eq14(friendRequests.receiverId, a))
+  ))).limit(1);
+  return !!r;
+}
+async function isBlockedEither(db, a, b) {
+  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(or4(
+    and10(eq14(userBlocklist.blockerId, a), eq14(userBlocklist.blockedId, b)),
+    and10(eq14(userBlocklist.blockerId, b), eq14(userBlocklist.blockedId, a))
+  )).limit(1);
+  return !!r;
+}
+async function hasBlocked(db, blocker, blocked) {
+  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and10(eq14(userBlocklist.blockerId, blocker), eq14(userBlocklist.blockedId, blocked))).limit(1);
+  return !!r;
+}
+async function assertCanDM(db, from, to) {
+  if (from === to) return;
+  if (await isBlockedEither(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u53D1\u9001(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
+  if (!await areFriends(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u4EC5\u597D\u53CB\u53EF\u79C1\u4FE1,\u8BF7\u5148\u52A0\u4E3A\u597D\u53CB" });
+}
+
+// server/routers/chat.ts
 async function assertGroupMember(db, groupId, userId) {
   const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and11(eq15(groupMembers.groupId, groupId), eq15(groupMembers.userId, userId))).limit(1);
   if (!m) throw new TRPCError8({ code: "FORBIDDEN", message: "Not a member of this group" });
@@ -5618,6 +5589,12 @@ var chatRouter = router({
       durationSeconds: input.durationSeconds ?? null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    void notifyDmOffline(
+      input.receiverId,
+      ctx.user.id,
+      `${ctx.user.name ?? ctx.user.username ?? "\u6709\u4EBA"} \u53D1\u6765\u6D88\u606F`,
+      hasTextContent ? sanitizeInput(input.content, 5e3) : "[\u5A92\u4F53\u6D88\u606F]"
+    );
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
     if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
     return { messageId };
@@ -6113,13 +6090,18 @@ var chatRouter = router({
   recallMessage: protectedProcedure.input(z5.object({ messageId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
-    const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
+    const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt, groupId: messages.groupId, receiverId: messages.receiverId }).from(messages).where(eq15(messages.id, input.messageId)).limit(1);
     if (!m) throw new TRPCError8({ code: "NOT_FOUND", message: "\u6D88\u606F\u4E0D\u5B58\u5728" });
     if (m.senderId !== ctx.user.id) throw new TRPCError8({ code: "FORBIDDEN", message: "\u53EA\u80FD\u64A4\u56DE\u81EA\u5DF1\u7684\u6D88\u606F" });
     if (Date.now() - new Date(m.createdAt).getTime() > 2 * 60 * 1e3) {
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8D85\u8FC7 2 \u5206\u949F\uFF0C\u65E0\u6CD5\u64A4\u56DE" });
     }
     await db.update(messages).set({ recalledAt: /* @__PURE__ */ new Date(), isPinned: false }).where(eq15(messages.id, input.messageId));
+    if (m.groupId) {
+      getSocketIO()?.to(`group:${m.groupId}`).emit("message_recall", { messageId: input.messageId, groupId: m.groupId });
+    } else if (m.receiverId) {
+      emitToUser(m.receiverId, "dm_recall", { messageId: input.messageId, fromUserId: ctx.user.id });
+    }
     return { ok: true };
   }),
   // ─── 转发消息（到群或私信）───────────────────────────────────────────────
@@ -6185,6 +6167,7 @@ var chatRouter = router({
       durationSeconds: src.durationSeconds ?? null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    void notifyDmOffline(input.targetReceiverId, ctx.user.id, `${ctx.user.name ?? ctx.user.username ?? "\u6709\u4EBA"} \u8F6C\u53D1\u4E86\u4E00\u6761\u6D88\u606F`, src.content || "[\u5A92\u4F53\u6D88\u606F]");
     return { messageId };
   }),
   // ─── 置顶消息（群主/管理员）─────────────────────────────────────────────
@@ -6598,12 +6581,13 @@ var chatRouter = router({
     }
     const isDM = !input.groupId && !!input.receiverId;
     if (input.groupId) await assertGroupMember(db, input.groupId, ctx.user.id);
+    else if (isDM) await assertCanDM(db, ctx.user.id, input.receiverId);
     const totalShares = isDM ? 1 : input.totalShares;
     const isRandom = isDM ? false : input.isRandom;
     if (totalShares > input.totalAmount) {
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E2A\u6570\u4E0D\u80FD\u8D85\u8FC7\u603B\u79EF\u5206\uFF08\u6BCF\u4EFD\u81F3\u5C11 1 AC\uFF09" });
     }
-    const blessing = (input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229").slice(0, 100);
+    const blessing = sanitizeInput(input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229", 100);
     let messageId = 0;
     await db.transaction(async (tx) => {
       const deduct = await tx.update(users).set({ npPoints: sql8`npPoints - ${input.totalAmount}` }).where(and11(eq15(users.id, ctx.user.id), sql8`npPoints >= ${input.totalAmount}`));
@@ -6641,6 +6625,7 @@ var chatRouter = router({
         durationSeconds: null,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       });
+      void notifyDmOffline(input.receiverId, ctx.user.id, `${ctx.user.name ?? ctx.user.username ?? "\u6709\u4EBA"} \u53D1\u6765\u4E00\u4E2A\u7EA2\u5305`, "\u{1F9E7} " + blessing);
     }
     return { messageId, totalAmount: input.totalAmount, totalShares };
   }),

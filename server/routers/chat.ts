@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, gte, asc, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { emitToUser, getSocketIO } from "../socket";
+import { emitToUser, getSocketIO, notifyDmOffline } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
@@ -450,6 +450,12 @@ export const chatRouter = router({
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
+      // 接收者离线(未连 socket)时发原生推送;emitToUser 只对在线端有效,离线得靠这个
+      void notifyDmOffline(
+        input.receiverId, ctx.user.id,
+        `${ctx.user.name ?? ctx.user.username ?? "有人"} 发来消息`,
+        hasTextContent ? sanitizeInput(input.content, 5000) : "[媒体消息]",
+      );
       // 异步 AI 内容审核:任何带非空 content 的消息都过(与类型解耦防绕过)
       if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
       // AC 产出：首次发消息里程碑(文本语义,保持原样)
@@ -1062,7 +1068,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-      const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt })
+      const [m] = await db.select({ senderId: messages.senderId, createdAt: messages.createdAt, groupId: messages.groupId, receiverId: messages.receiverId })
         .from(messages).where(eq(messages.id, input.messageId)).limit(1);
       if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "消息不存在" });
       if (m.senderId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "只能撤回自己的消息" });
@@ -1070,6 +1076,12 @@ export const chatRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "超过 2 分钟，无法撤回" });
       }
       await db.update(messages).set({ recalledAt: new Date(), isPinned: false }).where(eq(messages.id, input.messageId));
+      // 实时广播撤回:对端就地把气泡换成"[消息已撤回]",不必等下次拉历史
+      if (m.groupId) {
+        getSocketIO()?.to(`group:${m.groupId}`).emit("message_recall", { messageId: input.messageId, groupId: m.groupId });
+      } else if (m.receiverId) {
+        emitToUser(m.receiverId, "dm_recall", { messageId: input.messageId, fromUserId: ctx.user.id });
+      }
       return { ok: true };
     }),
 
@@ -1120,6 +1132,7 @@ export const chatRouter = router({
         content: src.content, messageType: src.messageType, mediaUrl: src.mediaUrl ?? null,
         durationSeconds: src.durationSeconds ?? null, createdAt: new Date().toISOString(),
       });
+      void notifyDmOffline(input.targetReceiverId!, ctx.user.id, `${ctx.user.name ?? ctx.user.username ?? "有人"} 转发了一条消息`, src.content || "[媒体消息]");
       return { messageId };
     }),
 
@@ -1685,13 +1698,14 @@ export const chatRouter = router({
       }
       const isDM = !input.groupId && !!input.receiverId;
       if (input.groupId) await assertGroupMember(db, input.groupId, ctx.user.id);
+      else if (isDM) await assertCanDM(db, ctx.user.id, input.receiverId!); // 私信红包同样过拉黑/好友闸,否则=拉黑者可发红包+推送骚扰的绕过口
       // 私信红包固定 1 个、不拼手气
       const totalShares = isDM ? 1 : input.totalShares;
       const isRandom = isDM ? false : input.isRandom;
       if (totalShares > input.totalAmount) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 AC）" });
       }
-      const blessing = (input.blessing?.trim() || "恭喜发财，大吉大利").slice(0, 100);
+      const blessing = sanitizeInput(input.blessing?.trim() || "恭喜发财，大吉大利", 100); // 净化,与其它 DM 内容路径一致(原来直接 slice 未过滤)
       let messageId = 0;
       await db.transaction(async (tx) => {
         // 1) 条件扣减发送者积分（防透支/并发）
@@ -1723,7 +1737,7 @@ export const chatRouter = router({
           blessing,
         });
       });
-      // 私信红包：实时推给接收者
+      // 私信红包：实时推给在线接收者 + 离线推送
       if (isDM && input.receiverId) {
         emitToUser(input.receiverId, "dm_message", {
           messageId, senderId: ctx.user.id,
@@ -1731,6 +1745,7 @@ export const chatRouter = router({
           content: blessing, messageType: "redpacket", mediaUrl: null,
           durationSeconds: null, createdAt: new Date().toISOString(),
         });
+        void notifyDmOffline(input.receiverId, ctx.user.id, `${ctx.user.name ?? ctx.user.username ?? "有人"} 发来一个红包`, "🧧 " + blessing);
       }
       return { messageId, totalAmount: input.totalAmount, totalShares };
     }),

@@ -113,6 +113,31 @@ export function emitToUser(userId: number, event: string, data: unknown): void {
   }
 }
 
+/** 某用户当前是否有在线 socket 连接。 */
+export function isUserOnline(userId: number): boolean {
+  const sids = userSockets.get(userId);
+  return !!sids && sids.size > 0;
+}
+
+/**
+ * 私信离线推送:接收者不在线且未对该会话免打扰时,发原生/Web 推送。
+ * 供 tRPC 各 DM 写入通道(sendDM/红包/转发/名片…)复用——原来这段逻辑只在 socket 的
+ * send_dm 死通道里,而 App 实际走 tRPC,导致离线私信收不到推送。
+ */
+export async function notifyDmOffline(receiverId: number, senderId: number, title: string, body: string): Promise<void> {
+  try {
+    if (isUserOnline(receiverId)) return;
+    if (await isConversationMuted(receiverId, `dm:${senderId}`)) return;
+    await sendPushToUser(receiverId, {
+      title,
+      body: body.length > 80 ? body.slice(0, 80) + "..." : body,
+      url: `/direct-message?userId=${senderId}`,
+    });
+  } catch (err) {
+    logger.warn({ err, receiverId }, "notifyDmOffline failed");
+  }
+}
+
 export function initSocketIO(httpServer: HttpServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -267,59 +292,9 @@ export function initSocketIO(httpServer: HttpServer) {
       }
     });
 
-    // Send DM message
-    socket.on("send_dm", async (data: { receiverId: number; content: string; messageType?: string; mediaUrl?: string }) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-        // 好友才能私信 + 拉黑校验(socket 之前完全绕过 → 可给拉黑自己/非好友的人发信);违规抛出 → 落到 catch 被拒绝
-        await assertCanDM(db, senderIdNum, data.receiverId);
-        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "dm"); // 基于 content 非 messageType,防绕过
-        const safeContent = sanitizeInput(data.content, 5000);
-        const [result] = await db.insert(messages).values({
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          content: safeContent,
-          messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
-          mediaUrl: data.mediaUrl ?? undefined,
-        });
-        const messageId = (result as any).insertId;
-        const outgoingMessage = {
-          id: messageId,
-          senderId: senderIdNum,
-          receiverId: data.receiverId,
-          senderName: userName,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: new Date(),
-        };
-        // Push to receiver if online
-        emitToUser(data.receiverId, "new_dm", outgoingMessage);
-        // Echo back to sender
-        socket.emit("dm_sent", outgoingMessage);
-        // Send Web Push if receiver is offline (not connected via socket) 且未对该会话免打扰
-        const receiverOnline = userSockets.has(data.receiverId) && userSockets.get(data.receiverId)!.size > 0;
-        if (!receiverOnline) {
-          const muted = await isConversationMuted(data.receiverId, `dm:${senderIdNum}`);
-          if (!muted) {
-            sendPushToUser(data.receiverId, {
-              title: `${userName} 发来消息`,
-              body: safeContent.length > 80 ? safeContent.slice(0, 80) + "..." : safeContent,
-              url: `/direct-message?userId=${senderIdNum}`, // RN 路由(原 /app/dm/ 是 web 路由,原生点开跳空白 Unmatched Route)
-
-            }).catch((err: unknown) => logger.warn({ err }, "Socket: Web Push failed"));
-          }
-        }
-      } catch (err) {
-        logger.error({ err }, "Socket.io: Error saving DM");
-        socket.emit("error", { message: "Failed to send DM" });
-      }
-    });
+    // (已删除 socket "send_dm" 死通道:App 从不 emit send_dm,发出的 new_dm/dm_sent 也无人监听,
+    //  且它缺 rateLimitWrite + reviewMessageAsync 异步审核 → 是一条准入较弱的并行发信路。私信统一走
+    //  tRPC chat.sendDM(已含限流+AI审核+离线推送)。离线推送逻辑抽成了导出的 notifyDmOffline。)
 
     // Typing indicator（群聊）
     socket.on("typing", (data: { groupId: number; isTyping: boolean }) => {
