@@ -3,18 +3,24 @@ import { Readable } from "stream";
 import { ENV } from "./env";
 
 /**
- * 存储代理：/manus-storage/<key> 经本域名【流式中转】媒体内容。
+ * 存储代理：/app-media/<key>（及旧路径 /manus-storage/<key>）经本域名【流式中转】媒体内容。
  *
  * 为什么不用 307 跳转到 CDN：媒体实际存在海外 CloudFront，大陆网络直连
  * 经常被掐/超时（视频"一直打不开"的结构性原因）。改为后端拉流转发——
  * 服务器到 CDN 链路稳定，用户只需连通本 API 域名（已有多端点容灾）。
+ *
+ * 为什么要 /app-media 别名：/manus-storage/* 在托管平台的 Cloudflare 边缘被一个
+ * 平台级 Worker 拦截、307 到 CloudFront 签名直链（我们删不掉，域名 NS 也不在自己
+ * Cloudflare 上）——本文件的流式逻辑在该路径上永远收不到请求。/app-media/* 平台
+ * 不认识，原样放行到源站，流式中转才真正生效。新 URL 一律铸 /app-media；旧路径
+ * 保留兼容（直连源站的容灾端点仍可用）。
  *
  * 鉴权说明：消息里历史存的本就是公开 CDN 直链，代理不再额外要求会话
  * （否则浏览器播视频/系统下载器无会话会 401）；key 含用户ID+毫秒时间戳，
  * 与 CDN 直链暴露面一致。
  */
 export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req: Request, res: Response) => {
+  app.get(["/app-media/*", "/manus-storage/*"], async (req: Request, res: Response) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");

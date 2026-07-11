@@ -43,8 +43,9 @@ export async function handleApkDownload(req: Request, res: Response) {
     }
 
     // 同源相对路径：直接 302（storageProxy 等本域名路由自己会流式中转）
+    // /manus-storage 换成 /app-media 别名——旧路径在平台边缘被 Worker 劫持 307 到 CloudFront(大陆挂)
     if (url.startsWith("/")) {
-      res.redirect(302, url);
+      res.redirect(302, url.replace(/^\/manus-storage\//, "/app-media/"));
       return;
     }
 

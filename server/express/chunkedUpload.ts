@@ -143,8 +143,8 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
     await storagePut(key, body, s.mime);
     cleanup();
     // 返回公网域名代理地址（流式中转）：大陆网络直连海外 CDN 不稳，经 API 域名稳定可达
-    // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
-    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`;
+    // 别用 req Host(被墙的 *.run.app);别用 /manus-storage(平台边缘 Worker 劫持 307 到 CloudFront)
+    const publicUrl = `${ENV.publicOrigin}/app-media/${key}`;
     res.json({ url: publicUrl });
   } catch {
     cleanup();

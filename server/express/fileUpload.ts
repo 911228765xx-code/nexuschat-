@@ -53,7 +53,7 @@ export async function handleFileUpload(req: Request, res: Response): Promise<voi
     const { storagePut } = await import("../storage");
     const key = `chat-files/${user.id}/${Date.now()}_${safe}`;
     await storagePut(key, body, mime);
-    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`; // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
+    const publicUrl = `${ENV.publicOrigin}/app-media/${key}`; // 别用 req Host(被墙的 *.run.app);别用 /manus-storage(平台边缘 Worker 劫持 307 到 CloudFront)
     res.json({ url: publicUrl, maxMB });
   } catch {
     res.status(500).json({ error: "上传失败，请重试" });
