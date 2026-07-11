@@ -31,20 +31,12 @@ export function registerStorageProxy(app: Express) {
       return;
     }
     try {
-      // 1) 取签名下载地址
-      const forgeUrl = new URL(
-        "v1/storage/presign/get",
-        ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
-      );
-      forgeUrl.searchParams.set("path", key);
-      const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
-      });
-      if (!forgeResp.ok) {
-        res.status(502).send("Storage backend error");
-        return;
-      }
-      const { url } = (await forgeResp.json()) as { url: string };
+      // 1) 取签名下载地址——必须用与上传(v1/storage/upload?path=)同族的 v1/storage/downloadUrl(storageGet)。
+      // 之前用 v1/storage/presign/get:它签出的存储位置与 upload 实际落盘位置不一致,拿到的 URL
+      // 一律 403/404——「视频/文件打不开」的最深层原因(好网络也打不开;图片没事是因为图片消息
+      // 存的是上传接口返回的公开直链,不走本代理取件)。
+      const { storageGet } = await import("../storage");
+      const { url } = await storageGet(key);
       if (!url) {
         res.status(502).send("Empty signed URL from backend");
         return;

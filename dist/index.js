@@ -1983,19 +1983,8 @@ function registerStorageProxy(app) {
       return;
     }
     try {
-      const forgeUrl = new URL(
-        "v1/storage/presign/get",
-        ENV.forgeApiUrl.replace(/\/+$/, "") + "/"
-      );
-      forgeUrl.searchParams.set("path", key);
-      const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` }
-      });
-      if (!forgeResp.ok) {
-        res.status(502).send("Storage backend error");
-        return;
-      }
-      const { url } = await forgeResp.json();
+      const { storageGet: storageGet2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
+      const { url } = await storageGet2(key);
       if (!url) {
         res.status(502).send("Empty signed URL from backend");
         return;
