@@ -3,7 +3,7 @@
  */
 import { and, eq, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { friendRequests, userBlocklist } from "../../drizzle/schema";
+import { friendRequests, userBlocklist, userSettings } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -36,9 +36,18 @@ export async function hasBlocked(db: Db, blocker: number, blocked: number): Prom
   return !!r;
 }
 
-/** 私信权限闸:仅好友可私信 + 任一方拉黑则不可。不满足抛 FORBIDDEN。 */
+/** 私信权限闸:任一方拉黑不可发;默认对所有人开放,仅当【接收方】开了「仅好友可私信我」才要求好友关系。
+ *  产品拍板(2026-07-12):默认开放兼顾拉新(陌生人打招呼场景),想清净的用户自己开开关。 */
 export async function assertCanDM(db: Db, from: number, to: number): Promise<void> {
   if (from === to) return;
   if (await isBlockedEither(db, from, to)) throw new TRPCError({ code: "FORBIDDEN", message: "无法发送(存在拉黑关系)" });
-  if (!(await areFriends(db, from, to))) throw new TRPCError({ code: "FORBIDDEN", message: "仅好友可私信,请先加为好友" });
+  let onlyFriends = false;
+  try {
+    const [s] = await db.select({ v: userSettings.dmOnlyFriends }).from(userSettings)
+      .where(eq(userSettings.userId, to)).limit(1);
+    onlyFriends = !!s?.v;
+  } catch { /* 列尚未补齐(启动补丁未跑完)时按默认开放,别把私信整体打挂 */ }
+  if (onlyFriends && !(await areFriends(db, from, to))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "对方设置了仅好友可私信,请先加为好友" });
+  }
 }

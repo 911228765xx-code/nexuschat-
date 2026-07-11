@@ -49,6 +49,7 @@ export const settingsRouter = router({
         showNFTs: z.boolean().optional(),
         readReceipts: z.boolean().optional(),
         profileVisible: z.boolean().optional(),
+        dmOnlyFriends: z.boolean().optional(),
         twoFAEnabled: z.boolean().optional(),
         biometricEnabled: z.boolean().optional(),
       })

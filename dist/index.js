@@ -5401,7 +5401,15 @@ async function hasBlocked(db, blocker, blocked) {
 async function assertCanDM(db, from, to) {
   if (from === to) return;
   if (await isBlockedEither(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u53D1\u9001(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
-  if (!await areFriends(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u4EC5\u597D\u53CB\u53EF\u79C1\u4FE1,\u8BF7\u5148\u52A0\u4E3A\u597D\u53CB" });
+  let onlyFriends = false;
+  try {
+    const [s] = await db.select({ v: userSettings.dmOnlyFriends }).from(userSettings).where(eq15(userSettings.userId, to)).limit(1);
+    onlyFriends = !!s?.v;
+  } catch {
+  }
+  if (onlyFriends && !await areFriends(db, from, to)) {
+    throw new TRPCError7({ code: "FORBIDDEN", message: "\u5BF9\u65B9\u8BBE\u7F6E\u4E86\u4EC5\u597D\u53CB\u53EF\u79C1\u4FE1,\u8BF7\u5148\u52A0\u4E3A\u597D\u53CB" });
+  }
 }
 
 // server/routers/chat.ts
@@ -9413,6 +9421,7 @@ var settingsRouter = router({
       showNFTs: z14.boolean().optional(),
       readReceipts: z14.boolean().optional(),
       profileVisible: z14.boolean().optional(),
+      dmOnlyFriends: z14.boolean().optional(),
       twoFAEnabled: z14.boolean().optional(),
       biometricEnabled: z14.boolean().optional()
     })
@@ -14824,6 +14833,34 @@ function startIcoRewardScheduler() {
   }, 3e4);
 }
 
+// server/schemaPatches.ts
+import mysql2 from "mysql2/promise";
+var PATCHES = [
+  "ALTER TABLE `user_settings` ADD COLUMN IF NOT EXISTS `dmOnlyFriends` BOOLEAN NOT NULL DEFAULT FALSE"
+];
+async function applySchemaPatches() {
+  const url = process.env.DATABASE_URL;
+  if (!url) return;
+  let conn = null;
+  try {
+    conn = await mysql2.createConnection(url);
+    for (const sql26 of PATCHES) {
+      try {
+        await conn.query(sql26);
+      } catch (e) {
+        console.error(`[SchemaPatch] failed: ${sql26}`, e);
+      }
+    }
+  } catch (e) {
+    console.error("[SchemaPatch] connection failed:", e);
+  } finally {
+    try {
+      await conn?.end();
+    } catch {
+    }
+  }
+}
+
 // server/express/tokenChatStream.ts
 init_env();
 var rateLimitMap = /* @__PURE__ */ new Map();
@@ -15777,6 +15814,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+  void applySchemaPatches();
   startPriceAlertChecker();
   startBotScheduler();
   startMessageCleanup();
