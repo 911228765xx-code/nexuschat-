@@ -1972,7 +1972,7 @@ function registerOAuthRoutes(app) {
 init_env();
 import { Readable } from "stream";
 function registerStorageProxy(app) {
-  app.get("/manus-storage/*", async (req, res) => {
+  app.get(["/app-media/*", "/manus-storage/*"], async (req, res) => {
     const key = req.params[0];
     if (!key) {
       res.status(400).send("Missing storage key");
@@ -15036,7 +15036,7 @@ async function handleApkDownload(req, res) {
       }
     }
     if (url.startsWith("/")) {
-      res.redirect(302, url);
+      res.redirect(302, url.replace(/^\/manus-storage\//, "/app-media/"));
       return;
     }
     const clientRange = req.headers.range;
@@ -15140,7 +15140,7 @@ async function handleVideoUpload(req, res) {
     const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
     const key = `chat-videos/${user.id}/${Date.now()}.${ext}`;
     await storagePut2(key, body, mime);
-    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`;
+    const publicUrl = `${ENV.publicOrigin}/app-media/${key}`;
     res.json({ url: publicUrl, maxMB });
   } catch (err) {
     res.status(500).json({ error: "\u4E0A\u4F20\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5" });
@@ -15196,7 +15196,7 @@ async function handleFileUpload(req, res) {
     const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
     const key = `chat-files/${user.id}/${Date.now()}_${safe}`;
     await storagePut2(key, body, mime);
-    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`;
+    const publicUrl = `${ENV.publicOrigin}/app-media/${key}`;
     res.json({ url: publicUrl, maxMB });
   } catch {
     res.status(500).json({ error: "\u4E0A\u4F20\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5" });
@@ -15350,7 +15350,7 @@ async function handleChunkFinish(req, res) {
     }
     await storagePut2(key, body, s.mime);
     cleanup();
-    const publicUrl = `${ENV.publicOrigin}/manus-storage/${key}`;
+    const publicUrl = `${ENV.publicOrigin}/app-media/${key}`;
     res.json({ url: publicUrl });
   } catch {
     cleanup();
