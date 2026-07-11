@@ -619,6 +619,7 @@ export const userSettings = mysqlTable(
     profileVisible: boolean("profileVisible").default(true).notNull(),
     twoFAEnabled: boolean("twoFAEnabled").default(false).notNull(),
     biometricEnabled: boolean("biometricEnabled").default(false).notNull(),
+    dmOnlyFriends: boolean("dmOnlyFriends").default(false).notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   }
 );
