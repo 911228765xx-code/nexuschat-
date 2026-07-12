@@ -22,7 +22,8 @@ const fadeUp = {
 
 /** 站点根(兼容自定义域/直连源站):二维码与复制直链都基于当前访问域名 */
 const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://nexuschat.best";
-const APK_SHORT_LINK = `${ORIGIN}/apk`;
+// 对外只发【下载页】链接:裸 /apk 直链走整包请求会中 32MiB 链路上限、下到 SPA 装不上;
+// 下载页走分块下载,人人可用。
 const PAGE_LINK = `${ORIGIN}/download`;
 
 const isWeChat = typeof navigator !== "undefined" && /MicroMessenger/i.test(navigator.userAgent);
@@ -63,7 +64,9 @@ export default function DownloadPage() {
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(APK_SHORT_LINK);
+      // 复制【下载页】链接而非裸 /apk:裸直链丢下载器/微信会走整包请求 → 中 32MiB 链路上限 →
+      // 下到 SPA 网页装不上。下载页会走分块下载,人人可用。
+      await navigator.clipboard.writeText(PAGE_LINK);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -86,17 +89,17 @@ export default function DownloadPage() {
     if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
     if (dlProgress !== null) return; // 正在下
 
-    // 关键:服务端 /apk 对【非 Range 完整请求】会崩(返回网页,装不上)。而且实测「开区间 bytes=0-」
-    // 或「上界超过文件末尾」也会被当成完整请求落到坏路径;只有【明确上下界、且不跨越整个文件】的分片
-    // 才稳定返回真 APK(206)。所以改成分块下载:每块 6MB、上界永远 < 文件总长,逐块拼成完整 APK。
+    // 托管链路(平台边缘→Cloud Run)对带 Content-Length 的响应有 32MiB 上限:整包或无界 Range
+    // 会被掐 → 边缘兜底吐回 SPA 网页 → 存成 .apk 装不上(「解析包出现问题」)。
+    // 分块下载:每块 8MB(<32MiB)、明确上下界、逐块拼成完整 APK。
+    // 每块字节数严格校验(SPA 兜底页不可能恰好等于请求区间长度),污染块立即中止而非默默拼进去。
     try {
       setDlProgress(0);
-      const CHUNK = 6 * 1024 * 1024; // 6MB/块(远小于 ~176MB,保证每块都是"部分"而非整包)
+      const CHUNK = 8 * 1024 * 1024;
       const parts: BlobPart[] = [];
       let start = 0;
       let total = 0;
       for (;;) {
-        // 已知总长后,上界封顶到 total-1(绝不 ≥ 总长,否则被当完整请求)
         const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
         const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
         if (res.status !== 206) throw new Error(`no partial (${res.status})`);
@@ -104,15 +107,18 @@ export default function DownloadPage() {
           const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
           total = cr ? Number(cr.split("/")[1]) : 0;
         }
+        if (!total || !Number.isFinite(total)) throw new Error("no total length");
         const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.length === 0) break;
+        // 完整性防线:拿回字节数必须正好等于请求区间(边缘吐 SPA 页时长度必然对不上)
+        if (buf.length !== end - start + 1) throw new Error(`chunk ${start}-${end} got ${buf.length}`);
         parts.push(buf);
         start += buf.length;
-        if (total > 0) setDlProgress(Math.min(0.999, start / total));
-        if (total > 0 && start >= total) break;
-        if (total === 0) break; // 拿不到总长,至少存下已下的
+        setDlProgress(Math.min(0.999, start / total));
+        if (start >= total) break;
       }
       const blob = new Blob(parts, { type: "application/vnd.android.package-archive" });
+      // 最终总长校验:任何缺斤少两都不落地(宁可报错重试,绝不给用户一个装不上的残包)
+      if (blob.size !== total) throw new Error(`blob ${blob.size} != ${total}`);
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objUrl;
@@ -123,9 +129,10 @@ export default function DownloadPage() {
       setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
       setDlProgress(null);
     } catch {
-      // 兜底:JS 拉取失败(内存不足/网络)→ 退回原生直链(仍可能慢,但比卡死强)
+      // 明确失败(网络中断/内存不足)→ 提示重试。绝不退回整包直链——那会中 32MiB 上限、
+      // 下到 SPA 网页装不上,反而制造「解析包出现问题」。
       setDlProgress(null);
-      window.location.href = "/apk";
+      alert("下载未完成，请检查网络后重试。若多次失败，可复制下方直链用手机浏览器的下载器打开。");
     }
   }
 
@@ -300,7 +307,7 @@ export default function DownloadPage() {
                 <input
                   id="apk-link-input"
                   readOnly
-                  value={APK_SHORT_LINK}
+                  value={PAGE_LINK}
                   className="flex-1 h-9 rounded-lg bg-[#0d1117] border border-border/30 px-3 text-xs text-muted-foreground"
                   onFocus={(e) => e.currentTarget.select()}
                 />
