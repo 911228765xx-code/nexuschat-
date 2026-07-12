@@ -91,6 +91,12 @@ export const appVersionRouter = router({
         downloadUrl = `${ENV.publicOrigin}/apk?v=${encodeURIComponent(config.latestVersion || "")}`;
       }
 
+      // directUrl:原始外部直链(expo.dev 等),【绕开平台边缘】。
+      // 平台边缘对 >32MiB 单响应会掐断吐 SPA → 浏览器/下载器【无 Range 整包 GET /apk】必拿到网页
+      // → 「解析包出现问题」(2026-07-12 事故根因)。/apk 只适合带【有界 Range】的分块客户端;
+      // 浏览器直下/复制链接场景必须给这条绕边缘的整包直链。仅当配的是 http(s) 外链时提供。
+      const directUrl = /^https?:\/\//i.test(config.downloadUrlAndroid) ? config.downloadUrlAndroid : "";
+
       return {
         currentVersion: input.currentVersion,
         latestVersion: config.latestVersion,
@@ -99,6 +105,7 @@ export const appVersionRouter = router({
         isForceUpdate: isForceUpdate || config.isForceUpdate,
         platform: input.platform,
         downloadUrl,
+        directUrl,
         releaseNotes: config.releaseNotes,
       };
     }),

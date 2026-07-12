@@ -11883,6 +11883,7 @@ var appVersionRouter = router({
     } else {
       downloadUrl = `${ENV.publicOrigin}/apk?v=${encodeURIComponent(config.latestVersion || "")}`;
     }
+    const directUrl = /^https?:\/\//i.test(config.downloadUrlAndroid) ? config.downloadUrlAndroid : "";
     return {
       currentVersion: input.currentVersion,
       latestVersion: config.latestVersion,
@@ -11891,6 +11892,7 @@ var appVersionRouter = router({
       isForceUpdate: isForceUpdate || config.isForceUpdate,
       platform: input.platform,
       downloadUrl,
+      directUrl,
       releaseNotes: config.releaseNotes
     };
   }),
