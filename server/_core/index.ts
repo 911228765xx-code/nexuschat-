@@ -81,6 +81,18 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // Storage proxy for /manus-storage/* paths
   registerStorageProxy(app);
+  // Android App Links 域名验证:微信/浏览器点 https://nexuschat.best/i/xxx 直接唤起 App。
+  // 指纹=EAS preview keystore SHA256(签 APK 的那把);express.static 默认忽略点目录,故用显式路由
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.json([{
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "com.nexuschat.app",
+        sha256_cert_fingerprints: ["3E:6C:EA:FD:00:11:BC:91:D7:EE:72:8A:DE:E4:89:49:AF:D4:73:C3:6B:36:65:C6:57:8C:08:B2:CC:17:74:36"],
+      },
+    }]);
+  });
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // APK 固定下载短链：对外只发 https://<域名>/apk（外链流式中转,大陆可直连;版本随后台配置)

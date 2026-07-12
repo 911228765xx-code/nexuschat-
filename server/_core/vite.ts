@@ -32,7 +32,8 @@ export async function setupVite(app: Express, server: Server) {
       url.startsWith("/apk?") ||
       url === "/download/apk" ||
       url.startsWith("/download/apk?") ||
-      url.startsWith("/i/");
+      url.startsWith("/i/") ||
+      url.startsWith("/.well-known/");
     if (isBackendRoute) {
       next();
       return;
@@ -81,8 +82,9 @@ export function serveStatic(app: Express) {
     lastModified: false,
   }));
 
-  // Other static files (manifest.json, sw.js, robots.txt): short cache
+  // Other static files (manifest.json, sw.js, robots.txt, .well-known): short cache
   app.use(express.static(distPath, {
+    dotfiles: 'allow',
     maxAge: "1h",
     etag: true,
   }));

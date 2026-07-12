@@ -1,3 +1,4 @@
+import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -15,7 +16,6 @@ import { watchlistRouter } from "./routers/watchlist";
 import { copyTradingRouter } from "./routers/copyTrading";
 import { settingsRouter } from "./routers/settings";
 import { referralRouter } from "./routers/referral";
-import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 import { emailAuthRouter } from "./routers/emailAuth";
 import { webPushRouter } from "./routers/webPush";
 import { voiceRouter } from "./routers/voice";
