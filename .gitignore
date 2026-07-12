@@ -116,3 +116,7 @@ nexuschat.zip
 
 # NP 积分模型设计文档（含合规讨论，勿入公开仓库）
 NP积分模型_*.md
+
+# PDF.js 静态资源的 build 目录是发行产物,必须入库(全局 build/ 规则的例外)
+!client/public/pdfjs/build/
+!client/public/pdfjs/build/**
