@@ -73,6 +73,14 @@ export function serveStatic(app: Express) {
     lastModified: false,
   }));
 
+  // PDF.js 查看器静态资源(App 内 PDF 预览的引擎,~10MB):7 天缓存——
+  // 第二次起打开 PDF 免拉引擎只取文档,明显提速。不用 1y:文件名无内容哈希,
+  // 升级 pdf.js 版本时 7 天内自然过期,不至于长期吃到旧引擎。
+  app.use("/pdfjs", express.static(path.join(distPath, "pdfjs"), {
+    maxAge: "7d",
+    etag: true,
+  }));
+
   // Other static files (manifest.json, sw.js, robots.txt): short cache
   app.use(express.static(distPath, {
     maxAge: "1h",
