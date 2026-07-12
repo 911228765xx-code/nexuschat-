@@ -11881,7 +11881,7 @@ var appVersionRouter = router({
     } else if (input.platform === "web") {
       downloadUrl = config.downloadUrlWeb;
     } else {
-      downloadUrl = `${ENV.publicOrigin}/apk`;
+      downloadUrl = `${ENV.publicOrigin}/apk?v=${encodeURIComponent(config.latestVersion || "")}`;
     }
     return {
       currentVersion: input.currentVersion,
@@ -15086,7 +15086,7 @@ async function handleApkDownload(req, res) {
     const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
     res.setHeader("Content-Encoding", "identity");
-    res.setHeader("Cache-Control", "public, max-age=1800, no-transform");
+    res.setHeader("Cache-Control", "no-store, no-transform");
     res.setHeader("Accept-Ranges", "bytes");
     const cr = upstream.headers.get("content-range");
     const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
@@ -15100,6 +15100,20 @@ async function handleApkDownload(req, res) {
       if (total) res.setHeader("Content-Length", String(total));
     }
     const nodeStream = Readable2.fromWeb(upstream.body);
+    const expected = typeof clientRange === "string" ? Number(upstream.headers.get("content-length") || 0) : total;
+    let piped = 0;
+    nodeStream.on("data", (c) => {
+      piped += c.length;
+    });
+    nodeStream.on("end", () => {
+      if (expected > 0 && piped < expected) {
+        console.error(`[APK] upstream\u77ED\u4F20 ${piped}/${expected},\u786C\u65AD\u8FDE\u63A5\u9632\u6B8B\u5305`);
+        try {
+          res.destroy();
+        } catch {
+        }
+      }
+    });
     nodeStream.pipe(res);
     nodeStream.on("error", () => {
       try {

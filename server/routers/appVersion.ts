@@ -87,7 +87,8 @@ export const appVersionRouter = router({
         // /apk 由本服务器把 downloadUrlAndroid 流式中转(稳定+断点续传),让更新真正装得上。
         // ⚠️ 域名必须用 ENV.publicOrigin:CF→Cloud Run 下 req Host 是 *.a.run.app(大陆被墙)。
         // 这是实时接口,存量老包下次检查即生效,无需先更新 App。
-        downloadUrl = `${ENV.publicOrigin}/apk`;
+        // ?v=版本:换缓存键——边缘若曾把某次截断传输缓存成残包(2026-07-12 事故),新版本号立刻绕开毒缓存
+        downloadUrl = `${ENV.publicOrigin}/apk?v=${encodeURIComponent(config.latestVersion || "")}`;
       }
 
       return {
