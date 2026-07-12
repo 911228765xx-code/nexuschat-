@@ -104,6 +104,8 @@ export async function handleApkDownload(req: Request, res: Response) {
     nodeStream.on("end", () => {
       if (expected > 0 && piped < expected) {
         console.error(`[APK] upstream短传 ${piped}/${expected},硬断连接防残包`);
+        // 先解管再销毁:否则 pipe 的 end 回调还会对已销毁的响应调 res.end()
+        try { nodeStream.unpipe(res); } catch { /* ignore */ }
         try { res.destroy(); } catch { /* ignore */ }
       }
     });

@@ -14369,6 +14369,10 @@ function serveStatic(app) {
     etag: false,
     lastModified: false
   }));
+  app.use("/pdfjs", express.static(path2.join(distPath, "pdfjs"), {
+    maxAge: "7d",
+    etag: true
+  }));
   app.use(express.static(distPath, {
     dotfiles: "allow",
     maxAge: "1h",
@@ -15108,6 +15112,10 @@ async function handleApkDownload(req, res) {
     nodeStream.on("end", () => {
       if (expected > 0 && piped < expected) {
         console.error(`[APK] upstream\u77ED\u4F20 ${piped}/${expected},\u786C\u65AD\u8FDE\u63A5\u9632\u6B8B\u5305`);
+        try {
+          nodeStream.unpipe(res);
+        } catch {
+        }
         try {
           res.destroy();
         } catch {
