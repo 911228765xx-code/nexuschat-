@@ -30,7 +30,7 @@ const isWeChat = typeof navigator !== "undefined" && /MicroMessenger/i.test(navi
 const isQQ = typeof navigator !== "undefined" && /\bQQ\/|QQBrowser/i.test(navigator.userAgent);
 const inAppBrowser = isWeChat || isQQ;
 
-interface VersionInfo { latestVersion: string; releaseNotes: string }
+interface VersionInfo { latestVersion: string; releaseNotes: string; directUrl: string }
 
 export default function DownloadPage() {
   const [, setLocation] = useLocation();
@@ -57,7 +57,7 @@ export default function DownloadPage() {
       .then((r) => r.json())
       .then((d) => {
         const j = d?.[0]?.result?.data?.json;
-        if (j?.latestVersion) setVer({ latestVersion: j.latestVersion, releaseNotes: j.releaseNotes ?? "" });
+        if (j?.latestVersion) setVer({ latestVersion: j.latestVersion, releaseNotes: j.releaseNotes ?? "", directUrl: j.directUrl ?? "" });
       })
       .catch(() => {});
   }, []);
@@ -129,10 +129,15 @@ export default function DownloadPage() {
       setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
       setDlProgress(null);
     } catch {
-      // 明确失败(网络中断/内存不足)→ 提示重试。绝不退回整包直链——那会中 32MiB 上限、
-      // 下到 SPA 网页装不上,反而制造「解析包出现问题」。
       setDlProgress(null);
-      alert("下载未完成，请检查网络后重新点击下载按钮。");
+      // 分块失败(内存不足/浏览器不支持 fetch Range/网络中断)→ 退到【绕平台边缘】的整包直链:
+      // directUrl 是 expo.dev 等外部直链,不经本边缘,不受 32MiB 上限,任何浏览器都能整包下完。
+      // 绝不退回 /apk 裸链(走本边缘,整包必中上限吐 SPA、装不上)。
+      if (ver?.directUrl) {
+        window.location.href = ver.directUrl;
+      } else {
+        alert("下载未完成，请检查网络后重新点击下载按钮。");
+      }
     }
   }
 
@@ -321,6 +326,17 @@ export default function DownloadPage() {
                   <span className="ml-1 text-xs">{copied ? "已复制" : "复制"}</span>
                 </Button>
               </div>
+
+              {/* 备用整包直链:分块下不动/浏览器不支持时的明路。走 expo.dev(绕平台边缘,不受 32MiB 上限,
+                  能整包下完),海外 CDN 稍慢但装得上。仅在后台配了外部直链时显示。 */}
+              {ver?.directUrl && (
+                <a
+                  href={ver.directUrl}
+                  className="text-xs text-muted-foreground/70 underline hover:text-[#00d4ff] transition-colors"
+                >
+                  下载慢或失败？点这里用备用线路下载
+                </a>
+              )}
 
               <div className="rounded-xl overflow-hidden border border-[#00d4ff]/20 p-3 bg-white">
                 <QRCodeSVG value={PAGE_LINK} size={168} level="M" />
