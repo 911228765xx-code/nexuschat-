@@ -72,9 +72,11 @@ export async function handleApkDownload(req: Request, res: Response) {
     const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
     // identity + no-transform:APK 已是压缩包,禁二次 gzip(0 收益、丢 Content-Length 让进度失效)。
-    // public max-age:允许 Cloudflare 边缘缓存(需 CF 后台给 /apk 加 Cache Rule 才真正命中)。
+    // no-store(2026-07-12 事故):曾用 public max-age=1800,一次被截断的传输(384KB)被边缘当完整
+    // 200 缓存,之后所有人(含带 Range 的应内更新)拿到的都是残包 → 「解析包出现问题」。APK 下载
+    // 频次低,禁缓存换正确性。
     res.setHeader("Content-Encoding", "identity");
-    res.setHeader("Cache-Control", "public, max-age=1800, no-transform");
+    res.setHeader("Cache-Control", "no-store, no-transform");
     res.setHeader("Accept-Ranges", "bytes");
     const cr = upstream.headers.get("content-range"); // "bytes 0-N/TOTAL"
     const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
@@ -91,6 +93,20 @@ export async function handleApkDownload(req: Request, res: Response) {
     }
 
     const nodeStream = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]);
+    // 完整性守卫:上游若"干净地"早收(收到字节<应有长度),绝不能让响应看起来正常结束——
+    // 那会被客户端当完整文件安装(解析包错误)、还可能被边缘缓存成残包。硬 destroy 造成
+    // 传输错误,下载器会报错/重试,残包不落地。
+    const expected = typeof clientRange === "string"
+      ? Number(upstream.headers.get("content-length") || 0)
+      : total;
+    let piped = 0;
+    nodeStream.on("data", (c: Buffer) => { piped += c.length; });
+    nodeStream.on("end", () => {
+      if (expected > 0 && piped < expected) {
+        console.error(`[APK] upstream短传 ${piped}/${expected},硬断连接防残包`);
+        try { res.destroy(); } catch { /* ignore */ }
+      }
+    });
     nodeStream.pipe(res);
     nodeStream.on("error", () => { try { res.destroy(); } catch { /* ignore */ } });
     req.on("close", () => { try { nodeStream.destroy(); } catch { /* ignore */ } });
