@@ -24,37 +24,40 @@ export const AUTO_BAN_THRESHOLD = 3;
 /** 是否启用 AI 智能审核（关键词没拦住的内容交给 AI 判断；关掉则仅用关键词） */
 export const AI_MODERATION = true;
 
-/** 违禁词库（按类别）。尽量用明确违法词，降低误伤。 */
+/** 违禁词库（按类别）。
+ *  ⚠️ 2026-07-12 误封真实用户后大幅精准化:只留【明确交易/招揽性】词。
+ *  讨论级词(赌博/赌场/毒品/走私/色情/betting/casino…)全部移除——币圈群里
+ *  "别把炒币当赌博""美国大麻股""走私域流量"这类正常聊天曾被子串匹配误拦并计违规,
+ *  三次改措辞重发就被自动永久封号。真正的违法内容由异步 AI 复核兜底(能区分宣传vs讨论)。 */
 const RULES: { category: string; label: string; words: string[] }[] = [
   {
     category: "drugs", label: "毒品",
     words: [
       "冰毒", "海洛因", "可卡因", "摇头丸", "氯胺酮", "k粉", "麻古", "鸦片", "吗啡",
-      "大麻", "毒品", "贩毒", "制毒", "运毒", "毒资", "毒贩", "迷幻药", "致幻剂",
+      "制毒", "运毒", "迷幻药", "致幻剂",
       "heroin", "cocaine", "methamphetamine", "ketamine",
     ],
   },
   {
     category: "gambling", label: "赌博",
     words: [
-      "赌博", "赌场", "博彩", "百家乐", "时时彩", "六合彩", "外围赌", "网赌", "赌资",
-      "老虎机", "轮盘赌", "私彩", "开赌", "聚众赌博", "赌球", "线上赌", "对赌平台",
-      "casino", "betting", "baccarat",
+      "百家乐", "时时彩", "六合彩", "外围赌", "老虎机", "轮盘赌", "私彩", "开赌",
+      "聚众赌博", "线上赌", "baccarat",
     ],
   },
   {
     category: "trafficking", label: "贩卖违禁品",
     words: [
       "贩卖枪支", "贩卖军火", "走私军火", "枪支弹药", "买卖枪支", "贩卖人口", "人口贩卖",
-      "拐卖", "贩卖野生动物", "贩卖器官", "买卖器官", "卖淫", "嫖娼", "招嫖", "走私",
+      "拐卖", "贩卖野生动物", "贩卖器官", "买卖器官", "卖淫", "嫖娼", "招嫖",
     ],
   },
   {
     category: "porn", label: "色情",
     words: [
-      "色情", "黄色视频", "黄片", "淫秽", "三级片", "情色", "裸聊", "约炮", "一夜情",
+      "黄色视频", "黄片", "淫秽", "三级片", "裸聊", "约炮",
       "成人影片", "成人视频", "av女优", "性服务", "性交易", "援交", "开房约", "福利姬",
-      "自慰", "做爱", "嫖", "卖淫", "招嫖", "口交", "性爱视频", "porn", "sex chat", "escort",
+      "性爱视频", "porn", "sex chat",
     ],
   },
 ];
@@ -109,10 +112,21 @@ export async function moderateWithAI(text: string): Promise<ScanResult> {
   }
 }
 
-/** 记一条违规，并在近 30 天累计达阈值时自动封号。返回是否已封。 */
+/** 记一条违规，并在近 30 天累计达阈值时自动封号。返回是否已封。
+ *  同用户同类目 10 分钟内只记 1 笔:用户被拦后改措辞重发属于正常行为,
+ *  不该被连击计数快速三振(2026-07-12 误封事故的帮凶之一)。 */
 async function recordAndMaybeBan(db: Db, userId: number, category: string, source: string, snippet: string): Promise<{ banned: boolean }> {
   try {
-    await db.insert(contentViolations).values({ userId, category, source, snippet: (snippet ?? "").slice(0, 200) });
+    const recent = new Date(Date.now() - 10 * 60 * 1000);
+    const [dup] = await db.select({ id: contentViolations.id }).from(contentViolations)
+      .where(and(
+        eq(contentViolations.userId, userId),
+        eq(contentViolations.category, category),
+        gt(contentViolations.createdAt, recent),
+      )).limit(1);
+    if (!dup) {
+      await db.insert(contentViolations).values({ userId, category, source, snippet: (snippet ?? "").slice(0, 200) });
+    }
   } catch (err) {
     logger.warn({ err }, "moderation: 记录违规失败");
   }
@@ -140,12 +154,30 @@ export async function enforceContent(
   opts?: { useAI?: boolean },
 ): Promise<void> {
   if (!text) return;
-  let r = scanContent(text);
-  if (!r.blocked && opts?.useAI && AI_MODERATION) r = await moderateWithAI(text);
-  if (!r.blocked) return;
-  const { banned } = await recordAndMaybeBan(db, userId, r.category ?? "other", source, text);
-  if (banned) throw new TRPCError({ code: "FORBIDDEN", message: "账号因多次发布违法违规内容（毒品/赌博/贩卖/色情等）已被封禁" });
-  throw new TRPCError({ code: "FORBIDDEN", message: "内容涉及违法违规信息（毒品 / 赌博 / 贩卖 / 色情等），已被拦截。继续发布将封禁账号。" });
+  const kw = scanContent(text);
+  if (kw.blocked) {
+    // 关键词命中:拦下这条,但【不直接记违规】——异步交 AI 复核(区分宣传交易 vs 正常讨论),
+    // AI 确认违规才计数。2026-07-12 误封事故根因:讨论级词命中即计数,改措辞重发三次=永久封号。
+    void (async () => {
+      try {
+        const ai = await moderateWithAI(text);
+        if (ai.blocked) await recordAndMaybeBan(db, userId, ai.category ?? kw.category ?? "other", source, text);
+      } catch { /* AI 失败不计数 */ }
+    })();
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "内容疑似涉及违规信息（毒品 / 赌博 / 贩卖 / 色情等），已被拦截。若为正常讨论请换个表述；发布违法违规内容将被封禁。",
+    });
+  }
+  if (opts?.useAI && AI_MODERATION) {
+    const ai = await moderateWithAI(text);
+    if (ai.blocked) {
+      // AI 同步确认的违规(广场动态路径):记违规,累计达阈值封号
+      const { banned } = await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text);
+      if (banned) throw new TRPCError({ code: "FORBIDDEN", message: "账号因多次发布违法违规内容（毒品/赌博/贩卖/色情等）已被封禁" });
+      throw new TRPCError({ code: "FORBIDDEN", message: "内容涉及违法违规信息（毒品 / 赌博 / 贩卖 / 色情等），已被拦截。继续发布将封禁账号。" });
+    }
+  }
 }
 
 /**

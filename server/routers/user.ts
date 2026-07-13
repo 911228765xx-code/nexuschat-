@@ -382,6 +382,13 @@ export const userRouter = router({
         if (target.role === "admin" || target.isBot) throw new TRPCError({ code: "FORBIDDEN", message: "不能封禁管理员或系统机器人" });
       }
       await db.update(users).set({ isBanned: input.banned }).where(eq(users.id, input.userId));
+      // 解封 = 违规记录清零重新开始:否则 30 天窗口内旧记录仍 ≥ 阈值,
+      // 解封后哪怕再被误判一次就瞬间二次封号(2026-07-12 误封事故的善后补丁)
+      if (!input.banned) {
+        try {
+          await db.delete(contentViolations).where(eq(contentViolations.userId, input.userId));
+        } catch { /* 清理失败不影响解封本身 */ }
+      }
       return { success: true, banned: input.banned };
     }),
 

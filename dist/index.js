@@ -3227,6 +3227,12 @@ var userRouter = router({
       if (target.role === "admin" || target.isBot) throw new TRPCError5({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
     }
     await db.update(users).set({ isBanned: input.banned }).where(eq7(users.id, input.userId));
+    if (!input.banned) {
+      try {
+        await db.delete(contentViolations).where(eq7(contentViolations.userId, input.userId));
+      } catch {
+      }
+    }
     return { success: true, banned: input.banned };
   }),
   // ─── 管理员：内容违规记录（毒品/赌博/贩卖 等拦截记录，供审查封号）──────────
@@ -5020,13 +5026,8 @@ var RULES = [
       "\u9EBB\u53E4",
       "\u9E26\u7247",
       "\u5417\u5561",
-      "\u5927\u9EBB",
-      "\u6BD2\u54C1",
-      "\u8D29\u6BD2",
       "\u5236\u6BD2",
       "\u8FD0\u6BD2",
-      "\u6BD2\u8D44",
-      "\u6BD2\u8D29",
       "\u8FF7\u5E7B\u836F",
       "\u81F4\u5E7B\u5242",
       "heroin",
@@ -5039,25 +5040,16 @@ var RULES = [
     category: "gambling",
     label: "\u8D4C\u535A",
     words: [
-      "\u8D4C\u535A",
-      "\u8D4C\u573A",
-      "\u535A\u5F69",
       "\u767E\u5BB6\u4E50",
       "\u65F6\u65F6\u5F69",
       "\u516D\u5408\u5F69",
       "\u5916\u56F4\u8D4C",
-      "\u7F51\u8D4C",
-      "\u8D4C\u8D44",
       "\u8001\u864E\u673A",
       "\u8F6E\u76D8\u8D4C",
       "\u79C1\u5F69",
       "\u5F00\u8D4C",
       "\u805A\u4F17\u8D4C\u535A",
-      "\u8D4C\u7403",
       "\u7EBF\u4E0A\u8D4C",
-      "\u5BF9\u8D4C\u5E73\u53F0",
-      "casino",
-      "betting",
       "baccarat"
     ]
   },
@@ -5078,23 +5070,19 @@ var RULES = [
       "\u4E70\u5356\u5668\u5B98",
       "\u5356\u6DEB",
       "\u5AD6\u5A3C",
-      "\u62DB\u5AD6",
-      "\u8D70\u79C1"
+      "\u62DB\u5AD6"
     ]
   },
   {
     category: "porn",
     label: "\u8272\u60C5",
     words: [
-      "\u8272\u60C5",
       "\u9EC4\u8272\u89C6\u9891",
       "\u9EC4\u7247",
       "\u6DEB\u79FD",
       "\u4E09\u7EA7\u7247",
-      "\u60C5\u8272",
       "\u88F8\u804A",
       "\u7EA6\u70AE",
-      "\u4E00\u591C\u60C5",
       "\u6210\u4EBA\u5F71\u7247",
       "\u6210\u4EBA\u89C6\u9891",
       "av\u5973\u4F18",
@@ -5103,16 +5091,9 @@ var RULES = [
       "\u63F4\u4EA4",
       "\u5F00\u623F\u7EA6",
       "\u798F\u5229\u59EC",
-      "\u81EA\u6170",
-      "\u505A\u7231",
-      "\u5AD6",
-      "\u5356\u6DEB",
-      "\u62DB\u5AD6",
-      "\u53E3\u4EA4",
       "\u6027\u7231\u89C6\u9891",
       "porn",
-      "sex chat",
-      "escort"
+      "sex chat"
     ]
   }
 ];
@@ -5154,7 +5135,15 @@ ${text2.slice(0, 1e3)}` }
 }
 async function recordAndMaybeBan(db, userId, category, source, snippet) {
   try {
-    await db.insert(contentViolations).values({ userId, category, source, snippet: (snippet ?? "").slice(0, 200) });
+    const recent = new Date(Date.now() - 10 * 60 * 1e3);
+    const [dup] = await db.select({ id: contentViolations.id }).from(contentViolations).where(and8(
+      eq12(contentViolations.userId, userId),
+      eq12(contentViolations.category, category),
+      gt2(contentViolations.createdAt, recent)
+    )).limit(1);
+    if (!dup) {
+      await db.insert(contentViolations).values({ userId, category, source, snippet: (snippet ?? "").slice(0, 200) });
+    }
   } catch (err) {
     logger_default.warn({ err }, "moderation: \u8BB0\u5F55\u8FDD\u89C4\u5931\u8D25");
   }
@@ -5173,12 +5162,28 @@ async function recordAndMaybeBan(db, userId, category, source, snippet) {
 }
 async function enforceContent(db, userId, text2, source, opts) {
   if (!text2) return;
-  let r = scanContent(text2);
-  if (!r.blocked && opts?.useAI && AI_MODERATION) r = await moderateWithAI(text2);
-  if (!r.blocked) return;
-  const { banned } = await recordAndMaybeBan(db, userId, r.category ?? "other", source, text2);
-  if (banned) throw new TRPCError7({ code: "FORBIDDEN", message: "\u8D26\u53F7\u56E0\u591A\u6B21\u53D1\u5E03\u8FDD\u6CD5\u8FDD\u89C4\u5185\u5BB9\uFF08\u6BD2\u54C1/\u8D4C\u535A/\u8D29\u5356/\u8272\u60C5\u7B49\uFF09\u5DF2\u88AB\u5C01\u7981" });
-  throw new TRPCError7({ code: "FORBIDDEN", message: "\u5185\u5BB9\u6D89\u53CA\u8FDD\u6CD5\u8FDD\u89C4\u4FE1\u606F\uFF08\u6BD2\u54C1 / \u8D4C\u535A / \u8D29\u5356 / \u8272\u60C5\u7B49\uFF09\uFF0C\u5DF2\u88AB\u62E6\u622A\u3002\u7EE7\u7EED\u53D1\u5E03\u5C06\u5C01\u7981\u8D26\u53F7\u3002" });
+  const kw = scanContent(text2);
+  if (kw.blocked) {
+    void (async () => {
+      try {
+        const ai = await moderateWithAI(text2);
+        if (ai.blocked) await recordAndMaybeBan(db, userId, ai.category ?? kw.category ?? "other", source, text2);
+      } catch {
+      }
+    })();
+    throw new TRPCError7({
+      code: "FORBIDDEN",
+      message: "\u5185\u5BB9\u7591\u4F3C\u6D89\u53CA\u8FDD\u89C4\u4FE1\u606F\uFF08\u6BD2\u54C1 / \u8D4C\u535A / \u8D29\u5356 / \u8272\u60C5\u7B49\uFF09\uFF0C\u5DF2\u88AB\u62E6\u622A\u3002\u82E5\u4E3A\u6B63\u5E38\u8BA8\u8BBA\u8BF7\u6362\u4E2A\u8868\u8FF0\uFF1B\u53D1\u5E03\u8FDD\u6CD5\u8FDD\u89C4\u5185\u5BB9\u5C06\u88AB\u5C01\u7981\u3002"
+    });
+  }
+  if (opts?.useAI && AI_MODERATION) {
+    const ai = await moderateWithAI(text2);
+    if (ai.blocked) {
+      const { banned } = await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text2);
+      if (banned) throw new TRPCError7({ code: "FORBIDDEN", message: "\u8D26\u53F7\u56E0\u591A\u6B21\u53D1\u5E03\u8FDD\u6CD5\u8FDD\u89C4\u5185\u5BB9\uFF08\u6BD2\u54C1/\u8D4C\u535A/\u8D29\u5356/\u8272\u60C5\u7B49\uFF09\u5DF2\u88AB\u5C01\u7981" });
+      throw new TRPCError7({ code: "FORBIDDEN", message: "\u5185\u5BB9\u6D89\u53CA\u8FDD\u6CD5\u8FDD\u89C4\u4FE1\u606F\uFF08\u6BD2\u54C1 / \u8D4C\u535A / \u8D29\u5356 / \u8272\u60C5\u7B49\uFF09\uFF0C\u5DF2\u88AB\u62E6\u622A\u3002\u7EE7\u7EED\u53D1\u5E03\u5C06\u5C01\u7981\u8D26\u53F7\u3002" });
+    }
+  }
 }
 async function reviewMessageAsync(db, userId, messageId, text2, source) {
   try {
