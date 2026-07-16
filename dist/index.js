@@ -3064,7 +3064,7 @@ var TASK_DEFINITIONS = {
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "\u53D1\u5E03\u52A8\u6001",
-    description: "\u5728\u5E7F\u573A\u53D1\u5E03\u4F18\u8D28\u52A8\u6001\uFF08\u6BCF\u65E5 3 \u6B21\uFF09",
+    description: "\u5728\u5E7F\u573A\u53D1\u5E03\u52A8\u6001\uFF08\u6BCF\u65E5 3 \u6B21\uFF09",
     npReward: 30,
     maxCompletions: 999999,
     daily: 3,
@@ -8083,8 +8083,7 @@ var postsRouter = router({
       tags: input.tags ? JSON.stringify(input.tags.map((t3) => sanitizeInput(t3, 30))) : void 0
     });
     void awardTaskEvent(db, ctx.user.id, "first_post");
-    const trimmed = input.content.trim();
-    if (trimmed.length >= 15) {
+    {
       const todayStart = /* @__PURE__ */ new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
       const [dup] = await db.select({ id: posts.id }).from(posts).where(and14(

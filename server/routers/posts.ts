@@ -233,11 +233,11 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
-      // AC 产出：首次发帖里程碑 + 每日发帖（每日上限内）。
-      // 质量门槛（防灌水刷分）：内容 ≥15 字，且当天没发过相同内容，才计每日发帖分。
+      // AC 产出：首次发帖里程碑 + 每日发帖（每日上限内，任务定义 daily:3 约束）。
+      // 门槛（用户拍板 2026-07-12 取消字数限制）：只防"当天发相同内容重复刷分"，
+      // 不再要求字数——发布动态即计分。每日 3 次上限本身已挡住无限刷。
       void awardTaskEvent(db, ctx.user.id, "first_post");
-      const trimmed = input.content.trim();
-      if (trimmed.length >= 15) {
+      {
         const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
         const [dup] = await db
           .select({ id: posts.id })
