@@ -160,7 +160,7 @@ export const TASK_DEFINITIONS: Record<
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "发布动态",
-    description: "在广场发布优质动态（每日 3 次）",
+    description: "在广场发布动态（每日 3 次）",
     npReward: 30,
     maxCompletions: 999999,
     daily: 3,
