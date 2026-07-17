@@ -3,18 +3,12 @@ import { Server as HttpServer } from "http";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { getDb } from "./db";
-import { messages, users, groupMembers, conversationPrefs, groupMutes } from "../drizzle/schema";
-import { eq, and, or, isNull, gt } from "drizzle-orm";
+import { messages, users, groupMembers, conversationPrefs } from "../drizzle/schema";
+import { eq, and, or } from "drizzle-orm";
 import logger from "./utils/logger";
 import { sdk } from "./_core/sdk";
 import { isAllowedOrigin } from "./_core/corsOrigin";
 import { sendPushToUser } from "./routers/webPush";
-import { triggerBotAutoReply } from "./botAutoReply";
-import { runInteractBot } from "./groupBots";
-// Socket 路径必须与 tRPC(saveMessage/sendDM)走同样的准入:否则客户端直接发 socket 事件即绕过禁言/拉黑/好友限制/内容审核。
-import { sanitizeInput } from "./utils/sanitize";
-import { enforceContent } from "./moderation";
-import { assertCanDM } from "./utils/relations";
 
 interface AuthedUser {
   id: number;
@@ -119,6 +113,17 @@ export function isUserOnline(userId: number): boolean {
   return !!sids && sids.size > 0;
 }
 
+/** 把某用户的全部 socket 连接移出指定群房间。踢人/退群后必须调:
+ *  否则其 socket 仍留在 group:{id} 房间,继续实时收到私密群新消息广播(越权泄露)。 */
+export function evictUserFromGroupRoom(userId: number, groupId: number): void {
+  if (!_io) return;
+  const sids = userSockets.get(userId);
+  if (!sids) return;
+  for (const sid of Array.from(sids)) {
+    _io.sockets.sockets.get(sid)?.leave(`group:${groupId}`);
+  }
+}
+
 /**
  * 私信离线推送:接收者不在线且未对该会话免打扰时,发原生/Web 推送。
  * 供 tRPC 各 DM 写入通道(sendDM/红包/转发/名片…)复用——原来这段逻辑只在 socket 的
@@ -212,85 +217,10 @@ export function initSocketIO(httpServer: HttpServer) {
       socket.leave(`group:${groupId}`);
     });
 
-    // Send message
-    socket.on("send_message", async (data: ChatMessage) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-
-        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-
-        // Authorization: sender must be a member of the target group.
-        if (!(await isGroupMember(db, data.groupId, userId))) {
-          socket.emit("error", { message: "Not a member of this group" });
-          return;
-        }
-
-        // 禁言检查:被 owner/admin 禁言的成员不能发言(tRPC saveMessage 有,socket 之前漏了→禁言形同虚设)
-        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes)
-          .where(and(eq(groupMutes.groupId, data.groupId), eq(groupMutes.userId, senderIdNum),
-            or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, new Date())))).limit(1);
-        if (muted) { socket.emit("error", { message: "你已被禁言，无法发言" }); return; }
-        // 内容审核(涉黄涉赌等):基于 content 而非 messageType,防塞进 image/file 类型绕过;违规抛出→下面 catch 拒绝
-        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "group");
-        const safeContent = sanitizeInput(data.content, 5000);
-
-        // Save to database
-        const [result] = await db.insert(messages).values({
-          groupId: data.groupId,
-          senderId: senderIdNum,
-          content: safeContent,
-          messageType: (data.messageType || "text") as "text" | "image" | "file" | "system",
-          mediaUrl: data.mediaUrl ?? undefined,
-        });
-
-        const messageId = (result as any).insertId;
-        const timestamp = new Date();
-
-        // Lookup sender's role + 群昵称 in this group
-        let senderRole: string = "member";
-        let senderDisplayName = userName; // 有群昵称则用群昵称,否则全局名
-        try {
-          const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers)
-            .where(and(eq(groupMembers.groupId, data.groupId), eq(groupMembers.userId, senderIdNum)))
-            .limit(1);
-          if (memberRow) { senderRole = memberRow.role; if (memberRow.alias) senderDisplayName = memberRow.alias; }
-        } catch (_) { /* fallback to member */ }
-
-        const outgoingMessage = {
-          id: messageId,
-          groupId: data.groupId,
-          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          senderName: senderDisplayName,
-          senderAvatar: userAvatar ?? null,
-          senderRole,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: timestamp,
-        };
-
-        // Broadcast to all in the group (including sender)
-        io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
-
-        // Trigger Bot auto-reply (non-blocking, fire-and-forget)
-        const triggerUid = typeof userId === "number" ? userId : parseInt(String(userId));
-        triggerBotAutoReply(data.groupId, triggerUid, data.content)
-          .catch((err: unknown) => logger.warn({ err }, "Socket: BotAutoReply trigger failed"));
-        // 互动机器人（订阅驱动的 AI 自由互动，仅文本）
-        if ((data.messageType || "text") === "text") {
-          runInteractBot(db, data.groupId, triggerUid, data.content)
-            .catch((err: unknown) => logger.warn({ err }, "Socket: interact bot failed"));
-        }
-      } catch (err) {
-        logger.error({ err }, "Socket.io: Error saving message");
-        socket.emit("error", { message: "Failed to send message" });
-      }
-    });
+    // (已删除 socket "send_message" 死通道,同 send_dm 的理由:App 发群消息只走 tRPC
+    //  chat.saveMessage(含 rateLimitWrite 限流 + reviewMessageAsync 异步 AI 复审 + 引用校验),
+    //  这条旁路虽有成员/禁言/关键词检查,但缺限流与 AI 复审 → 持 token 的自定义客户端可刷屏、
+    //  规避事后删封。广播 new_message 由 saveMessage 落库后统一发,前端不受影响。)
 
     // (已删除 socket "send_dm" 死通道:App 从不 emit send_dm,发出的 new_dm/dm_sent 也无人监听,
     //  且它缺 rateLimitWrite + reviewMessageAsync 异步审核 → 是一条准入较弱的并行发信路。私信统一走

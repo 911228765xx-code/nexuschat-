@@ -9,6 +9,12 @@ import mysql from "mysql2/promise";
 
 const PATCHES: string[] = [
   "ALTER TABLE `user_settings` ADD COLUMN IF NOT EXISTS `dmOnlyFriends` BOOLEAN NOT NULL DEFAULT FALSE",
+  // 群模块三列(2026-07-17 审计):alias 无任何 migration 覆盖,新建库缺列会让
+  // joinGroup/getMessages/getGroupMembers 的全列 select 集体报 Unknown column;
+  // joinApproval/forbidAddFriend 虽有 migration,但 Publish 不跑迁移,补列兜底。
+  "ALTER TABLE `group_members` ADD COLUMN IF NOT EXISTS `alias` VARCHAR(50)",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `joinApproval` BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `forbidAddFriend` BOOLEAN NOT NULL DEFAULT FALSE",
 ];
 
 export async function applySchemaPatches(): Promise<void> {
