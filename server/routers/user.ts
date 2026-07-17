@@ -290,6 +290,18 @@ export const userRouter = router({
       return { url };
     }),
 
+  // ─── 公开名片:下载落地页给未登录访客显示"XXX 邀请你加为好友"。只暴露昵称+头像(本就在 searchUsers 公开) ──
+  getPublicCard: publicProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar })
+        .from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!u) return null;
+      return { id: u.id, name: u.name || u.username || "用户", avatar: u.avatar ?? null };
+    }),
+
   // ─── Get leaderboard ──────────────────────────────────────────────────────
   leaderboard: publicProcedure
     .input(

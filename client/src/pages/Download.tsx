@@ -43,12 +43,34 @@ export default function DownloadPage() {
   const [dlProgress, setDlProgress] = useState<number | null>(null); // 下载进度 0..1;null=未在下载
   // 邀请短链 /i/CODE 会 302 到 /download?ref=CODE。旧版本这里直接丢了 ref → 装完 App 不知道填啥码,
   // 推荐关系断掉("邀请链接无效")。这里接住并展示,引导装后手动填(sideload 无 Play 安装来源,web/native 存储不通,展示+手填是可靠路径)。
+  // 群邀请码 g{id}t{token} / 用户名片码 u{id} 不当推荐码展示——它们走下面的个性化横幅(查群名/用户名)
   const [inviteRef] = useState<string>(() => {
     if (typeof window === "undefined") return "";
-    const r = new URLSearchParams(window.location.search).get("ref") || "";
-    return r.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 30);
+    const r = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
+    if (/^g\d+t[0-9a-fA-F]+$/.test(r) || /^u\d+$/.test(r)) return "";
+    return r.toUpperCase();
   });
   const [refCopied, setRefCopied] = useState(false);
+  // 从群/用户二维码扫来:显示"邀请你加入群聊「XXX」"/"XXX 邀请你加为好友",提高下载转化
+  const [inviteTarget, setInviteTarget] = useState<{ type: "group" | "user"; name: string; avatar: string | null; memberCount?: number } | null>(null);
+  useEffect(() => {
+    const raw = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
+    const g = raw.match(/^g(\d+)t[0-9a-fA-F]+$/);
+    const u = raw.match(/^u(\d+)$/);
+    if (g) {
+      const input = encodeURIComponent(JSON.stringify({ 0: { json: { groupId: Number(g[1]) } } }));
+      fetch(`/api/trpc/chat.getGroupInfo?batch=1&input=${input}`).then((r) => r.json()).then((d) => {
+        const j = d?.[0]?.result?.data?.json;
+        if (j?.name) setInviteTarget({ type: "group", name: j.name, avatar: j.avatar ?? null, memberCount: j.memberCount });
+      }).catch(() => {});
+    } else if (u) {
+      const input = encodeURIComponent(JSON.stringify({ 0: { json: { userId: Number(u[1]) } } }));
+      fetch(`/api/trpc/user.getPublicCard?batch=1&input=${input}`).then((r) => r.json()).then((d) => {
+        const j = d?.[0]?.result?.data?.json;
+        if (j?.name) setInviteTarget({ type: "user", name: j.name, avatar: j.avatar ?? null });
+      }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     // 公开端点,免登录:拿最新版本号 + 更新日志(与 App 内检查更新同一数据源)
@@ -219,6 +241,31 @@ export default function DownloadPage() {
           </p>
         </motion.div>
       </section>
+
+      {/* 群/用户邀请个性化横幅:从群/用户二维码扫来,显示要加入的群名或对方名片,提高下载转化 */}
+      {inviteTarget && (
+        <section className="px-4 -mt-6 mb-2">
+          <div className="max-w-md mx-auto rounded-2xl border border-[#00d4ff]/30 bg-[#00d4ff]/10 p-4 flex items-center gap-4">
+            {inviteTarget.avatar ? (
+              <img src={inviteTarget.avatar} alt="" className="w-14 h-14 rounded-2xl object-cover shrink-0" />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-white text-xl font-bold shrink-0">
+                {inviteTarget.name.slice(0, 1)}
+              </div>
+            )}
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-xs text-muted-foreground mb-0.5">{inviteTarget.type === "group" ? "邀请你加入群聊" : "邀请你加为好友"}</p>
+              <p className="text-lg font-bold truncate">{inviteTarget.name}</p>
+              {inviteTarget.type === "group" && inviteTarget.memberCount != null && (
+                <p className="text-xs text-muted-foreground">{inviteTarget.memberCount} 名成员</p>
+              )}
+            </div>
+          </div>
+          <p className="max-w-md mx-auto text-center text-xs text-muted-foreground mt-2">
+            下载 App 并登录后，{inviteTarget.type === "group" ? "自动加入该群" : "打开 TA 的名片"}
+          </p>
+        </section>
+      )}
 
       {/* 邀请码横幅:从 /i/CODE 短链进来时展示邀请人的码,引导装后手动填(否则 ref 丢失=邀请无效) */}
       {inviteRef && (
