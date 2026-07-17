@@ -1254,10 +1254,12 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // 只有 owner/admin 可创建邀请链接(与客户端入口一致):否则普通成员能造永久链接把外部人拉进私密群,绕过群主管控
+      // 任何群成员都可生成邀请码/群二维码(2026-07-17 放开,对齐微信):原来仅 owner/admin,
+      // 普通成员点「群二维码」直接失败,扫码加群整条链路对成员不可用。
+      // 群主管控不靠这道闸——靠「进群需审批」开关:开了之后凭邀请码进来也要走审批(见 useInviteLink)。
       const member = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
-      if (!member[0] || (member[0].role !== "owner" && member[0].role !== "admin")) throw new Error("只有群主或管理员可创建邀请链接");
+      if (!member[0]) throw new Error("仅群成员可生成邀请码");
       const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
       const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 3600_000) : undefined;
       await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
