@@ -863,6 +863,7 @@ export const chatRouter = router({
           isPublic: chatGroups.isPublic, category: chatGroups.category,
           isTokenGated: chatGroups.isTokenGated, tokenGateAmount: chatGroups.tokenGateAmount,
           joinApproval: chatGroups.joinApproval,
+          forbidAddFriend: chatGroups.forbidAddFriend, // 群设置页「禁止群成员互加好友」开关靠它回显——漏投影会让开关每次进来都显示关闭(设了像没生效)
           creatorId: chatGroups.creatorId, // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
         })
         .from(chatGroups)
