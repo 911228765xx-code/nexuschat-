@@ -5671,9 +5671,6 @@ var chatRouter = router({
     if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
       throw new TRPCError9({ code: "FORBIDDEN", message: `\u5F53\u524D\u4F1A\u5458\u6700\u591A\u53EF\u521B\u5EFA ${benefits.maxGroups} \u4E2A\u7FA4\uFF0C\u5347\u7EA7\u4F1A\u5458\u53EF\u63D0\u5347\u4E0A\u9650` });
     }
-    if (input.isPublic && !benefits.publicGroups) {
-      throw new TRPCError9({ code: "FORBIDDEN", message: "\u516C\u5F00\u7FA4\u4E3A\u4F1A\u5458\u4E13\u5C5E\u6743\u76CA\uFF0C\u5347\u7EA7 Plus/Pro \u540E\u53EF\u521B\u5EFA\uFF1B\u4F60\u4ECD\u53EF\u521B\u5EFA\u79C1\u5BC6\u7FA4" });
-    }
     const [result] = await db.insert(chatGroups).values({
       name: input.name,
       description: input.description ?? void 0,
@@ -6253,6 +6250,8 @@ var chatRouter = router({
       isTokenGated: chatGroups.isTokenGated,
       tokenGateAmount: chatGroups.tokenGateAmount,
       joinApproval: chatGroups.joinApproval,
+      forbidAddFriend: chatGroups.forbidAddFriend,
+      // 群设置页「禁止群成员互加好友」开关靠它回显——漏投影会让开关每次进来都显示关闭(设了像没生效)
       creatorId: chatGroups.creatorId
       // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
     }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
@@ -6556,7 +6555,7 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const member = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
-    if (!member[0] || member[0].role !== "owner" && member[0].role !== "admin") throw new Error("\u53EA\u6709\u7FA4\u4E3B\u6216\u7BA1\u7406\u5458\u53EF\u521B\u5EFA\u9080\u8BF7\u94FE\u63A5");
+    if (!member[0]) throw new Error("\u4EC5\u7FA4\u6210\u5458\u53EF\u751F\u6210\u9080\u8BF7\u7801");
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 36e5) : void 0;
     await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
@@ -6779,12 +6778,6 @@ var chatRouter = router({
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
     if (actor[0].role !== "owner" && (input.isPublic !== void 0 || input.joinApproval !== void 0)) {
       throw new TRPCError9({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B\u53EF\u4FEE\u6539\u7FA4\u7684\u516C\u5F00/\u5165\u7FA4\u5BA1\u6279\u8BBE\u7F6E" });
-    }
-    if (input.isPublic === true) {
-      const benefits = await getBenefits(db, ctx.user.id);
-      if (!benefits.publicGroups) {
-        throw new TRPCError9({ code: "FORBIDDEN", message: "\u516C\u5F00\u7FA4\u4E3A\u4F1A\u5458\u4E13\u5C5E\u6743\u76CA\uFF0C\u5347\u7EA7 Plus/Pro \u540E\u53EF\u5C06\u7FA4\u8BBE\u4E3A\u516C\u5F00" });
-      }
     }
     const updates = {};
     if (input.name !== void 0) updates.name = sanitizeInput(input.name);

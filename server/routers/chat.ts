@@ -178,10 +178,7 @@ export const chatRouter = router({
       if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
         throw new TRPCError({ code: "FORBIDDEN", message: `当前会员最多可创建 ${benefits.maxGroups} 个群，升级会员可提升上限` });
       }
-      // 公开群为会员专属：免费用户仅可创建私密群
-      if (input.isPublic && !benefits.publicGroups) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可创建；你仍可创建私密群" });
-      }
+      // 公开群已对所有用户放开（2026-07-12 用户拍板）：不再要求会员，免费/会员都可建公开群。
       const [result] = await db.insert(chatGroups).values({
         name: input.name,
         description: input.description ?? undefined,
@@ -863,6 +860,7 @@ export const chatRouter = router({
           isPublic: chatGroups.isPublic, category: chatGroups.category,
           isTokenGated: chatGroups.isTokenGated, tokenGateAmount: chatGroups.tokenGateAmount,
           joinApproval: chatGroups.joinApproval,
+          forbidAddFriend: chatGroups.forbidAddFriend, // 群设置页「禁止群成员互加好友」开关靠它回显——漏投影会让开关每次进来都显示关闭(设了像没生效)
           creatorId: chatGroups.creatorId, // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
         })
         .from(chatGroups)
@@ -1256,10 +1254,12 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // 只有 owner/admin 可创建邀请链接(与客户端入口一致):否则普通成员能造永久链接把外部人拉进私密群,绕过群主管控
+      // 任何群成员都可生成邀请码/群二维码(2026-07-17 放开,对齐微信):原来仅 owner/admin,
+      // 普通成员点「群二维码」直接失败,扫码加群整条链路对成员不可用。
+      // 群主管控不靠这道闸——靠「进群需审批」开关:开了之后凭邀请码进来也要走审批(见 useInviteLink)。
       const member = await db.select({ role: groupMembers.role }).from(groupMembers)
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
-      if (!member[0] || (member[0].role !== "owner" && member[0].role !== "admin")) throw new Error("只有群主或管理员可创建邀请链接");
+      if (!member[0]) throw new Error("仅群成员可生成邀请码");
       const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
       const expiresAt = input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 3600_000) : undefined;
       await db.insert(groupInviteLinks).values({ groupId: input.groupId, creatorId: ctx.user.id, token, maxUses: input.maxUses, expiresAt });
@@ -1588,13 +1588,7 @@ export const chatRouter = router({
       if (actor[0].role !== "owner" && (input.isPublic !== undefined || input.joinApproval !== undefined)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅群主可修改群的公开/入群审批设置" });
       }
-      // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
-      if (input.isPublic === true) {
-        const benefits = await getBenefits(db, ctx.user.id);
-        if (!benefits.publicGroups) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可将群设为公开" });
-        }
-      }
+      // 公开群已对所有用户放开（2026-07-12 用户拍板）：私密改公开不再要求会员。
       const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean; forbidAddFriend: boolean }> = {};
       if (input.name !== undefined) updates.name = sanitizeInput(input.name);
       if (input.description !== undefined) updates.description = sanitizeInput(input.description);
