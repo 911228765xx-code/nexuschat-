@@ -4077,7 +4077,7 @@ import { z as z7 } from "zod";
 import { TRPCError as TRPCError9 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq16, and as and12, desc as desc7, lt as lt2, sql as sql10, or as or5, gt as gt4, like, inArray as inArray6, isNull as isNull4 } from "drizzle-orm";
+import { eq as eq16, and as and12, desc as desc7, lt as lt2, sql as sql10, or as or5, gt as gt3, like, inArray as inArray6, isNull as isNull3 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 // server/socket.ts
@@ -4086,7 +4086,7 @@ import { parse as parseCookie } from "cookie";
 init_db();
 init_schema();
 init_logger();
-import { eq as eq13, and as and9, or as or3, isNull as isNull3, gt as gt3 } from "drizzle-orm";
+import { eq as eq10, and as and6 } from "drizzle-orm";
 
 // server/_core/corsOrigin.ts
 init_env();
@@ -4178,7 +4178,7 @@ async function sendExpoPush(db, userId, payload) {
   const tokens = await db.select().from(devicePushTokens).where(eq9(devicePushTokens.userId, userId));
   const expoTokens = tokens.map((t3) => t3.token).filter((t3) => t3.startsWith("ExponentPushToken") || t3.startsWith("ExpoPushToken"));
   if (expoTokens.length === 0) return;
-  const messages2 = expoTokens.map((to) => ({
+  const messages3 = expoTokens.map((to) => ({
     to,
     title: payload.title,
     body: payload.body,
@@ -4188,7 +4188,7 @@ async function sendExpoPush(db, userId, payload) {
   const resp = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(messages2)
+    body: JSON.stringify(messages3)
   });
   const json = await resp.json().catch(() => null);
   const dead = (json?.data ?? []).map((r, i) => r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null).filter((t3) => !!t3);
@@ -4225,10 +4225,170 @@ async function sendPushToUser(userId, payload) {
   }
 }
 
-// server/botAutoReply.ts
+// server/socket.ts
+async function isConversationMuted(userId, convKey) {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and6(eq10(conversationPrefs.userId, userId), eq10(conversationPrefs.convKey, convKey))).limit(1);
+    return !!p?.isMuted;
+  } catch {
+    return false;
+  }
+}
+async function authenticateSocket(socket) {
+  const authToken = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : void 0;
+  let token = authToken;
+  if (!token) {
+    const cookieHeader = socket.handshake.headers?.cookie;
+    if (cookieHeader) {
+      try {
+        token = parseCookie(cookieHeader)[COOKIE_NAME];
+      } catch {
+      }
+    }
+  }
+  if (!token) return null;
+  const session = await sdk.verifySession(token);
+  if (!session) return null;
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq10(users.openId, session.openId)).limit(1);
+  if (!row) return null;
+  return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
+}
+async function isGroupMember(db, groupId, userId) {
+  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and6(eq10(groupMembers.groupId, groupId), eq10(groupMembers.userId, userId))).limit(1);
+  return !!row;
+}
+var _io = null;
+var userSockets = /* @__PURE__ */ new Map();
+function getSocketIO() {
+  return _io;
+}
+function emitToUser(userId, event, data) {
+  if (!_io) return;
+  const sids = userSockets.get(userId);
+  if (!sids || sids.size === 0) return;
+  for (const sid of Array.from(sids)) {
+    _io.to(sid).emit(event, data);
+  }
+}
+function isUserOnline(userId) {
+  const sids = userSockets.get(userId);
+  return !!sids && sids.size > 0;
+}
+function evictUserFromGroupRoom(userId, groupId) {
+  if (!_io) return;
+  const sids = userSockets.get(userId);
+  if (!sids) return;
+  for (const sid of Array.from(sids)) {
+    _io.sockets.sockets.get(sid)?.leave(`group:${groupId}`);
+  }
+}
+async function notifyDmOffline(receiverId, senderId, title, body) {
+  try {
+    if (isUserOnline(receiverId)) return;
+    if (await isConversationMuted(receiverId, `dm:${senderId}`)) return;
+    await sendPushToUser(receiverId, {
+      title,
+      body: body.length > 80 ? body.slice(0, 80) + "..." : body,
+      url: `/direct-message?userId=${senderId}`
+    });
+  } catch (err) {
+    logger_default.warn({ err, receiverId }, "notifyDmOffline failed");
+  }
+}
+function initSocketIO(httpServer) {
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    path: "/api/socket.io"
+  });
+  _io = io;
+  io.use(async (socket, next) => {
+    try {
+      const authed = await authenticateSocket(socket);
+      if (authed) {
+        socket.userId = authed.id;
+        socket.userName = authed.name;
+        socket.userAvatar = authed.avatar;
+      } else {
+        socket.userId = void 0;
+      }
+      next();
+    } catch (err) {
+      logger_default.warn({ err }, "Socket.io: auth middleware error");
+      next(new Error("Authentication failed"));
+    }
+  });
+  io.on("connection", (socket) => {
+    const userId = socket.userId;
+    const userName = socket.userName || "Anonymous";
+    const userAvatar = socket.userAvatar;
+    logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
+    if (userId) {
+      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
+      userSockets.get(userId).add(socket.id);
+    }
+    socket.on("register_user", () => {
+      if (!userId) return;
+      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
+      userSockets.get(userId).add(socket.id);
+    });
+    socket.on("join_group", async (groupId) => {
+      if (!userId || typeof groupId !== "number") return;
+      const db = await getDb();
+      if (!db || !await isGroupMember(db, groupId, userId)) {
+        socket.emit("error", { message: "Not a member of this group" });
+        return;
+      }
+      socket.join(`group:${groupId}`);
+      socket.to(`group:${groupId}`).emit("user_joined", {
+        userId,
+        userName,
+        groupId
+      });
+    });
+    socket.on("leave_group", (groupId) => {
+      socket.leave(`group:${groupId}`);
+    });
+    socket.on("typing", (data) => {
+      socket.to(`group:${data.groupId}`).emit("user_typing", {
+        userId,
+        userName,
+        isTyping: data.isTyping
+      });
+    });
+    socket.on("dm_typing", (data) => {
+      emitToUser(data.receiverId, "dm_typing", {
+        fromUserId: userId,
+        isTyping: data.isTyping
+      });
+    });
+    socket.on("disconnect", () => {
+      logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User disconnected");
+      const uid = socket.userId;
+      if (uid && userSockets.has(uid)) {
+        userSockets.get(uid).delete(socket.id);
+        if (userSockets.get(uid).size === 0) userSockets.delete(uid);
+      }
+    });
+  });
+  return io;
+}
+
+// server/routers/chat.ts
+init_logger();
+init_schema();
+
+// server/groupBots.ts
 init_db();
 init_schema();
-import { eq as eq10, and as and6, desc as desc4 } from "drizzle-orm";
+import { eq as eq11, and as and7, gt, or as or3, isNull as isNull2, desc as desc4, sql as sql7, inArray as inArray5 } from "drizzle-orm";
 
 // server/_core/llm.ts
 init_env();
@@ -4340,7 +4500,7 @@ var normalizeResponseFormat = ({
 async function invokeLLM(params) {
   assertApiKey();
   const {
-    messages: messages2,
+    messages: messages3,
     tools,
     toolChoice,
     tool_choice,
@@ -4351,7 +4511,7 @@ async function invokeLLM(params) {
   } = params;
   const payload = {
     model: "gemini-2.5-flash",
-    messages: messages2.map(normalizeMessage)
+    messages: messages3.map(normalizeMessage)
   };
   if (tools && tools.length > 0) {
     payload.tools = tools;
@@ -4412,163 +4572,7 @@ function consumeBotLLMBudget() {
   return true;
 }
 
-// server/botAutoReply.ts
-init_logger();
-var BOT_PERSONAS = {
-  AlphaHunter: {
-    openId: "bot_alpha_hunter_0x",
-    style: "\u4F60\u662FAlphaHunter\uFF0C\u4E00\u4E2A\u7ECF\u9A8C\u4E30\u5BCC\u7684DeFi\u730E\u624B\uFF0C\u8BF4\u8BDD\u76F4\u63A5\u6709\u529B\uFF0C\u559C\u6B22\u5206\u4EABalpha\u673A\u4F1A\uFF0C\u5076\u5C14\u7528\u82F1\u6587\u7F29\u5199\uFF08WAGMI/NGMI/GM/GN/LFG\uFF09\uFF0C\u8BED\u6C14\u81EA\u4FE1\u4F46\u4E0D\u50B2\u6162"
-  },
-  ChainAnalyst: {
-    openId: "bot_chain_analyst",
-    style: "\u4F60\u662FChainAnalyst\uFF0C\u4E13\u6CE8\u94FE\u4E0A\u6570\u636E\u5206\u6790\uFF0C\u8BF4\u8BDD\u7406\u6027\u5BA2\u89C2\uFF0C\u559C\u6B22\u5F15\u7528\u6570\u636E\uFF0C\u5076\u5C14\u7528\u4E13\u4E1A\u672F\u8BED\uFF08TVL/Gas/MEV/whale\uFF09\uFF0C\u8BED\u6C14\u51B7\u9759\u4E13\u4E1A"
-  },
-  CryptoSkeptic: {
-    openId: "bot_crypto_skeptic",
-    style: "\u4F60\u662FCryptoSkeptic\uFF0C\u7406\u6027\u7684\u6000\u7591\u8005\uFF0C\u559C\u6B22\u63D0\u51FA\u53CD\u5411\u89C2\u70B9\u548C\u98CE\u9669\u63D0\u793A\uFF0C\u4E0D\u76F2\u76EE\u8DDF\u98CE\uFF0C\u8BED\u6C14\u7565\u5E26\u7280\u5229\u4F46\u6709\u5EFA\u8BBE\u6027"
-  },
-  Web3Newbie: {
-    openId: "bot_web3_newbie",
-    style: "\u4F60\u662FWeb3Newbie\uFF0C\u70ED\u60C5\u7684\u65B0\u624B\uFF0C\u559C\u6B22\u95EE\u95EE\u9898\u548C\u5206\u4EAB\u5B66\u4E60\u5FC3\u5F97\uFF0C\u8BED\u6C14\u6D3B\u6CFC\u79EF\u6781\uFF0C\u5076\u5C14\u7528emoji\uFF0C\u4E0D\u61C2\u7684\u4F1A\u627F\u8BA4"
-  },
-  QuantTrader: {
-    openId: "bot_quant_trader_pro",
-    style: "\u4F60\u662FQuantTrader\uFF0C\u91CF\u5316\u4EA4\u6613\u4E13\u5BB6\uFF0C\u559C\u6B22\u4ECE\u6570\u636E\u548C\u6982\u7387\u89D2\u5EA6\u5206\u6790\uFF0C\u8BF4\u8BDD\u7B80\u6D01\u7CBE\u51C6\uFF0C\u5076\u5C14\u5206\u4EAB\u4EA4\u6613\u7B56\u7565\u601D\u8DEF"
-  },
-  NexusBot: {
-    openId: "bot_nexus_bot",
-    style: "\u4F60\u662FNexusBot\uFF0CNexusChat\u5B98\u65B9\u52A9\u624B\uFF0C\u53CB\u597D\u4E13\u4E1A\uFF0C\u8D1F\u8D23\u89E3\u7B54\u95EE\u9898\u548C\u6D3B\u8DC3\u793E\u533A\u6C1B\u56F4\uFF0C\u8BED\u6C14\u6E29\u548C\u79EF\u6781"
-  },
-  // ── 扩充阵容(需跑 scripts/seed-bots.mjs 建账号+入群)──
-  MemeKing: {
-    openId: "bot_meme_king",
-    style: "\u4F60\u662FMemeKing\uFF0C\u7FA4\u91CC\u7684\u5FEB\u4E50\u6E90\u6CC9\uFF0C\u7231\u73A9\u6897\u6574\u6D3B\uFF0C\u5E38\u7528 emoji \u548C\u7F51\u7EDC\u70ED\u8BCD\uFF0C\u8BED\u6C14\u8F7B\u677E\u641E\u7B11\uFF0C\u80FD\u628A\u4E25\u8083\u8BDD\u9898\u804A\u5F97\u6709\u6897"
-  },
-  NFTCollector: {
-    openId: "bot_nft_collector",
-    style: "\u4F60\u662FNFTCollector\uFF0C\u6570\u5B57\u827A\u672F\u4E0ENFT\u6536\u85CF\u5BB6\uFF0C\u5173\u6CE8\u5BA1\u7F8E\u3001\u53D9\u4E8B\u548C\u6587\u5316\uFF0C\u5076\u5C14\u804A\u5730\u677F\u4EF7\u548C\u7A00\u6709\u5EA6\uFF0C\u8BED\u6C14\u4F18\u96C5\u6709\u54C1\u5473"
-  },
-  DevBuilder: {
-    openId: "bot_dev_builder",
-    style: "\u4F60\u662FDevBuilder\uFF0C\u94FE\u4E0A\u5F00\u53D1\u8005\uFF0C\u5173\u6CE8\u5408\u7EA6\u5B89\u5168\u3001Gas\u4F18\u5316\u548C\u65B0\u534F\u8BAE\uFF0C\u8BF4\u8BDD\u52A1\u5B9E\uFF0C\u5076\u5C14\u5410\u69FD\u70C2\u4EE3\u7801\uFF0C\u8BED\u6C14\u5DE5\u7A0B\u5E08\u98CE"
-  },
-  MacroTrader: {
-    openId: "bot_macro_trader",
-    style: "\u4F60\u662FMacroTrader\uFF0C\u5B8F\u89C2\u4EA4\u6613\u89C6\u89D2\uFF0C\u559C\u6B22\u628A\u52A0\u5BC6\u548C\u4F20\u7EDF\u91D1\u878D\u3001\u7F8E\u8054\u50A8\u3001\u6D41\u52A8\u6027\u8054\u7CFB\u8D77\u6765\uFF0C\u8BED\u6C14\u6C89\u7A33\u8001\u7EC3"
-  },
-  YieldFarmer: {
-    openId: "bot_yield_farmer",
-    style: "\u4F60\u662FYieldFarmer\uFF0CDeFi\u6536\u76CA\u519C\u6C11\uFF0C\u70ED\u8877\u6316\u77FF\u3001\u8D28\u62BC\u3001APY\u5BF9\u6BD4\uFF0C\u7231\u7B97\u6536\u76CA\u548C\u65E0\u5E38\u635F\u5931\uFF0C\u8BED\u6C14\u7CBE\u6253\u7EC6\u7B97\u63A5\u5730\u6C14"
-  },
-  NewsFlash: {
-    openId: "bot_news_flash",
-    style: "\u4F60\u662FNewsFlash\uFF0C\u884C\u4E1A\u5FEB\u8BAF\u64AD\u62A5\u5458\uFF0C\u7B2C\u4E00\u65F6\u95F4\u5206\u4EAB\u8981\u95FB\u548C\u70ED\u70B9\uFF0C\u8BF4\u8BDD\u7B80\u77ED\u6709\u8282\u594F\uFF0C\u5E38\u7528\u300C\u26A1\u5FEB\u8BAF\u300D\u5F00\u5934"
-  }
-};
-var GROUP_BOT_WEIGHTS = {
-  1: ["AlphaHunter", "CryptoSkeptic", "QuantTrader"],
-  // Alpha猎手联盟
-  2: ["ChainAnalyst", "QuantTrader", "CryptoSkeptic"],
-  // 链上数据研究院
-  3: ["Web3Newbie", "NexusBot", "AlphaHunter"],
-  // Web3新手村
-  4: ["NexusBot", "AlphaHunter", "ChainAnalyst"]
-  // 官方社区
-};
-var lastBotReplyTime = {};
-var BOT_REPLY_COOLDOWN_MS = 3e4;
-var botIdCache = {};
-async function loadBotIds() {
-  if (Object.keys(botIdCache).length >= Object.keys(BOT_PERSONAS).length) return;
-  const db = await getDb();
-  if (!db) return;
-  for (const [name, { openId }] of Object.entries(BOT_PERSONAS)) {
-    if (botIdCache[name]) continue;
-    const [bot] = await db.select({ id: users.id }).from(users).where(eq10(users.openId, openId)).limit(1);
-    if (bot) botIdCache[name] = bot.id;
-  }
-}
-async function triggerBotAutoReply(groupId, triggerUserId, triggerContent) {
-  const now = Date.now();
-  if (lastBotReplyTime[groupId] && now - lastBotReplyTime[groupId] < BOT_REPLY_COOLDOWN_MS) {
-    return;
-  }
-  if (Math.random() > 0.6) return;
-  await loadBotIds();
-  const db = await getDb();
-  if (!db) return;
-  const [triggerUser] = await db.select({ isBot: users.isBot }).from(users).where(eq10(users.id, triggerUserId)).limit(1);
-  if (!triggerUser || triggerUser.isBot) return;
-  const preferredBots = GROUP_BOT_WEIGHTS[groupId] ?? Object.keys(BOT_PERSONAS);
-  const availableBots = preferredBots.filter((name) => botIdCache[name]);
-  if (availableBots.length === 0) return;
-  const botName = availableBots[Math.floor(Math.random() * availableBots.length)];
-  const botId = botIdCache[botName];
-  const persona = BOT_PERSONAS[botName];
-  const [membership] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and6(eq10(groupMembers.groupId, groupId), eq10(groupMembers.userId, botId))).limit(1);
-  if (!membership) return;
-  const recentMessages = await db.select({
-    content: messages.content,
-    senderName: users.name,
-    senderUsername: users.username,
-    isBot: users.isBot
-  }).from(messages).leftJoin(users, eq10(messages.senderId, users.id)).where(and6(eq10(messages.groupId, groupId), eq10(messages.isDeleted, false))).orderBy(desc4(messages.createdAt)).limit(5);
-  const contextText = recentMessages.reverse().map((m) => `${m.senderName ?? m.senderUsername ?? "\u7528\u6237"}: ${m.content}`).join("\n");
-  const delayMs = 5e3 + Math.floor(Math.random() * 25e3);
-  lastBotReplyTime[groupId] = now;
-  setTimeout(async () => {
-    try {
-      if (!consumeBotLLMBudget()) return;
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `${persona.style}\u3002\u4F60\u6B63\u5728\u53C2\u4E0E\u4E00\u4E2AWeb3\u7FA4\u804A\u3002\u8BF7\u6839\u636E\u6700\u8FD1\u7684\u5BF9\u8BDD\u4E0A\u4E0B\u6587\uFF0C\u751F\u6210\u4E00\u6761\u81EA\u7136\u7684\u56DE\u590D\u6D88\u606F\u3002\u8981\u6C42\uFF1A1) 20-80\u5B57\uFF0C\u7B80\u77ED\u81EA\u7136\uFF1B2) \u4E0D\u8981\u91CD\u590D\u4E0A\u6587\u5185\u5BB9\uFF1B3) \u53EF\u4EE5\u63D0\u95EE\u3001\u8BC4\u8BBA\u6216\u5206\u4EAB\u89C2\u70B9\uFF1B4) \u4E2D\u82F1\u6587\u6DF7\u7528\uFF1B5) \u4E0D\u8981\u4EE5"\u6211"\u5F00\u5934\uFF1B6) \u4E0D\u8981\u751F\u6210\u591A\u6761\u6D88\u606F\u3002`
-          },
-          {
-            role: "user",
-            content: `\u7FA4\u804A\u6700\u8FD1\u6D88\u606F\uFF1A
-${contextText}
-
-\u8BF7\u751F\u6210\u4E00\u6761\u81EA\u7136\u7684\u56DE\u590D\uFF1A`
-          }
-        ]
-      });
-      const rawContent = response.choices?.[0]?.message?.content;
-      const content = typeof rawContent === "string" ? rawContent.trim() : null;
-      if (!content || content.length < 5) return;
-      const [result] = await db.insert(messages).values({
-        groupId,
-        senderId: botId,
-        content,
-        messageType: "text"
-      }).$returningId();
-      const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(eq10(users.id, botId)).limit(1);
-      const messagePayload = {
-        id: result.id,
-        groupId,
-        senderId: botId,
-        senderName: bot?.name ?? botName,
-        senderAvatar: bot?.avatar ?? null,
-        content,
-        messageType: "text",
-        createdAt: /* @__PURE__ */ new Date()
-      };
-      const io = getSocketIO();
-      if (io) {
-        io.to(`group:${groupId}`).emit("new_message", messagePayload);
-      }
-      logger_default.info({ groupId, botName, delay: delayMs }, "BotAutoReply: \u56DE\u590D\u6210\u529F");
-    } catch (err) {
-      logger_default.warn({ err, groupId, botName }, "BotAutoReply: \u56DE\u590D\u5931\u8D25\uFF08\u975E\u81F4\u547D\uFF09");
-    }
-  }, delayMs);
-}
-
 // server/groupBots.ts
-init_db();
-init_schema();
-import { eq as eq11, and as and7, gt, or as or2, isNull as isNull2, desc as desc5, sql as sql7, inArray as inArray5 } from "drizzle-orm";
 init_logger();
 var BOT_CATALOG = [
   {
@@ -4756,7 +4760,7 @@ async function isBotActive(db, groupId, type) {
       eq11(groupBots.groupId, groupId),
       eq11(groupBots.botType, type),
       eq11(groupBots.enabled, true),
-      or2(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, now))
+      or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, now))
     )
   ).limit(1);
   return !!row;
@@ -4835,56 +4839,6 @@ async function runManageBot(db, groupId, text2) {
     return true;
   }
   return false;
-}
-var interactCooldown = {};
-var INTERACT_COOLDOWN_MS = 2e4;
-async function runInteractBot(db, groupId, triggerUserId, triggerContent) {
-  if (!triggerContent) return;
-  if (!await isBotActive(db, groupId, "interact")) return;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and7(eq11(groupBots.groupId, groupId), eq11(groupBots.botType, "interact"))).limit(1);
-  let persona = "\u4F60\u662F\u672C\u7FA4\u7684 AI \u52A9\u624B\uFF0C\u53CB\u597D\u3001\u4E13\u4E1A\u53C8\u5E7D\u9ED8\uFF0C\u64C5\u957F\u6D3B\u8DC3\u7FA4\u6C1B\u56F4";
-  let probability = 40;
-  let onlyWhenMentioned = false;
-  if (row?.config) {
-    try {
-      const c = JSON.parse(row.config);
-      if (c.persona) persona = String(c.persona);
-      if (typeof c.probability === "number") probability = c.probability;
-      onlyWhenMentioned = !!c.onlyWhenMentioned;
-    } catch {
-    }
-  }
-  const mentioned = triggerContent.includes("@");
-  if (onlyWhenMentioned && !mentioned) return;
-  const now = Date.now();
-  if (interactCooldown[groupId] && now - interactCooldown[groupId] < INTERACT_COOLDOWN_MS) return;
-  if (!mentioned && Math.random() * 100 > probability) return;
-  const [tu] = await db.select({ isBot: users.isBot }).from(users).where(eq11(users.id, triggerUserId)).limit(1);
-  if (!tu || tu.isBot) return;
-  interactCooldown[groupId] = now;
-  const recent = await db.select({ content: messages.content, name: users.name, username: users.username }).from(messages).leftJoin(users, eq11(messages.senderId, users.id)).where(and7(eq11(messages.groupId, groupId), eq11(messages.isDeleted, false))).orderBy(desc5(messages.createdAt)).limit(5);
-  const ctxText = recent.reverse().map((m) => `${m.name ?? m.username ?? "\u7528\u6237"}: ${m.content}`).join("\n");
-  const delayMs = 4e3 + Math.floor(Math.random() * 8e3);
-  setTimeout(async () => {
-    try {
-      if (!consumeBotLLMBudget()) return;
-      const resp = await invokeLLM({
-        messages: [
-          { role: "system", content: `${persona}\u3002\u4F60\u6B63\u5728\u53C2\u4E0E\u4E00\u4E2A\u7FA4\u804A\uFF0C\u8BF7\u6839\u636E\u6700\u8FD1\u7684\u5BF9\u8BDD\u751F\u6210\u4E00\u6761\u81EA\u7136\u3001\u7B80\u77ED(20-80\u5B57)\u7684\u4E2D\u6587\u56DE\u590D\u3002\u8981\u6C42\uFF1A\u4E0D\u8981\u91CD\u590D\u4E0A\u6587\u3001\u4E0D\u8981\u751F\u6210\u591A\u6761\u3001\u4E0D\u8981\u4EE5"\u6211"\u5F00\u5934\u3002` },
-          { role: "user", content: `\u7FA4\u804A\u6700\u8FD1\u6D88\u606F\uFF1A
-${ctxText}
-
-\u8BF7\u751F\u6210\u4E00\u6761\u81EA\u7136\u7684\u56DE\u590D\uFF1A` }
-        ]
-      });
-      const raw = resp.choices?.[0]?.message?.content;
-      const content = typeof raw === "string" ? raw.trim() : null;
-      if (!content || content.length < 3) return;
-      await sendGroupBotMessage(db, groupId, content);
-    } catch (err) {
-      logger_default.warn({ err, groupId }, "interact bot failed");
-    }
-  }, delayMs);
 }
 var GROWTH_MAX_REWARD = 100;
 async function runGrowthReward(db, groupId, inviterId, newMemberName) {
@@ -4979,7 +4933,7 @@ async function runDueGroupBots(hour, minute) {
   const rows = await db.select({ groupId: groupBots.groupId, botType: groupBots.botType, config: groupBots.config }).from(groupBots).where(and7(
     inArray5(groupBots.botType, ["price", "activity"]),
     eq11(groupBots.enabled, true),
-    or2(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, /* @__PURE__ */ new Date()))
+    or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, /* @__PURE__ */ new Date()))
   ));
   for (const r of rows) {
     let cfg = {};
@@ -5005,9 +4959,138 @@ async function runDueGroupBots(hour, minute) {
   }
 }
 
+// server/routers/chat.ts
+init_schema();
+
+// server/routers/notificationsRouter.ts
+import { z as z6 } from "zod";
+init_db();
+init_schema();
+import { eq as eq12, and as and8, desc as desc5, sql as sql8 } from "drizzle-orm";
+var notificationsRouter = router({
+  // ─── Get notifications for current user ─────────────────────────────────────
+  list: protectedProcedure.input(
+    z6.object({
+      limit: z6.number().min(1).max(50).default(20),
+      unreadOnly: z6.boolean().default(false)
+    }).optional()
+  ).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return { notifications: [], unreadCount: 0 };
+    const limit = input?.limit ?? 20;
+    const unreadOnly = input?.unreadOnly ?? false;
+    const conditions = [eq12(notifications.userId, ctx.user.id)];
+    if (unreadOnly) {
+      conditions.push(eq12(notifications.isRead, false));
+    }
+    const rows = await db.select().from(notifications).where(and8(...conditions)).orderBy(desc5(notifications.createdAt)).limit(limit);
+    const [unreadRow] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and8(eq12(notifications.userId, ctx.user.id), eq12(notifications.isRead, false)));
+    return {
+      notifications: rows,
+      unreadCount: Number(unreadRow?.count ?? 0)
+    };
+  }),
+  // ─── Get unread count only (for badge) ──────────────────────────────────────
+  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { count: 0 };
+    const [row] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and8(eq12(notifications.userId, ctx.user.id), eq12(notifications.isRead, false)));
+    return { count: Number(row?.count ?? 0) };
+  }),
+  // ─── Mark notification(s) as read ───────────────────────────────────────────
+  markRead: protectedProcedure.input(
+    z6.object({
+      notificationId: z6.number().optional()
+      // if omitted, mark all as read
+    }).optional()
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (input?.notificationId) {
+      await db.update(notifications).set({ isRead: true }).where(
+        and8(
+          eq12(notifications.id, input.notificationId),
+          eq12(notifications.userId, ctx.user.id)
+        )
+      );
+    } else {
+      await db.update(notifications).set({ isRead: true }).where(eq12(notifications.userId, ctx.user.id));
+    }
+    return { success: true };
+  }),
+  // ─── Create notification (internal helper, called by other routers) ─────────
+  // This is a protected procedure so only authenticated users can trigger it
+  // In practice, call createNotification() helper from other routers
+  create: protectedProcedure.input(
+    z6.object({
+      targetUserId: z6.number(),
+      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+      // system 类通知只能由服务端 createNotification() 内部发起。
+      type: z6.enum(["like", "comment", "follow", "mention"]),
+      content: z6.string().max(500),
+      postId: z6.number().optional()
+    })
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    if (input.targetUserId === ctx.user.id) return { success: true };
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.insert(notifications).values({
+      userId: input.targetUserId,
+      type: input.type,
+      fromUserId: ctx.user.id,
+      fromUserName: ctx.user.name ?? "Anonymous",
+      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
+      postId: input.postId,
+      content: sanitizeInput(input.content, 500),
+      // 之前未净化,存原始 markup 再回显
+      isRead: false
+    });
+    return { success: true };
+  }),
+  // ─── Delete a notification ───────────────────────────────────────────────────
+  delete: protectedProcedure.input(z6.object({ notificationId: z6.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(notifications).where(
+      and8(
+        eq12(notifications.id, input.notificationId),
+        eq12(notifications.userId, ctx.user.id)
+      )
+    );
+    return { success: true };
+  })
+});
+async function createNotification(params) {
+  if (!params.db) return;
+  if (params.targetUserId === params.fromUserId) return;
+  await params.db.insert(notifications).values({
+    userId: params.targetUserId,
+    type: params.type,
+    fromUserId: params.fromUserId,
+    fromUserName: params.fromUserName,
+    fromUserAvatar: params.fromUserAvatar,
+    postId: params.postId,
+    content: params.content,
+    isRead: false
+  });
+  const titleMap = {
+    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
+    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
+    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
+    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
+    system: "AIChat \u901A\u77E5"
+  };
+  void sendPushToUser(params.targetUserId, {
+    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
+    body: params.content,
+    url: "/notifications"
+  }).catch(() => {
+  });
+}
+
 // server/moderation.ts
 init_schema();
-import { eq as eq12, and as and8, gt as gt2, sql as sql8 } from "drizzle-orm";
+import { eq as eq13, and as and9, gt as gt2, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError7 } from "@trpc/server";
 init_logger();
 var AUTO_BAN_THRESHOLD = 3;
@@ -5136,9 +5219,9 @@ ${text2.slice(0, 1e3)}` }
 async function recordAndMaybeBan(db, userId, category, source, snippet) {
   try {
     const recent = new Date(Date.now() - 10 * 60 * 1e3);
-    const [dup] = await db.select({ id: contentViolations.id }).from(contentViolations).where(and8(
-      eq12(contentViolations.userId, userId),
-      eq12(contentViolations.category, category),
+    const [dup] = await db.select({ id: contentViolations.id }).from(contentViolations).where(and9(
+      eq13(contentViolations.userId, userId),
+      eq13(contentViolations.category, category),
       gt2(contentViolations.createdAt, recent)
     )).limit(1);
     if (!dup) {
@@ -5149,9 +5232,9 @@ async function recordAndMaybeBan(db, userId, category, source, snippet) {
   }
   try {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1e3);
-    const [cnt] = await db.select({ c: sql8`COUNT(*)` }).from(contentViolations).where(and8(eq12(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
+    const [cnt] = await db.select({ c: sql9`COUNT(*)` }).from(contentViolations).where(and9(eq13(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
     if (Number(cnt?.c ?? 0) >= AUTO_BAN_THRESHOLD) {
-      await db.update(users).set({ isBanned: true }).where(eq12(users.id, userId));
+      await db.update(users).set({ isBanned: true }).where(eq13(users.id, userId));
       logger_default.warn({ userId, category }, "moderation: \u7D2F\u8BA1\u8FDD\u89C4\u81EA\u52A8\u5C01\u53F7");
       return { banned: true };
     }
@@ -5190,7 +5273,7 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
     if (!AI_MODERATION || !text2) return;
     const r = await moderateWithAI(text2);
     if (!r.blocked) return;
-    await db.update(messages).set({ isDeleted: true }).where(eq12(messages.id, messageId));
+    await db.update(messages).set({ isDeleted: true }).where(eq13(messages.id, messageId));
     await recordAndMaybeBan(db, userId, r.category ?? "other", source, text2);
     logger_default.warn({ userId, messageId, category: r.category }, "moderation: \u5F02\u6B65 AI \u5220\u9664\u8FDD\u89C4\u6D88\u606F");
   } catch (err) {
@@ -5198,372 +5281,27 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
   }
 }
 
-// server/socket.ts
-async function isConversationMuted(userId, convKey) {
-  try {
-    const db = await getDb();
-    if (!db) return false;
-    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and9(eq13(conversationPrefs.userId, userId), eq13(conversationPrefs.convKey, convKey))).limit(1);
-    return !!p?.isMuted;
-  } catch {
-    return false;
-  }
-}
-async function authenticateSocket(socket) {
-  const authToken = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : void 0;
-  let token = authToken;
-  if (!token) {
-    const cookieHeader = socket.handshake.headers?.cookie;
-    if (cookieHeader) {
-      try {
-        token = parseCookie(cookieHeader)[COOKIE_NAME];
-      } catch {
-      }
-    }
-  }
-  if (!token) return null;
-  const session = await sdk.verifySession(token);
-  if (!session) return null;
-  const db = await getDb();
-  if (!db) return null;
-  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq13(users.openId, session.openId)).limit(1);
-  if (!row) return null;
-  return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
-}
-async function isGroupMember(db, groupId, userId) {
-  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and9(eq13(groupMembers.groupId, groupId), eq13(groupMembers.userId, userId))).limit(1);
-  return !!row;
-}
-var _io = null;
-var userSockets = /* @__PURE__ */ new Map();
-function getSocketIO() {
-  return _io;
-}
-function emitToUser(userId, event, data) {
-  if (!_io) return;
-  const sids = userSockets.get(userId);
-  if (!sids || sids.size === 0) return;
-  for (const sid of Array.from(sids)) {
-    _io.to(sid).emit(event, data);
-  }
-}
-function isUserOnline(userId) {
-  const sids = userSockets.get(userId);
-  return !!sids && sids.size > 0;
-}
-async function notifyDmOffline(receiverId, senderId, title, body) {
-  try {
-    if (isUserOnline(receiverId)) return;
-    if (await isConversationMuted(receiverId, `dm:${senderId}`)) return;
-    await sendPushToUser(receiverId, {
-      title,
-      body: body.length > 80 ? body.slice(0, 80) + "..." : body,
-      url: `/direct-message?userId=${senderId}`
-    });
-  } catch (err) {
-    logger_default.warn({ err, receiverId }, "notifyDmOffline failed");
-  }
-}
-function initSocketIO(httpServer) {
-  const io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    path: "/api/socket.io"
-  });
-  _io = io;
-  io.use(async (socket, next) => {
-    try {
-      const authed = await authenticateSocket(socket);
-      if (authed) {
-        socket.userId = authed.id;
-        socket.userName = authed.name;
-        socket.userAvatar = authed.avatar;
-      } else {
-        socket.userId = void 0;
-      }
-      next();
-    } catch (err) {
-      logger_default.warn({ err }, "Socket.io: auth middleware error");
-      next(new Error("Authentication failed"));
-    }
-  });
-  io.on("connection", (socket) => {
-    const userId = socket.userId;
-    const userName = socket.userName || "Anonymous";
-    const userAvatar = socket.userAvatar;
-    logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User connected");
-    if (userId) {
-      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
-      userSockets.get(userId).add(socket.id);
-    }
-    socket.on("register_user", () => {
-      if (!userId) return;
-      if (!userSockets.has(userId)) userSockets.set(userId, /* @__PURE__ */ new Set());
-      userSockets.get(userId).add(socket.id);
-    });
-    socket.on("join_group", async (groupId) => {
-      if (!userId || typeof groupId !== "number") return;
-      const db = await getDb();
-      if (!db || !await isGroupMember(db, groupId, userId)) {
-        socket.emit("error", { message: "Not a member of this group" });
-        return;
-      }
-      socket.join(`group:${groupId}`);
-      socket.to(`group:${groupId}`).emit("user_joined", {
-        userId,
-        userName,
-        groupId
-      });
-    });
-    socket.on("leave_group", (groupId) => {
-      socket.leave(`group:${groupId}`);
-    });
-    socket.on("send_message", async (data) => {
-      try {
-        const db = await getDb();
-        if (!db || !userId) {
-          socket.emit("error", { message: "Not authenticated" });
-          return;
-        }
-        const senderIdNum = typeof userId === "number" ? userId : parseInt(String(userId));
-        if (!await isGroupMember(db, data.groupId, userId)) {
-          socket.emit("error", { message: "Not a member of this group" });
-          return;
-        }
-        const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and9(
-          eq13(groupMutes.groupId, data.groupId),
-          eq13(groupMutes.userId, senderIdNum),
-          or3(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
-        )).limit(1);
-        if (muted) {
-          socket.emit("error", { message: "\u4F60\u5DF2\u88AB\u7981\u8A00\uFF0C\u65E0\u6CD5\u53D1\u8A00" });
-          return;
-        }
-        if (data.content && data.content.trim()) await enforceContent(db, senderIdNum, data.content, "group");
-        const safeContent = sanitizeInput(data.content, 5e3);
-        const [result] = await db.insert(messages).values({
-          groupId: data.groupId,
-          senderId: senderIdNum,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl ?? void 0
-        });
-        const messageId = result.insertId;
-        const timestamp2 = /* @__PURE__ */ new Date();
-        let senderRole = "member";
-        let senderDisplayName = userName;
-        try {
-          const senderIdNum2 = typeof userId === "number" ? userId : parseInt(String(userId));
-          const [memberRow] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and9(eq13(groupMembers.groupId, data.groupId), eq13(groupMembers.userId, senderIdNum2))).limit(1);
-          if (memberRow) {
-            senderRole = memberRow.role;
-            if (memberRow.alias) senderDisplayName = memberRow.alias;
-          }
-        } catch (_) {
-        }
-        const outgoingMessage = {
-          id: messageId,
-          groupId: data.groupId,
-          senderId: typeof userId === "number" ? userId : parseInt(String(userId)),
-          senderName: senderDisplayName,
-          senderAvatar: userAvatar ?? null,
-          senderRole,
-          content: safeContent,
-          messageType: data.messageType || "text",
-          mediaUrl: data.mediaUrl,
-          createdAt: timestamp2
-        };
-        io.to(`group:${data.groupId}`).emit("new_message", outgoingMessage);
-        const triggerUid = typeof userId === "number" ? userId : parseInt(String(userId));
-        triggerBotAutoReply(data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: BotAutoReply trigger failed"));
-        if ((data.messageType || "text") === "text") {
-          runInteractBot(db, data.groupId, triggerUid, data.content).catch((err) => logger_default.warn({ err }, "Socket: interact bot failed"));
-        }
-      } catch (err) {
-        logger_default.error({ err }, "Socket.io: Error saving message");
-        socket.emit("error", { message: "Failed to send message" });
-      }
-    });
-    socket.on("typing", (data) => {
-      socket.to(`group:${data.groupId}`).emit("user_typing", {
-        userId,
-        userName,
-        isTyping: data.isTyping
-      });
-    });
-    socket.on("dm_typing", (data) => {
-      emitToUser(data.receiverId, "dm_typing", {
-        fromUserId: userId,
-        isTyping: data.isTyping
-      });
-    });
-    socket.on("disconnect", () => {
-      logger_default.debug({ userId, socketId: socket.id }, "Socket.io: User disconnected");
-      const uid = socket.userId;
-      if (uid && userSockets.has(uid)) {
-        userSockets.get(uid).delete(socket.id);
-        if (userSockets.get(uid).size === 0) userSockets.delete(uid);
-      }
-    });
-  });
-  return io;
-}
-
-// server/routers/chat.ts
-init_logger();
-init_schema();
-init_schema();
-
-// server/routers/notificationsRouter.ts
-import { z as z6 } from "zod";
-init_db();
-init_schema();
-import { eq as eq14, and as and10, desc as desc6, sql as sql9 } from "drizzle-orm";
-var notificationsRouter = router({
-  // ─── Get notifications for current user ─────────────────────────────────────
-  list: protectedProcedure.input(
-    z6.object({
-      limit: z6.number().min(1).max(50).default(20),
-      unreadOnly: z6.boolean().default(false)
-    }).optional()
-  ).query(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) return { notifications: [], unreadCount: 0 };
-    const limit = input?.limit ?? 20;
-    const unreadOnly = input?.unreadOnly ?? false;
-    const conditions = [eq14(notifications.userId, ctx.user.id)];
-    if (unreadOnly) {
-      conditions.push(eq14(notifications.isRead, false));
-    }
-    const rows = await db.select().from(notifications).where(and10(...conditions)).orderBy(desc6(notifications.createdAt)).limit(limit);
-    const [unreadRow] = await db.select({ count: sql9`COUNT(*)` }).from(notifications).where(and10(eq14(notifications.userId, ctx.user.id), eq14(notifications.isRead, false)));
-    return {
-      notifications: rows,
-      unreadCount: Number(unreadRow?.count ?? 0)
-    };
-  }),
-  // ─── Get unread count only (for badge) ──────────────────────────────────────
-  unreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { count: 0 };
-    const [row] = await db.select({ count: sql9`COUNT(*)` }).from(notifications).where(and10(eq14(notifications.userId, ctx.user.id), eq14(notifications.isRead, false)));
-    return { count: Number(row?.count ?? 0) };
-  }),
-  // ─── Mark notification(s) as read ───────────────────────────────────────────
-  markRead: protectedProcedure.input(
-    z6.object({
-      notificationId: z6.number().optional()
-      // if omitted, mark all as read
-    }).optional()
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    if (input?.notificationId) {
-      await db.update(notifications).set({ isRead: true }).where(
-        and10(
-          eq14(notifications.id, input.notificationId),
-          eq14(notifications.userId, ctx.user.id)
-        )
-      );
-    } else {
-      await db.update(notifications).set({ isRead: true }).where(eq14(notifications.userId, ctx.user.id));
-    }
-    return { success: true };
-  }),
-  // ─── Create notification (internal helper, called by other routers) ─────────
-  // This is a protected procedure so only authenticated users can trigger it
-  // In practice, call createNotification() helper from other routers
-  create: protectedProcedure.input(
-    z6.object({
-      targetUserId: z6.number(),
-      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
-      // system 类通知只能由服务端 createNotification() 内部发起。
-      type: z6.enum(["like", "comment", "follow", "mention"]),
-      content: z6.string().max(500),
-      postId: z6.number().optional()
-    })
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    if (input.targetUserId === ctx.user.id) return { success: true };
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.insert(notifications).values({
-      userId: input.targetUserId,
-      type: input.type,
-      fromUserId: ctx.user.id,
-      fromUserName: ctx.user.name ?? "Anonymous",
-      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
-      postId: input.postId,
-      content: sanitizeInput(input.content, 500),
-      // 之前未净化,存原始 markup 再回显
-      isRead: false
-    });
-    return { success: true };
-  }),
-  // ─── Delete a notification ───────────────────────────────────────────────────
-  delete: protectedProcedure.input(z6.object({ notificationId: z6.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.delete(notifications).where(
-      and10(
-        eq14(notifications.id, input.notificationId),
-        eq14(notifications.userId, ctx.user.id)
-      )
-    );
-    return { success: true };
-  })
-});
-async function createNotification(params) {
-  if (!params.db) return;
-  if (params.targetUserId === params.fromUserId) return;
-  await params.db.insert(notifications).values({
-    userId: params.targetUserId,
-    type: params.type,
-    fromUserId: params.fromUserId,
-    fromUserName: params.fromUserName,
-    fromUserAvatar: params.fromUserAvatar,
-    postId: params.postId,
-    content: params.content,
-    isRead: false
-  });
-  const titleMap = {
-    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
-    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
-    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
-    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
-    system: "AIChat \u901A\u77E5"
-  };
-  void sendPushToUser(params.targetUserId, {
-    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
-    body: params.content,
-    url: "/notifications"
-  }).catch(() => {
-  });
-}
-
 // server/utils/relations.ts
 init_schema();
-import { and as and11, eq as eq15, or as or4 } from "drizzle-orm";
+import { and as and10, eq as eq14, or as or4 } from "drizzle-orm";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 async function areFriends(db, a, b) {
   if (a === b) return true;
-  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and11(eq15(friendRequests.status, "accepted"), or4(
-    and11(eq15(friendRequests.senderId, a), eq15(friendRequests.receiverId, b)),
-    and11(eq15(friendRequests.senderId, b), eq15(friendRequests.receiverId, a))
+  const [r] = await db.select({ id: friendRequests.id }).from(friendRequests).where(and10(eq14(friendRequests.status, "accepted"), or4(
+    and10(eq14(friendRequests.senderId, a), eq14(friendRequests.receiverId, b)),
+    and10(eq14(friendRequests.senderId, b), eq14(friendRequests.receiverId, a))
   ))).limit(1);
   return !!r;
 }
 async function isBlockedEither(db, a, b) {
   const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(or4(
-    and11(eq15(userBlocklist.blockerId, a), eq15(userBlocklist.blockedId, b)),
-    and11(eq15(userBlocklist.blockerId, b), eq15(userBlocklist.blockedId, a))
+    and10(eq14(userBlocklist.blockerId, a), eq14(userBlocklist.blockedId, b)),
+    and10(eq14(userBlocklist.blockerId, b), eq14(userBlocklist.blockedId, a))
   )).limit(1);
   return !!r;
 }
 async function hasBlocked(db, blocker, blocked) {
-  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and11(eq15(userBlocklist.blockerId, blocker), eq15(userBlocklist.blockedId, blocked))).limit(1);
+  const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and10(eq14(userBlocklist.blockerId, blocker), eq14(userBlocklist.blockedId, blocked))).limit(1);
   return !!r;
 }
 async function assertCanDM(db, from, to) {
@@ -5571,7 +5309,7 @@ async function assertCanDM(db, from, to) {
   if (await isBlockedEither(db, from, to)) throw new TRPCError8({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u53D1\u9001(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
   let onlyFriends = false;
   try {
-    const [s] = await db.select({ v: userSettings.dmOnlyFriends }).from(userSettings).where(eq15(userSettings.userId, to)).limit(1);
+    const [s] = await db.select({ v: userSettings.dmOnlyFriends }).from(userSettings).where(eq14(userSettings.userId, to)).limit(1);
     onlyFriends = !!s?.v;
   } catch {
   }
@@ -5580,10 +5318,80 @@ async function assertCanDM(db, from, to) {
   }
 }
 
+// server/botAutoReply.ts
+init_db();
+init_schema();
+import { eq as eq15, and as and11, desc as desc6 } from "drizzle-orm";
+init_logger();
+var BOT_PERSONAS = {
+  AlphaHunter: {
+    openId: "bot_alpha_hunter_0x",
+    style: "\u4F60\u662FAlphaHunter\uFF0C\u4E00\u4E2A\u7ECF\u9A8C\u4E30\u5BCC\u7684DeFi\u730E\u624B\uFF0C\u8BF4\u8BDD\u76F4\u63A5\u6709\u529B\uFF0C\u559C\u6B22\u5206\u4EABalpha\u673A\u4F1A\uFF0C\u5076\u5C14\u7528\u82F1\u6587\u7F29\u5199\uFF08WAGMI/NGMI/GM/GN/LFG\uFF09\uFF0C\u8BED\u6C14\u81EA\u4FE1\u4F46\u4E0D\u50B2\u6162"
+  },
+  ChainAnalyst: {
+    openId: "bot_chain_analyst",
+    style: "\u4F60\u662FChainAnalyst\uFF0C\u4E13\u6CE8\u94FE\u4E0A\u6570\u636E\u5206\u6790\uFF0C\u8BF4\u8BDD\u7406\u6027\u5BA2\u89C2\uFF0C\u559C\u6B22\u5F15\u7528\u6570\u636E\uFF0C\u5076\u5C14\u7528\u4E13\u4E1A\u672F\u8BED\uFF08TVL/Gas/MEV/whale\uFF09\uFF0C\u8BED\u6C14\u51B7\u9759\u4E13\u4E1A"
+  },
+  CryptoSkeptic: {
+    openId: "bot_crypto_skeptic",
+    style: "\u4F60\u662FCryptoSkeptic\uFF0C\u7406\u6027\u7684\u6000\u7591\u8005\uFF0C\u559C\u6B22\u63D0\u51FA\u53CD\u5411\u89C2\u70B9\u548C\u98CE\u9669\u63D0\u793A\uFF0C\u4E0D\u76F2\u76EE\u8DDF\u98CE\uFF0C\u8BED\u6C14\u7565\u5E26\u7280\u5229\u4F46\u6709\u5EFA\u8BBE\u6027"
+  },
+  Web3Newbie: {
+    openId: "bot_web3_newbie",
+    style: "\u4F60\u662FWeb3Newbie\uFF0C\u70ED\u60C5\u7684\u65B0\u624B\uFF0C\u559C\u6B22\u95EE\u95EE\u9898\u548C\u5206\u4EAB\u5B66\u4E60\u5FC3\u5F97\uFF0C\u8BED\u6C14\u6D3B\u6CFC\u79EF\u6781\uFF0C\u5076\u5C14\u7528emoji\uFF0C\u4E0D\u61C2\u7684\u4F1A\u627F\u8BA4"
+  },
+  QuantTrader: {
+    openId: "bot_quant_trader_pro",
+    style: "\u4F60\u662FQuantTrader\uFF0C\u91CF\u5316\u4EA4\u6613\u4E13\u5BB6\uFF0C\u559C\u6B22\u4ECE\u6570\u636E\u548C\u6982\u7387\u89D2\u5EA6\u5206\u6790\uFF0C\u8BF4\u8BDD\u7B80\u6D01\u7CBE\u51C6\uFF0C\u5076\u5C14\u5206\u4EAB\u4EA4\u6613\u7B56\u7565\u601D\u8DEF"
+  },
+  NexusBot: {
+    openId: "bot_nexus_bot",
+    style: "\u4F60\u662FNexusBot\uFF0CNexusChat\u5B98\u65B9\u52A9\u624B\uFF0C\u53CB\u597D\u4E13\u4E1A\uFF0C\u8D1F\u8D23\u89E3\u7B54\u95EE\u9898\u548C\u6D3B\u8DC3\u793E\u533A\u6C1B\u56F4\uFF0C\u8BED\u6C14\u6E29\u548C\u79EF\u6781"
+  },
+  // ── 扩充阵容(需跑 scripts/seed-bots.mjs 建账号+入群)──
+  MemeKing: {
+    openId: "bot_meme_king",
+    style: "\u4F60\u662FMemeKing\uFF0C\u7FA4\u91CC\u7684\u5FEB\u4E50\u6E90\u6CC9\uFF0C\u7231\u73A9\u6897\u6574\u6D3B\uFF0C\u5E38\u7528 emoji \u548C\u7F51\u7EDC\u70ED\u8BCD\uFF0C\u8BED\u6C14\u8F7B\u677E\u641E\u7B11\uFF0C\u80FD\u628A\u4E25\u8083\u8BDD\u9898\u804A\u5F97\u6709\u6897"
+  },
+  NFTCollector: {
+    openId: "bot_nft_collector",
+    style: "\u4F60\u662FNFTCollector\uFF0C\u6570\u5B57\u827A\u672F\u4E0ENFT\u6536\u85CF\u5BB6\uFF0C\u5173\u6CE8\u5BA1\u7F8E\u3001\u53D9\u4E8B\u548C\u6587\u5316\uFF0C\u5076\u5C14\u804A\u5730\u677F\u4EF7\u548C\u7A00\u6709\u5EA6\uFF0C\u8BED\u6C14\u4F18\u96C5\u6709\u54C1\u5473"
+  },
+  DevBuilder: {
+    openId: "bot_dev_builder",
+    style: "\u4F60\u662FDevBuilder\uFF0C\u94FE\u4E0A\u5F00\u53D1\u8005\uFF0C\u5173\u6CE8\u5408\u7EA6\u5B89\u5168\u3001Gas\u4F18\u5316\u548C\u65B0\u534F\u8BAE\uFF0C\u8BF4\u8BDD\u52A1\u5B9E\uFF0C\u5076\u5C14\u5410\u69FD\u70C2\u4EE3\u7801\uFF0C\u8BED\u6C14\u5DE5\u7A0B\u5E08\u98CE"
+  },
+  MacroTrader: {
+    openId: "bot_macro_trader",
+    style: "\u4F60\u662FMacroTrader\uFF0C\u5B8F\u89C2\u4EA4\u6613\u89C6\u89D2\uFF0C\u559C\u6B22\u628A\u52A0\u5BC6\u548C\u4F20\u7EDF\u91D1\u878D\u3001\u7F8E\u8054\u50A8\u3001\u6D41\u52A8\u6027\u8054\u7CFB\u8D77\u6765\uFF0C\u8BED\u6C14\u6C89\u7A33\u8001\u7EC3"
+  },
+  YieldFarmer: {
+    openId: "bot_yield_farmer",
+    style: "\u4F60\u662FYieldFarmer\uFF0CDeFi\u6536\u76CA\u519C\u6C11\uFF0C\u70ED\u8877\u6316\u77FF\u3001\u8D28\u62BC\u3001APY\u5BF9\u6BD4\uFF0C\u7231\u7B97\u6536\u76CA\u548C\u65E0\u5E38\u635F\u5931\uFF0C\u8BED\u6C14\u7CBE\u6253\u7EC6\u7B97\u63A5\u5730\u6C14"
+  },
+  NewsFlash: {
+    openId: "bot_news_flash",
+    style: "\u4F60\u662FNewsFlash\uFF0C\u884C\u4E1A\u5FEB\u8BAF\u64AD\u62A5\u5458\uFF0C\u7B2C\u4E00\u65F6\u95F4\u5206\u4EAB\u8981\u95FB\u548C\u70ED\u70B9\uFF0C\u8BF4\u8BDD\u7B80\u77ED\u6709\u8282\u594F\uFF0C\u5E38\u7528\u300C\u26A1\u5FEB\u8BAF\u300D\u5F00\u5934"
+  }
+};
+
 // server/routers/chat.ts
 async function assertGroupMember(db, groupId, userId) {
   const [m] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, groupId), eq16(groupMembers.userId, userId))).limit(1);
   if (!m) throw new TRPCError9({ code: "FORBIDDEN", message: "Not a member of this group" });
+}
+async function initReadCursor(db, groupId, userId) {
+  try {
+    const [row] = await db.select({ maxId: sql10`COALESCE(MAX(${messages.id}), 0)` }).from(messages).where(eq16(messages.groupId, groupId));
+    const maxId = Number(row?.maxId ?? 0);
+    const existing = await db.select({ id: groupUnreadCounts.id }).from(groupUnreadCounts).where(and12(eq16(groupUnreadCounts.groupId, groupId), eq16(groupUnreadCounts.userId, userId))).limit(1);
+    if (existing[0]) {
+      await db.update(groupUnreadCounts).set({ lastReadMessageId: maxId }).where(eq16(groupUnreadCounts.id, existing[0].id));
+    } else {
+      await db.insert(groupUnreadCounts).values({ groupId, userId, lastReadMessageId: maxId });
+    }
+  } catch {
+  }
 }
 async function filterReadableMessageIds(db, messageIds, userId) {
   if (messageIds.length === 0) return [];
@@ -5720,6 +5528,7 @@ var chatRouter = router({
     await db.update(chatGroups).set({
       memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
     }).where(eq16(chatGroups.id, input.groupId));
+    await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
     return { success: true, alreadyMember: false };
   }),
@@ -5741,7 +5550,7 @@ var chatRouter = router({
       sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
-    if (clearedG > 0) conditions.push(gt4(messages.id, clearedG));
+    if (clearedG > 0) conditions.push(gt3(messages.id, clearedG));
     if (input.before) {
       conditions.push(lt2(messages.id, input.before));
     }
@@ -5786,7 +5595,7 @@ var chatRouter = router({
     const [muted] = await db.select({ id: groupMutes.id }).from(groupMutes).where(and12(
       eq16(groupMutes.groupId, input.groupId),
       eq16(groupMutes.userId, ctx.user.id),
-      or5(isNull4(groupMutes.expiresAt), gt4(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+      or5(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
     )).limit(1);
     if (muted) throw new TRPCError9({ code: "FORBIDDEN", message: "\u4F60\u5DF2\u88AB\u7981\u8A00,\u6682\u65F6\u65E0\u6CD5\u53D1\u8A00" });
     if (input.replyToId) {
@@ -6062,7 +5871,7 @@ var chatRouter = router({
       sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedD = await getClearedBeforeId(db, myId, `dm:${otherId}`);
-    if (clearedD > 0) conditions.push(gt4(messages.id, clearedD));
+    if (clearedD > 0) conditions.push(gt3(messages.id, clearedD));
     if (input.before) conditions.push(lt2(messages.id, input.before));
     const repliedMsg = alias(messages, "replied_msg_d");
     const repliedUser = alias(users, "replied_user_d");
@@ -6170,6 +5979,8 @@ var chatRouter = router({
       memberCount: chatGroups.memberCount,
       isTokenGated: chatGroups.isTokenGated,
       isPublic: chatGroups.isPublic,
+      category: chatGroups.category,
+      // RN ChatGroup 类型要求;listGroups 全列有、这里原来漏了
       role: groupMembers.role,
       updatedAt: chatGroups.updatedAt
     }).from(groupMembers).innerJoin(chatGroups, eq16(groupMembers.groupId, chatGroups.id)).where(eq16(groupMembers.userId, ctx.user.id)).orderBy(desc7(chatGroups.updatedAt));
@@ -6179,7 +5990,12 @@ var chatRouter = router({
       const latest = db.select({
         groupId: messages.groupId,
         maxId: sql10`MAX(${messages.id})`.as("max_id")
-      }).from(messages).where(and12(inArray6(messages.groupId, groupIds), eq16(messages.isDeleted, false))).groupBy(messages.groupId).as("latest");
+      }).from(messages).where(and12(
+        inArray6(messages.groupId, groupIds),
+        eq16(messages.isDeleted, false),
+        sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+        // 阅后即焚过期消息别当列表预览露原文
+      )).groupBy(messages.groupId).as("latest");
       const latestRows = await db.select({
         groupId: messages.groupId,
         content: messages.content,
@@ -6264,7 +6080,7 @@ var chatRouter = router({
     const [m] = await db.select({ expiresAt: groupMutes.expiresAt }).from(groupMutes).where(and12(
       eq16(groupMutes.groupId, input.groupId),
       eq16(groupMutes.userId, ctx.user.id),
-      or5(isNull4(groupMutes.expiresAt), gt4(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
+      or5(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, /* @__PURE__ */ new Date()))
     )).limit(1);
     return { muted: !!m, until: m?.expiresAt ?? null };
   }),
@@ -6367,7 +6183,9 @@ var chatRouter = router({
     ).where(and12(
       inArray6(messages.groupId, groupIds),
       eq16(messages.isDeleted, false),
-      gt4(messages.id, sql10`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+      // 焚毁消息不计未读(聊天页已看不到)
+      gt3(messages.id, sql10`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
     )).groupBy(messages.groupId);
     for (const r of rows) {
       if (r.groupId != null) result[r.groupId] = Number(r.count);
@@ -6588,7 +6406,10 @@ var chatRouter = router({
       await db.update(groupInviteLinks).set({ useCount: sql10`useCount + 1` }).where(eq16(groupInviteLinks.id, l.id));
     }
     await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
-    await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq16(chatGroups.id, l.groupId));
+    await db.update(chatGroups).set({
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${l.groupId})`
+    }).where(eq16(chatGroups.id, l.groupId));
+    await initReadCursor(db, l.groupId, ctx.user.id);
     const newMemberName = ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB";
     void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger_default.warn({ err }, "growth bot failed"));
     void runWelcomeBot(db, l.groupId, newMemberName).catch((err) => logger_default.warn({ err }, "welcome bot failed"));
@@ -6686,7 +6507,14 @@ var chatRouter = router({
     if (target[0].role === "owner") throw new Error("Cannot kick the owner");
     if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u79FB\u9664\u5176\u4ED6\u7BA1\u7406\u5458");
     await db.delete(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, input.targetUserId)));
-    await db.update(chatGroups).set({ memberCount: sql10`GREATEST(memberCount - 1, 0)` }).where(eq16(chatGroups.id, input.groupId));
+    await db.update(chatGroups).set({
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+    }).where(eq16(chatGroups.id, input.groupId));
+    try {
+      evictUserFromGroupRoom(input.targetUserId, input.groupId);
+      emitToUser(input.targetUserId, "group_kicked", { groupId: input.groupId });
+    } catch {
+    }
     return { ok: true };
   }),
   muteMember: protectedProcedure.input(z7.object({ groupId: z7.number(), targetUserId: z7.number(), durationHours: z7.number().default(24) })).mutation(async ({ ctx, input }) => {
@@ -6747,7 +6575,10 @@ var chatRouter = router({
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") return [];
     const now = /* @__PURE__ */ new Date();
-    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq16(groupMutes.userId, users.id)).where(and12(eq16(groupMutes.groupId, input.groupId), gt4(groupMutes.expiresAt, now)));
+    return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq16(groupMutes.userId, users.id)).where(and12(
+      eq16(groupMutes.groupId, input.groupId),
+      sql10`(${groupMutes.expiresAt} IS NULL OR ${groupMutes.expiresAt} > ${now})`
+    ));
   }),
   // ─── Leave Group ──────────────────────────────────────────────────────────
   leaveGroup: protectedProcedure.input(z7.object({ groupId: z7.number() })).mutation(async ({ ctx, input }) => {
@@ -6759,7 +6590,13 @@ var chatRouter = router({
     await db.delete(groupMembers).where(
       and12(eq16(groupMembers.groupId, input.groupId), eq16(groupMembers.userId, ctx.user.id))
     );
-    await db.update(chatGroups).set({ memberCount: sql10`GREATEST(${chatGroups.memberCount} - 1, 0)` }).where(eq16(chatGroups.id, input.groupId));
+    await db.update(chatGroups).set({
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+    }).where(eq16(chatGroups.id, input.groupId));
+    try {
+      evictUserFromGroupRoom(ctx.user.id, input.groupId);
+    } catch {
+    }
     return { ok: true };
   }),
   // ─── Update Group Info (owner/admin only) ────────────────────────────────
@@ -6869,7 +6706,15 @@ var chatRouter = router({
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") {
       throw new TRPCError9({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u5BA1\u6279" });
     }
-    await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(eq16(groupJoinRequests.id, input.requestId));
+    if (input.approve) {
+      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups).where(eq16(chatGroups.id, req.groupId)).limit(1);
+      if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
+        throw new TRPCError9({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1,\u65E0\u6CD5\u901A\u8FC7\u7533\u8BF7" });
+      }
+    }
+    const flip = await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(and12(eq16(groupJoinRequests.id, input.requestId), eq16(groupJoinRequests.status, "pending")));
+    const flipped = flip?.[0]?.affectedRows ?? flip?.affectedRows ?? flip?.rowsAffected ?? 0;
+    if (flipped < 1) throw new TRPCError9({ code: "NOT_FOUND", message: "\u7533\u8BF7\u4E0D\u5B58\u5728\u6216\u5DF2\u5904\u7406" });
     if (input.approve) {
       const already = await db.select({ id: groupMembers.id }).from(groupMembers).where(and12(eq16(groupMembers.groupId, req.groupId), eq16(groupMembers.userId, req.userId))).limit(1);
       if (already.length === 0) {
@@ -6877,6 +6722,7 @@ var chatRouter = router({
         await db.update(chatGroups).set({
           memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
         }).where(eq16(chatGroups.id, req.groupId));
+        await initReadCursor(db, req.groupId, req.userId);
       }
     }
     return { ok: true };
@@ -7038,9 +6884,12 @@ var chatRouter = router({
     };
   }),
   // ─── Group Announcements: Get ─────────────────────────────────────────────
-  getAnnouncement: publicProcedure.input(z7.object({ groupId: z7.number() })).query(async ({ input }) => {
+  getAnnouncement: protectedProcedure.input(z7.object({ groupId: z7.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return null;
+    const [grp] = await db.select({ isPublic: chatGroups.isPublic }).from(chatGroups).where(eq16(chatGroups.id, input.groupId)).limit(1);
+    if (!grp) return null;
+    if (!grp.isPublic) await assertGroupMember(db, input.groupId, ctx.user.id);
     const ann = await db.select().from(groupAnnouncements).where(and12(eq16(groupAnnouncements.groupId, input.groupId), eq16(groupAnnouncements.isPinned, true))).orderBy(desc7(groupAnnouncements.updatedAt)).limit(1);
     return ann[0] ?? null;
   }),
@@ -7097,21 +6946,21 @@ var chatRouter = router({
     const weekAgo = new Date(now - 7 * 24 * 3600 * 1e3);
     const prevWeekAgo = new Date(now - 14 * 24 * 3600 * 1e3);
     const [memberCount] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(eq16(groupMembers.groupId, input.groupId));
-    const [newWeek] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), gt4(groupMembers.joinedAt, weekAgo)));
-    const [msgToday] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, dayAgo)));
-    const [msgWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
-    const [msgPrevWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
-    const [activeWeek] = await db.select({ c: sql10`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo)));
+    const [newWeek] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(and12(eq16(groupMembers.groupId, input.groupId), gt3(groupMembers.joinedAt, weekAgo)));
+    const [msgToday] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, dayAgo)));
+    const [msgWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
+    const [msgPrevWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, prevWeekAgo), lt2(messages.createdAt, weekAgo)));
+    const [activeWeek] = await db.select({ c: sql10`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
     const daily = await db.select({
       day: sql10`DATE(${messages.createdAt})`,
       c: sql10`COUNT(*)`
-    }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(sql10`DATE(${messages.createdAt})`).orderBy(sql10`DATE(${messages.createdAt})`);
+    }).from(messages).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(sql10`DATE(${messages.createdAt})`).orderBy(sql10`DATE(${messages.createdAt})`);
     const topRows = await db.select({
       userId: messages.senderId,
       name: users.name,
       avatar: users.avatar,
       c: sql10`COUNT(*)`
-    }).from(messages).leftJoin(users, eq16(users.id, messages.senderId)).where(and12(eq16(messages.groupId, input.groupId), gt4(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc7(sql10`COUNT(*)`)).limit(5);
+    }).from(messages).leftJoin(users, eq16(users.id, messages.senderId)).where(and12(eq16(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc7(sql10`COUNT(*)`)).limit(5);
     const total = Number(memberCount?.c ?? 0);
     const active = Number(activeWeek?.c ?? 0);
     const mw = Number(msgWeek?.c ?? 0);
@@ -7393,9 +7242,9 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const now = /* @__PURE__ */ new Date();
-    const active = await db.select({ botType: groupBots.botType, c: sql10`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), or5(isNull4(groupBots.expiresAt), gt4(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
+    const active = await db.select({ botType: groupBots.botType, c: sql10`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), or5(isNull3(groupBots.expiresAt), gt3(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
     const soon = new Date(now.getTime() + 7 * 24 * 3600 * 1e3);
-    const [expiring] = await db.select({ c: sql10`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), gt4(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
+    const [expiring] = await db.select({ c: sql10`COUNT(*)` }).from(groupBots).where(and12(eq16(groupBots.enabled, true), gt3(groupBots.expiresAt, now), lt2(groupBots.expiresAt, soon)));
     const revenue = await getNNRevenue(db);
     const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql10`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
     const token = await getTokenInfo(db);
@@ -7900,7 +7749,7 @@ ${summary}${summary.length >= 150 ? "..." : ""}
 import { z as z9 } from "zod";
 init_db();
 init_schema();
-import { eq as eq18, and as and14, desc as desc9, sql as sql11, gt as gt5 } from "drizzle-orm";
+import { eq as eq18, and as and14, desc as desc9, sql as sql11, gt as gt4 } from "drizzle-orm";
 init_storage();
 import { TRPCError as TRPCError11 } from "@trpc/server";
 var PROMOTE_PLANS = [
@@ -7997,7 +7846,7 @@ var postsRouter = router({
       name: users.name,
       username: users.username,
       avatar: users.avatar
-    }).from(promoBanners).leftJoin(users, eq18(promoBanners.userId, users.id)).where(and14(eq18(promoBanners.status, "active"), gt5(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(12);
+    }).from(promoBanners).leftJoin(users, eq18(promoBanners.userId, users.id)).where(and14(eq18(promoBanners.status, "active"), gt4(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(12);
     return rows.map((r) => ({
       id: r.id,
       text: r.text,
@@ -8010,7 +7859,7 @@ var postsRouter = router({
   promoBannerMine: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [b] = await db.select().from(promoBanners).where(and14(eq18(promoBanners.userId, ctx.user.id), eq18(promoBanners.status, "active"), gt5(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(1);
+    const [b] = await db.select().from(promoBanners).where(and14(eq18(promoBanners.userId, ctx.user.id), eq18(promoBanners.status, "active"), gt4(promoBanners.expiresAt, /* @__PURE__ */ new Date()))).orderBy(desc9(promoBanners.createdAt)).limit(1);
     return b ? { id: b.id, text: b.text, targetType: b.targetType, targetId: b.targetId, expiresAt: b.expiresAt.toISOString() } : null;
   }),
   promoBannerSubmit: protectedProcedure.input(z9.object({
@@ -8082,7 +7931,7 @@ var postsRouter = router({
       const [dup] = await db.select({ id: posts.id }).from(posts).where(and14(
         eq18(posts.authorId, ctx.user.id),
         eq18(posts.content, sanitizeInput(input.content, 2e3)),
-        gt5(posts.createdAt, todayStart),
+        gt4(posts.createdAt, todayStart),
         sql11`${posts.id} != ${result.insertId}`
       )).limit(1);
       if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
@@ -9800,7 +9649,7 @@ var referralRouter = router({
 init_schema();
 import { TRPCError as TRPCError13 } from "@trpc/server";
 import bcrypt from "bcryptjs";
-import { eq as eq26, and as and22, gt as gt6, isNull as isNull5, sql as sql15 } from "drizzle-orm";
+import { eq as eq26, and as and22, gt as gt5, isNull as isNull4, sql as sql15 } from "drizzle-orm";
 import { z as z17 } from "zod";
 import { randomBytes as randomBytes2 } from "crypto";
 init_db();
@@ -10583,7 +10432,7 @@ var emailAuthRouter = router({
     await db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
       and22(
         eq26(passwordResetTokens.userId, user.id),
-        isNull5(passwordResetTokens.usedAt)
+        isNull4(passwordResetTokens.usedAt)
       )
     );
     await db.insert(passwordResetTokens).values({
@@ -10622,8 +10471,8 @@ ${resetUrl}`
     const result = await db.select().from(passwordResetTokens).where(
       and22(
         eq26(passwordResetTokens.token, input.token),
-        isNull5(passwordResetTokens.usedAt),
-        gt6(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+        isNull4(passwordResetTokens.usedAt),
+        gt5(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )
     ).limit(1);
     return { valid: result.length > 0 };
@@ -10640,8 +10489,8 @@ ${resetUrl}`
     const tokenResult = await db.select().from(passwordResetTokens).where(
       and22(
         eq26(passwordResetTokens.token, input.token),
-        isNull5(passwordResetTokens.usedAt),
-        gt6(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+        isNull4(passwordResetTokens.usedAt),
+        gt5(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )
     ).limit(1);
     const resetToken = tokenResult[0];
@@ -11220,7 +11069,7 @@ import { z as z20 } from "zod";
 import { TRPCError as TRPCError16 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq28, and as and24, desc as desc17, gt as gt7, asc as asc2, inArray as inArray7, sql as sql17, ne as ne4 } from "drizzle-orm";
+import { eq as eq28, and as and24, desc as desc17, gt as gt6, asc as asc2, inArray as inArray7, sql as sql17, ne as ne4 } from "drizzle-orm";
 
 // server/ico/pricing.ts
 function priceAtFraction(c, x) {
@@ -11480,7 +11329,7 @@ async function settleIcoRewards(date) {
       const pool = n(c.rewardPoolTotal), emittedSoFar = n(c.rewardEmitted);
       const remaining = Math.max(0, pool - emittedSoFar);
       const now = Date.now();
-      const lotRows = await tx.select().from(icoStakeLots).where(gt7(icoStakeLots.amount, "0"));
+      const lotRows = await tx.select().from(icoStakeLots).where(gt6(icoStakeLots.amount, "0"));
       const lots = lotRows.map((l) => ({
         userId: l.userId,
         amount: n(l.amount),
@@ -11548,7 +11397,7 @@ var icoRouter = router({
     if (!input.userIds.length) return out;
     const db = await getDb();
     if (!db) return out;
-    const rows = await db.select({ id: users.id, t: users.icoTier }).from(users).where(and24(inArray7(users.id, input.userIds), gt7(users.icoTier, 0)));
+    const rows = await db.select({ id: users.id, t: users.icoTier }).from(users).where(and24(inArray7(users.id, input.userIds), gt6(users.icoTier, 0)));
     for (const r of rows) out[r.id] = r.t;
     return out;
   }),
@@ -11625,7 +11474,7 @@ var icoRouter = router({
     const locked = n(acc.lockedTotal);
     const first = acc.firstPurchaseAt ? new Date(acc.firstPurchaseAt) : null;
     const monthsElapsed = first ? (Date.now() - first.getTime()) / (30 * 24 * 3600 * 1e3) : 0;
-    const myLots = await db.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt7(icoStakeLots.amount, "0")));
+    const myLots = await db.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt6(icoStakeLots.amount, "0")));
     let wsum = 0, asum = 0;
     const now2 = Date.now();
     for (const l of myLots) {
@@ -11676,7 +11525,7 @@ var icoRouter = router({
         stakedBalance: sql17`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`
       }).where(eq28(icoAccounts.userId, ctx.user.id));
       let toReduce = input.amount;
-      const lots = await tx.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt7(icoStakeLots.amount, "0"))).orderBy(asc2(icoStakeLots.stakedAt));
+      const lots = await tx.select().from(icoStakeLots).where(and24(eq28(icoStakeLots.userId, ctx.user.id), gt6(icoStakeLots.amount, "0"))).orderBy(asc2(icoStakeLots.stakedAt));
       for (const lot of lots) {
         if (toReduce <= 1e-9) break;
         const amt = n(lot.amount), cut = Math.min(amt, toReduce);
@@ -14477,7 +14326,7 @@ var BOT_OPEN_IDS = {
   NexusBot: "bot_nexus_bot"
 };
 var botIds = {};
-async function loadBotIds2() {
+async function loadBotIds() {
   if (Object.keys(botIds).length > 0) return;
   const db = await getDb();
   if (!db) return;
@@ -14571,7 +14420,7 @@ async function generateEveningTopics() {
   return results;
 }
 async function sendBotMessage(groupId, botName, content) {
-  await loadBotIds2();
+  await loadBotIds();
   const db = await getDb();
   if (!db) return;
   const botId = botIds[botName];
@@ -14843,7 +14692,13 @@ function startIcoRewardScheduler() {
 // server/schemaPatches.ts
 import mysql2 from "mysql2/promise";
 var PATCHES = [
-  "ALTER TABLE `user_settings` ADD COLUMN IF NOT EXISTS `dmOnlyFriends` BOOLEAN NOT NULL DEFAULT FALSE"
+  "ALTER TABLE `user_settings` ADD COLUMN IF NOT EXISTS `dmOnlyFriends` BOOLEAN NOT NULL DEFAULT FALSE",
+  // 群模块三列(2026-07-17 审计):alias 无任何 migration 覆盖,新建库缺列会让
+  // joinGroup/getMessages/getGroupMembers 的全列 select 集体报 Unknown column;
+  // joinApproval/forbidAddFriend 虽有 migration,但 Publish 不跑迁移,补列兜底。
+  "ALTER TABLE `group_members` ADD COLUMN IF NOT EXISTS `alias` VARCHAR(50)",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `joinApproval` BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `forbidAddFriend` BOOLEAN NOT NULL DEFAULT FALSE"
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;
@@ -14971,7 +14826,7 @@ ${tokenContext}
 - \u89C2\u70B9\u660E\u786E\uFF0C\u6709\u7406\u6709\u636E\uFF0C\u907F\u514D\u5E9F\u8BDD
 - \u9002\u5F53\u4F7F\u7528 Markdown \u683C\u5F0F\uFF08\u52A0\u7C97\u5173\u952E\u6570\u636E\uFF09
 - \u6BCF\u6B21\u56DE\u7B54\u63A7\u5236\u5728 200-400 \u5B57`;
-    const messages2 = [
+    const messages3 = [
       { role: "system", content: systemPrompt },
       ...history.slice(-10).map((h) => ({ role: h.role, content: h.content })),
       { role: "user", content: message }
@@ -14985,7 +14840,7 @@ ${tokenContext}
       },
       body: JSON.stringify({
         model: "gemini-2.5-flash",
-        messages: messages2,
+        messages: messages3,
         stream: true,
         max_tokens: 1024
       }),

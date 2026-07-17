@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, gte, asc, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { emitToUser, getSocketIO, notifyDmOffline } from "../socket";
+import { emitToUser, evictUserFromGroupRoom, getSocketIO, notifyDmOffline } from "../socket";
 import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
@@ -31,6 +31,23 @@ async function assertGroupMember(db: Db, groupId: number, userId: number): Promi
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
     .limit(1);
   if (!m) throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+}
+
+/** 入群时把读游标定位到当前最新消息:否则 lastReadMessageId 为空,getUnreadCounts 会把
+ *  整群历史都算成新成员的未读(加入老群立刻顶几百上千红点)。失败不阻断入群。 */
+async function initReadCursor(db: Db, groupId: number, userId: number): Promise<void> {
+  try {
+    const [row] = await db.select({ maxId: sql<number>`COALESCE(MAX(${messages.id}), 0)` })
+      .from(messages).where(eq(messages.groupId, groupId));
+    const maxId = Number(row?.maxId ?? 0);
+    const existing = await db.select({ id: groupUnreadCounts.id }).from(groupUnreadCounts)
+      .where(and(eq(groupUnreadCounts.groupId, groupId), eq(groupUnreadCounts.userId, userId))).limit(1);
+    if (existing[0]) {
+      await db.update(groupUnreadCounts).set({ lastReadMessageId: maxId }).where(eq(groupUnreadCounts.id, existing[0].id));
+    } else {
+      await db.insert(groupUnreadCounts).values({ groupId, userId, lastReadMessageId: maxId });
+    }
+  } catch { /* 游标初始化失败仅影响首屏未读数,不阻断入群 */ }
 }
 
 /**
@@ -249,6 +266,7 @@ export const chatRouter = router({
           memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
         })
         .where(eq(chatGroups.id, input.groupId));
+      await initReadCursor(db, input.groupId, ctx.user.id); // 历史消息不算新成员未读
       // 欢迎机器人（启用则自动发欢迎语；不阻塞入群）
       void runWelcomeBot(db, input.groupId, (ctx.user as any).name || (ctx.user as any).username || "新朋友")
         .catch((err) => logger.warn({ err }, "welcome bot failed"));
@@ -748,6 +766,7 @@ export const chatRouter = router({
         memberCount: chatGroups.memberCount,
         isTokenGated: chatGroups.isTokenGated,
         isPublic: chatGroups.isPublic,
+        category: chatGroups.category, // RN ChatGroup 类型要求;listGroups 全列有、这里原来漏了
         role: groupMembers.role,
         updatedAt: chatGroups.updatedAt,
       })
@@ -767,7 +786,10 @@ export const chatRouter = router({
           maxId: sql<number>`MAX(${messages.id})`.as("max_id"),
         })
         .from(messages)
-        .where(and(inArray(messages.groupId, groupIds), eq(messages.isDeleted, false)))
+        .where(and(
+          inArray(messages.groupId, groupIds), eq(messages.isDeleted, false),
+          sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`, // 阅后即焚过期消息别当列表预览露原文
+        ))
         .groupBy(messages.groupId)
         .as("latest");
       const latestRows = await db
@@ -1023,6 +1045,7 @@ export const chatRouter = router({
       .where(and(
         inArray(messages.groupId, groupIds),
         eq(messages.isDeleted, false),
+        sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`, // 焚毁消息不计未读(聊天页已看不到)
         gt(messages.id, sql`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`),
       ))
       .groupBy(messages.groupId);
@@ -1303,7 +1326,11 @@ export const chatRouter = router({
         await db.update(groupInviteLinks).set({ useCount: sql`useCount + 1` }).where(eq(groupInviteLinks.id, l.id));
       }
       await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
-      await db.update(chatGroups).set({ memberCount: sql`memberCount + 1` }).where(eq(chatGroups.id, l.groupId));
+      // 与 joinGroup 一致:用真实成员数回写,避免双击/并发核销导致 memberCount 自增漂移
+      await db.update(chatGroups).set({
+        memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${l.groupId})`,
+      }).where(eq(chatGroups.id, l.groupId));
+      await initReadCursor(db, l.groupId, ctx.user.id); // 历史消息不算新成员未读
       const newMemberName = (ctx.user as any).name || (ctx.user as any).username || "新朋友";
       // 添粉机器人：奖励邀请人 + 群内致谢；欢迎机器人：欢迎语（均不阻塞）
       void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger.warn({ err }, "growth bot failed"));
@@ -1451,7 +1478,15 @@ export const chatRouter = router({
       // admin 只能踢普通成员;踢其他 admin 需 owner(防单个失陷/恶意 admin 踢光其他管理员独占群)
       if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("管理员不能移除其他管理员");
       await db.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.targetUserId)));
-      await db.update(chatGroups).set({ memberCount: sql`GREATEST(memberCount - 1, 0)` }).where(eq(chatGroups.id, input.groupId));
+      // COUNT(*) 回写而非 -1:kick 与 leave 交错/两管理员并发踢同一人时,-1 会重复递减造成漂移
+      await db.update(chatGroups).set({
+        memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
+      }).where(eq(chatGroups.id, input.groupId));
+      // 把被踢者的 socket 移出群房间并通知:否则其连接仍留在房间,继续实时收到群消息(私密群越权泄露)
+      try {
+        evictUserFromGroupRoom(input.targetUserId, input.groupId);
+        emitToUser(input.targetUserId, "group_kicked", { groupId: input.groupId });
+      } catch { /* socket 通知失败不影响踢人本身 */ }
       return { ok: true };
     }),
 
@@ -1546,7 +1581,9 @@ export const chatRouter = router({
       return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name })
         .from(groupMutes)
         .leftJoin(users, eq(groupMutes.userId, users.id))
-        .where(and(eq(groupMutes.groupId, input.groupId), gt(groupMutes.expiresAt, now)));
+        // 永久禁言 expiresAt 为 NULL:与 saveMessage 的强制判定对齐,否则永久禁言的人不出现在名单、无法解除
+        .where(and(eq(groupMutes.groupId, input.groupId),
+          sql`(${groupMutes.expiresAt} IS NULL OR ${groupMutes.expiresAt} > ${now})`));
     }),
 
   // ─── Leave Group ──────────────────────────────────────────────────────────
@@ -1562,8 +1599,11 @@ export const chatRouter = router({
       await db.delete(groupMembers).where(
         and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))
       );
-      await db.update(chatGroups).set({ memberCount: sql`GREATEST(${chatGroups.memberCount} - 1, 0)` })
-        .where(eq(chatGroups.id, input.groupId));
+      // COUNT(*) 回写而非 -1:与 kick 交错时 -1 会重复递减(见 kickMember 同注释)
+      await db.update(chatGroups).set({
+        memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
+      }).where(eq(chatGroups.id, input.groupId));
+      try { evictUserFromGroupRoom(ctx.user.id, input.groupId); } catch { /* 非关键 */ }
       return { ok: true };
     }),
 
@@ -1696,7 +1736,20 @@ export const chatRouter = router({
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅群主/管理员可审批" });
       }
-      await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(eq(groupJoinRequests.id, input.requestId));
+      // 审批通过也要过容量闸:joinGroup/useInviteLink 都拦了"群成员已满",这条路径原来没拦,可越过上限
+      if (input.approve) {
+        const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers })
+          .from(chatGroups).where(eq(chatGroups.id, req.groupId)).limit(1);
+        if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满,无法通过申请" });
+        }
+      }
+      // 条件更新做幂等:双击/两管理员并发审批时只有一方能把 pending 翻走,另一方直接返回,防重复入群
+      const flip = await db.update(groupJoinRequests)
+        .set({ status: input.approve ? "approved" : "rejected" })
+        .where(and(eq(groupJoinRequests.id, input.requestId), eq(groupJoinRequests.status, "pending")));
+      const flipped = (flip as any)?.[0]?.affectedRows ?? (flip as any)?.affectedRows ?? (flip as any)?.rowsAffected ?? 0;
+      if (flipped < 1) throw new TRPCError({ code: "NOT_FOUND", message: "申请不存在或已处理" });
       if (input.approve) {
         const already = await db.select({ id: groupMembers.id }).from(groupMembers)
           .where(and(eq(groupMembers.groupId, req.groupId), eq(groupMembers.userId, req.userId))).limit(1);
@@ -1705,6 +1758,7 @@ export const chatRouter = router({
           await db.update(chatGroups).set({
             memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`,
           }).where(eq(chatGroups.id, req.groupId));
+          await initReadCursor(db, req.groupId, req.userId); // 历史消息不算新成员未读
         }
       }
       return { ok: true };
@@ -1882,11 +1936,17 @@ export const chatRouter = router({
     }),
 
   // ─── Group Announcements: Get ─────────────────────────────────────────────
-  getAnnouncement: publicProcedure
+  getAnnouncement: protectedProcedure
     .input(z.object({ groupId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return null;
+      // 与 getMessages/getPinnedMessages 同门禁:私密群公告仅成员可读。
+      // 原来是 publicProcedure 且无校验,任何人(含未登录)遍历 groupId 就能拿走私密群公告全文。
+      const [grp] = await db.select({ isPublic: chatGroups.isPublic }).from(chatGroups)
+        .where(eq(chatGroups.id, input.groupId)).limit(1);
+      if (!grp) return null;
+      if (!grp.isPublic) await assertGroupMember(db, input.groupId, ctx.user.id);
       const ann = await db.select().from(groupAnnouncements)
         .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)))
         .orderBy(desc(groupAnnouncements.updatedAt)).limit(1);
