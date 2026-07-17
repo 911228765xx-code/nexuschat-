@@ -51,6 +51,13 @@ export default function DownloadPage() {
     return r.toUpperCase();
   });
   const [refCopied, setRefCopied] = useState(false);
+  // 邀请流(扫群/用户二维码进来):同步判定,页面直接按"转化优先"紧凑布局渲染,不等接口、不跳版。
+  // 压缩 hero、隐藏手机上无意义的大二维码/更新日志/Web版引导,让邀请卡+下载按钮进第一屏。
+  const [isInviteFlow] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const r = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
+    return /^g\d+t[0-9a-fA-F]+$/.test(r) || /^u\d+$/.test(r);
+  });
   // 从群/用户二维码扫来:显示"邀请你加入群聊「XXX」"/"XXX 邀请你加为好友",提高下载转化
   const [inviteTarget, setInviteTarget] = useState<{ type: "group" | "user"; name: string; avatar: string | null; memberCount?: number } | null>(null);
   useEffect(() => {
@@ -226,44 +233,53 @@ export default function DownloadPage() {
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="pt-28 pb-12 px-4 text-center">
+      {/* Hero:邀请流压缩(徽标/口号让位,邀请卡+下载按钮要进手机第一屏) */}
+      <section className={`${isInviteFlow ? "pt-24 pb-5" : "pt-28 pb-12"} px-4 text-center`}>
         <motion.div {...fadeUp}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
-            <QrCode size={12} />
-            扫码或点击下载 {versionLabel && <span className="font-bold">{versionLabel}</span>}
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">
+          {!isInviteFlow && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
+              <QrCode size={12} />
+              扫码或点击下载 {versionLabel && <span className="font-bold">{versionLabel}</span>}
+            </div>
+          )}
+          <h1 className={`${isInviteFlow ? "text-2xl" : "text-3xl sm:text-4xl"} font-bold mb-3`}>
             下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">AIChat</span>
           </h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            AI 智能体 · 加密社交 · Web3 资产，一个 App 全搞定
-          </p>
+          {!isInviteFlow && (
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              AI 智能体 · 加密社交 · Web3 资产，一个 App 全搞定
+            </p>
+          )}
         </motion.div>
       </section>
 
-      {/* 群/用户邀请个性化横幅:从群/用户二维码扫来,显示要加入的群名或对方名片,提高下载转化 */}
-      {inviteTarget && (
-        <section className="px-4 -mt-6 mb-2">
-          <div className="max-w-md mx-auto rounded-2xl border border-[#00d4ff]/30 bg-[#00d4ff]/10 p-4 flex items-center gap-4">
-            {inviteTarget.avatar ? (
-              <img src={inviteTarget.avatar} alt="" className="w-14 h-14 rounded-2xl object-cover shrink-0" />
-            ) : (
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-white text-xl font-bold shrink-0">
-                {inviteTarget.name.slice(0, 1)}
-              </div>
-            )}
-            <div className="flex-1 text-left min-w-0">
-              <p className="text-xs text-muted-foreground mb-0.5">{inviteTarget.type === "group" ? "邀请你加入群聊" : "邀请你加为好友"}</p>
-              <p className="text-lg font-bold truncate">{inviteTarget.name}</p>
-              {inviteTarget.type === "group" && inviteTarget.memberCount != null && (
-                <p className="text-xs text-muted-foreground">{inviteTarget.memberCount} 名成员</p>
+      {/* 群/用户邀请个性化卡片:从群/用户二维码扫来,显示要加入的群名或对方名片,提高下载转化。
+          未拿到数据前(接口在途/群已删)显示通用文案占位,布局不跳。 */}
+      {isInviteFlow && (
+        <section className="px-4 mb-4">
+          <motion.div {...fadeUp} className="max-w-md mx-auto rounded-2xl border border-[#00d4ff]/30 bg-gradient-to-br from-[#00d4ff]/10 to-[#a855f7]/5 overflow-hidden">
+            <div className="p-4 flex items-center gap-4">
+              {inviteTarget?.avatar ? (
+                <img src={inviteTarget.avatar} alt="" className="w-14 h-14 rounded-2xl object-cover shrink-0" />
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center text-white text-xl font-bold shrink-0">
+                  {(inviteTarget?.name || "友").slice(0, 1)}
+                </div>
               )}
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">
+                  {inviteTarget ? (inviteTarget.type === "group" ? "邀请你加入群聊" : "邀请你加为好友") : "好友邀请你加入"}
+                </p>
+                <p className="text-lg font-bold truncate">{inviteTarget?.name || "AIChat"}</p>
+                {inviteTarget?.type === "group" && inviteTarget.memberCount != null && (
+                  <p className="text-xs text-muted-foreground">{inviteTarget.memberCount} 名成员</p>
+                )}
+              </div>
             </div>
-          </div>
-          <p className="max-w-md mx-auto text-center text-xs text-muted-foreground mt-2">
-            下载 App 并登录后，{inviteTarget.type === "group" ? "自动加入该群" : "打开 TA 的名片"}
-          </p>
+            <div className="px-4 py-2.5 bg-white/[0.03] border-t border-white/10 text-center text-xs text-muted-foreground">
+              下载 App 并登录后，{inviteTarget?.type === "user" ? "自动打开 TA 的名片" : "自动加入该群"}
+            </div>
+          </motion.div>
         </section>
       )}
 
@@ -295,7 +311,7 @@ export default function DownloadPage() {
         <motion.div
           {...fadeUp}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex justify-center mb-10"
+          className={`flex justify-center ${isInviteFlow ? "mb-6" : "mb-10"}`}
         >
           <div className="flex rounded-xl border border-border/30 bg-card/30 p-2 gap-2">
             <button
@@ -385,13 +401,14 @@ export default function DownloadPage() {
                 </a>
               )}
 
-              <div className="rounded-xl overflow-hidden border border-[#00d4ff]/20 p-3 bg-white">
+              {/* 二维码只在桌面显示:手机用户已经在手机上,给他看"用手机扫这个码"没有意义还占一整屏 */}
+              <div className="hidden md:block rounded-xl overflow-hidden border border-[#00d4ff]/20 p-3 bg-white">
                 <QRCodeSVG value={PAGE_LINK} size={168} level="M" />
               </div>
-              <p className="text-sm text-muted-foreground text-center">
+              <p className="hidden md:block text-sm text-muted-foreground text-center">
                 手机扫码打开本页下载<br />（微信扫码后请选「在浏览器打开」）
               </p>
-              <p className="text-sm text-muted-foreground/60 text-center">
+              <p className="text-xs md:text-sm text-muted-foreground/60 text-center">
                 {versionLabel ? `版本 ${versionLabel} · ` : ""}需要 Android 8.0+ · 官方原生版
               </p>
             </div>
@@ -410,32 +427,36 @@ export default function DownloadPage() {
                 ))}
               </div>
 
-              {ver?.releaseNotes ? (
+              {/* 更新日志对扫码拉新的人没有价值(还常是旧版本文案),邀请流不展示 */}
+              {!isInviteFlow && ver?.releaseNotes ? (
                 <div className="mt-4 p-4 rounded-xl bg-card/40 border border-border/30 max-h-44 overflow-y-auto">
                   <p className="text-xs font-semibold text-foreground mb-2">更新内容（{versionLabel}）</p>
                   <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{ver.releaseNotes}</p>
                 </div>
               ) : null}
 
-              <div className="mt-4 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-sm text-amber-400/80 leading-relaxed">
+              <div className="mt-4 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-xs leading-relaxed text-amber-400/80">
                   <strong className="text-amber-400">安全提示：</strong>
                   安装完成后建议在设置中关闭「允许安装未知来源应用」。本页下载的 APK 为官方发布版本。
                 </p>
               </div>
 
-              <div className="pt-2">
-                <p className="text-sm text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
-                <Button
-                  onClick={() => setLocation("/app/chat")}
-                  variant="outline"
-                  size="sm"
-                  className="border-border/30 text-muted-foreground hover:text-foreground text-sm h-8 bg-transparent"
-                >
-                  <ExternalLink size={12} className="mr-1.5" />
-                  打开 Web 版
-                </Button>
-              </div>
+              {/* 邀请流不引导去 Web 版:自动进群/名片只在 App 深链里生效,分流到 Web 会断掉 */}
+              {!isInviteFlow && (
+                <div className="pt-2">
+                  <p className="text-sm text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
+                  <Button
+                    onClick={() => setLocation("/app/chat")}
+                    variant="outline"
+                    size="sm"
+                    className="border-border/30 text-muted-foreground hover:text-foreground text-sm h-8 bg-transparent"
+                  >
+                    <ExternalLink size={12} className="mr-1.5" />
+                    打开 Web 版
+                  </Button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -508,23 +529,25 @@ export default function DownloadPage() {
           </motion.div>
         )}
 
-        {/* Bottom CTA */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mt-16 text-center"
-        >
-          <p className="text-sm text-muted-foreground mb-4">
-            已有账号？直接进入 Web 版体验全部功能
-          </p>
-          <Button
-            onClick={() => setLocation("/app/chat")}
-            className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-11 px-8 text-sm font-semibold"
+        {/* Bottom CTA:邀请流不放"体验 Web 版"大按钮——和下载按钮抢视觉重心,还会把要进群的人带离 App 路径 */}
+        {!isInviteFlow && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="mt-16 text-center"
           >
-            立即体验 Web 版
-          </Button>
-        </motion.div>
+            <p className="text-sm text-muted-foreground mb-4">
+              已有账号？直接进入 Web 版体验全部功能
+            </p>
+            <Button
+              onClick={() => setLocation("/app/chat")}
+              className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-11 px-8 text-sm font-semibold"
+            >
+              立即体验 Web 版
+            </Button>
+          </motion.div>
+        )}
       </section>
     </div>
   );
