@@ -178,10 +178,7 @@ export const chatRouter = router({
       if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
         throw new TRPCError({ code: "FORBIDDEN", message: `当前会员最多可创建 ${benefits.maxGroups} 个群，升级会员可提升上限` });
       }
-      // 公开群为会员专属：免费用户仅可创建私密群
-      if (input.isPublic && !benefits.publicGroups) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可创建；你仍可创建私密群" });
-      }
+      // 公开群已对所有用户放开（2026-07-12 用户拍板）：不再要求会员，免费/会员都可建公开群。
       const [result] = await db.insert(chatGroups).values({
         name: input.name,
         description: input.description ?? undefined,
@@ -1589,13 +1586,7 @@ export const chatRouter = router({
       if (actor[0].role !== "owner" && (input.isPublic !== undefined || input.joinApproval !== undefined)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅群主可修改群的公开/入群审批设置" });
       }
-      // 切换为公开群与创建公开群同闸：会员专属（防免费用户先建私密再改公开绕过）
-      if (input.isPublic === true) {
-        const benefits = await getBenefits(db, ctx.user.id);
-        if (!benefits.publicGroups) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "公开群为会员专属权益，升级 Plus/Pro 后可将群设为公开" });
-        }
-      }
+      // 公开群已对所有用户放开（2026-07-12 用户拍板）：私密改公开不再要求会员。
       const updates: Partial<{ name: string; description: string; avatar: string; isPublic: boolean; joinApproval: boolean; forbidAddFriend: boolean }> = {};
       if (input.name !== undefined) updates.name = sanitizeInput(input.name);
       if (input.description !== undefined) updates.description = sanitizeInput(input.description);
