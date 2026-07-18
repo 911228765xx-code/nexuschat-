@@ -5,9 +5,10 @@ import { appConfig } from "../../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
+import { getAndroidApkDirectUrl, isOwnDownloadLoop } from "../utils/androidApkSource";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.5.6";
+export const CURRENT_APP_VERSION = "1.9.0";
 
 /**
  * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
@@ -41,7 +42,7 @@ export const appVersionRouter = router({
       const defaultConfig = {
         latestVersion: CURRENT_APP_VERSION,
         minVersion: CURRENT_APP_VERSION,
-        downloadUrlAndroid: "https://nexuschat.best/download",
+        downloadUrlAndroid: ENV.androidApkFallbackUrl,
         downloadUrlIos: "https://nexuschat.best/download",
         downloadUrlWeb: "https://nexuschat.best/download",
         releaseNotes: "初始版本",
@@ -95,7 +96,7 @@ export const appVersionRouter = router({
       // 平台边缘对 >32MiB 单响应会掐断吐 SPA → 浏览器/下载器【无 Range 整包 GET /apk】必拿到网页
       // → 「解析包出现问题」(2026-07-12 事故根因)。/apk 只适合带【有界 Range】的分块客户端;
       // 浏览器直下/复制链接场景必须给这条绕边缘的整包直链。仅当配的是 http(s) 外链时提供。
-      const directUrl = /^https?:\/\//i.test(config.downloadUrlAndroid) ? config.downloadUrlAndroid : "";
+      const directUrl = getAndroidApkDirectUrl(config.downloadUrlAndroid);
 
       return {
         currentVersion: input.currentVersion,
@@ -132,6 +133,12 @@ export const appVersionRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.downloadUrlAndroid && isOwnDownloadLoop(input.downloadUrlAndroid)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Android 下载地址必须是 APK 文件源，不能填写本站 /apk 或 /download",
+        });
+      }
 
       // Upsert: update if exists, insert if not
       const existing = await db

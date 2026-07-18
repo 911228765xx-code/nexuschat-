@@ -32,6 +32,26 @@ const inAppBrowser = isWeChat || isQQ;
 
 interface VersionInfo { latestVersion: string; releaseNotes: string; directUrl: string }
 
+function readInviteCode(): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get("ref") || "")
+    .replace(/[^0-9A-Za-z]/g, "")
+    .slice(0, 30);
+}
+
+/** directUrl 必须是真实外部文件源，不能再次跳回本站下载入口。 */
+function usableDirectUrl(value: string | null | undefined): string {
+  if (!value) return "";
+  try {
+    const target = new URL(value, ORIGIN);
+    const path = target.pathname.replace(/\/+$/, "") || "/";
+    if (target.origin === ORIGIN && ["/apk", "/download", "/download/apk"].includes(path)) return "";
+    return target.href;
+  } catch {
+    return "";
+  }
+}
+
 export default function DownloadPage() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"android" | "ios">(
@@ -44,24 +64,23 @@ export default function DownloadPage() {
   // 邀请短链 /i/CODE 会 302 到 /download?ref=CODE。旧版本这里直接丢了 ref → 装完 App 不知道填啥码,
   // 推荐关系断掉("邀请链接无效")。这里接住并展示,引导装后手动填(sideload 无 Play 安装来源,web/native 存储不通,展示+手填是可靠路径)。
   // 群邀请码 g{id}t{token} / 用户名片码 u{id} 不当推荐码展示——它们走下面的个性化横幅(查群名/用户名)
+  const [rawInviteCode] = useState(readInviteCode);
   const [inviteRef] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    const r = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
-    if (/^g\d+t[0-9a-fA-F]+$/.test(r) || /^u\d+$/.test(r)) return "";
-    return r.toUpperCase();
+    if (/^g\d+t[0-9a-fA-F]+$/.test(rawInviteCode) || /^u\d+$/.test(rawInviteCode)) return "";
+    return rawInviteCode.toUpperCase();
   });
   const [refCopied, setRefCopied] = useState(false);
   // 邀请流(扫群/用户二维码进来):同步判定,页面直接按"转化优先"紧凑布局渲染,不等接口、不跳版。
   // 压缩 hero、隐藏手机上无意义的大二维码/更新日志/Web版引导,让邀请卡+下载按钮进第一屏。
-  const [isInviteFlow] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const r = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
-    return /^g\d+t[0-9a-fA-F]+$/.test(r) || /^u\d+$/.test(r);
-  });
+  const [inviteFlowCode] = useState<string>(() =>
+    /^g\d+t[0-9a-fA-F]+$/.test(rawInviteCode) || /^u\d+$/.test(rawInviteCode) ? rawInviteCode : "",
+  );
+  const isInviteFlow = Boolean(inviteFlowCode);
+  const continueInAppUrl = inviteFlowCode ? `nexuschat://i/${inviteFlowCode}` : "";
   // 从群/用户二维码扫来:显示"邀请你加入群聊「XXX」"/"XXX 邀请你加为好友",提高下载转化
   const [inviteTarget, setInviteTarget] = useState<{ type: "group" | "user"; name: string; avatar: string | null; memberCount?: number } | null>(null);
   useEffect(() => {
-    const raw = (new URLSearchParams(window.location.search).get("ref") || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 30);
+    const raw = rawInviteCode;
     const g = raw.match(/^g(\d+)t[0-9a-fA-F]+$/);
     const u = raw.match(/^u(\d+)$/);
     if (g) {
@@ -77,7 +96,7 @@ export default function DownloadPage() {
         if (j?.name) setInviteTarget({ type: "user", name: j.name, avatar: j.avatar ?? null });
       }).catch(() => {});
     }
-  }, []);
+  }, [rawInviteCode]);
 
   useEffect(() => {
     // 公开端点,免登录:拿最新版本号 + 更新日志(与 App 内检查更新同一数据源)
@@ -132,14 +151,24 @@ export default function DownloadPage() {
         const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
         const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
         if (res.status !== 206) throw new Error(`no partial (${res.status})`);
-        if (!total) {
-          const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
-          total = cr ? Number(cr.split("/")[1]) : 0;
+        const type = res.headers.get("content-type")?.toLowerCase() ?? "";
+        if (type.includes("text/html")) throw new Error("received html");
+        const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
+        const range = cr?.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+        if (!range) throw new Error("invalid content-range");
+        const returnedStart = Number(range[1]);
+        const returnedEnd = Number(range[2]);
+        const returnedTotal = Number(range[3]);
+        if (returnedStart !== start || returnedEnd !== end || !Number.isFinite(returnedTotal)) {
+          throw new Error("mismatched content-range");
         }
+        if (!total) total = returnedTotal;
+        if (total !== returnedTotal) throw new Error("total length changed");
         if (!total || !Number.isFinite(total)) throw new Error("no total length");
         const buf = new Uint8Array(await res.arrayBuffer());
         // 完整性防线:拿回字节数必须正好等于请求区间(边缘吐 SPA 页时长度必然对不上)
         if (buf.length !== end - start + 1) throw new Error(`chunk ${start}-${end} got ${buf.length}`);
+        if (start === 0 && (buf[0] !== 0x50 || buf[1] !== 0x4b)) throw new Error("not an apk/zip");
         parts.push(buf);
         start += buf.length;
         setDlProgress(Math.min(0.999, start / total));
@@ -162,8 +191,9 @@ export default function DownloadPage() {
       // 分块失败(内存不足/浏览器不支持 fetch Range/网络中断)→ 退到【绕平台边缘】的整包直链:
       // directUrl 是 expo.dev 等外部直链,不经本边缘,不受 32MiB 上限,任何浏览器都能整包下完。
       // 绝不退回 /apk 裸链(走本边缘,整包必中上限吐 SPA、装不上)。
-      if (ver?.directUrl) {
-        window.location.href = ver.directUrl;
+      const directUrl = usableDirectUrl(ver?.directUrl);
+      if (directUrl) {
+        window.location.href = directUrl;
       } else {
         alert("下载未完成，请检查网络后重新点击下载按钮。");
       }
@@ -171,12 +201,20 @@ export default function DownloadPage() {
   }
 
   const versionLabel = ver ? `v${ver.latestVersion}` : "";
-  const androidSteps = [
-    "点击下方「下载 Android 版」按钮，下载 APK 安装包",
-    "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
-    "点击 APK 文件，按提示完成安装",
-    "安装完成后在桌面找到 AIChat 图标，点击启动",
-  ];
+  const safeDirectUrl = usableDirectUrl(ver?.directUrl);
+  const androidSteps = isInviteFlow
+    ? [
+        "点击下方「下载 Android 版」按钮，下载 APK 安装包",
+        "点击 APK 文件，按提示完成安装",
+        "安装完成后返回这个下载页面",
+        "点击「打开 AIChat 继续」完成加群或查看名片",
+      ]
+    : [
+        "点击下方「下载 Android 版」按钮，下载 APK 安装包",
+        "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
+        "点击 APK 文件，按提示完成安装",
+        "安装完成后在桌面找到 AIChat 图标，点击启动",
+      ];
   const iosSteps = [
     "使用 Safari 浏览器打开 nexuschat.best",
     "点击底部工具栏中间的「分享」按钮（方框加箭头图标）",
@@ -276,8 +314,17 @@ export default function DownloadPage() {
                 )}
               </div>
             </div>
-            <div className="px-4 py-2.5 bg-white/[0.03] border-t border-white/10 text-center text-xs text-muted-foreground">
-              下载 App 并登录后，{inviteTarget?.type === "user" ? "自动打开 TA 的名片" : "自动加入该群"}
+            <div className="px-4 py-3 bg-white/[0.03] border-t border-white/10 text-center">
+              <p className="text-xs text-muted-foreground mb-2">
+                已安装可直接打开；首次安装请下载完成后返回本页继续
+              </p>
+              <a
+                href={continueInAppUrl}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#00d4ff]/15 border border-[#00d4ff]/35 px-4 py-2 text-sm font-semibold text-[#00d4ff] hover:bg-[#00d4ff]/25 transition-colors"
+              >
+                <ExternalLink size={15} />
+                打开 AIChat {inviteTarget?.type === "user" ? "查看名片" : "继续加群"}
+              </a>
             </div>
           </motion.div>
         </section>
@@ -392,9 +439,9 @@ export default function DownloadPage() {
 
               {/* 备用整包直链:分块下不动/浏览器不支持时的明路。走 expo.dev(绕平台边缘,不受 32MiB 上限,
                   能整包下完),海外 CDN 稍慢但装得上。仅在后台配了外部直链时显示。 */}
-              {ver?.directUrl && (
+              {safeDirectUrl && (
                 <a
-                  href={ver.directUrl}
+                  href={safeDirectUrl}
                   className="text-xs text-muted-foreground/70 underline hover:text-[#00d4ff] transition-colors"
                 >
                   下载慢或失败？点这里用备用线路下载
