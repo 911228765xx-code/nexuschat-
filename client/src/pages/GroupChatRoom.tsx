@@ -953,7 +953,9 @@ export default function GroupChatRoom() {
       // Fallback to nexuschat.best (production domain) to avoid dev server URLs in invite links
       const configuredUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "");
       const appBaseUrl = configuredUrl || "https://nexuschat.best";
-      const url = `${appBaseUrl}/invite/${data.token}`;
+      // 与原生端二维码、服务端 /i/:code 落地规则保持一致：
+      // 已安装 App 会由 App Links 接管，未安装则进入带群信息的下载页。
+      const url = `${appBaseUrl}/i/g${groupId}t${data.token}`;
       setInviteUrl(url);
       // Modal is already open (opened immediately on click), just update the URL
     },
