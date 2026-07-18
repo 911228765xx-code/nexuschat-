@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "38a34e39-3aeb-45ef-bdaf-01b028258c99",
-  "prevId": "7e1beaa8-be09-419b-b8a3-da6eeef8b707",
+  "id": "d234ac3c-2e4f-4ba5-a368-b0b8f3e8eb7d",
+  "prevId": "b4adb524-f7c9-4600-b4d7-99b64f486b06",
   "tables": {
     "app_config": {
       "name": "app_config",
@@ -2120,13 +2120,6 @@
         },
         "mediaUrls": {
           "name": "mediaUrls",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "mediaThumbs": {
-          "name": "mediaThumbs",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { appConfig } from "../../drizzle/schema";
+import { resolveAndroidApkSource } from "../utils/androidApkSource";
 
 /**
  * /apk — 固定下载短链（对外只发这一个地址，永不过期）。
@@ -29,17 +30,10 @@ export async function handleApkDownload(req: Request, res: Response) {
         version = (rows[0] as { latestVersion?: string | null }).latestVersion ?? "";
       }
     }
-    if (!url) {
-      res.status(503).send("下载地址未配置，请稍后再试");
-      return;
-    }
-    // 防回环：后台若误把 downloadUrl 配成本短链自身，302 会无限循环
-    if (/\/(apk|download\/apk)(\?|$)/.test(url) && !url.includes("expo.dev")) {
-      const own = !/^https?:\/\//i.test(url) || url.includes(req.hostname);
-      if (own) {
-        res.status(502).send("下载地址配置错误（指向了短链自身），请在后台把下载地址改为 APK 文件直链");
-        return;
-      }
+    const source = resolveAndroidApkSource(url);
+    url = source.url;
+    if (source.usedFallback) {
+      console.warn("[APK] downloadUrlAndroid 为空或指回本站下载入口，已切换应急 APK 源");
     }
 
     // 同源相对路径：直接 302（storageProxy 等本域名路由自己会流式中转）
@@ -63,8 +57,22 @@ export async function handleApkDownload(req: Request, res: Response) {
       res.status(502).send(`下载源暂不可用（${upstream.status}），请稍后再试`);
       return;
     }
+    if (typeof clientRange === "string" && upstream.status !== 206) {
+      res.status(502).send("下载源不支持分段读取，请使用备用下载线路");
+      return;
+    }
     if (!upstream.body) {
       res.status(502).send("下载源返回为空");
+      return;
+    }
+    const upstreamType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
+    if (upstreamType.includes("text/html")) {
+      res.status(502).send("下载源返回了网页而不是 APK，请稍后再试");
+      return;
+    }
+    const cr = upstream.headers.get("content-range"); // "bytes 0-N/TOTAL"
+    if (typeof clientRange === "string" && !/^bytes\s+\d+-\d+\/\d+$/i.test(cr ?? "")) {
+      res.status(502).send("下载源缺少有效 Content-Range，无法保证文件完整");
       return;
     }
 
@@ -78,7 +86,6 @@ export async function handleApkDownload(req: Request, res: Response) {
     res.setHeader("Content-Encoding", "identity");
     res.setHeader("Cache-Control", "no-store, no-transform");
     res.setHeader("Accept-Ranges", "bytes");
-    const cr = upstream.headers.get("content-range"); // "bytes 0-N/TOTAL"
     const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
     if (typeof clientRange === "string") {
       // 客户端确实请求了范围:如实回 206 + Content-Range

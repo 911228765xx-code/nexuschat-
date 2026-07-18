@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "04b6eb69-0155-496b-9855-847cf353c3d3",
+  "id": "8b3788cb-98c4-4679-acd4-ae8c26b91bf8",
   "prevId": "f81e9f74-e363-4f32-a7a1-e3c45d6979ba",
   "tables": {
     "app_config": {
@@ -73,6 +73,21 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "aiChatCost": {
+          "name": "aiChatCost",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 5
+        },
+        "taskRewards": {
+          "name": "taskRewards",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -1532,6 +1547,13 @@
           "autoincrement": false,
           "default": false
         },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -1563,6 +1585,13 @@
           "columns": [
             "receiverId",
             "isRead"
+          ],
+          "isUnique": false
+        },
+        "idx_msg_expires": {
+          "name": "idx_msg_expires",
+          "columns": [
+            "expiresAt"
           ],
           "isUnique": false
         }
@@ -3340,6 +3369,14 @@
         },
         "isBot": {
           "name": "isBot",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "isBanned": {
+          "name": "isBanned",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

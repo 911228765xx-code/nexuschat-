@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "7e1beaa8-be09-419b-b8a3-da6eeef8b707",
-  "prevId": "04b6eb69-0155-496b-9855-847cf353c3d3",
+  "id": "b4adb524-f7c9-4600-b4d7-99b64f486b06",
+  "prevId": "8b3788cb-98c4-4679-acd4-ae8c26b91bf8",
   "tables": {
     "app_config": {
       "name": "app_config",
@@ -1510,7 +1510,7 @@
         },
         "messageType": {
           "name": "messageType",
-          "type": "enum('text','image','file','system','redpacket','transfer')",
+          "type": "enum('text','image','file','system','redpacket','transfer','voice','video')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -1519,6 +1519,13 @@
         "mediaUrl": {
           "name": "mediaUrl",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "durationSeconds": {
+          "name": "durationSeconds",
+          "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -2214,6 +2221,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "amount": {
+          "name": "amount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "claimedAt": {
           "name": "claimedAt",
           "type": "timestamp",
@@ -2244,6 +2259,118 @@
       "compositePrimaryKeys": {
         "red_packet_claims_id": {
           "name": "red_packet_claims_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "red_packets": {
+      "name": "red_packets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "messageId": {
+          "name": "messageId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "groupId": {
+          "name": "groupId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "senderId": {
+          "name": "senderId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalAmount": {
+          "name": "totalAmount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalShares": {
+          "name": "totalShares",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "remainingAmount": {
+          "name": "remainingAmount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "remainingShares": {
+          "name": "remainingShares",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "isRandom": {
+          "name": "isRandom",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "blessing": {
+          "name": "blessing",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'恭喜发财，大吉大利'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "idx_rp_message": {
+          "name": "idx_rp_message",
+          "columns": [
+            "messageId"
+          ],
+          "isUnique": false
+        },
+        "idx_rp_group": {
+          "name": "idx_rp_group",
+          "columns": [
+            "groupId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "red_packets_id": {
+          "name": "red_packets_id",
           "columns": [
             "id"
           ]

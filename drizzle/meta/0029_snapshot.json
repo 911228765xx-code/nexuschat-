@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "a8dc3013-043e-4a64-8b34-08f07778ae79",
-  "prevId": "38a34e39-3aeb-45ef-bdaf-01b028258c99",
+  "id": "0116563d-e562-498f-99b5-0762ad6f5111",
+  "prevId": "d234ac3c-2e4f-4ba5-a368-b0b8f3e8eb7d",
   "tables": {
     "app_config": {
       "name": "app_config",
@@ -2406,7 +2406,7 @@
           "name": "groupId",
           "type": "int",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "claimedBy": {
@@ -2483,14 +2483,7 @@
           "name": "groupId",
           "type": "int",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "receiverId": {
-          "name": "receiverId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "senderId": {

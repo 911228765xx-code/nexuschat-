@@ -24,18 +24,9 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
-    // Never serve HTML for backend routes — pass through to Express handlers
-    // /api/* → tRPC/REST; /apk /download/apk → APK download; /i/* → invite shortlink
-    const isBackendRoute =
-      url.startsWith("/api/") ||
-      url === "/apk" ||
-      url.startsWith("/apk?") ||
-      url === "/download/apk" ||
-      url.startsWith("/download/apk?") ||
-      url.startsWith("/i/") ||
-      url.startsWith("/.well-known/");
-    if (isBackendRoute) {
-      next();
+    // Never serve HTML for API routes — return 503 so tRPC client gets a proper error
+    if (url.startsWith("/api/")) {
+      res.status(503).json({ error: "Service temporarily unavailable" });
       return;
     }
 
@@ -90,9 +81,8 @@ export function serveStatic(app: Express) {
     etag: true,
   }));
 
-  // Other static files (manifest.json, sw.js, robots.txt, .well-known): short cache
+  // Other static files (manifest.json, sw.js, robots.txt): short cache
   app.use(express.static(distPath, {
-    dotfiles: 'allow',
     maxAge: "1h",
     etag: true,
   }));

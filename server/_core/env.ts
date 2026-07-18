@@ -26,6 +26,12 @@ export const ENV = {
    * *.a.run.app(Google 域名,大陆被墙),拼出去的链接国内用户全打不开。
    */
   publicOrigin: (process.env.PUBLIC_ORIGIN ?? "https://nexuschat.best").replace(/\/+$/, ""),
+  /**
+   * app_config 被误配成本站 /apk 或 /download 时的应急真实 APK 源。
+   * 正常发布仍以数据库 downloadUrlAndroid 为准；此值只负责防止下载链路整体熔断。
+   */
+  androidApkFallbackUrl: process.env.ANDROID_APK_FALLBACK_URL?.trim()
+    || "https://expo.dev/artifacts/eas/78Y8WC0yA6facXvoJT-byD38-Hk0neS09ze6DUjYBC8.apk",
 };
 
 // 安全断言:JWT_SECRET 是整个会话签名的根密钥。原来缺失时静默退化为空 HMAC key → 任何人可用空密钥

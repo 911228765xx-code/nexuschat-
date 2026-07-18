@@ -1,4 +1,3 @@
-import { adminMaintenanceRouter } from "./routers/adminMaintenance";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -64,7 +63,6 @@ export const appRouter = router({
   copyTrading: copyTradingRouter,
   settings: settingsRouter,
   referral: referralRouter,
-  adminMaintenance: adminMaintenanceRouter,
   emailAuth: emailAuthRouter,
   webPush: webPushRouter,
   voice: voiceRouter,

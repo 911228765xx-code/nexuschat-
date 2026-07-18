@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 180 pnpm install --prefer-offline --ignore-scripts)",
+      "Bash(pnpm check *)",
+      "Bash(pnpm test *)",
+      "Bash(grep -n \"^import\\\\|{ eq\\\\|and,\" server/routers/research.ts)",
+      "Bash(awk '/export const users = /{f=1} f{print NR\": \"$0} /^}\\\\\\)/{if\\(f\\){exit}}' drizzle/schema.ts)",
+      "Bash(grep -n \"index\\(\\\\|uniqueIndex\\\\|}, \\(table\\)\\\\|=> \\({\\\\|import {\" drizzle/schema.ts)",
+      "Bash(DATABASE_URL=\"mysql://user:pass@localhost:3306/db\" npx drizzle-kit generate)",
+      "Bash(sed -n '1,12p' client/src/pages/Chat.tsx)",
+      "Bash(sed -n '38,48p' client/src/pages/Chat.tsx)"
+    ]
+  }
+}

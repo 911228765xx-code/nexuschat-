@@ -190,7 +190,7 @@ describe("User Router — Task Definitions", () => {
     expect(longBio.length <= 200).toBe(false);
   });
 
-  it("calculates NP rank correctly", () => {
+  it("calculates AC rank correctly", () => {
     const usersAbove = 42;
     const myRank = usersAbove + 1;
     expect(myRank).toBe(43);
@@ -206,7 +206,7 @@ describe("User Router — Task Definitions", () => {
 
 // ─── Phase 4: Profile Stats, Image Upload, Chat Polling Tests ─────────────────
 describe("Profile Stats", () => {
-  it("calculates NP level progress correctly", () => {
+  it("calculates AC level progress correctly", () => {
     const npPoints = 24680;
     const nextMilestone = Math.ceil((npPoints + 1) / 10000) * 10000;
     const progress = Math.min(((npPoints % 10000) / 10000) * 100, 100);
@@ -214,7 +214,7 @@ describe("Profile Stats", () => {
     expect(progress).toBeCloseTo(46.8, 0);
   });
 
-  it("formats NP points with locale separator", () => {
+  it("formats AC points with locale separator", () => {
     const np = 24680;
     const formatted = np.toLocaleString("en-US");
     expect(formatted).toBe("24,680");

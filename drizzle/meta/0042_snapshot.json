@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "6efbde83-9294-49ee-a508-cba2e7ed37d1",
-  "prevId": "97cc4648-d2d0-4cc2-83b6-56483b467839",
+  "id": "a3717d68-d127-4a65-af6b-c3936779adae",
+  "prevId": "5cf48b84-4894-45d3-a6da-8b3eb5409e8b",
   "tables": {
     "ai_daily_usage": {
       "name": "ai_daily_usage",
@@ -262,6 +262,14 @@
         },
         "joinApproval": {
           "name": "joinApproval",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "forbidAddFriend": {
+          "name": "forbidAddFriend",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -582,6 +590,13 @@
           "autoincrement": false,
           "default": false
         },
+        "remarkName": {
+          "name": "remarkName",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "note": {
           "name": "note",
           "type": "text",
@@ -628,6 +643,75 @@
       "compositePrimaryKeys": {
         "contact_metadata_id": {
           "name": "contact_metadata_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "content_violations": {
+      "name": "content_violations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snippet": {
+          "name": "snippet",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "idx_violation_user": {
+          "name": "idx_violation_user",
+          "columns": [
+            "userId",
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "content_violations_id": {
+          "name": "content_violations_id",
           "columns": [
             "id"
           ]
@@ -3905,6 +3989,61 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "user_daily_np": {
+      "name": "user_daily_np",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ymd": {
+          "name": "ymd",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "earned": {
+          "name": "earned",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "uniq_daily_np_user_ymd": {
+          "name": "uniq_daily_np_user_ymd",
+          "columns": [
+            "userId",
+            "ymd"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "user_daily_np_id": {
+          "name": "user_daily_np_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "user_follows": {
       "name": "user_follows",
       "columns": {
@@ -4340,6 +4479,29 @@
         "inviteCode": {
           "name": "inviteCode",
           "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reputation": {
+          "name": "reputation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "signinStreak": {
+          "name": "signinStreak",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "lastSigninYmd": {
+          "name": "lastSigninYmd",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
