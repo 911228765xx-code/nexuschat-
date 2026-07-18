@@ -4946,6 +4946,8 @@ import { eq as eq13, and as and9, gt as gt2, sql as sql8 } from "drizzle-orm";
 import { TRPCError as TRPCError6 } from "@trpc/server";
 init_logger();
 var AUTO_BAN_THRESHOLD = 3;
+var AUTO_BAN = false;
+var AI_AUTO_DELETE = false;
 var AI_MODERATION = true;
 var RULES = [
   {
@@ -5082,6 +5084,7 @@ async function recordAndMaybeBan(db, userId, category, source, snippet) {
   } catch (err) {
     logger_default.warn({ err }, "moderation: \u8BB0\u5F55\u8FDD\u89C4\u5931\u8D25");
   }
+  if (!AUTO_BAN) return { banned: false };
   try {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1e3);
     const [cnt] = await db.select({ c: sql8`COUNT(*)` }).from(contentViolations).where(and9(eq13(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
@@ -5112,12 +5115,13 @@ async function enforceContent(db, userId, text2, source, opts) {
     });
   }
   if (opts?.useAI && AI_MODERATION) {
-    const ai = await moderateWithAI(text2);
-    if (ai.blocked) {
-      const { banned } = await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text2);
-      if (banned) throw new TRPCError6({ code: "FORBIDDEN", message: "\u8D26\u53F7\u56E0\u591A\u6B21\u53D1\u5E03\u8FDD\u6CD5\u8FDD\u89C4\u5185\u5BB9\uFF08\u6BD2\u54C1/\u8D4C\u535A/\u8D29\u5356/\u8272\u60C5\u7B49\uFF09\u5DF2\u88AB\u5C01\u7981" });
-      throw new TRPCError6({ code: "FORBIDDEN", message: "\u5185\u5BB9\u6D89\u53CA\u8FDD\u6CD5\u8FDD\u89C4\u4FE1\u606F\uFF08\u6BD2\u54C1 / \u8D4C\u535A / \u8D29\u5356 / \u8272\u60C5\u7B49\uFF09\uFF0C\u5DF2\u88AB\u62E6\u622A\u3002\u7EE7\u7EED\u53D1\u5E03\u5C06\u5C01\u7981\u8D26\u53F7\u3002" });
-    }
+    void (async () => {
+      try {
+        const ai = await moderateWithAI(text2);
+        if (ai.blocked) await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text2);
+      } catch {
+      }
+    })();
   }
 }
 async function reviewMessageAsync(db, userId, messageId, text2, source) {
@@ -5125,9 +5129,9 @@ async function reviewMessageAsync(db, userId, messageId, text2, source) {
     if (!AI_MODERATION || !text2) return;
     const r = await moderateWithAI(text2);
     if (!r.blocked) return;
-    await db.update(messages).set({ isDeleted: true }).where(eq13(messages.id, messageId));
+    if (AI_AUTO_DELETE) await db.update(messages).set({ isDeleted: true }).where(eq13(messages.id, messageId));
     await recordAndMaybeBan(db, userId, r.category ?? "other", source, text2);
-    logger_default.warn({ userId, messageId, category: r.category }, "moderation: \u5F02\u6B65 AI \u5220\u9664\u8FDD\u89C4\u6D88\u606F");
+    logger_default.warn({ userId, messageId, category: r.category, deleted: AI_AUTO_DELETE }, "moderation: \u5F02\u6B65 AI \u5224\u5B9A\u8FDD\u89C4");
   } catch (err) {
     logger_default.warn({ err }, "moderation: \u5F02\u6B65\u5BA1\u6838\u5931\u8D25");
   }

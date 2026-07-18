@@ -337,13 +337,13 @@ export default function DownloadPage() {
             <p className="text-sm text-muted-foreground mb-3">
               🎁 好友邀请你加入！安装后在 App「我的 → 邀请好友」填入下方邀请码，双方各得 AC 奖励
             </p>
-            <div className="flex items-center justify-center gap-3">
-              <span className="text-2xl font-black tracking-[0.2em] bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">
+            <div className="flex min-w-0 flex-col items-center justify-center gap-3 sm:flex-row">
+              <span className="max-w-full break-all text-center text-xl font-black leading-relaxed tracking-[0.12em] bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent sm:text-2xl sm:tracking-[0.2em]">
                 {inviteRef}
               </span>
               <button
                 onClick={copyRef}
-                className="flex items-center gap-1 rounded-lg bg-white/10 border border-white/20 px-3 py-1.5 text-sm hover:bg-white/20 transition-colors"
+                className="flex shrink-0 items-center gap-1 rounded-lg bg-white/10 border border-white/20 px-3 py-1.5 text-sm hover:bg-white/20 transition-colors"
               >
                 {refCopied ? <Check size={14} /> : <Copy size={14} />}
                 {refCopied ? "已复制" : "复制"}

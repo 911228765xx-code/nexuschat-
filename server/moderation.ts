@@ -1,11 +1,12 @@
 /**
  * 内容审核：拦截毒品 / 赌博 / 贩卖（人口·军火·野生动物等）违法内容。
  *
- * 策略（合规底线）：
- *  - 命中违禁词 → 直接拦截，消息/动态不发出；
- *  - 记一条违规（content_violations）；
- *  - 累计违规达阈值 → 自动封号（users.isBanned=true，全站功能被封禁拦截挡住）；
- *  - 管理员可在后台查违规、手动封号。
+ * 策略（2026-07-18 降门槛：只留合规底线，系统不再自动删/自动封）：
+ *  - 命中违禁词（明确违法招揽词）→ 直接拦截，消息/动态不发出——唯一的硬闸；
+ *  - AI 复核只【记录】违规到 content_violations 供后台查看，不删消息、不拦发布；
+ *  - 自动封号已关闭（AUTO_BAN=false），封号只保留管理后台的手动开关。
+ *  背景：币圈群的项目宣传文案曾被 AI 归为 gambling 误删（用户视角=发出的消息凭空消失），
+ *  叠加累计自动封号，正常运营者可能被自家系统封禁。要收紧时把下面两个开关打开即可。
  *
  * 说明：关键词为基础防线，可在 RULES 持续扩充；严重场景建议再叠加人工审核 / 第三方审核服务。
  */
@@ -18,10 +19,16 @@ import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-/** 累计违规达到此值自动封号（可调；默认 3 次给容错，避免误杀） */
+/** 累计违规达到此值自动封号（仅 AUTO_BAN=true 时生效） */
 export const AUTO_BAN_THRESHOLD = 3;
 
-/** 是否启用 AI 智能审核（关键词没拦住的内容交给 AI 判断；关掉则仅用关键词） */
+/** 是否自动封号。2026-07-18 关闭:系统永不自己封人,封号只走管理后台手动开关(user.setBanned) */
+export const AUTO_BAN = false;
+
+/** AI 判违规后是否自动删消息。2026-07-18 关闭:只记违规供后台查看,消息不动 */
+export const AI_AUTO_DELETE = false;
+
+/** 是否启用 AI 智能审核（现仅用于给后台记违规线索；关掉则连记录也不记） */
 export const AI_MODERATION = true;
 
 /** 违禁词库（按类别）。
@@ -130,6 +137,7 @@ async function recordAndMaybeBan(db: Db, userId: number, category: string, sourc
   } catch (err) {
     logger.warn({ err }, "moderation: 记录违规失败");
   }
+  if (!AUTO_BAN) return { banned: false }; // 自动封号已关闭:违规只记录,封号走管理后台手动
   try {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
     const [cnt] = await db.select({ c: sql<number>`COUNT(*)` }).from(contentViolations)
@@ -170,28 +178,30 @@ export async function enforceContent(
     });
   }
   if (opts?.useAI && AI_MODERATION) {
-    const ai = await moderateWithAI(text);
-    if (ai.blocked) {
-      // AI 同步确认的违规(广场动态路径):记违规,累计达阈值封号
-      const { banned } = await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text);
-      if (banned) throw new TRPCError({ code: "FORBIDDEN", message: "账号因多次发布违法违规内容（毒品/赌博/贩卖/色情等）已被封禁" });
-      throw new TRPCError({ code: "FORBIDDEN", message: "内容涉及违法违规信息（毒品 / 赌博 / 贩卖 / 色情等），已被拦截。继续发布将封禁账号。" });
-    }
+    // 2026-07-18 降门槛:AI 判定不再拦发布、不再封号——只异步记一条违规供后台查看。
+    // 硬拦截只保留上面的违禁词闸;要恢复强拦截,回滚本段为「记违规+throw FORBIDDEN」。
+    void (async () => {
+      try {
+        const ai = await moderateWithAI(text);
+        if (ai.blocked) await recordAndMaybeBan(db, userId, ai.category ?? "other", source, text);
+      } catch { /* 记录失败不影响发布 */ }
+    })();
   }
 }
 
 /**
  * 异步审核已发出的消息（群聊/私信，不阻塞发送）。
- * AI 判定违规 → 删该消息(isDeleted) + 记违规 + 累犯封号。fire-and-forget 调用。
+ * 2026-07-18 降门槛:AI 判违规默认只【记违规】供后台查看——不删消息(AI_AUTO_DELETE=false)、
+ * 不自动封号(AUTO_BAN=false)。曾把「云尊币」等币圈宣传误判 gambling 直接删,用户消息凭空消失。
  */
 export async function reviewMessageAsync(db: Db, userId: number, messageId: number, text: string | null | undefined, source: string): Promise<void> {
   try {
     if (!AI_MODERATION || !text) return;
     const r = await moderateWithAI(text);
     if (!r.blocked) return;
-    await db.update(messages).set({ isDeleted: true }).where(eq(messages.id, messageId));
+    if (AI_AUTO_DELETE) await db.update(messages).set({ isDeleted: true }).where(eq(messages.id, messageId));
     await recordAndMaybeBan(db, userId, r.category ?? "other", source, text);
-    logger.warn({ userId, messageId, category: r.category }, "moderation: 异步 AI 删除违规消息");
+    logger.warn({ userId, messageId, category: r.category, deleted: AI_AUTO_DELETE }, "moderation: 异步 AI 判定违规");
   } catch (err) {
     logger.warn({ err }, "moderation: 异步审核失败");
   }
