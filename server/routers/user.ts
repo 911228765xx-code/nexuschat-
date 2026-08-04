@@ -24,7 +24,7 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
-import { bitAirdropSchedule } from "../bitRankAirdrop";
+import { bitAirdropSchedule, claimBitRankAirdrop, getBitAirdropClaimStatus } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
 
 /** C 折中：这些"高价值任务"需先绑定邀请人才发 AC（基础任务不受限）。 */
@@ -634,8 +634,11 @@ export const userRouter = router({
       teamActiveToday = Number(activeC);
     }
     const bitAirdrop = bitAirdropSchedule();
-    // 估算：若今天你活跃且所在段位仅你一人，理论可得整份；实际按同段位活跃人数均分
-    const myBitAirdropEstimate = tier >= 1 ? bitAirdrop.tierPot : 0;
+    const claimStatus = await getBitAirdropClaimStatus(db, ctx.user.id, tier);
+    // 估算：同段位活跃均分；真实到账以领取时为准
+    const myBitAirdropEstimate = claimStatus.estimatedBit > 0
+      ? claimStatus.estimatedBit
+      : (tier >= 1 ? bitAirdrop.tierPot : 0);
     return {
       score,
       tier,
@@ -650,14 +653,36 @@ export const userRouter = router({
       teamDirect: directCount,
       teamActiveToday,
       tiers: RANK_TIERS.map((t, i) => ({ idx: i + 1, name: t.name, min: t.min, bonusPct: Math.round(t.bonus * 100), daily: t.daily })),
-      // BIT 段位空投（与 IT 日俸独立）
+      // BIT 段位空投：捐献 IT 后领取（V1=1000 … V10=10000）
       bitAirdrop: {
         ...bitAirdrop,
         myTierPot: myBitAirdropEstimate,
-        // 占位：前端可展示「段位份额」；真实到账按当日同段位活跃人数均分
-        note: "日额度均分 10 段位；当天活跃才发，同段位活跃用户均分",
+        itCost: claimStatus.itCost,
+        estimatedBit: claimStatus.estimatedBit,
+        claimedToday: claimStatus.claimedToday,
+        claimedBit: claimStatus.claimedBit,
+        claimedItCost: claimStatus.claimedItCost,
+        canClaim: claimStatus.canClaim,
+        claimReason: claimStatus.reason,
+        note: "捐献对应段位 IT 后领取当日 BIT 空投；日额度均分 10 段位，同段位活跃用户均分",
       },
     };
+  }),
+
+  // ─── 捐献 IT 领取当日 BIT 段位空投 ───────────────────────────────────────────
+  claimBitAirdrop: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+    try {
+      return await claimBitRankAirdrop(db, ctx.user.id);
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      const code = err.code === "CONFLICT" ? "CONFLICT"
+        : err.code === "FORBIDDEN" ? "FORBIDDEN"
+        : err.code === "INTERNAL_SERVER_ERROR" ? "INTERNAL_SERVER_ERROR"
+        : "BAD_REQUEST";
+      throw new TRPCError({ code, message: err.message || "领取失败" });
+    }
   }),
 
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
