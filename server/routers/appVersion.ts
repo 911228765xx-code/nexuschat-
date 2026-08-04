@@ -5,10 +5,10 @@ import { appConfig } from "../../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
-import { getAndroidApkDirectUrl, isOwnDownloadLoop } from "../utils/androidApkSource";
+import { assertAndroidApkSource, getAndroidApkDirectUrl } from "../utils/androidApkSource";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.9.0";
+export const CURRENT_APP_VERSION = "1.9.1";
 
 /**
  * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
@@ -133,11 +133,9 @@ export const appVersionRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      if (input.downloadUrlAndroid && isOwnDownloadLoop(input.downloadUrlAndroid)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Android 下载地址必须是 APK 文件源，不能填写本站 /apk 或 /download",
-        });
+      const apkErr = assertAndroidApkSource(input.downloadUrlAndroid);
+      if (apkErr) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: apkErr });
       }
 
       // Upsert: update if exists, insert if not

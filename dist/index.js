@@ -11878,6 +11878,29 @@ function isOwnDownloadLoop(url, publicOrigin = ENV.publicOrigin) {
     return true;
   }
 }
+function isExpoBuildPageUrl(url) {
+  const raw = url?.trim();
+  if (!raw) return false;
+  try {
+    const u = new URL(raw);
+    if (!/(^|\.)expo\.dev$/i.test(u.hostname)) return false;
+    if (/\/artifacts\/eas\//i.test(u.pathname) && /\.apk$/i.test(u.pathname)) return false;
+    return /\/builds\//i.test(u.pathname) || !/\/artifacts\//i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+function assertAndroidApkSource(url) {
+  const raw = url?.trim();
+  if (!raw) return null;
+  if (isOwnDownloadLoop(raw)) {
+    return "Android \u4E0B\u8F7D\u5730\u5740\u5FC5\u987B\u662F APK \u6587\u4EF6\u6E90\uFF0C\u4E0D\u80FD\u586B\u5199\u672C\u7AD9 /apk \u6216 /download";
+  }
+  if (isExpoBuildPageUrl(raw)) {
+    return "\u8BF7\u586B\u5199 APK \u76F4\u94FE\uFF08\u2026/artifacts/eas/xxx.apk\uFF09\uFF0C\u4E0D\u8981\u586B\u6784\u5EFA\u8BE6\u60C5\u9875\uFF08\u2026/builds/\u2026\uFF09";
+  }
+  return null;
+}
 function resolveAndroidApkSource(url, publicOrigin = ENV.publicOrigin, fallbackUrl = ENV.androidApkFallbackUrl) {
   const raw = url?.trim() ?? "";
   if (!raw || isOwnDownloadLoop(raw, publicOrigin)) {
@@ -11895,7 +11918,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 }
 
 // server/routers/appVersion.ts
-var CURRENT_APP_VERSION = "1.9.0";
+var CURRENT_APP_VERSION = "1.9.1";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -11983,11 +12006,9 @@ var appVersionRouter = router({
     }
     const db = await getDb();
     if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
-    if (input.downloadUrlAndroid && isOwnDownloadLoop(input.downloadUrlAndroid)) {
-      throw new TRPCError16({
-        code: "BAD_REQUEST",
-        message: "Android \u4E0B\u8F7D\u5730\u5740\u5FC5\u987B\u662F APK \u6587\u4EF6\u6E90\uFF0C\u4E0D\u80FD\u586B\u5199\u672C\u7AD9 /apk \u6216 /download"
-      });
+    const apkErr = assertAndroidApkSource(input.downloadUrlAndroid);
+    if (apkErr) {
+      throw new TRPCError16({ code: "BAD_REQUEST", message: apkErr });
     }
     const existing = await db.select().from(appConfig).where(eq30(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
