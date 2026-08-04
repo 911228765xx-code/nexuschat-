@@ -5,9 +5,9 @@
  * - 过期降级：proUntil 早于现在即视为 free。
  * - 会员费用 AI 扣减（回流金库），记入 AI 流水。
  */
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { getDb } from "./db";
-import { users } from "../drizzle/schema";
+import { chatGroups, users } from "../drizzle/schema";
 import { spendNN } from "./token";
 import { awardMembershipShare, awardReferrerMilestone } from "./referralRewards";
 
@@ -46,15 +46,23 @@ export const MEMBERSHIP_TIERS: MembershipTier[] = [
   },
   {
     key: "plus", name: "会员 Plus", monthlyNN: 80, color: "#6366F1", tagline: "进阶社群运营",
-    benefits: { maxGroups: 10, maxGroupMembers: 500, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false, voiceRoomFreeMonthly: 10 },
-    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 500", "每日 3 次免费 AI（超出 10 AI/次）", "智能体语音房每月 10 次免费开房", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
+    benefits: { maxGroups: 10, maxGroupMembers: 50_000, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false, voiceRoomFreeMonthly: 10 },
+    perks: ["可创建公开群（发现社区曝光）", "建群上限 10 个", "群人数上限 5 万", "每日 3 次免费 AI（超出 10 AI/次）", "智能体语音房每月 10 次免费开房", "文件 ≤ 100MB", "视频 ≤ 120MB", "免广告", "Plus 专属徽章"],
   },
   {
     key: "pro", name: "高级会员 Pro", monthlyNN: 200, color: "#F59E0B", tagline: "专业玩家 / KOL",
-    benefits: { maxGroups: 50, maxGroupMembers: 2000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true, voiceRoomFreeMonthly: 20 },
-    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 2000", "每日 10 次免费 AI（超出 10 AI/次）", "智能体语音房每月 20 次免费开房", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
+    benefits: { maxGroups: 50, maxGroupMembers: 200_000, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true, voiceRoomFreeMonthly: 20 },
+    perks: ["发现页滚动广告位投放（Pro 专属）", "可创建公开群（发现社区曝光）", "建群上限 50 个", "群人数上限 20 万", "每日 10 次免费 AI（超出 10 AI/次）", "智能体语音房每月 20 次免费开房", "文件 ≤ 500MB", "视频 ≤ 250MB", "免广告", "Pro 金色徽章", "AI 优先响应"],
   },
 ];
+
+/** 把创建者名下群的人数上限抬到当前会员档位（只升不降，覆盖老群 500/2000 旧值） */
+async function syncOwnedGroupMemberCaps(db: Db, userId: number, maxGroupMembers: number): Promise<void> {
+  if (maxGroupMembers <= 0) return;
+  await db.update(chatGroups)
+    .set({ maxMembers: maxGroupMembers })
+    .where(and(eq(chatGroups.creatorId, userId), lt(chatGroups.maxMembers, maxGroupMembers)));
+}
 
 /** 订阅期限折扣：3 个月 8 折、12 个月 5 折 */
 export const MEMBERSHIP_TERMS = [
@@ -88,6 +96,10 @@ export async function getMembership(db: Db, userId: number) {
   const eff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
   const tier = getTier(eff);
   const daysLeft = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1000)) : null;
+  // 会员档位上调后，把名下已有群的人数上限一并抬到新额度
+  if (eff !== "free") {
+    void syncOwnedGroupMemberCaps(db, userId, tier.benefits.maxGroupMembers).catch(() => {});
+  }
   return {
     tier: eff,
     name: tier.name,
@@ -141,6 +153,8 @@ export async function buyMembership(db: Db, userId: number, tierKey: ProTier, mo
   // 裂变奖励：消费分成（每次续费）+ 首次开会员里程碑奖（一次性），给直接邀请人(事务外,失败不回滚主流程)
   void awardMembershipShare(db, userId, tierKey);
   void awardReferrerMilestone(db, userId, `membership_${tierKey}`, tierKey === "pro" ? 2000 : 800);
+  // 开通/续费后立刻抬高名下群人数上限（Plus 5 万 / Pro 20 万）
+  void syncOwnedGroupMemberCaps(db, userId, tier.benefits.maxGroupMembers).catch(() => {});
 
   return { tier: tierKey, proUntil: proUntil.toISOString() };
 }

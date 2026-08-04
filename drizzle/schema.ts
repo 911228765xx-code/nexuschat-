@@ -76,6 +76,17 @@ export const rankAggRun = mysqlTable("rank_agg_run", {
   processedAt: timestamp("processedAt").defaultNow().notNull(),
 }, (t) => [uniqueIndex("uniq_rank_agg_ymd").on(t.ymd)]);
 
+// ─── BIT 段位空投日结算幂等记录（每个 UTC 日只空投一次）──────────────────────────
+export const bitRankAirdropRun = mysqlTable("bit_rank_airdrop_run", {
+  id: int("id").autoincrement().primaryKey(),
+  ymd: varchar("ymd", { length: 10 }).notNull(),
+  monthIndex: int("monthIndex").default(0).notNull(),
+  dailyPool: int("dailyPool").default(0).notNull(),
+  paidUsers: int("paidUsers").default(0).notNull(),
+  paidTotal: int("paidTotal").default(0).notNull(),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+}, (t) => [uniqueIndex("uniq_bit_rank_airdrop_ymd").on(t.ymd)]);
+
 // ─── 邀请里程碑（被邀请人首次达成某高价值动作 → 邀请人一次性奖；每人每里程碑一次）──
 export const referralMilestones = mysqlTable("referral_milestones", {
   id: int("id").autoincrement().primaryKey(),

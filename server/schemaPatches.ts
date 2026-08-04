@@ -15,6 +15,18 @@ const PATCHES: string[] = [
   "ALTER TABLE `group_members` ADD COLUMN IF NOT EXISTS `alias` VARCHAR(50)",
   "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `joinApproval` BOOLEAN NOT NULL DEFAULT FALSE",
   "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `forbidAddFriend` BOOLEAN NOT NULL DEFAULT FALSE",
+  // BIT 段位空投日结算表（Publish 不跑迁移时兜底建表）
+  `CREATE TABLE IF NOT EXISTS \`bit_rank_airdrop_run\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`ymd\` varchar(10) NOT NULL,
+    \`monthIndex\` int NOT NULL DEFAULT 0,
+    \`dailyPool\` int NOT NULL DEFAULT 0,
+    \`paidUsers\` int NOT NULL DEFAULT 0,
+    \`paidTotal\` int NOT NULL DEFAULT 0,
+    \`processedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_bit_rank_airdrop_ymd\` (\`ymd\`)
+  )`,
 ];
 
 export async function applySchemaPatches(): Promise<void> {

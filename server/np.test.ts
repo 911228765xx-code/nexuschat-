@@ -24,8 +24,8 @@ describe("段位表 RANK_TIERS", () => {
   it("加成 10%→100%，每段 +10%", () => {
     expect(RANK_TIERS.map((t) => Math.round(t.bonus * 100))).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
   });
-  it("日俸：1-5 段无，6-10 段 1000→5000", () => {
-    expect(RANK_TIERS.map((t) => t.daily)).toEqual([0, 0, 0, 0, 0, 1000, 2000, 3000, 4000, 5000]);
+  it("每日奖励：1-10 段 100→5000", () => {
+    expect(RANK_TIERS.map((t) => t.daily)).toEqual([100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000]);
   });
 });
 
@@ -46,22 +46,27 @@ describe("tierForScore（累积价值分→段位序号）", () => {
 });
 
 describe("tierBonus / tierDaily / tierUpReward", () => {
-  it("青铜：+10% / 无日俸 / 升段奖=门槛÷10=50", () => {
+  it("青铜：+10% / 每日奖励100 / 升段奖=门槛÷10=50", () => {
     expect(tierBonus(1)).toBeCloseTo(0.10);
-    expect(tierDaily(1)).toBe(0);
+    expect(tierDaily(1)).toBe(100);
     expect(tierUpReward(1)).toBe(50);
   });
-  it("星耀(6)：+60% / 日俸1000 / 升段奖=100000÷10=10000", () => {
+  it("钻石(5)：+50% / 每日奖励500 / 升段奖=40000÷10=4000", () => {
+    expect(tierBonus(5)).toBeCloseTo(0.50);
+    expect(tierDaily(5)).toBe(500);
+    expect(tierUpReward(5)).toBe(4000);
+  });
+  it("星耀(6)：+60% / 每日奖励1000 / 升段奖=100000÷10=10000", () => {
     expect(tierBonus(6)).toBeCloseTo(0.60);
     expect(tierDaily(6)).toBe(1000);
     expect(tierUpReward(6)).toBe(10000);
   });
-  it("传奇(10)：+100% / 日俸5000 / 升段奖=2500000÷10=250000", () => {
+  it("传奇(10)：+100% / 每日奖励5000 / 升段奖=2500000÷10=250000", () => {
     expect(tierBonus(10)).toBeCloseTo(1.00);
     expect(tierDaily(10)).toBe(5000);
     expect(tierUpReward(10)).toBe(250000);
   });
-  it("无段位(0)：加成/日俸/升段奖均为 0", () => {
+  it("无段位(0)：加成/每日奖励/升段奖均为 0", () => {
     expect(tierBonus(0)).toBe(0);
     expect(tierDaily(0)).toBe(0);
     expect(tierUpReward(0)).toBe(0);
@@ -82,18 +87,18 @@ describe("reputationBonus（封顶 0.3）", () => {
   });
 });
 
-// ─── 结算公式：实得 = base×(1+段位+声誉) + 日俸 ──────────────────────────────────
-describe("AC 结算公式（用真实 tierBonus/reputationBonus 组合）", () => {
+// ─── 结算公式：实得 = base×(1+段位+声誉) + 每日奖励 ──────────────────────────────────
+describe("IT 结算公式（用真实 tierBonus/reputationBonus 组合）", () => {
   const settle = (base: number, tier: number, rep: number) =>
     Math.round(base * (1 + tierBonus(tier) + reputationBonus(rep))) + tierDaily(tier);
 
-  it("base400 + 黄金(+30%) + 声誉0 = 520", () => {
-    expect(settle(400, 3, 0)).toBe(520);
+  it("base400 + 黄金(+30%) + 每日奖励300 = 820", () => {
+    expect(settle(400, 3, 0)).toBe(820);
   });
-  it("base400 + 星耀(+60%) + 日俸1000 = 1640", () => {
+  it("base400 + 星耀(+60%) + 每日奖励1000 = 1640", () => {
     expect(settle(400, 6, 0)).toBe(1640);
   });
-  it("自己不做任务 base=0 → 加成乘出来仍是 0（日俸另算）", () => {
+  it("自己不做任务 base=0 → 加成乘出来仍是 0（每日奖励另算）", () => {
     expect(Math.round(0 * (1 + tierBonus(10)))).toBe(0);
   });
 });
