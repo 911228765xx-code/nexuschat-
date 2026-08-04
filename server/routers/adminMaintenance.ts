@@ -43,7 +43,7 @@ const WIPE_ALL = [
   "swap_history", "ai_swap_trades", "usdt_deposits", "usdt_withdrawals",
   "ico_orders", "ico_purchases", "ico_accounts", "ico_stake_lots", "ico_reward_runs",
   "tge_claims", "partner_bonuses", "partner_earnings", "partner_payouts", "partner_settle_runs",
-  "platform_fee_ledger", "rank_agg_run",
+  "platform_fee_ledger", "rank_agg_run", "bit_rank_airdrop_run",
   // 未上线金融模块残留
   "trading_positions", "trading_strategies", "copy_traders", "copy_trader_follows",
 ] as const;

@@ -24,6 +24,7 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
+import { bitAirdropSchedule } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
 
 /** C 折中：这些"高价值任务"需先绑定邀请人才发 AC（基础任务不受限）。 */
@@ -587,7 +588,7 @@ export const userRouter = router({
       return { ok: true };
     }),
 
-  // ─── 段位状态（累积价值分 / 当前段位 / 加成 / 日俸 / 下一段进度 / 我的网体）──────
+  // ─── 段位状态（累积贡献值 / 当前段位 / 加成 / 每日奖励 / 下一段进度 / 我的网体）──────
   getRankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
@@ -632,6 +633,9 @@ export const userRouter = router({
         .where(and(inArray(userTasks.userId, batch), gte(userTasks.completedAt, todayStart)));
       teamActiveToday = Number(activeC);
     }
+    const bitAirdrop = bitAirdropSchedule();
+    // 估算：若今天你活跃且所在段位仅你一人，理论可得整份；实际按同段位活跃人数均分
+    const myBitAirdropEstimate = tier >= 1 ? bitAirdrop.tierPot : 0;
     return {
       score,
       tier,
@@ -646,6 +650,13 @@ export const userRouter = router({
       teamDirect: directCount,
       teamActiveToday,
       tiers: RANK_TIERS.map((t, i) => ({ idx: i + 1, name: t.name, min: t.min, bonusPct: Math.round(t.bonus * 100), daily: t.daily })),
+      // BIT 段位空投（与 IT 日俸独立）
+      bitAirdrop: {
+        ...bitAirdrop,
+        myTierPot: myBitAirdropEstimate,
+        // 占位：前端可展示「段位份额」；真实到账按当日同段位活跃人数均分
+        note: "日额度均分 10 段位；当天活跃才发，同段位活跃用户均分",
+      },
     };
   }),
 

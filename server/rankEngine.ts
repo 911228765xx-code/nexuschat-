@@ -5,7 +5,7 @@
  *  - 当日价值分 = 你【整个网体】中【当天活跃】成员的加权和（取最高身份权重）。
  *  - 累积价值分 = Σ 每天的当日价值分（只增不减）。段位看累积分，永久不降。
  *  - 加成（10%~100%）只乘"本人当天任务产出"（见 user.ts creditNp）。
- *  - 日俸（6-10 段）须本人当天活跃才发。升段奖一次性，跨段即发。
+ *  - 日俸（1-10 段均有）须本人当天活跃才发。升段奖一次性，跨段即发。
  *
  * 合规护栏：≤无限层级按业务决策；死号（当天无任务产出）不计价值分；
  *           加成/日俸均挂"本人当天活跃"，避免纯躺赚。地域隔离 + 法务见文档。
@@ -21,13 +21,13 @@ import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-/** 10 段位表：min=累积价值分门槛，bonus=个人产出加成，daily=日俸（6-10 段）。 */
+/** 10 段位表：min=累积贡献值门槛，bonus=个人产出加成，daily=每日奖励（IT/天，本人当天活跃才发）。 */
 export const RANK_TIERS: { name: string; min: number; bonus: number; daily: number }[] = [
-  { name: "青铜", min: 500, bonus: 0.10, daily: 0 },
-  { name: "白银", min: 2000, bonus: 0.20, daily: 0 },
-  { name: "黄金", min: 6000, bonus: 0.30, daily: 0 },
-  { name: "铂金", min: 15000, bonus: 0.40, daily: 0 },
-  { name: "钻石", min: 40000, bonus: 0.50, daily: 0 },
+  { name: "青铜", min: 500, bonus: 0.10, daily: 100 },
+  { name: "白银", min: 2000, bonus: 0.20, daily: 200 },
+  { name: "黄金", min: 6000, bonus: 0.30, daily: 300 },
+  { name: "铂金", min: 15000, bonus: 0.40, daily: 400 },
+  { name: "钻石", min: 40000, bonus: 0.50, daily: 500 },
   { name: "星耀", min: 100000, bonus: 0.60, daily: 1000 },
   { name: "大师", min: 250000, bonus: 0.70, daily: 2000 },
   { name: "宗师", min: 600000, bonus: 0.80, daily: 3000 },
@@ -45,7 +45,7 @@ export function tierForScore(score: number): number {
 export function tierBonus(tier: number): number {
   return tier >= 1 && tier <= 10 ? RANK_TIERS[tier - 1].bonus : 0;
 }
-/** 段位 → 日俸（6-10 段才有） */
+/** 段位 → 每日奖励（1-10 段均有，无段位为 0） */
 export function tierDaily(tier: number): number {
   return tier >= 1 && tier <= 10 ? RANK_TIERS[tier - 1].daily : 0;
 }
@@ -148,13 +148,21 @@ export async function runRankAggregation(
     }
   }
 
-  // 6) 日俸：当天活跃 且 段位 ≥ 星耀(6) 的成员发日俸（uncapped；须本人当天活跃）
+  // 6) 每日奖励：当天活跃且已有段位(≥青铜)的成员按段位表发放（uncapped；须本人当天活跃）
   const dayuneers = await db
     .select({ id: users.id, rankTier: users.rankTier })
-    .from(users).where(and(inArray(users.id, activeIds), gte(users.rankTier, 6)));
+    .from(users).where(and(inArray(users.id, activeIds), gte(users.rankTier, 1)));
   for (const u of dayuneers) {
     const pay = tierDaily(u.rankTier ?? 0);
     if (pay > 0) await db.update(users).set({ npPoints: sql`npPoints + ${pay}` }).where(eq(users.id, u.id));
+  }
+
+  // 7) BIT 段位空投：日额度均分 10 段位，活跃用户按所在段位领取（独立幂等，失败不影响 IT 结算）
+  try {
+    const { runBitRankAirdrop } = await import("./bitRankAirdrop");
+    await runBitRankAirdrop(db, ymd);
+  } catch (err) {
+    logger.warn({ err, ymd }, "rankEngine: BIT 段位空投失败");
   }
 
   logger.info({ ymd, activeMembers: activeIds.length, ancestorsUpdated }, "rankEngine: 每日聚合完成");
