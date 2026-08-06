@@ -26,10 +26,14 @@ import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 import { bitAirdropSchedule, claimBitRankAirdrop, getBitAirdropClaimStatus } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
-import { grantNN, spendNN } from "../token";
+import { grantNN, spendNN, transferNN } from "../token";
+import { createNotification } from "./notificationsRouter";
 
 /** IT ↔ BIT 兑换比例：100 IT = 1 BIT（双向） */
 const IT_PER_BIT = 100;
+/** 单笔用户间转账上限 */
+const TRANSFER_MAX_IT = 1_000_000;
+const TRANSFER_MAX_BIT = 100_000;
 
 /** C 折中：这些"高价值任务"需先绑定邀请人才发 AC（基础任务不受限）。 */
 const REQUIRES_BINDING = new Set(["first_research", "research_daily"]);
@@ -728,6 +732,86 @@ export const userRouter = router({
         .select({ npPoints: users.npPoints, nnBalance: users.nnBalance })
         .from(users).where(eq(users.id, ctx.user.id)).limit(1);
       return { ok: true as const, it: u?.npPoints ?? 0, bit: Number(u?.nnBalance ?? 0), rate: IT_PER_BIT };
+    }),
+
+  // ─── 用户间转账 BIT / IT ────────────────────────────────────────────────────
+  transferCurrency: protectedProcedure
+    .input(z.object({
+      currency: z.enum(["it", "bit"]),
+      toUserId: z.number().int().positive(),
+      amount: z.number().int().positive().max(10_000_000),
+      memo: z.string().max(80).optional(),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      if (input.toUserId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "不能转给自己" });
+      }
+      if (input.currency === "it" && input.amount > TRANSFER_MAX_IT) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `单笔 IT 最多 ${TRANSFER_MAX_IT.toLocaleString()}` });
+      }
+      if (input.currency === "bit" && input.amount > TRANSFER_MAX_BIT) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `单笔 BIT 最多 ${TRANSFER_MAX_BIT.toLocaleString()}` });
+      }
+
+      const [to] = await db
+        .select({ id: users.id, name: users.name, username: users.username, isBanned: users.isBanned })
+        .from(users).where(eq(users.id, input.toUserId)).limit(1);
+      if (!to) throw new TRPCError({ code: "NOT_FOUND", message: "收款用户不存在" });
+      if (to.isBanned) throw new TRPCError({ code: "BAD_REQUEST", message: "收款用户不可用" });
+
+      const memo = sanitizeInput(input.memo?.trim() || "", 80) || undefined;
+      const toName = to.name ?? to.username ?? `用户 #${to.id}`;
+      const fromName = ctx.user.name ?? ctx.user.username ?? `用户 #${ctx.user.id}`;
+
+      if (input.currency === "it") {
+        try {
+          await db.transaction(async (tx) => {
+            const spent: any = await tx.update(users)
+              .set({ npPoints: sql`${users.npPoints} - ${input.amount}` })
+              .where(and(eq(users.id, ctx.user.id), sql`${users.npPoints} >= ${input.amount}`));
+            const affected = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+            if (affected <= 0) throw new Error("INSUFFICIENT_IT");
+            await tx.update(users)
+              .set({ npPoints: sql`${users.npPoints} + ${input.amount}` })
+              .where(eq(users.id, input.toUserId));
+          });
+        } catch (e: any) {
+          if (e?.message === "INSUFFICIENT_IT") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "IT 余额不足" });
+          }
+          throw e;
+        }
+      } else {
+        const ok = await transferNN(db, ctx.user.id, input.toUserId, input.amount, memo ?? `to ${toName}`);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
+      }
+
+      const symbol = input.currency === "it" ? "IT" : "BIT";
+      void createNotification({
+        db,
+        targetUserId: input.toUserId,
+        fromUserId: ctx.user.id,
+        fromUserName: fromName,
+        fromUserAvatar: ctx.user.avatar ?? "",
+        type: "system",
+        content: `${fromName} 向你转账 ${input.amount.toLocaleString()} ${symbol}${memo ? `：${memo}` : ""}`,
+      }).catch(() => {});
+
+      const [u] = await db
+        .select({ npPoints: users.npPoints, nnBalance: users.nnBalance })
+        .from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      return {
+        ok: true as const,
+        currency: input.currency,
+        amount: input.amount,
+        toUserId: input.toUserId,
+        toName,
+        it: u?.npPoints ?? 0,
+        bit: Number(u?.nnBalance ?? 0),
+      };
     }),
 
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────

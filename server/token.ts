@@ -170,6 +170,45 @@ export async function grantNN(db: Db, userId: number, amount: number, meta?: NNT
   return true;
 }
 
+/**
+ * 用户间划转 BIT：A→B，流通总量不变（不经金库）。
+ * 事务内条件扣减发送方再加接收方，并记双边流水。
+ */
+export async function transferNN(
+  db: Db,
+  fromUserId: number,
+  toUserId: number,
+  amount: number,
+  memo?: string,
+): Promise<boolean> {
+  if (amount <= 0 || fromUserId === toUserId) return false;
+  try {
+    await db.transaction(async (tx) => {
+      const res: any = await tx.update(users)
+        .set({ nnBalance: sql`${users.nnBalance} - ${amount}` })
+        .where(sql`${users.id} = ${fromUserId} AND ${users.nnBalance} >= ${amount}`);
+      const affected = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+      if (affected <= 0) throw new Error("INSUFFICIENT");
+      await tx.update(users)
+        .set({ nnBalance: sql`${users.nnBalance} + ${amount}` })
+        .where(eq(users.id, toUserId));
+      await tx.insert(nnTransactions).values({
+        userId: fromUserId, amount: -amount, type: "transfer_out",
+        refType: "user", refId: toUserId, memo: memo ?? `to#${toUserId}`,
+      });
+      await tx.insert(nnTransactions).values({
+        userId: toUserId, amount, type: "transfer_in",
+        refType: "user", refId: fromUserId, memo: memo ?? `from#${fromUserId}`,
+      });
+    });
+    return true;
+  } catch (e: any) {
+    if (e?.message === "INSUFFICIENT") return false;
+    console.error("[transferNN] failed:", e?.message);
+    return false;
+  }
+}
+
 // ─── AI 底池（流动性共建 · 用户从底池购买 AI） ──────────────────────────────────
 /** 底池初始储备 = 流动性共建桶 10% = 2,100,000 AI（随分配模型 2026-07-08 调整同步）*/
 export const NN_POOL_SEED = Math.round((NN_TOTAL_SUPPLY * 10) / 100);

@@ -1673,6 +1673,38 @@ async function grantNN(db, userId, amount, meta) {
   await recordTx(db, userId, amount, meta ?? { type: "grant" });
   return true;
 }
+async function transferNN(db, fromUserId, toUserId, amount, memo) {
+  if (amount <= 0 || fromUserId === toUserId) return false;
+  try {
+    await db.transaction(async (tx) => {
+      const res = await tx.update(users).set({ nnBalance: sql`${users.nnBalance} - ${amount}` }).where(sql`${users.id} = ${fromUserId} AND ${users.nnBalance} >= ${amount}`);
+      const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+      if (affected2 <= 0) throw new Error("INSUFFICIENT");
+      await tx.update(users).set({ nnBalance: sql`${users.nnBalance} + ${amount}` }).where(eq3(users.id, toUserId));
+      await tx.insert(nnTransactions).values({
+        userId: fromUserId,
+        amount: -amount,
+        type: "transfer_out",
+        refType: "user",
+        refId: toUserId,
+        memo: memo ?? `to#${toUserId}`
+      });
+      await tx.insert(nnTransactions).values({
+        userId: toUserId,
+        amount,
+        type: "transfer_in",
+        refType: "user",
+        refId: fromUserId,
+        memo: memo ?? `from#${fromUserId}`
+      });
+    });
+    return true;
+  } catch (e) {
+    if (e?.message === "INSUFFICIENT") return false;
+    console.error("[transferNN] failed:", e?.message);
+    return false;
+  }
+}
 function vestedAmount(v, now = Date.now()) {
   const elapsedMonths = (now - v.startAt.getTime()) / MONTH_MS;
   if (elapsedMonths < v.cliffMonths) return 0;
@@ -2978,10 +3010,10 @@ var rateLimitWrite = t2.middleware(async (opts) => {
 });
 
 // server/routers/wallet.ts
-import { z as z3 } from "zod";
+import { z as z5 } from "zod";
 init_db();
 init_schema();
-import { eq as eq9, desc as desc3, sql as sql6 } from "drizzle-orm";
+import { eq as eq11, desc as desc4, sql as sql7 } from "drizzle-orm";
 
 // server/utils/coinGeckoCache.ts
 init_logger();
@@ -3070,12 +3102,12 @@ function cleanupCache() {
 setInterval(cleanupCache, 3e5);
 
 // server/routers/user.ts
-import { z as z2 } from "zod";
-import { TRPCError as TRPCError4 } from "@trpc/server";
+import { z as z4 } from "zod";
+import { TRPCError as TRPCError5 } from "@trpc/server";
 init_db();
 init_schema();
 init_storage();
-import { eq as eq8, desc as desc2, sql as sql5, and as and7, gte as gte4, count, ne as ne2, inArray as inArray4 } from "drizzle-orm";
+import { eq as eq10, desc as desc3, sql as sql6, and as and8, gte as gte4, count, ne as ne2, inArray as inArray5 } from "drizzle-orm";
 
 // server/utils/sanitize.ts
 function stripHtml(input) {
@@ -3104,9 +3136,251 @@ init_rankEngine();
 init_bitRankAirdrop();
 init_referralRewards();
 init_token();
+
+// server/routers/notificationsRouter.ts
+import { z as z3 } from "zod";
+init_db();
+init_schema();
+import { eq as eq9, and as and7, desc as desc2, sql as sql5 } from "drizzle-orm";
+
+// server/routers/webPush.ts
+init_schema();
+import { TRPCError as TRPCError4 } from "@trpc/server";
+import webpush from "web-push";
+import { eq as eq8, inArray as inArray4 } from "drizzle-orm";
+import { z as z2 } from "zod";
+init_db();
+var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BDELsotXx1M-DHSpJ998MHEUIlj8-GzJPzOuDXRaHOGS_9h_-apvpaN4v6cnvaZQr3HwwauehFHRN5ROV77Qh5w";
+var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "mzHowEZfED1ijF4CN1DsRVH3t0cALTZvmP3uy0UCxL0";
+var VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@nexuschat.best";
+webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+var webPushRouter = router({
+  /** Return the VAPID public key for client-side subscription */
+  getPublicKey: publicProcedure.query(() => {
+    return { publicKey: VAPID_PUBLIC_KEY };
+  }),
+  /** Register a push subscription for the current user */
+  subscribe: protectedProcedure.input(
+    z2.object({
+      endpoint: z2.string().url(),
+      p256dh: z2.string(),
+      auth: z2.string()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    const existing = await db.select().from(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id)).limit(10);
+    if (existing.length >= 5) {
+      await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id));
+    }
+    await db.insert(pushSubscriptions).values({
+      userId: ctx.user.id,
+      endpoint: input.endpoint,
+      p256dh: input.p256dh,
+      auth: input.auth
+    });
+    return { success: true };
+  }),
+  /** Unsubscribe (remove push subscription) */
+  unsubscribe: protectedProcedure.input(z2.object({ endpoint: z2.string() })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) return { success: false };
+    await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id));
+    return { success: true };
+  }),
+  /** 注册原生推送（Expo Push）设备 token。同一 token 改归当前用户（换账号登录），幂等。 */
+  registerDeviceToken: protectedProcedure.input(z2.object({ token: z2.string().min(10).max(255), platform: z2.enum(["android", "ios"]).default("android") })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    await db.delete(devicePushTokens).where(eq8(devicePushTokens.token, input.token));
+    await db.insert(devicePushTokens).values({ userId: ctx.user.id, token: input.token, platform: input.platform });
+    return { success: true };
+  }),
+  /** 注销设备 token（退出登录时调用）。 */
+  unregisterDeviceToken: protectedProcedure.input(z2.object({ token: z2.string() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { success: false };
+    await db.delete(devicePushTokens).where(eq8(devicePushTokens.token, input.token));
+    return { success: true };
+  })
+});
+async function sendExpoPush(db, userId, payload) {
+  const tokens = await db.select().from(devicePushTokens).where(eq8(devicePushTokens.userId, userId));
+  const expoTokens = tokens.map((t3) => t3.token).filter((t3) => t3.startsWith("ExponentPushToken") || t3.startsWith("ExpoPushToken"));
+  if (expoTokens.length === 0) return;
+  const messages3 = expoTokens.map((to) => ({
+    to,
+    title: payload.title,
+    body: payload.body,
+    sound: "default",
+    data: { url: payload.url || "/notifications" }
+  }));
+  const resp = await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(messages3)
+  });
+  const json = await resp.json().catch(() => null);
+  const dead = (json?.data ?? []).map((r, i) => r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null).filter((t3) => !!t3);
+  if (dead.length) await db.delete(devicePushTokens).where(inArray4(devicePushTokens.token, dead));
+}
+async function sendPushToUser(userId, payload) {
+  const db = await getDb();
+  if (!db) return;
+  void sendExpoPush(db, userId, payload).catch(() => {
+  });
+  const subs = await db.select().from(pushSubscriptions).where(eq8(pushSubscriptions.userId, userId));
+  const notificationPayload = JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    url: payload.url || "/(tabs)",
+    // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
+    icon: payload.icon || "/icons/icon-192x192.png",
+    badge: "/icons/icon-72x72.png"
+  });
+  const results = await Promise.allSettled(
+    subs.map(
+      (sub) => webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth }
+        },
+        notificationPayload
+      )
+    )
+  );
+  const expiredEndpoints = results.map((r, i) => r.status === "rejected" ? subs[i].endpoint : null).filter(Boolean);
+  if (expiredEndpoints.length > 0) {
+    await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, userId));
+  }
+}
+
+// server/routers/notificationsRouter.ts
+var notificationsRouter = router({
+  // ─── Get notifications for current user ─────────────────────────────────────
+  list: protectedProcedure.input(
+    z3.object({
+      limit: z3.number().min(1).max(50).default(20),
+      unreadOnly: z3.boolean().default(false)
+    }).optional()
+  ).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return { notifications: [], unreadCount: 0 };
+    const limit = input?.limit ?? 20;
+    const unreadOnly = input?.unreadOnly ?? false;
+    const conditions = [eq9(notifications.userId, ctx.user.id)];
+    if (unreadOnly) {
+      conditions.push(eq9(notifications.isRead, false));
+    }
+    const rows = await db.select().from(notifications).where(and7(...conditions)).orderBy(desc2(notifications.createdAt)).limit(limit);
+    const [unreadRow] = await db.select({ count: sql5`COUNT(*)` }).from(notifications).where(and7(eq9(notifications.userId, ctx.user.id), eq9(notifications.isRead, false)));
+    return {
+      notifications: rows,
+      unreadCount: Number(unreadRow?.count ?? 0)
+    };
+  }),
+  // ─── Get unread count only (for badge) ──────────────────────────────────────
+  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { count: 0 };
+    const [row] = await db.select({ count: sql5`COUNT(*)` }).from(notifications).where(and7(eq9(notifications.userId, ctx.user.id), eq9(notifications.isRead, false)));
+    return { count: Number(row?.count ?? 0) };
+  }),
+  // ─── Mark notification(s) as read ───────────────────────────────────────────
+  markRead: protectedProcedure.input(
+    z3.object({
+      notificationId: z3.number().optional()
+      // if omitted, mark all as read
+    }).optional()
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (input?.notificationId) {
+      await db.update(notifications).set({ isRead: true }).where(
+        and7(
+          eq9(notifications.id, input.notificationId),
+          eq9(notifications.userId, ctx.user.id)
+        )
+      );
+    } else {
+      await db.update(notifications).set({ isRead: true }).where(eq9(notifications.userId, ctx.user.id));
+    }
+    return { success: true };
+  }),
+  // ─── Create notification (internal helper, called by other routers) ─────────
+  // This is a protected procedure so only authenticated users can trigger it
+  // In practice, call createNotification() helper from other routers
+  create: protectedProcedure.input(
+    z3.object({
+      targetUserId: z3.number(),
+      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+      // system 类通知只能由服务端 createNotification() 内部发起。
+      type: z3.enum(["like", "comment", "follow", "mention"]),
+      content: z3.string().max(500),
+      postId: z3.number().optional()
+    })
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    if (input.targetUserId === ctx.user.id) return { success: true };
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.insert(notifications).values({
+      userId: input.targetUserId,
+      type: input.type,
+      fromUserId: ctx.user.id,
+      fromUserName: ctx.user.name ?? "Anonymous",
+      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
+      postId: input.postId,
+      content: sanitizeInput(input.content, 500),
+      // 之前未净化,存原始 markup 再回显
+      isRead: false
+    });
+    return { success: true };
+  }),
+  // ─── Delete a notification ───────────────────────────────────────────────────
+  delete: protectedProcedure.input(z3.object({ notificationId: z3.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(notifications).where(
+      and7(
+        eq9(notifications.id, input.notificationId),
+        eq9(notifications.userId, ctx.user.id)
+      )
+    );
+    return { success: true };
+  })
+});
+async function createNotification(params) {
+  if (!params.db) return;
+  if (params.targetUserId === params.fromUserId) return;
+  await params.db.insert(notifications).values({
+    userId: params.targetUserId,
+    type: params.type,
+    fromUserId: params.fromUserId,
+    fromUserName: params.fromUserName,
+    fromUserAvatar: params.fromUserAvatar,
+    postId: params.postId,
+    content: params.content,
+    isRead: false
+  });
+  const titleMap = {
+    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
+    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
+    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
+    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
+    system: "AIChat \u901A\u77E5"
+  };
+  void sendPushToUser(params.targetUserId, {
+    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
+    body: params.content,
+    url: "/notifications"
+  }).catch(() => {
+  });
+}
+
+// server/routers/user.ts
 async function getTaskRewardOverrides(db) {
   try {
-    const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq8(appConfig.platform, "all")).limit(1);
+    const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq10(appConfig.platform, "all")).limit(1);
     if (row?.tr) {
       const o = JSON.parse(row.tr);
       if (o && typeof o === "object") return o;
@@ -3116,6 +3390,8 @@ async function getTaskRewardOverrides(db) {
   return {};
 }
 var IT_PER_BIT = 100;
+var TRANSFER_MAX_IT = 1e6;
+var TRANSFER_MAX_BIT = 1e5;
 var REQUIRES_BINDING = /* @__PURE__ */ new Set(["first_research", "research_daily"]);
 function ymdUtc3(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
@@ -3135,29 +3411,29 @@ async function creditNp(tx, userId, amount, capped) {
   let base = amount;
   let total = amount;
   if (capped) {
-    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq8(users.id, userId)).limit(1);
+    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq10(users.id, userId)).limit(1);
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc3();
     if (u.deviceId) {
-      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql5`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq8(userDailyNp.userId, users.id)).where(and7(
-        eq8(users.deviceId, u.deviceId),
-        eq8(userDailyNp.ymd, ymd),
+      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq10(userDailyNp.userId, users.id)).where(and8(
+        eq10(users.deviceId, u.deviceId),
+        eq10(userDailyNp.ymd, ymd),
         gte4(userDailyNp.earned, 1),
-        sql5`${userDailyNp.userId} != ${userId}`
+        sql6`${userDailyNp.userId} != ${userId}`
       ));
       if (Number(otherEarners) >= 3) return 0;
     }
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql5`earned` } });
-    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and7(eq8(userDailyNp.userId, userId), eq8(userDailyNp.ymd, ymd))).for("update").limit(1);
+    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
+    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and8(eq10(userDailyNp.userId, userId), eq10(userDailyNp.ymd, ymd))).for("update").limit(1);
     const earned = row?.earned ?? 0;
     base = Math.min(amount, Math.max(0, cap - earned));
     if (base <= 0) return 0;
-    await tx.update(userDailyNp).set({ earned: earned + base }).where(and7(eq8(userDailyNp.userId, userId), eq8(userDailyNp.ymd, ymd)));
+    await tx.update(userDailyNp).set({ earned: earned + base }).where(and8(eq10(userDailyNp.userId, userId), eq10(userDailyNp.ymd, ymd)));
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
   }
-  await tx.update(users).set({ npPoints: sql5`npPoints + ${total}` }).where(eq8(users.id, userId));
+  await tx.update(users).set({ npPoints: sql6`npPoints + ${total}` }).where(eq10(users.id, userId));
   return total;
 }
 var TASK_DEFINITIONS = {
@@ -3262,16 +3538,16 @@ var userRouter = router({
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
       lastSignedIn: users.lastSignedIn
-    }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     return result[0] ?? null;
   }),
   // ─── Update profile ────────────────────────────────────────────────────────
   updateProfile: protectedProcedure.input(
-    z2.object({
-      name: z2.string().min(1).max(50).optional(),
-      username: z2.string().min(2).max(30).regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, underscores").optional(),
-      bio: z2.string().max(200).optional(),
-      avatar: z2.string().max(500).optional()
+    z4.object({
+      name: z4.string().min(1).max(50).optional(),
+      username: z4.string().min(2).max(30).regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, underscores").optional(),
+      bio: z4.string().max(200).optional(),
+      avatar: z4.string().max(500).optional()
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -3281,8 +3557,8 @@ var userRouter = router({
     if (input.username !== void 0) updateData.username = sanitizeUsername(input.username);
     if (input.bio !== void 0) updateData.bio = sanitizeInput(input.bio, 200);
     if (input.avatar !== void 0) updateData.avatar = input.avatar;
-    await db.update(users).set(updateData).where(eq8(users.id, ctx.user.id));
-    const updated = await db.select().from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    await db.update(users).set(updateData).where(eq10(users.id, ctx.user.id));
+    const updated = await db.select().from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     const u = updated[0];
     if (u && u.name && u.bio && u.avatar) {
       await _completeTask(ctx.user.id, "complete_profile", db);
@@ -3291,10 +3567,10 @@ var userRouter = router({
   }),
   // ─── Upload avatar to S3 ─────────────────────────────────────────────────
   uploadAvatar: protectedProcedure.input(
-    z2.object({
-      fileData: z2.string().max(6e6),
+    z4.object({
+      fileData: z4.string().max(6e6),
       // ~4.5MB base64
-      mimeType: z2.string().max(100)
+      mimeType: z4.string().max(100)
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const { fileData, mimeType } = input;
@@ -3310,22 +3586,22 @@ var userRouter = router({
     const { url } = await storagePut(key, buffer, mime);
     const db = await getDb();
     if (db) {
-      await db.update(users).set({ avatar: url }).where(eq8(users.id, ctx.user.id));
+      await db.update(users).set({ avatar: url }).where(eq10(users.id, ctx.user.id));
     }
     return { url };
   }),
   // ─── 公开名片:下载落地页给未登录访客显示"XXX 邀请你加为好友"。只暴露昵称+头像(本就在 searchUsers 公开) ──
-  getPublicCard: publicProcedure.input(z2.object({ userId: z2.number().int().positive() })).query(async ({ input }) => {
+  getPublicCard: publicProcedure.input(z4.object({ userId: z4.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq8(users.id, input.userId)).limit(1);
+    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq10(users.id, input.userId)).limit(1);
     if (!u) return null;
     return { id: u.id, name: u.name || u.username || "\u7528\u6237", avatar: u.avatar ?? null };
   }),
   // ─── Get leaderboard ──────────────────────────────────────────────────────
   leaderboard: publicProcedure.input(
-    z2.object({
-      limit: z2.number().min(1).max(100).default(50)
+    z4.object({
+      limit: z4.number().min(1).max(100).default(50)
     }).optional()
   ).query(async ({ input }) => {
     const db = await getDb();
@@ -3338,7 +3614,7 @@ var userRouter = router({
       avatar: users.avatar,
       npPoints: users.npPoints,
       walletAddress: users.walletAddress
-    }).from(users).orderBy(desc2(users.npPoints)).limit(limit);
+    }).from(users).orderBy(desc3(users.npPoints)).limit(limit);
     return rows.map((u, idx) => {
       const { walletAddress, ...pub } = u;
       return {
@@ -3353,9 +3629,9 @@ var userRouter = router({
   myRank: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     if (!me) return null;
-    const [{ count: count7 }] = await db.select({ count: sql5`COUNT(*)` }).from(users).where(sql5`npPoints > ${me.npPoints}`);
+    const [{ count: count7 }] = await db.select({ count: sql6`COUNT(*)` }).from(users).where(sql6`npPoints > ${me.npPoints}`);
     return {
       rank: Number(count7) + 1,
       npPoints: me.npPoints
@@ -3363,32 +3639,32 @@ var userRouter = router({
   }),
   // ─── Get task status for current user ─────────────────────────────────────
   // ─── 管理员：用户封禁 ─────────────────────────────────────────────
-  adminGetUser: adminProcedure.input(z2.object({ userId: z2.number() })).query(async ({ input }) => {
+  adminGetUser: adminProcedure.input(z4.object({ userId: z4.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, role: users.role, isBanned: users.isBanned, npPoints: users.npPoints }).from(users).where(eq8(users.id, input.userId)).limit(1);
+    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, role: users.role, isBanned: users.isBanned, npPoints: users.npPoints }).from(users).where(eq10(users.id, input.userId)).limit(1);
     return u ?? null;
   }),
-  setBanned: adminProcedure.input(z2.object({ userId: z2.number(), banned: z2.boolean() })).mutation(async ({ ctx, input }) => {
-    if (input.userId === ctx.user.id) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u5C01\u7981\u81EA\u5DF1" });
+  setBanned: adminProcedure.input(z4.object({ userId: z4.number(), banned: z4.boolean() })).mutation(async ({ ctx, input }) => {
+    if (input.userId === ctx.user.id) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u5C01\u7981\u81EA\u5DF1" });
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     if (input.banned) {
-      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq8(users.id, input.userId)).limit(1);
-      if (!target) throw new TRPCError4({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
-      if (target.role === "admin" || target.isBot) throw new TRPCError4({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
+      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq10(users.id, input.userId)).limit(1);
+      if (!target) throw new TRPCError5({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
+      if (target.role === "admin" || target.isBot) throw new TRPCError5({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
     }
-    await db.update(users).set({ isBanned: input.banned }).where(eq8(users.id, input.userId));
+    await db.update(users).set({ isBanned: input.banned }).where(eq10(users.id, input.userId));
     if (!input.banned) {
       try {
-        await db.delete(contentViolations).where(eq8(contentViolations.userId, input.userId));
+        await db.delete(contentViolations).where(eq10(contentViolations.userId, input.userId));
       } catch {
       }
     }
     return { success: true, banned: input.banned };
   }),
   // ─── 管理员：内容违规记录（毒品/赌博/贩卖 等拦截记录，供审查封号）──────────
-  adminListViolations: adminProcedure.input(z2.object({ userId: z2.number().optional() }).optional()).query(async ({ input }) => {
+  adminListViolations: adminProcedure.input(z4.object({ userId: z4.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const rows = await db.select({
@@ -3400,7 +3676,7 @@ var userRouter = router({
       createdAt: contentViolations.createdAt,
       userName: users.name,
       isBanned: users.isBanned
-    }).from(contentViolations).leftJoin(users, eq8(users.id, contentViolations.userId)).where(input?.userId ? eq8(contentViolations.userId, input.userId) : void 0).orderBy(desc2(contentViolations.createdAt)).limit(100);
+    }).from(contentViolations).leftJoin(users, eq10(users.id, contentViolations.userId)).where(input?.userId ? eq10(contentViolations.userId, input.userId) : void 0).orderBy(desc3(contentViolations.createdAt)).limit(100);
     return rows;
   }),
   // ─── 管理员：任务奖励配置 ─────────────────────────────────────────
@@ -3415,17 +3691,17 @@ var userRouter = router({
       defaultReward: def.npReward
     }));
   }),
-  setTaskRewards: adminProcedure.input(z2.object({ rewards: z2.record(z2.string(), z2.number().int().min(0).max(1e5)) })).mutation(async ({ input }) => {
+  setTaskRewards: adminProcedure.input(z4.object({ rewards: z4.record(z4.string(), z4.number().int().min(0).max(1e5)) })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const clean = {};
     for (const [k, v] of Object.entries(input.rewards)) {
       if (TASK_DEFINITIONS[k] && Number.isFinite(v)) clean[k] = v;
     }
     const json = JSON.stringify(clean);
-    const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq8(appConfig.platform, "all")).limit(1);
+    const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq10(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
-      await db.update(appConfig).set({ taskRewards: json }).where(eq8(appConfig.platform, "all"));
+      await db.update(appConfig).set({ taskRewards: json }).where(eq10(appConfig.platform, "all"));
     } else {
       await db.insert(appConfig).values({ platform: "all", taskRewards: json });
     }
@@ -3439,7 +3715,7 @@ var userRouter = router({
       taskType: userTasks.taskType,
       completedAt: userTasks.completedAt,
       npEarned: userTasks.npEarned
-    }).from(userTasks).where(eq8(userTasks.userId, ctx.user.id)).orderBy(desc2(userTasks.completedAt));
+    }).from(userTasks).where(eq10(userTasks.userId, ctx.user.id)).orderBy(desc3(userTasks.completedAt));
     const completionCount = {};
     const todayCount = {};
     const todayStart = startOfUtcDay2(ymdUtc3());
@@ -3474,32 +3750,32 @@ var userRouter = router({
     });
   }),
   // ─── Complete a task ───────────────────────────────────────────────────────
-  completeTask: protectedProcedure.input(z2.object({ taskType: z2.string().max(50) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  completeTask: protectedProcedure.input(z4.object({ taskType: z4.string().max(50) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const def = TASK_DEFINITIONS[input.taskType];
     if (!def) throw new Error("Unknown task type");
-    if (def.eventOnly) throw new TRPCError4({ code: "FORBIDDEN", message: "\u8BE5\u4EFB\u52A1\u7531\u7CFB\u7EDF\u81EA\u52A8\u53D1\u653E" });
+    if (def.eventOnly) throw new TRPCError5({ code: "FORBIDDEN", message: "\u8BE5\u4EFB\u52A1\u7531\u7CFB\u7EDF\u81EA\u52A8\u53D1\u653E" });
     return _completeTask(ctx.user.id, input.taskType, db);
   }),
   // ─── 上报设备指纹（防多号撸AC；App 启动后调用）────────────────────────────────
-  reportDevice: protectedProcedure.input(z2.object({ deviceId: z2.string().min(8).max(64) })).mutation(async ({ ctx, input }) => {
+  reportDevice: protectedProcedure.input(z4.object({ deviceId: z4.string().min(8).max(64) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { ok: false };
-    await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq8(users.id, ctx.user.id));
+    await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq10(users.id, ctx.user.id));
     return { ok: true };
   }),
   // ─── 意见反馈（help.tsx 反馈表单的真实落库）─────────────────────────────────────
-  submitFeedback: protectedProcedure.input(z2.object({
-    content: z2.string().min(1).max(1e3),
-    contact: z2.string().max(120).optional(),
-    appVersion: z2.string().max(24).optional(),
-    platform: z2.string().max(16).optional()
+  submitFeedback: protectedProcedure.input(z4.object({
+    content: z4.string().min(1).max(1e3),
+    contact: z4.string().max(120).optional(),
+    appVersion: z4.string().max(24).optional(),
+    platform: z4.string().max(16).optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const content = sanitizeInput(input.content, 1e3).trim();
-    if (!content) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u53CD\u9988\u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A" });
+    if (!content) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u53CD\u9988\u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A" });
     await db.insert(feedback).values({
       userId: ctx.user.id,
       content,
@@ -3509,27 +3785,27 @@ var userRouter = router({
     });
     return { ok: true };
   }),
-  adminListFeedback: adminProcedure.input(z2.object({ status: z2.enum(["new", "read", "resolved"]).optional(), limit: z2.number().min(1).max(200).default(100) }).optional()).query(async ({ input }) => {
+  adminListFeedback: adminProcedure.input(z4.object({ status: z4.enum(["new", "read", "resolved"]).optional(), limit: z4.number().min(1).max(200).default(100) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const conds = input?.status ? [eq8(feedback.status, input.status)] : [];
-    return db.select().from(feedback).where(conds.length ? and7(...conds) : void 0).orderBy(desc2(feedback.createdAt)).limit(input?.limit ?? 100);
+    const conds = input?.status ? [eq10(feedback.status, input.status)] : [];
+    return db.select().from(feedback).where(conds.length ? and8(...conds) : void 0).orderBy(desc3(feedback.createdAt)).limit(input?.limit ?? 100);
   }),
-  adminSetFeedbackStatus: adminProcedure.input(z2.object({ id: z2.number(), status: z2.enum(["new", "read", "resolved"]) })).mutation(async ({ input }) => {
+  adminSetFeedbackStatus: adminProcedure.input(z4.object({ id: z4.number(), status: z4.enum(["new", "read", "resolved"]) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(feedback).set({ status: input.status }).where(eq8(feedback.id, input.id));
+    await db.update(feedback).set({ status: input.status }).where(eq10(feedback.id, input.id));
     return { ok: true };
   }),
   // ─── 段位状态（累积贡献值 / 当前段位 / 加成 / 每日奖励 / 下一段进度 / 我的网体）──────
   getRankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ score: users.rankScore, tier: users.rankTier, reputation: users.reputation }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    const [u] = await db.select({ score: users.rankScore, tier: users.rankTier, reputation: users.reputation }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     const score = u?.score ?? 0;
     const tier = u?.tier ?? 0;
     const next = tier < RANK_TIERS.length ? RANK_TIERS[tier] : null;
-    const refRows = await db.select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId }).from(referrals).where(eq8(referrals.status, "active"));
+    const refRows = await db.select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId }).from(referrals).where(eq10(referrals.status, "active"));
     const children = /* @__PURE__ */ new Map();
     for (const r of refRows) {
       if (!children.has(r.referrerId)) children.set(r.referrerId, []);
@@ -3553,7 +3829,7 @@ var userRouter = router({
     if (team.length > 0) {
       const todayStart = startOfUtcDay2(ymdUtc3());
       const batch = team.slice(0, 1e4);
-      const [{ c: activeC = 0 } = { c: 0 }] = await db.select({ c: sql5`COUNT(DISTINCT ${userTasks.userId})` }).from(userTasks).where(and7(inArray4(userTasks.userId, batch), gte4(userTasks.completedAt, todayStart)));
+      const [{ c: activeC = 0 } = { c: 0 }] = await db.select({ c: sql6`COUNT(DISTINCT ${userTasks.userId})` }).from(userTasks).where(and8(inArray5(userTasks.userId, batch), gte4(userTasks.completedAt, todayStart)));
       teamActiveToday = Number(activeC);
     }
     const bitAirdrop = bitAirdropSchedule();
@@ -3591,47 +3867,111 @@ var userRouter = router({
   // ─── 捐献 IT 领取当日 BIT 段位空投 ───────────────────────────────────────────
   claimBitAirdrop: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     try {
       return await claimBitRankAirdrop(db, ctx.user.id);
     } catch (e) {
       const err = e;
       const code = err.code === "CONFLICT" ? "CONFLICT" : err.code === "FORBIDDEN" ? "FORBIDDEN" : err.code === "INTERNAL_SERVER_ERROR" ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
-      throw new TRPCError4({ code, message: err.message || "\u9886\u53D6\u5931\u8D25" });
+      throw new TRPCError5({ code, message: err.message || "\u9886\u53D6\u5931\u8D25" });
     }
   }),
   // ─── BIT ↔ IT 互转（100 IT = 1 BIT）────────────────────────────────────────
-  convertCurrency: protectedProcedure.input(z2.object({
-    direction: z2.enum(["it_to_bit", "bit_to_it"]),
-    amount: z2.number().int().positive().max(1e7)
+  convertCurrency: protectedProcedure.input(z4.object({
+    direction: z4.enum(["it_to_bit", "bit_to_it"]),
+    amount: z4.number().int().positive().max(1e7)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     if (input.direction === "it_to_bit") {
       if (input.amount % IT_PER_BIT !== 0) {
-        throw new TRPCError4({ code: "BAD_REQUEST", message: `IT \u6570\u91CF\u9700\u4E3A ${IT_PER_BIT} \u7684\u6574\u6570\u500D` });
+        throw new TRPCError5({ code: "BAD_REQUEST", message: `IT \u6570\u91CF\u9700\u4E3A ${IT_PER_BIT} \u7684\u6574\u6570\u500D` });
       }
       const bitOut = Math.floor(input.amount / IT_PER_BIT);
-      if (bitOut <= 0) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
-      const spent = await db.update(users).set({ npPoints: sql5`${users.npPoints} - ${input.amount}` }).where(and7(eq8(users.id, ctx.user.id), sql5`${users.npPoints} >= ${input.amount}`));
+      if (bitOut <= 0) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+      const spent = await db.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and8(eq10(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
       const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
-      if (affected2 <= 0) throw new TRPCError4({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+      if (affected2 <= 0) throw new TRPCError5({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
       const ok = await grantNN(db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
       if (!ok) {
-        await db.update(users).set({ npPoints: sql5`${users.npPoints} + ${input.amount}` }).where(eq8(users.id, ctx.user.id));
-        throw new TRPCError4({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
+        await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq10(users.id, ctx.user.id));
+        throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
       }
     } else {
       const itOut = input.amount * IT_PER_BIT;
       const ok = await spendNN(db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
-      if (!ok) throw new TRPCError4({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
-      await db.update(users).set({ npPoints: sql5`${users.npPoints} + ${itOut}` }).where(eq8(users.id, ctx.user.id));
+      if (!ok) throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+      await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${itOut}` }).where(eq10(users.id, ctx.user.id));
     }
-    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     return { ok: true, it: u?.npPoints ?? 0, bit: Number(u?.nnBalance ?? 0), rate: IT_PER_BIT };
   }),
+  // ─── 用户间转账 BIT / IT ────────────────────────────────────────────────────
+  transferCurrency: protectedProcedure.input(z4.object({
+    currency: z4.enum(["it", "bit"]),
+    toUserId: z4.number().int().positive(),
+    amount: z4.number().int().positive().max(1e7),
+    memo: z4.string().max(80).optional()
+  })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (input.toUserId === ctx.user.id) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8F6C\u7ED9\u81EA\u5DF1" });
+    }
+    if (input.currency === "it" && input.amount > TRANSFER_MAX_IT) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: `\u5355\u7B14 IT \u6700\u591A ${TRANSFER_MAX_IT.toLocaleString()}` });
+    }
+    if (input.currency === "bit" && input.amount > TRANSFER_MAX_BIT) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: `\u5355\u7B14 BIT \u6700\u591A ${TRANSFER_MAX_BIT.toLocaleString()}` });
+    }
+    const [to] = await db.select({ id: users.id, name: users.name, username: users.username, isBanned: users.isBanned }).from(users).where(eq10(users.id, input.toUserId)).limit(1);
+    if (!to) throw new TRPCError5({ code: "NOT_FOUND", message: "\u6536\u6B3E\u7528\u6237\u4E0D\u5B58\u5728" });
+    if (to.isBanned) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u6536\u6B3E\u7528\u6237\u4E0D\u53EF\u7528" });
+    const memo = sanitizeInput(input.memo?.trim() || "", 80) || void 0;
+    const toName = to.name ?? to.username ?? `\u7528\u6237 #${to.id}`;
+    const fromName = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237 #${ctx.user.id}`;
+    if (input.currency === "it") {
+      try {
+        await db.transaction(async (tx) => {
+          const spent = await tx.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and8(eq10(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
+          const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+          if (affected2 <= 0) throw new Error("INSUFFICIENT_IT");
+          await tx.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq10(users.id, input.toUserId));
+        });
+      } catch (e) {
+        if (e?.message === "INSUFFICIENT_IT") {
+          throw new TRPCError5({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+        }
+        throw e;
+      }
+    } else {
+      const ok = await transferNN(db, ctx.user.id, input.toUserId, input.amount, memo ?? `to ${toName}`);
+      if (!ok) throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+    }
+    const symbol = input.currency === "it" ? "IT" : "BIT";
+    void createNotification({
+      db,
+      targetUserId: input.toUserId,
+      fromUserId: ctx.user.id,
+      fromUserName: fromName,
+      fromUserAvatar: ctx.user.avatar ?? "",
+      type: "system",
+      content: `${fromName} \u5411\u4F60\u8F6C\u8D26 ${input.amount.toLocaleString()} ${symbol}${memo ? `\uFF1A${memo}` : ""}`
+    }).catch(() => {
+    });
+    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
+    return {
+      ok: true,
+      currency: input.currency,
+      amount: input.amount,
+      toUserId: input.toUserId,
+      toName,
+      it: u?.npPoints ?? 0,
+      bit: Number(u?.nnBalance ?? 0)
+    };
+  }),
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
-  adminRunRankAgg: adminProcedure.input(z2.object({ ymd: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
+  adminRunRankAgg: adminProcedure.input(z4.object({ ymd: z4.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return runRankAggregation(db, input.ymd);
@@ -3640,7 +3980,7 @@ var userRouter = router({
   // ─── Search users ─────────────────────────────────────────────────────────
   // 纯数字 query → 按唯一 ID 精确查找（移动端好友搜索走这条：用户名可重复，ID 唯一）
   // 非数字 query → 按昵称/用户名模糊匹配（保留给 Web 端等按名字搜人的入口）
-  searchUsers: protectedProcedure.input(z2.object({ query: z2.string().min(1).max(50) })).query(async ({ ctx, input }) => {
+  searchUsers: protectedProcedure.input(z4.object({ query: z4.string().min(1).max(50) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const raw = input.query.trim();
@@ -3655,7 +3995,7 @@ var userRouter = router({
     if (!/^\d+$/.test(raw)) return [];
     const idNum = Number(raw);
     if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
-    const rows = await db.select(cols).from(users).where(and7(ne2(users.id, ctx.user.id), eq8(users.id, idNum))).limit(1);
+    const rows = await db.select(cols).from(users).where(and8(ne2(users.id, ctx.user.id), eq10(users.id, idNum))).limit(1);
     return rows.map((u) => ({
       id: u.id,
       name: u.name ?? u.username ?? `User #${u.id}`,
@@ -3665,17 +4005,17 @@ var userRouter = router({
     }));
   }),
   // ─── Invite leaderboard (by referral count) ────────────────────────────
-  inviteLeaderboard: publicProcedure.input(z2.object({ limit: z2.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
+  inviteLeaderboard: publicProcedure.input(z4.object({ limit: z4.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const limit = input?.limit ?? 50;
     const rows = await db.select({
       referrerId: referrals.referrerId,
       cnt: count()
-    }).from(referrals).where(eq8(referrals.status, "active")).groupBy(referrals.referrerId).orderBy(desc2(count())).limit(limit);
+    }).from(referrals).where(eq10(referrals.status, "active")).groupBy(referrals.referrerId).orderBy(desc3(count())).limit(limit);
     if (rows.length === 0) return [];
     const userIds = rows.map((r) => r.referrerId);
-    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql5`${users.id} IN (${sql5.join(userIds.map((id) => sql5`${id}`), sql5`, `)})`);
+    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql6`${users.id} IN (${sql6.join(userIds.map((id) => sql6`${id}`), sql6`, `)})`);
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     return rows.map((r, idx) => {
       const u = userMap.get(r.referrerId);
@@ -3688,17 +4028,17 @@ var userRouter = router({
     });
   }),
   // ─── Profit leaderboard (by closed position count as proxy) ────────────
-  profitLeaderboard: publicProcedure.input(z2.object({ limit: z2.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
+  profitLeaderboard: publicProcedure.input(z4.object({ limit: z4.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const limit = input?.limit ?? 50;
     const rows = await db.select({
       userId: tradingPositions.userId,
       tradeCount: count()
-    }).from(tradingPositions).where(eq8(tradingPositions.status, "closed")).groupBy(tradingPositions.userId).orderBy(desc2(count())).limit(limit);
+    }).from(tradingPositions).where(eq10(tradingPositions.status, "closed")).groupBy(tradingPositions.userId).orderBy(desc3(count())).limit(limit);
     if (rows.length === 0) return [];
     const userIds = rows.map((r) => r.userId);
-    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql5`${users.id} IN (${sql5.join(userIds.map((id) => sql5`${id}`), sql5`, `)})`);
+    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql6`${users.id} IN (${sql6.join(userIds.map((id) => sql6`${id}`), sql6`, `)})`);
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     return rows.map((r, idx) => {
       const u = userMap.get(r.userId);
@@ -3713,10 +4053,10 @@ var userRouter = router({
   getUserStats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [postCountRow] = await db.select({ count: count() }).from(posts).where(eq8(posts.authorId, ctx.user.id));
-    const [taskCountRow] = await db.select({ count: count() }).from(userTasks).where(eq8(userTasks.userId, ctx.user.id));
-    const [userRow] = await db.select({ npPoints: users.npPoints }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
-    const [rankRow] = await db.select({ count: count() }).from(users).where(sql5`npPoints > ${userRow?.npPoints ?? 0}`);
+    const [postCountRow] = await db.select({ count: count() }).from(posts).where(eq10(posts.authorId, ctx.user.id));
+    const [taskCountRow] = await db.select({ count: count() }).from(userTasks).where(eq10(userTasks.userId, ctx.user.id));
+    const [userRow] = await db.select({ npPoints: users.npPoints }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
+    const [rankRow] = await db.select({ count: count() }).from(users).where(sql6`npPoints > ${userRow?.npPoints ?? 0}`);
     return {
       postCount: postCountRow?.count ?? 0,
       taskCount: taskCountRow?.count ?? 0,
@@ -3738,27 +4078,27 @@ async function _completeTask(userId, taskType, db) {
   let granted = 0;
   let blocked = false;
   await db.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq8(users.id, userId)).for("update").limit(1);
+    await tx.select({ id: users.id }).from(users).where(eq10(users.id, userId)).for("update").limit(1);
     if (isDaily) {
       const todayStart = startOfUtcDay2(ymdUtc3());
-      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and7(eq8(userTasks.userId, userId), eq8(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
+      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and8(eq10(userTasks.userId, userId), eq10(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
       if (Number(todayCount) >= def.daily) {
         blocked = true;
         return;
       }
     } else {
-      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and7(eq8(userTasks.userId, userId), eq8(userTasks.taskType, taskType)));
+      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and8(eq10(userTasks.userId, userId), eq10(userTasks.taskType, taskType)));
       if (existing.length >= def.maxCompletions) {
         blocked = true;
         return;
       }
     }
     if (taskType === "daily_login") {
-      const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq8(users.id, userId)).limit(1);
+      const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq10(users.id, userId)).limit(1);
       const yesterday = ymdUtc3(new Date(Date.now() - 864e5));
       const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq8(users.id, userId));
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq10(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
     await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
@@ -3837,16 +4177,16 @@ async function fetchBscScanV2(params) {
 var walletRouter = router({
   //
   updateAddress: protectedProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
-      chain: z3.string().default("BSC")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
+      chain: z5.string().default("BSC")
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [taken] = await db.select({ id: users.id }).from(users).where(sql6`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
+    const [taken] = await db.select({ id: users.id }).from(users).where(sql7`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
     if (taken) throw new Error("\u8BE5\u94B1\u5305\u5730\u5740\u5DF2\u88AB\u5176\u4ED6\u8D26\u53F7\u7ED1\u5B9A");
-    await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq9(users.id, ctx.user.id));
+    await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq11(users.id, ctx.user.id));
     void awardTaskEvent(db, ctx.user.id, "connect_wallet");
     return { success: true };
   }),
@@ -3854,7 +4194,7 @@ var walletRouter = router({
   unbindAddress: protectedProcedure.use(rateLimitWrite).mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(users).set({ walletAddress: null }).where(eq9(users.id, ctx.user.id));
+    await db.update(users).set({ walletAddress: null }).where(eq11(users.id, ctx.user.id));
     return { success: true };
   }),
   //
@@ -3868,13 +4208,13 @@ var walletRouter = router({
       username: users.username,
       bio: users.bio,
       avatar: users.avatar
-    }).from(users).where(eq9(users.id, ctx.user.id)).limit(1);
+    }).from(users).where(eq11(users.id, ctx.user.id)).limit(1);
     return result[0] ?? null;
   }),
   //
   getBalance: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const hexBalance = await callBscRpc("eth_getBalance", [input.address, "latest"]);
@@ -3898,8 +4238,8 @@ var walletRouter = router({
   }),
   //
   getTokenBalances: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const balanceResults = await Promise.all(
@@ -3960,11 +4300,11 @@ var walletRouter = router({
   }),
   //
   getSwapQuote: publicProcedure.input(
-    z3.object({
-      fromToken: z3.string(),
+    z5.object({
+      fromToken: z5.string(),
       // e.g. "BNB", "ETH", "SOL"
-      toToken: z3.string(),
-      amount: z3.number().positive()
+      toToken: z5.string(),
+      amount: z5.number().positive()
     })
   ).query(async ({ input }) => {
     const COINGECKO_IDS = {
@@ -4048,16 +4388,16 @@ var walletRouter = router({
   }),
   //
   saveSwapHistory: protectedProcedure.input(
-    z3.object({
-      walletAddress: z3.string(),
-      fromToken: z3.string().max(20),
-      toToken: z3.string().max(20),
-      fromAmount: z3.string(),
-      toAmount: z3.string(),
-      rate: z3.string(),
-      dex: z3.string().max(50),
-      txHash: z3.string().max(70),
-      slippage: z3.string().default("0.5")
+    z5.object({
+      walletAddress: z5.string(),
+      fromToken: z5.string().max(20),
+      toToken: z5.string().max(20),
+      fromAmount: z5.string(),
+      toAmount: z5.string(),
+      rate: z5.string(),
+      dex: z5.string().max(50),
+      txHash: z5.string().max(70),
+      slippage: z5.string().default("0.5")
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -4079,21 +4419,21 @@ var walletRouter = router({
   }),
   //
   getSwapHistory: protectedProcedure.input(
-    z3.object({
-      limit: z3.number().min(1).max(50).default(20)
+    z5.object({
+      limit: z5.number().min(1).max(50).default(20)
     })
   ).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(swapHistory).where(eq9(swapHistory.userId, ctx.user.id)).orderBy(desc3(swapHistory.createdAt)).limit(input.limit);
+    const rows = await db.select().from(swapHistory).where(eq11(swapHistory.userId, ctx.user.id)).orderBy(desc4(swapHistory.createdAt)).limit(input.limit);
     return rows;
   }),
   //
   getTransactions: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
-      page: z3.number().min(1).default(1),
-      offset: z3.number().min(1).max(50).default(20)
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
+      page: z5.number().min(1).default(1),
+      offset: z5.number().min(1).max(50).default(20)
     })
   ).query(async ({ input }) => {
     const data = await fetchBscScanV2({
@@ -4127,8 +4467,8 @@ var walletRouter = router({
   // Falls back to Etherscan free API if ALCHEMY_API_KEY is not set.
   // Enriches each token with USD price and 24h change from CoinGecko.
   getEthTokenBalances: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY ?? "";
@@ -4296,7 +4636,7 @@ import { parse as parseCookie } from "cookie";
 init_db();
 init_schema();
 init_logger();
-import { eq as eq11, and as and8 } from "drizzle-orm";
+import { eq as eq12, and as and9 } from "drizzle-orm";
 
 // server/_core/corsOrigin.ts
 init_env();
@@ -4323,124 +4663,12 @@ function corsOriginDelegate(origin, cb) {
   cb(null, isAllowedOrigin(origin));
 }
 
-// server/routers/webPush.ts
-init_schema();
-import { TRPCError as TRPCError5 } from "@trpc/server";
-import webpush from "web-push";
-import { eq as eq10, inArray as inArray5 } from "drizzle-orm";
-import { z as z4 } from "zod";
-init_db();
-var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BDELsotXx1M-DHSpJ998MHEUIlj8-GzJPzOuDXRaHOGS_9h_-apvpaN4v6cnvaZQr3HwwauehFHRN5ROV77Qh5w";
-var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "mzHowEZfED1ijF4CN1DsRVH3t0cALTZvmP3uy0UCxL0";
-var VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@nexuschat.best";
-webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-var webPushRouter = router({
-  /** Return the VAPID public key for client-side subscription */
-  getPublicKey: publicProcedure.query(() => {
-    return { publicKey: VAPID_PUBLIC_KEY };
-  }),
-  /** Register a push subscription for the current user */
-  subscribe: protectedProcedure.input(
-    z4.object({
-      endpoint: z4.string().url(),
-      p256dh: z4.string(),
-      auth: z4.string()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
-    const existing = await db.select().from(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id)).limit(10);
-    if (existing.length >= 5) {
-      await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id));
-    }
-    await db.insert(pushSubscriptions).values({
-      userId: ctx.user.id,
-      endpoint: input.endpoint,
-      p256dh: input.p256dh,
-      auth: input.auth
-    });
-    return { success: true };
-  }),
-  /** Unsubscribe (remove push subscription) */
-  unsubscribe: protectedProcedure.input(z4.object({ endpoint: z4.string() })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) return { success: false };
-    await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id));
-    return { success: true };
-  }),
-  /** 注册原生推送（Expo Push）设备 token。同一 token 改归当前用户（换账号登录），幂等。 */
-  registerDeviceToken: protectedProcedure.input(z4.object({ token: z4.string().min(10).max(255), platform: z4.enum(["android", "ios"]).default("android") })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
-    await db.delete(devicePushTokens).where(eq10(devicePushTokens.token, input.token));
-    await db.insert(devicePushTokens).values({ userId: ctx.user.id, token: input.token, platform: input.platform });
-    return { success: true };
-  }),
-  /** 注销设备 token（退出登录时调用）。 */
-  unregisterDeviceToken: protectedProcedure.input(z4.object({ token: z4.string() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) return { success: false };
-    await db.delete(devicePushTokens).where(eq10(devicePushTokens.token, input.token));
-    return { success: true };
-  })
-});
-async function sendExpoPush(db, userId, payload) {
-  const tokens = await db.select().from(devicePushTokens).where(eq10(devicePushTokens.userId, userId));
-  const expoTokens = tokens.map((t3) => t3.token).filter((t3) => t3.startsWith("ExponentPushToken") || t3.startsWith("ExpoPushToken"));
-  if (expoTokens.length === 0) return;
-  const messages3 = expoTokens.map((to) => ({
-    to,
-    title: payload.title,
-    body: payload.body,
-    sound: "default",
-    data: { url: payload.url || "/notifications" }
-  }));
-  const resp = await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(messages3)
-  });
-  const json = await resp.json().catch(() => null);
-  const dead = (json?.data ?? []).map((r, i) => r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null).filter((t3) => !!t3);
-  if (dead.length) await db.delete(devicePushTokens).where(inArray5(devicePushTokens.token, dead));
-}
-async function sendPushToUser(userId, payload) {
-  const db = await getDb();
-  if (!db) return;
-  void sendExpoPush(db, userId, payload).catch(() => {
-  });
-  const subs = await db.select().from(pushSubscriptions).where(eq10(pushSubscriptions.userId, userId));
-  const notificationPayload = JSON.stringify({
-    title: payload.title,
-    body: payload.body,
-    url: payload.url || "/(tabs)",
-    // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
-    icon: payload.icon || "/icons/icon-192x192.png",
-    badge: "/icons/icon-72x72.png"
-  });
-  const results = await Promise.allSettled(
-    subs.map(
-      (sub) => webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth }
-        },
-        notificationPayload
-      )
-    )
-  );
-  const expiredEndpoints = results.map((r, i) => r.status === "rejected" ? subs[i].endpoint : null).filter(Boolean);
-  if (expiredEndpoints.length > 0) {
-    await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, userId));
-  }
-}
-
 // server/socket.ts
 async function isConversationMuted(userId, convKey) {
   try {
     const db = await getDb();
     if (!db) return false;
-    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and8(eq11(conversationPrefs.userId, userId), eq11(conversationPrefs.convKey, convKey))).limit(1);
+    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and9(eq12(conversationPrefs.userId, userId), eq12(conversationPrefs.convKey, convKey))).limit(1);
     return !!p?.isMuted;
   } catch {
     return false;
@@ -4463,12 +4691,12 @@ async function authenticateSocket(socket) {
   if (!session) return null;
   const db = await getDb();
   if (!db) return null;
-  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq11(users.openId, session.openId)).limit(1);
+  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq12(users.openId, session.openId)).limit(1);
   if (!row) return null;
   return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
 }
 async function isGroupMember(db, groupId, userId) {
-  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and8(eq11(groupMembers.groupId, groupId), eq11(groupMembers.userId, userId))).limit(1);
+  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and9(eq12(groupMembers.groupId, groupId), eq12(groupMembers.userId, userId))).limit(1);
   return !!row;
 }
 var _io = null;
@@ -4598,7 +4826,7 @@ init_schema();
 // server/groupBots.ts
 init_db();
 init_schema();
-import { eq as eq12, and as and9, gt, or as or3, isNull as isNull2, desc as desc4, sql as sql7, inArray as inArray6 } from "drizzle-orm";
+import { eq as eq13, and as and10, gt, or as or3, isNull as isNull2, desc as desc5, sql as sql8, inArray as inArray6 } from "drizzle-orm";
 
 // server/_core/llm.ts
 init_env();
@@ -4926,7 +5154,7 @@ function getBotMeta(type) {
   return catalogByType.get(type);
 }
 async function listGroupBots(db, groupId) {
-  const rows = await db.select().from(groupBots).where(eq12(groupBots.groupId, groupId));
+  const rows = await db.select().from(groupBots).where(eq13(groupBots.groupId, groupId));
   const byType = new Map(rows.map((r) => [r.botType, r]));
   const now = /* @__PURE__ */ new Date();
   return BOT_CATALOG.map((meta) => {
@@ -4966,10 +5194,10 @@ async function listGroupBots(db, groupId) {
 async function isBotActive(db, groupId, type) {
   const now = /* @__PURE__ */ new Date();
   const [row] = await db.select({ enabled: groupBots.enabled, expiresAt: groupBots.expiresAt }).from(groupBots).where(
-    and9(
-      eq12(groupBots.groupId, groupId),
-      eq12(groupBots.botType, type),
-      eq12(groupBots.enabled, true),
+    and10(
+      eq13(groupBots.groupId, groupId),
+      eq13(groupBots.botType, type),
+      eq13(groupBots.enabled, true),
       or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, now))
     )
   ).limit(1);
@@ -4978,7 +5206,7 @@ async function isBotActive(db, groupId, type) {
 var nexusBotId = null;
 async function getNexusBotId(db) {
   if (nexusBotId) return nexusBotId;
-  const [bot] = await db.select({ id: users.id }).from(users).where(eq12(users.openId, "bot_nexus_bot")).limit(1);
+  const [bot] = await db.select({ id: users.id }).from(users).where(eq13(users.openId, "bot_nexus_bot")).limit(1);
   if (bot) nexusBotId = bot.id;
   return nexusBotId;
 }
@@ -4995,7 +5223,7 @@ async function sendGroupBotMessage(db, groupId, content) {
       content,
       messageType: "text"
     }).$returningId();
-    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq12(users.id, botId)).limit(1);
+    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq13(users.id, botId)).limit(1);
     const io = getSocketIO();
     if (io) {
       io.to(`group:${groupId}`).emit("new_message", {
@@ -5015,7 +5243,7 @@ async function sendGroupBotMessage(db, groupId, content) {
 }
 async function runWelcomeBot(db, groupId, newMemberName) {
   if (!await isBotActive(db, groupId, "welcome")) return;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "welcome"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "welcome"))).limit(1);
   let template = "\u6B22\u8FCE {name} \u52A0\u5165\u672C\u7FA4\uFF01\u{1F389}";
   if (row?.config) {
     try {
@@ -5030,7 +5258,7 @@ async function runWelcomeBot(db, groupId, newMemberName) {
 async function runManageBot(db, groupId, text2) {
   if (!text2) return false;
   if (!await isBotActive(db, groupId, "manage")) return false;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "manage"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "manage"))).limit(1);
   let keywords = [];
   let warn = "\u8BF7\u6CE8\u610F\u7FA4\u5185\u53D1\u8A00\u89C4\u8303\u54E6~";
   if (row?.config) {
@@ -5054,7 +5282,7 @@ var GROWTH_MAX_REWARD = 100;
 async function runGrowthReward(db, groupId, inviterId, newMemberName) {
   if (!inviterId) return;
   if (!await isBotActive(db, groupId, "growth")) return;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "growth"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "growth"))).limit(1);
   let reward = 5;
   let announce = true;
   if (row?.config) {
@@ -5067,10 +5295,10 @@ async function runGrowthReward(db, groupId, inviterId, newMemberName) {
   }
   reward = Math.max(0, Math.min(GROWTH_MAX_REWARD, Math.floor(reward)));
   if (reward > 0) {
-    await db.update(users).set({ npPoints: sql7`${users.npPoints} + ${reward}` }).where(eq12(users.id, inviterId));
+    await db.update(users).set({ npPoints: sql8`${users.npPoints} + ${reward}` }).where(eq13(users.id, inviterId));
   }
   if (announce) {
-    const [inv] = await db.select({ name: users.name, username: users.username }).from(users).where(eq12(users.id, inviterId)).limit(1);
+    const [inv] = await db.select({ name: users.name, username: users.username }).from(users).where(eq13(users.id, inviterId)).limit(1);
     const invName = inv?.name ?? inv?.username ?? "\u7FA4\u53CB";
     await sendGroupBotMessage(
       db,
@@ -5140,9 +5368,9 @@ async function runDueGroupBots(hour, minute) {
   const db = await getDb();
   if (!db) return;
   const now = Date.now();
-  const rows = await db.select({ groupId: groupBots.groupId, botType: groupBots.botType, config: groupBots.config }).from(groupBots).where(and9(
+  const rows = await db.select({ groupId: groupBots.groupId, botType: groupBots.botType, config: groupBots.config }).from(groupBots).where(and10(
     inArray6(groupBots.botType, ["price", "activity"]),
-    eq12(groupBots.enabled, true),
+    eq13(groupBots.enabled, true),
     or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, /* @__PURE__ */ new Date()))
   ));
   for (const r of rows) {
@@ -5174,132 +5402,6 @@ init_token();
 init_schema();
 init_membership();
 init_referralRewards();
-
-// server/routers/notificationsRouter.ts
-import { z as z5 } from "zod";
-init_db();
-init_schema();
-import { eq as eq13, and as and10, desc as desc5, sql as sql8 } from "drizzle-orm";
-var notificationsRouter = router({
-  // ─── Get notifications for current user ─────────────────────────────────────
-  list: protectedProcedure.input(
-    z5.object({
-      limit: z5.number().min(1).max(50).default(20),
-      unreadOnly: z5.boolean().default(false)
-    }).optional()
-  ).query(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) return { notifications: [], unreadCount: 0 };
-    const limit = input?.limit ?? 20;
-    const unreadOnly = input?.unreadOnly ?? false;
-    const conditions = [eq13(notifications.userId, ctx.user.id)];
-    if (unreadOnly) {
-      conditions.push(eq13(notifications.isRead, false));
-    }
-    const rows = await db.select().from(notifications).where(and10(...conditions)).orderBy(desc5(notifications.createdAt)).limit(limit);
-    const [unreadRow] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and10(eq13(notifications.userId, ctx.user.id), eq13(notifications.isRead, false)));
-    return {
-      notifications: rows,
-      unreadCount: Number(unreadRow?.count ?? 0)
-    };
-  }),
-  // ─── Get unread count only (for badge) ──────────────────────────────────────
-  unreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { count: 0 };
-    const [row] = await db.select({ count: sql8`COUNT(*)` }).from(notifications).where(and10(eq13(notifications.userId, ctx.user.id), eq13(notifications.isRead, false)));
-    return { count: Number(row?.count ?? 0) };
-  }),
-  // ─── Mark notification(s) as read ───────────────────────────────────────────
-  markRead: protectedProcedure.input(
-    z5.object({
-      notificationId: z5.number().optional()
-      // if omitted, mark all as read
-    }).optional()
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    if (input?.notificationId) {
-      await db.update(notifications).set({ isRead: true }).where(
-        and10(
-          eq13(notifications.id, input.notificationId),
-          eq13(notifications.userId, ctx.user.id)
-        )
-      );
-    } else {
-      await db.update(notifications).set({ isRead: true }).where(eq13(notifications.userId, ctx.user.id));
-    }
-    return { success: true };
-  }),
-  // ─── Create notification (internal helper, called by other routers) ─────────
-  // This is a protected procedure so only authenticated users can trigger it
-  // In practice, call createNotification() helper from other routers
-  create: protectedProcedure.input(
-    z5.object({
-      targetUserId: z5.number(),
-      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
-      // system 类通知只能由服务端 createNotification() 内部发起。
-      type: z5.enum(["like", "comment", "follow", "mention"]),
-      content: z5.string().max(500),
-      postId: z5.number().optional()
-    })
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    if (input.targetUserId === ctx.user.id) return { success: true };
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.insert(notifications).values({
-      userId: input.targetUserId,
-      type: input.type,
-      fromUserId: ctx.user.id,
-      fromUserName: ctx.user.name ?? "Anonymous",
-      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
-      postId: input.postId,
-      content: sanitizeInput(input.content, 500),
-      // 之前未净化,存原始 markup 再回显
-      isRead: false
-    });
-    return { success: true };
-  }),
-  // ─── Delete a notification ───────────────────────────────────────────────────
-  delete: protectedProcedure.input(z5.object({ notificationId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.delete(notifications).where(
-      and10(
-        eq13(notifications.id, input.notificationId),
-        eq13(notifications.userId, ctx.user.id)
-      )
-    );
-    return { success: true };
-  })
-});
-async function createNotification(params) {
-  if (!params.db) return;
-  if (params.targetUserId === params.fromUserId) return;
-  await params.db.insert(notifications).values({
-    userId: params.targetUserId,
-    type: params.type,
-    fromUserId: params.fromUserId,
-    fromUserName: params.fromUserName,
-    fromUserAvatar: params.fromUserAvatar,
-    postId: params.postId,
-    content: params.content,
-    isRead: false
-  });
-  const titleMap = {
-    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
-    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
-    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
-    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
-    system: "AIChat \u901A\u77E5"
-  };
-  void sendPushToUser(params.targetUserId, {
-    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
-    body: params.content,
-    url: "/notifications"
-  }).catch(() => {
-  });
-}
 
 // server/moderation.ts
 init_schema();
