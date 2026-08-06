@@ -335,6 +335,59 @@ export const chatRouter = router({
       return rows.reverse();
     }),
 
+  // ─── 群聊历史搜索（服务端，不限本地已加载消息）────────────────────────────
+  searchMessages: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      query: z.string().min(1).max(50),
+      limit: z.number().int().min(1).max(50).default(30),
+      before: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      await assertGroupMember(db, input.groupId, ctx.user.id);
+      const q = input.query.trim();
+      if (!q) return [];
+      // 转义 LIKE 通配符，避免 %/_ 扫全表
+      const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      const conditions = [
+        eq(messages.groupId, input.groupId),
+        eq(messages.isDeleted, false),
+        sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+        like(messages.content, `%${escaped}%`),
+        sql`(${messages.recalledAt} IS NULL)`,
+      ];
+      const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
+      if (clearedG > 0) conditions.push(gt(messages.id, clearedG));
+      if (input.before) conditions.push(lt(messages.id, input.before));
+
+      const rows = await db
+        .select({
+          id: messages.id,
+          content: messages.content,
+          messageType: messages.messageType,
+          mediaUrl: messages.mediaUrl,
+          durationSeconds: messages.durationSeconds,
+          replyToId: messages.replyToId,
+          isPinned: messages.isPinned,
+          recalledAt: messages.recalledAt,
+          createdAt: messages.createdAt,
+          expiresAt: messages.expiresAt,
+          senderId: messages.senderId,
+          senderName: sql<string | null>`COALESCE(${groupMembers.alias}, ${users.name})`,
+          senderAvatar: users.avatar,
+          senderRole: groupMembers.role,
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.senderId, users.id))
+        .leftJoin(groupMembers, and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, messages.senderId)))
+        .where(and(...conditions))
+        .orderBy(desc(messages.id))
+        .limit(input.limit);
+      return rows;
+    }),
+
   // Save a message (called from socket handler via REST fallback)
   saveMessage: protectedProcedure
     .input(z.object({

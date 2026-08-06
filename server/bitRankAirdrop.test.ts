@@ -9,8 +9,11 @@ import {
   bitAirdropTierPot,
   bitAirdropPerUser,
   bitAirdropSchedule,
+  bitAirdropItCost,
+  bitAirdropDonateLadder,
   BIT_AIRDROP_BASE_DAILY,
   BIT_AIRDROP_MONTHLY_STEP,
+  BIT_AIRDROP_IT_COSTS,
 } from "./bitRankAirdrop";
 
 describe("bitAirdropMonthIndex", () => {
@@ -67,14 +70,31 @@ describe("tier pot / per user", () => {
 });
 
 describe("bitAirdropSchedule", () => {
-  it("返回 11 个月进度表", () => {
+  it("返回 10 个月进度表", () => {
     const s = bitAirdropSchedule("2026-08-15");
     expect(s.monthIndex).toBe(1);
     expect(s.dailyPool).toBe(1000);
     expect(s.tierPot).toBe(100);
-    expect(s.schedule).toHaveLength(11);
+    expect(s.schedule).toHaveLength(10);
     expect(s.schedule[0]).toEqual({ month: 1, daily: 1000, monthly: 30000 });
-    expect(s.schedule[10]).toEqual({ month: 11, daily: 6000, monthly: 180000 });
+    expect(s.schedule[9]).toEqual({ month: 10, daily: 5500, monthly: 165000 });
     expect(s.tiers).toHaveLength(10);
+    expect(s.donateLadder).toHaveLength(10);
+  });
+});
+
+describe("bitAirdropItCost / donate ladder", () => {
+  it("V1–V10 捐献 IT = 1000…10000", () => {
+    expect([...BIT_AIRDROP_IT_COSTS]).toEqual([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]);
+    for (let t = 1; t <= 10; t++) {
+      expect(bitAirdropItCost(t)).toBe(t * 1000);
+    }
+    expect(bitAirdropItCost(0)).toBe(0);
+    expect(bitAirdropItCost(11)).toBe(0);
+  });
+  it("donateLadder 与段位一一对应", () => {
+    const ladder = bitAirdropDonateLadder();
+    expect(ladder[0]).toMatchObject({ tier: 1, itCost: 1000 });
+    expect(ladder[9]).toMatchObject({ tier: 10, itCost: 10000 });
   });
 });

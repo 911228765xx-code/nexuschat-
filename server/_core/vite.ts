@@ -87,6 +87,24 @@ export function serveStatic(app: Express) {
     etag: true,
   }));
 
+  // Crestline Technologies About 页（静态 HTML，避免被 SPA 回退吃掉）
+  // 必须在 SPA `*` 回退之前；多路径兜底，防止 outDir/cwd 差异导致漏文件
+  app.get(["/about", "/about/"], (_req, res, next) => {
+    const candidates = [
+      path.resolve(distPath, "about.html"),
+      path.resolve(process.cwd(), "dist", "public", "about.html"),
+      path.resolve(process.cwd(), "client", "public", "about.html"),
+    ];
+    for (const file of candidates) {
+      if (fs.existsSync(file)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(file);
+        return;
+      }
+    }
+    next();
+  });
+
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
     // index.html: no cache (always fresh for SPA routing)

@@ -87,6 +87,19 @@ export const bitRankAirdropRun = mysqlTable("bit_rank_airdrop_run", {
   processedAt: timestamp("processedAt").defaultNow().notNull(),
 }, (t) => [uniqueIndex("uniq_bit_rank_airdrop_ymd").on(t.ymd)]);
 
+// ─── BIT 段位空投领取记录：捐献 IT 后领 BIT（每人每天一次）──────────────────────
+export const bitRankAirdropClaim = mysqlTable("bit_rank_airdrop_claim", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  ymd: varchar("ymd", { length: 10 }).notNull(),
+  tier: int("tier").notNull(),
+  itCost: int("itCost").notNull(),
+  bitAmount: int("bitAmount").notNull(),
+  claimedAt: timestamp("claimedAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("uniq_bit_airdrop_claim_user_ymd").on(t.userId, t.ymd),
+]);
+
 // ─── 邀请里程碑（被邀请人首次达成某高价值动作 → 邀请人一次性奖；每人每里程碑一次）──
 export const referralMilestones = mysqlTable("referral_milestones", {
   id: int("id").autoincrement().primaryKey(),

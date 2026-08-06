@@ -49,7 +49,7 @@ export default function Login() {
 
   const registerMutation = trpc.emailAuth.register.useMutation({
     onSuccess: () => {
-      toast.success("注册成功，欢迎加入 NexusChat！");
+      toast.success("注册成功，欢迎加入比特AI！");
       window.location.href = returnPath;
     },
     onError: (err) => {
@@ -330,7 +330,7 @@ export default function Login() {
         <div style={S.logoIcon}>
           <MessageCircle size={28} color="white" />
         </div>
-        <h1 style={S.logoTitle}>NexusChat</h1>
+        <h1 style={S.logoTitle}>比特AI</h1>
         <p style={S.logoSub}>全球首款 AI 智能体 · Web3 社交平台</p>
       </div>
 

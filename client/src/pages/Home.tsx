@@ -1,5 +1,5 @@
 /*
- * Home — NexusChat 产品落地页
+ * Home — 比特AI（Bitchat）产品落地页
  * Cyberpunk Noir: 深色背景 + 霓虹强调色 + 毛玻璃效果
  * 多语言支持 + 钱包连接弹窗
  */
@@ -95,7 +95,7 @@ export default function Home() {
         <div className="flex flex-col items-center gap-4">
           <img
             src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
-            alt="NexusChat"
+            alt="比特AI Bitchat"
             className="w-16 h-16 rounded-2xl"
           />
           <div className="flex gap-2.5">
@@ -121,10 +121,10 @@ export default function Home() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
-              alt="NexusChat"
+              alt="比特AI Bitchat"
               className="w-8 h-8 rounded-lg"
             />
-            <span className="text-lg font-bold font-display">NexusChat</span>
+            <span className="text-lg font-bold font-display">比特AI</span>
           </div>
 
           {/* Desktop nav buttons */}
@@ -634,7 +634,7 @@ export default function Home() {
             <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
               <MessageCircle size={12} className="text-white" />
             </div>
-            <span className="text-sm font-display font-semibold">NexusChat</span>
+            <span className="text-sm font-display font-semibold">比特AI</span>
           </div>
           <p className="text-sm text-muted-foreground">
             {t("footer.text")}

@@ -2,8 +2,8 @@ import { rateLimitWrite } from "../rateLimit";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { userFollows, users, notifications } from "../../drizzle/schema";
-import { eq, and, count, sql } from "drizzle-orm";
+import { userFollows, users, notifications, posts } from "../../drizzle/schema";
+import { eq, and, count, sql, desc } from "drizzle-orm";
 
 // Helper: create a follow notification
 async function createFollowNotification(
@@ -107,14 +107,14 @@ export const followRouter = router({
       return { following: result.length > 0 };
     }),
 
-  // Get follower/following counts for a user
+  // Get follower/following/likes counts for a user
   getCounts: publicProcedure
     .input(z.object({ userId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { followers: 0, following: 0 };
+      if (!db) return { followers: 0, following: 0, likes: 0, posts: 0 };
 
-      const [followerResult, followingResult] = await Promise.all([
+      const [followerResult, followingResult, likeResult, postResult] = await Promise.all([
         db
           .select({ cnt: count() })
           .from(userFollows)
@@ -123,20 +123,31 @@ export const followRouter = router({
           .select({ cnt: count() })
           .from(userFollows)
           .where(eq(userFollows.followerId, input.userId)),
+        db
+          .select({ cnt: sql<number>`COALESCE(SUM(${posts.likeCount}), 0)` })
+          .from(posts)
+          .where(eq(posts.authorId, input.userId)),
+        db
+          .select({ cnt: count() })
+          .from(posts)
+          .where(eq(posts.authorId, input.userId)),
       ]);
 
       return {
-        followers: followerResult[0]?.cnt ?? 0,
-        following: followingResult[0]?.cnt ?? 0,
+        followers: Number(followerResult[0]?.cnt ?? 0),
+        following: Number(followingResult[0]?.cnt ?? 0),
+        likes: Number(likeResult[0]?.cnt ?? 0),
+        posts: Number(postResult[0]?.cnt ?? 0),
       };
     }),
 
   // Get list of users that the current user follows
   getFollowing: protectedProcedure
-    .input(z.object({ limit: z.number().default(50) }).optional())
+    .input(z.object({ userId: z.number().optional(), limit: z.number().default(50) }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      const uid = input?.userId ?? ctx.user.id;
 
       const rows = await db
         .select({
@@ -148,7 +159,33 @@ export const followRouter = router({
         })
         .from(userFollows)
         .innerJoin(users, eq(users.id, userFollows.followingId))
-        .where(eq(userFollows.followerId, ctx.user.id))
+        .where(eq(userFollows.followerId, uid))
+        .orderBy(desc(userFollows.id))
+        .limit(input?.limit ?? 50);
+
+      return rows;
+    }),
+
+  // Get followers of a user
+  getFollowers: protectedProcedure
+    .input(z.object({ userId: z.number().optional(), limit: z.number().default(50) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const uid = input?.userId ?? ctx.user.id;
+
+      const rows = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          username: users.username,
+          avatar: users.avatar,
+          bio: users.bio,
+        })
+        .from(userFollows)
+        .innerJoin(users, eq(users.id, userFollows.followerId))
+        .where(eq(userFollows.followingId, uid))
+        .orderBy(desc(userFollows.id))
         .limit(input?.limit ?? 50);
 
       return rows;

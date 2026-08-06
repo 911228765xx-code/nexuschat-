@@ -15,6 +15,7 @@ __export(schema_exports, {
   aiDailyUsage: () => aiDailyUsage,
   aiSwapTrades: () => aiSwapTrades,
   appConfig: () => appConfig,
+  bitRankAirdropClaim: () => bitRankAirdropClaim,
   bitRankAirdropRun: () => bitRankAirdropRun,
   calls: () => calls,
   chatGroups: () => chatGroups,
@@ -100,7 +101,7 @@ import {
   index,
   uniqueIndex
 } from "drizzle-orm/mysql-core";
-var users, userDailyNp, rankAggRun, bitRankAirdropRun, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
+var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -170,6 +171,17 @@ var init_schema = __esm({
       paidTotal: int("paidTotal").default(0).notNull(),
       processedAt: timestamp("processedAt").defaultNow().notNull()
     }, (t3) => [uniqueIndex("uniq_bit_rank_airdrop_ymd").on(t3.ymd)]);
+    bitRankAirdropClaim = mysqlTable("bit_rank_airdrop_claim", {
+      id: int("id").autoincrement().primaryKey(),
+      userId: int("userId").notNull(),
+      ymd: varchar("ymd", { length: 10 }).notNull(),
+      tier: int("tier").notNull(),
+      itCost: int("itCost").notNull(),
+      bitAmount: int("bitAmount").notNull(),
+      claimedAt: timestamp("claimedAt").defaultNow().notNull()
+    }, (t3) => [
+      uniqueIndex("uniq_bit_airdrop_claim_user_ymd").on(t3.userId, t3.ymd)
+    ]);
     referralMilestones = mysqlTable("referral_milestones", {
       id: int("id").autoincrement().primaryKey(),
       inviteeId: int("inviteeId").notNull(),
@@ -1661,6 +1673,38 @@ async function grantNN(db, userId, amount, meta) {
   await recordTx(db, userId, amount, meta ?? { type: "grant" });
   return true;
 }
+async function transferNN(db, fromUserId, toUserId, amount, memo) {
+  if (amount <= 0 || fromUserId === toUserId) return false;
+  try {
+    await db.transaction(async (tx) => {
+      const res = await tx.update(users).set({ nnBalance: sql`${users.nnBalance} - ${amount}` }).where(sql`${users.id} = ${fromUserId} AND ${users.nnBalance} >= ${amount}`);
+      const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+      if (affected2 <= 0) throw new Error("INSUFFICIENT");
+      await tx.update(users).set({ nnBalance: sql`${users.nnBalance} + ${amount}` }).where(eq3(users.id, toUserId));
+      await tx.insert(nnTransactions).values({
+        userId: fromUserId,
+        amount: -amount,
+        type: "transfer_out",
+        refType: "user",
+        refId: toUserId,
+        memo: memo ?? `to#${toUserId}`
+      });
+      await tx.insert(nnTransactions).values({
+        userId: toUserId,
+        amount,
+        type: "transfer_in",
+        refType: "user",
+        refId: fromUserId,
+        memo: memo ?? `from#${fromUserId}`
+      });
+    });
+    return true;
+  } catch (e) {
+    if (e?.message === "INSUFFICIENT") return false;
+    console.error("[transferNN] failed:", e?.message);
+    return false;
+  }
+}
 function vestedAmount(v, now = Date.now()) {
   const elapsedMonths = (now - v.startAt.getTime()) / MONTH_MS;
   if (elapsedMonths < v.cliffMonths) return 0;
@@ -1956,19 +2000,31 @@ var init_membership = __esm({
 var bitRankAirdrop_exports = {};
 __export(bitRankAirdrop_exports, {
   BIT_AIRDROP_BASE_DAILY: () => BIT_AIRDROP_BASE_DAILY,
+  BIT_AIRDROP_IT_COSTS: () => BIT_AIRDROP_IT_COSTS,
   BIT_AIRDROP_MONTHLY_STEP: () => BIT_AIRDROP_MONTHLY_STEP,
   BIT_AIRDROP_MONTH_DAYS: () => BIT_AIRDROP_MONTH_DAYS,
   BIT_AIRDROP_TIER_COUNT: () => BIT_AIRDROP_TIER_COUNT,
   BIT_RANK_AIRDROP_START: () => BIT_RANK_AIRDROP_START,
   bitAirdropDailyPool: () => bitAirdropDailyPool,
+  bitAirdropDonateLadder: () => bitAirdropDonateLadder,
+  bitAirdropItCost: () => bitAirdropItCost,
   bitAirdropMonthIndex: () => bitAirdropMonthIndex,
   bitAirdropMonthlyTotal: () => bitAirdropMonthlyTotal,
   bitAirdropPerUser: () => bitAirdropPerUser,
   bitAirdropSchedule: () => bitAirdropSchedule,
   bitAirdropTierPot: () => bitAirdropTierPot,
-  runBitRankAirdrop: () => runBitRankAirdrop
+  claimBitRankAirdrop: () => claimBitRankAirdrop,
+  getBitAirdropClaimStatus: () => getBitAirdropClaimStatus,
+  runBitRankAirdrop: () => runBitRankAirdrop,
+  ymdUtc: () => ymdUtc
 });
-import { and as and5, eq as eq6, gte as gte2, inArray as inArray2, lt as lt2 } from "drizzle-orm";
+import { and as and5, eq as eq6, gte as gte2, inArray as inArray2, lt as lt2, sql as sql3 } from "drizzle-orm";
+async function spendIT(db, userId, cost) {
+  if (cost <= 0) return true;
+  const res = await db.update(users).set({ npPoints: sql3`${users.npPoints} - ${cost}` }).where(and5(eq6(users.id, userId), sql3`${users.npPoints} >= ${cost}`));
+  const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
+  return affected2 > 0;
+}
 function ymdUtc(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
 }
@@ -1993,11 +2049,21 @@ function bitAirdropPerUser(tierPot, recipients) {
   if (tierPot <= 0 || recipients <= 0) return 0;
   return Math.floor(tierPot / recipients);
 }
+function bitAirdropItCost(tier) {
+  if (tier < 1 || tier > BIT_AIRDROP_TIER_COUNT) return 0;
+  return BIT_AIRDROP_IT_COSTS[tier - 1] ?? 0;
+}
+function bitAirdropDonateLadder() {
+  return RANK_TIERS.map((t3, i) => {
+    const tier = i + 1;
+    return { tier, name: t3.name, itCost: bitAirdropItCost(tier) };
+  });
+}
 function bitAirdropSchedule(ymd = ymdUtc()) {
   const monthIndex = bitAirdropMonthIndex(ymd);
   const dailyPool = bitAirdropDailyPool(monthIndex);
   const tierPot = bitAirdropTierPot(dailyPool);
-  const months = Array.from({ length: 11 }, (_, i) => {
+  const months = Array.from({ length: 10 }, (_, i) => {
     const idx = i + 1;
     const daily = bitAirdropDailyPool(idx);
     return { month: idx, daily, monthly: daily * BIT_AIRDROP_MONTH_DAYS };
@@ -2011,67 +2077,142 @@ function bitAirdropSchedule(ymd = ymdUtc()) {
     tierCount: BIT_AIRDROP_TIER_COUNT,
     monthDays: BIT_AIRDROP_MONTH_DAYS,
     tiers: RANK_TIERS.map((t3, i) => ({ idx: i + 1, name: t3.name })),
+    donateLadder: bitAirdropDonateLadder(),
     schedule: months
   };
 }
-async function runBitRankAirdrop(db, targetYmd) {
-  const ymd = targetYmd ?? ymdUtc(new Date(Date.now() - 864e5));
+async function countActiveInTier(db, ymd, tier) {
+  const dayStart = /* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 864e5);
+  const activeRows = await db.selectDistinct({ userId: userTasks.userId }).from(userTasks).where(and5(gte2(userTasks.completedAt, dayStart), lt2(userTasks.completedAt, dayEnd)));
+  const activeIds = activeRows.map((r) => r.userId);
+  if (activeIds.length === 0) return 0;
+  const ranked = await db.select({ id: users.id }).from(users).where(and5(inArray2(users.id, activeIds), eq6(users.rankTier, tier)));
+  return ranked.length;
+}
+async function isUserActiveOn(db, userId, ymd) {
+  const dayStart = /* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 864e5);
+  const [row] = await db.select({ id: userTasks.id }).from(userTasks).where(and5(
+    eq6(userTasks.userId, userId),
+    gte2(userTasks.completedAt, dayStart),
+    lt2(userTasks.completedAt, dayEnd)
+  )).limit(1);
+  return !!row;
+}
+async function getBitAirdropClaimStatus(db, userId, tier, ymd = ymdUtc()) {
+  const schedule = bitAirdropSchedule(ymd);
+  const itCost = bitAirdropItCost(tier);
+  const [claimed] = await db.select({
+    itCost: bitRankAirdropClaim.itCost,
+    bitAmount: bitRankAirdropClaim.bitAmount,
+    claimedAt: bitRankAirdropClaim.claimedAt
+  }).from(bitRankAirdropClaim).where(and5(eq6(bitRankAirdropClaim.userId, userId), eq6(bitRankAirdropClaim.ymd, ymd))).limit(1);
+  const activeToday = tier >= 1 ? await isUserActiveOn(db, userId, ymd) : false;
+  const peers = tier >= 1 && schedule.dailyPool > 0 ? await countActiveInTier(db, ymd, tier) : 0;
+  const peerCount = peers > 0 ? peers : activeToday ? 1 : 0;
+  const estimatedBit = bitAirdropPerUser(schedule.tierPot, peerCount);
+  const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq6(users.id, userId)).limit(1);
+  const npPoints = u?.npPoints ?? 0;
+  const canClaim = !claimed && tier >= 1 && schedule.dailyPool > 0 && activeToday && estimatedBit > 0 && itCost > 0 && npPoints >= itCost;
+  return {
+    ymd,
+    itCost,
+    estimatedBit,
+    claimedToday: !!claimed,
+    claimedBit: claimed?.bitAmount ?? 0,
+    claimedItCost: claimed?.itCost ?? 0,
+    activeToday,
+    canClaim,
+    reason: claimed ? "\u4ECA\u65E5\u5DF2\u9886\u53D6" : tier < 1 ? "\u9700\u5148\u8FBE\u5230\u9752\u94DC\u53CA\u4EE5\u4E0A\u6BB5\u4F4D" : schedule.dailyPool <= 0 ? "\u7A7A\u6295\u5C1A\u672A\u5F00\u59CB" : !activeToday ? "\u4ECA\u65E5\u9700\u5148\u5B8C\u6210\u4EFB\u52A1\u624D\u53EF\u9886\u53D6" : estimatedBit <= 0 ? "\u5F53\u524D\u6BB5\u4F4D\u6682\u65E0\u53EF\u9886\u4EFD\u989D" : npPoints < itCost ? `IT \u4E0D\u8DB3\uFF0C\u9700\u6350\u732E ${itCost.toLocaleString()} IT` : null
+  };
+}
+async function claimBitRankAirdrop(db, userId) {
+  const ymd = ymdUtc();
   const monthIndex = bitAirdropMonthIndex(ymd);
   const dailyPool = bitAirdropDailyPool(monthIndex);
   if (dailyPool <= 0) {
-    return { ran: false, ymd, paidUsers: 0, paidTotal: 0, dailyPool: 0 };
+    throw Object.assign(new Error("\u7A7A\u6295\u5C1A\u672A\u5F00\u59CB"), { code: "BAD_REQUEST" });
+  }
+  const [u] = await db.select({ rankTier: users.rankTier, npPoints: users.npPoints }).from(users).where(eq6(users.id, userId)).limit(1);
+  const tier = u?.rankTier ?? 0;
+  if (tier < 1 || tier > BIT_AIRDROP_TIER_COUNT) {
+    throw Object.assign(new Error("\u9700\u5148\u8FBE\u5230\u9752\u94DC\u53CA\u4EE5\u4E0A\u6BB5\u4F4D"), { code: "FORBIDDEN" });
+  }
+  const itCost = bitAirdropItCost(tier);
+  if ((u?.npPoints ?? 0) < itCost) {
+    throw Object.assign(new Error(`IT \u4E0D\u8DB3\uFF0C\u9700\u6350\u732E ${itCost.toLocaleString()} IT`), { code: "BAD_REQUEST" });
+  }
+  if (!await isUserActiveOn(db, userId, ymd)) {
+    throw Object.assign(new Error("\u4ECA\u65E5\u9700\u5148\u5B8C\u6210\u4EFB\u52A1\u624D\u53EF\u9886\u53D6"), { code: "FORBIDDEN" });
+  }
+  const [existing] = await db.select({ id: bitRankAirdropClaim.id }).from(bitRankAirdropClaim).where(and5(eq6(bitRankAirdropClaim.userId, userId), eq6(bitRankAirdropClaim.ymd, ymd))).limit(1);
+  if (existing) {
+    throw Object.assign(new Error("\u4ECA\u65E5\u5DF2\u9886\u53D6"), { code: "CONFLICT" });
+  }
+  const tierPot = bitAirdropTierPot(dailyPool);
+  const peers = await countActiveInTier(db, ymd, tier);
+  const bitAmount = bitAirdropPerUser(tierPot, peers);
+  if (bitAmount <= 0) {
+    throw Object.assign(new Error("\u5F53\u524D\u6BB5\u4F4D\u6682\u65E0\u53EF\u9886\u4EFD\u989D"), { code: "BAD_REQUEST" });
+  }
+  try {
+    await db.insert(bitRankAirdropClaim).values({
+      userId,
+      ymd,
+      tier,
+      itCost,
+      bitAmount
+    });
+  } catch {
+    throw Object.assign(new Error("\u4ECA\u65E5\u5DF2\u9886\u53D6"), { code: "CONFLICT" });
+  }
+  const spent = await spendIT(db, userId, itCost);
+  if (!spent) {
+    await db.delete(bitRankAirdropClaim).where(and5(
+      eq6(bitRankAirdropClaim.userId, userId),
+      eq6(bitRankAirdropClaim.ymd, ymd)
+    ));
+    throw Object.assign(new Error(`IT \u4E0D\u8DB3\uFF0C\u9700\u6350\u732E ${itCost.toLocaleString()} IT`), { code: "BAD_REQUEST" });
+  }
+  const ok = await grantNN(db, userId, bitAmount, {
+    type: "rank_bit_airdrop",
+    refType: "rank",
+    memo: `${ymd}:T${tier}:donate${itCost}`
+  });
+  if (!ok) {
+    await db.update(users).set({ npPoints: sql3`${users.npPoints} + ${itCost}` }).where(eq6(users.id, userId));
+    await db.delete(bitRankAirdropClaim).where(and5(
+      eq6(bitRankAirdropClaim.userId, userId),
+      eq6(bitRankAirdropClaim.ymd, ymd)
+    ));
+    throw Object.assign(new Error("BIT \u53D1\u653E\u5931\u8D25\uFF0C\u5DF2\u9000\u56DE IT\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5"), { code: "INTERNAL_SERVER_ERROR" });
   }
   try {
     await db.insert(bitRankAirdropRun).values({
       ymd,
       monthIndex,
       dailyPool,
-      paidUsers: 0,
-      paidTotal: 0
+      paidUsers: 1,
+      paidTotal: bitAmount
     });
   } catch {
-    return { ran: false, ymd, paidUsers: 0, paidTotal: 0, dailyPool };
+    await db.update(bitRankAirdropRun).set({
+      paidUsers: sql3`${bitRankAirdropRun.paidUsers} + 1`,
+      paidTotal: sql3`${bitRankAirdropRun.paidTotal} + ${bitAmount}`
+    }).where(eq6(bitRankAirdropRun.ymd, ymd));
   }
-  const dayStart = /* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`);
-  const dayEnd = new Date(dayStart.getTime() + 864e5);
-  const activeRows = await db.selectDistinct({ userId: userTasks.userId }).from(userTasks).where(and5(gte2(userTasks.completedAt, dayStart), lt2(userTasks.completedAt, dayEnd)));
-  const activeIds = activeRows.map((r) => r.userId);
-  if (activeIds.length === 0) {
-    logger_default.info({ ymd, dailyPool }, "bitRankAirdrop: \u65E0\u6D3B\u8DC3\u7528\u6237");
-    return { ran: true, ymd, paidUsers: 0, paidTotal: 0, dailyPool };
-  }
-  const ranked = await db.select({ id: users.id, rankTier: users.rankTier }).from(users).where(and5(inArray2(users.id, activeIds), gte2(users.rankTier, 1)));
-  const byTier = /* @__PURE__ */ new Map();
-  for (const u of ranked) {
-    const t3 = u.rankTier ?? 0;
-    if (t3 < 1 || t3 > BIT_AIRDROP_TIER_COUNT) continue;
-    if (!byTier.has(t3)) byTier.set(t3, []);
-    byTier.get(t3).push(u.id);
-  }
-  const tierPot = bitAirdropTierPot(dailyPool);
-  let paidUsers = 0;
-  let paidTotal = 0;
-  for (let tier = 1; tier <= BIT_AIRDROP_TIER_COUNT; tier++) {
-    const ids = byTier.get(tier) ?? [];
-    const per = bitAirdropPerUser(tierPot, ids.length);
-    if (per <= 0) continue;
-    for (const userId of ids) {
-      const ok = await grantNN(db, userId, per, {
-        type: "rank_bit_airdrop",
-        refType: "rank",
-        memo: `${ymd}:T${tier}`
-      });
-      if (ok) {
-        paidUsers++;
-        paidTotal += per;
-      }
-    }
-  }
-  await db.update(bitRankAirdropRun).set({ paidUsers, paidTotal }).where(eq6(bitRankAirdropRun.ymd, ymd));
-  logger_default.info({ ymd, monthIndex, dailyPool, paidUsers, paidTotal }, "bitRankAirdrop: \u65E5\u7ED3\u7B97\u5B8C\u6210");
-  return { ran: true, ymd, paidUsers, paidTotal, dailyPool };
+  logger_default.info({ userId, ymd, tier, itCost, bitAmount }, "bitRankAirdrop: \u7528\u6237\u6350\u732E\u9886\u53D6");
+  return { ok: true, ymd, tier, itCost, bitAmount };
 }
-var BIT_RANK_AIRDROP_START, BIT_AIRDROP_BASE_DAILY, BIT_AIRDROP_MONTHLY_STEP, BIT_AIRDROP_MONTH_DAYS, BIT_AIRDROP_TIER_COUNT;
+async function runBitRankAirdrop(_db2, targetYmd) {
+  const ymd = targetYmd ?? ymdUtc(new Date(Date.now() - 864e5));
+  const monthIndex = bitAirdropMonthIndex(ymd);
+  const dailyPool = bitAirdropDailyPool(monthIndex);
+  logger_default.info({ ymd, monthIndex, dailyPool }, "bitRankAirdrop: \u5DF2\u6539\u4E3A\u6350\u732E\u9886\u53D6\uFF0C\u8DF3\u8FC7\u81EA\u52A8\u53D1\u653E");
+  return { ran: false, ymd, paidUsers: 0, paidTotal: 0, dailyPool };
+}
+var BIT_RANK_AIRDROP_START, BIT_AIRDROP_BASE_DAILY, BIT_AIRDROP_MONTHLY_STEP, BIT_AIRDROP_MONTH_DAYS, BIT_AIRDROP_TIER_COUNT, BIT_AIRDROP_IT_COSTS;
 var init_bitRankAirdrop = __esm({
   "server/bitRankAirdrop.ts"() {
     "use strict";
@@ -2084,11 +2225,12 @@ var init_bitRankAirdrop = __esm({
     BIT_AIRDROP_MONTHLY_STEP = 500;
     BIT_AIRDROP_MONTH_DAYS = 30;
     BIT_AIRDROP_TIER_COUNT = 10;
+    BIT_AIRDROP_IT_COSTS = [1e3, 2e3, 3e3, 4e3, 5e3, 6e3, 7e3, 8e3, 9e3, 1e4];
   }
 });
 
 // server/rankEngine.ts
-import { eq as eq7, and as and6, gte as gte3, lt as lt3, inArray as inArray3, sql as sql3 } from "drizzle-orm";
+import { eq as eq7, and as and6, gte as gte3, lt as lt3, inArray as inArray3, sql as sql4 } from "drizzle-orm";
 function tierForScore(score) {
   let t3 = 0;
   for (let i = 0; i < RANK_TIERS.length; i++) if (score >= RANK_TIERS[i].min) t3 = i + 1;
@@ -2163,14 +2305,14 @@ async function runRankAggregation(db, targetYmd) {
       const newTier = Math.max(u.rankTier ?? 0, tierForScore(newScore));
       let upReward = 0;
       for (let t3 = (u.rankTier ?? 0) + 1; t3 <= newTier; t3++) upReward += tierUpReward(t3);
-      await db.update(users).set({ rankScore: newScore, rankTier: newTier, npPoints: sql3`npPoints + ${upReward}` }).where(eq7(users.id, u.id));
+      await db.update(users).set({ rankScore: newScore, rankTier: newTier, npPoints: sql4`npPoints + ${upReward}` }).where(eq7(users.id, u.id));
       ancestorsUpdated++;
     }
   }
   const dayuneers = await db.select({ id: users.id, rankTier: users.rankTier }).from(users).where(and6(inArray3(users.id, activeIds), gte3(users.rankTier, 1)));
   for (const u of dayuneers) {
     const pay = tierDaily(u.rankTier ?? 0);
-    if (pay > 0) await db.update(users).set({ npPoints: sql3`npPoints + ${pay}` }).where(eq7(users.id, u.id));
+    if (pay > 0) await db.update(users).set({ npPoints: sql4`npPoints + ${pay}` }).where(eq7(users.id, u.id));
   }
   try {
     const { runBitRankAirdrop: runBitRankAirdrop2 } = await Promise.resolve().then(() => (init_bitRankAirdrop(), bitRankAirdrop_exports));
@@ -2251,6 +2393,8 @@ var init_image = __esm({
 import "dotenv/config";
 import express2 from "express";
 import { createServer } from "http";
+import fs4 from "fs";
+import path4 from "path";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
@@ -2589,9 +2733,9 @@ function registerOAuthRoutes(app) {
       try {
         const statePayload = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
         if (statePayload?.returnPath && typeof statePayload.returnPath === "string") {
-          const path4 = statePayload.returnPath;
-          if (path4.startsWith("/") && !path4.startsWith("//")) {
-            returnPath = path4;
+          const path5 = statePayload.returnPath;
+          if (path5.startsWith("/") && !path5.startsWith("//")) {
+            returnPath = path5;
           }
         }
       } catch {
@@ -2866,10 +3010,10 @@ var rateLimitWrite = t2.middleware(async (opts) => {
 });
 
 // server/routers/wallet.ts
-import { z as z3 } from "zod";
+import { z as z5 } from "zod";
 init_db();
 init_schema();
-import { eq as eq9, desc as desc3, sql as sql5 } from "drizzle-orm";
+import { eq as eq11, desc as desc4, sql as sql7 } from "drizzle-orm";
 
 // server/utils/coinGeckoCache.ts
 init_logger();
@@ -2958,12 +3102,12 @@ function cleanupCache() {
 setInterval(cleanupCache, 3e5);
 
 // server/routers/user.ts
-import { z as z2 } from "zod";
-import { TRPCError as TRPCError4 } from "@trpc/server";
+import { z as z4 } from "zod";
+import { TRPCError as TRPCError5 } from "@trpc/server";
 init_db();
 init_schema();
 init_storage();
-import { eq as eq8, desc as desc2, sql as sql4, and as and7, gte as gte4, count, ne as ne2, inArray as inArray4 } from "drizzle-orm";
+import { eq as eq10, desc as desc3, sql as sql6, and as and8, gte as gte4, count, ne as ne2, inArray as inArray5 } from "drizzle-orm";
 
 // server/utils/sanitize.ts
 function stripHtml(input) {
@@ -2991,9 +3135,252 @@ function sanitizeUsername(input) {
 init_rankEngine();
 init_bitRankAirdrop();
 init_referralRewards();
+init_token();
+
+// server/routers/notificationsRouter.ts
+import { z as z3 } from "zod";
+init_db();
+init_schema();
+import { eq as eq9, and as and7, desc as desc2, sql as sql5 } from "drizzle-orm";
+
+// server/routers/webPush.ts
+init_schema();
+import { TRPCError as TRPCError4 } from "@trpc/server";
+import webpush from "web-push";
+import { eq as eq8, inArray as inArray4 } from "drizzle-orm";
+import { z as z2 } from "zod";
+init_db();
+var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BDELsotXx1M-DHSpJ998MHEUIlj8-GzJPzOuDXRaHOGS_9h_-apvpaN4v6cnvaZQr3HwwauehFHRN5ROV77Qh5w";
+var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "mzHowEZfED1ijF4CN1DsRVH3t0cALTZvmP3uy0UCxL0";
+var VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@nexuschat.best";
+webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+var webPushRouter = router({
+  /** Return the VAPID public key for client-side subscription */
+  getPublicKey: publicProcedure.query(() => {
+    return { publicKey: VAPID_PUBLIC_KEY };
+  }),
+  /** Register a push subscription for the current user */
+  subscribe: protectedProcedure.input(
+    z2.object({
+      endpoint: z2.string().url(),
+      p256dh: z2.string(),
+      auth: z2.string()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    const existing = await db.select().from(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id)).limit(10);
+    if (existing.length >= 5) {
+      await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id));
+    }
+    await db.insert(pushSubscriptions).values({
+      userId: ctx.user.id,
+      endpoint: input.endpoint,
+      p256dh: input.p256dh,
+      auth: input.auth
+    });
+    return { success: true };
+  }),
+  /** Unsubscribe (remove push subscription) */
+  unsubscribe: protectedProcedure.input(z2.object({ endpoint: z2.string() })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) return { success: false };
+    await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, ctx.user.id));
+    return { success: true };
+  }),
+  /** 注册原生推送（Expo Push）设备 token。同一 token 改归当前用户（换账号登录），幂等。 */
+  registerDeviceToken: protectedProcedure.input(z2.object({ token: z2.string().min(10).max(255), platform: z2.enum(["android", "ios"]).default("android") })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    await db.delete(devicePushTokens).where(eq8(devicePushTokens.token, input.token));
+    await db.insert(devicePushTokens).values({ userId: ctx.user.id, token: input.token, platform: input.platform });
+    return { success: true };
+  }),
+  /** 注销设备 token（退出登录时调用）。 */
+  unregisterDeviceToken: protectedProcedure.input(z2.object({ token: z2.string() })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { success: false };
+    await db.delete(devicePushTokens).where(eq8(devicePushTokens.token, input.token));
+    return { success: true };
+  })
+});
+async function sendExpoPush(db, userId, payload) {
+  const tokens = await db.select().from(devicePushTokens).where(eq8(devicePushTokens.userId, userId));
+  const expoTokens = tokens.map((t3) => t3.token).filter((t3) => t3.startsWith("ExponentPushToken") || t3.startsWith("ExpoPushToken"));
+  if (expoTokens.length === 0) return;
+  const messages3 = expoTokens.map((to) => ({
+    to,
+    title: payload.title,
+    body: payload.body,
+    sound: "default",
+    data: { url: payload.url || "/notifications" }
+  }));
+  const resp = await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(messages3)
+  });
+  const json = await resp.json().catch(() => null);
+  const dead = (json?.data ?? []).map((r, i) => r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null).filter((t3) => !!t3);
+  if (dead.length) await db.delete(devicePushTokens).where(inArray4(devicePushTokens.token, dead));
+}
+async function sendPushToUser(userId, payload) {
+  const db = await getDb();
+  if (!db) return;
+  void sendExpoPush(db, userId, payload).catch(() => {
+  });
+  const subs = await db.select().from(pushSubscriptions).where(eq8(pushSubscriptions.userId, userId));
+  const notificationPayload = JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    url: payload.url || "/(tabs)",
+    // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
+    icon: payload.icon || "/icons/icon-192x192.png",
+    badge: "/icons/icon-72x72.png"
+  });
+  const results = await Promise.allSettled(
+    subs.map(
+      (sub) => webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth }
+        },
+        notificationPayload
+      )
+    )
+  );
+  const expiredEndpoints = results.map((r, i) => r.status === "rejected" ? subs[i].endpoint : null).filter(Boolean);
+  if (expiredEndpoints.length > 0) {
+    await db.delete(pushSubscriptions).where(eq8(pushSubscriptions.userId, userId));
+  }
+}
+
+// server/routers/notificationsRouter.ts
+var notificationsRouter = router({
+  // ─── Get notifications for current user ─────────────────────────────────────
+  list: protectedProcedure.input(
+    z3.object({
+      limit: z3.number().min(1).max(50).default(20),
+      unreadOnly: z3.boolean().default(false)
+    }).optional()
+  ).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return { notifications: [], unreadCount: 0 };
+    const limit = input?.limit ?? 20;
+    const unreadOnly = input?.unreadOnly ?? false;
+    const conditions = [eq9(notifications.userId, ctx.user.id)];
+    if (unreadOnly) {
+      conditions.push(eq9(notifications.isRead, false));
+    }
+    const rows = await db.select().from(notifications).where(and7(...conditions)).orderBy(desc2(notifications.createdAt)).limit(limit);
+    const [unreadRow] = await db.select({ count: sql5`COUNT(*)` }).from(notifications).where(and7(eq9(notifications.userId, ctx.user.id), eq9(notifications.isRead, false)));
+    return {
+      notifications: rows,
+      unreadCount: Number(unreadRow?.count ?? 0)
+    };
+  }),
+  // ─── Get unread count only (for badge) ──────────────────────────────────────
+  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { count: 0 };
+    const [row] = await db.select({ count: sql5`COUNT(*)` }).from(notifications).where(and7(eq9(notifications.userId, ctx.user.id), eq9(notifications.isRead, false)));
+    return { count: Number(row?.count ?? 0) };
+  }),
+  // ─── Mark notification(s) as read ───────────────────────────────────────────
+  markRead: protectedProcedure.input(
+    z3.object({
+      notificationId: z3.number().optional()
+      // if omitted, mark all as read
+    }).optional()
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (input?.notificationId) {
+      await db.update(notifications).set({ isRead: true }).where(
+        and7(
+          eq9(notifications.id, input.notificationId),
+          eq9(notifications.userId, ctx.user.id)
+        )
+      );
+    } else {
+      await db.update(notifications).set({ isRead: true }).where(eq9(notifications.userId, ctx.user.id));
+    }
+    return { success: true };
+  }),
+  // ─── Create notification (internal helper, called by other routers) ─────────
+  // This is a protected procedure so only authenticated users can trigger it
+  // In practice, call createNotification() helper from other routers
+  create: protectedProcedure.input(
+    z3.object({
+      targetUserId: z3.number(),
+      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
+      // system 类通知只能由服务端 createNotification() 内部发起。
+      type: z3.enum(["like", "comment", "follow", "mention"]),
+      content: z3.string().max(500),
+      postId: z3.number().optional()
+    })
+  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    if (input.targetUserId === ctx.user.id) return { success: true };
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.insert(notifications).values({
+      userId: input.targetUserId,
+      type: input.type,
+      fromUserId: ctx.user.id,
+      fromUserName: ctx.user.name ?? "Anonymous",
+      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
+      postId: input.postId,
+      content: sanitizeInput(input.content, 500),
+      // 之前未净化,存原始 markup 再回显
+      isRead: false
+    });
+    return { success: true };
+  }),
+  // ─── Delete a notification ───────────────────────────────────────────────────
+  delete: protectedProcedure.input(z3.object({ notificationId: z3.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(notifications).where(
+      and7(
+        eq9(notifications.id, input.notificationId),
+        eq9(notifications.userId, ctx.user.id)
+      )
+    );
+    return { success: true };
+  })
+});
+async function createNotification(params) {
+  if (!params.db) return;
+  if (params.targetUserId === params.fromUserId) return;
+  await params.db.insert(notifications).values({
+    userId: params.targetUserId,
+    type: params.type,
+    fromUserId: params.fromUserId,
+    fromUserName: params.fromUserName,
+    fromUserAvatar: params.fromUserAvatar,
+    postId: params.postId,
+    content: params.content,
+    isRead: false
+  });
+  const titleMap = {
+    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
+    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
+    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
+    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
+    system: "AIChat \u901A\u77E5"
+  };
+  void sendPushToUser(params.targetUserId, {
+    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
+    body: params.content,
+    url: "/notifications"
+  }).catch(() => {
+  });
+}
+
+// server/routers/user.ts
 async function getTaskRewardOverrides(db) {
   try {
-    const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq8(appConfig.platform, "all")).limit(1);
+    const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq10(appConfig.platform, "all")).limit(1);
     if (row?.tr) {
       const o = JSON.parse(row.tr);
       if (o && typeof o === "object") return o;
@@ -3002,6 +3389,9 @@ async function getTaskRewardOverrides(db) {
   }
   return {};
 }
+var IT_PER_BIT = 100;
+var TRANSFER_MAX_IT = 1e6;
+var TRANSFER_MAX_BIT = 1e5;
 var REQUIRES_BINDING = /* @__PURE__ */ new Set(["first_research", "research_daily"]);
 function ymdUtc3(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
@@ -3021,29 +3411,29 @@ async function creditNp(tx, userId, amount, capped) {
   let base = amount;
   let total = amount;
   if (capped) {
-    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq8(users.id, userId)).limit(1);
+    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq10(users.id, userId)).limit(1);
     if (!u) return 0;
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc3();
     if (u.deviceId) {
-      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql4`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq8(userDailyNp.userId, users.id)).where(and7(
-        eq8(users.deviceId, u.deviceId),
-        eq8(userDailyNp.ymd, ymd),
+      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq10(userDailyNp.userId, users.id)).where(and8(
+        eq10(users.deviceId, u.deviceId),
+        eq10(userDailyNp.ymd, ymd),
         gte4(userDailyNp.earned, 1),
-        sql4`${userDailyNp.userId} != ${userId}`
+        sql6`${userDailyNp.userId} != ${userId}`
       ));
       if (Number(otherEarners) >= 3) return 0;
     }
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql4`earned` } });
-    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and7(eq8(userDailyNp.userId, userId), eq8(userDailyNp.ymd, ymd))).for("update").limit(1);
+    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
+    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and8(eq10(userDailyNp.userId, userId), eq10(userDailyNp.ymd, ymd))).for("update").limit(1);
     const earned = row?.earned ?? 0;
     base = Math.min(amount, Math.max(0, cap - earned));
     if (base <= 0) return 0;
-    await tx.update(userDailyNp).set({ earned: earned + base }).where(and7(eq8(userDailyNp.userId, userId), eq8(userDailyNp.ymd, ymd)));
+    await tx.update(userDailyNp).set({ earned: earned + base }).where(and8(eq10(userDailyNp.userId, userId), eq10(userDailyNp.ymd, ymd)));
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
   }
-  await tx.update(users).set({ npPoints: sql4`npPoints + ${total}` }).where(eq8(users.id, userId));
+  await tx.update(users).set({ npPoints: sql6`npPoints + ${total}` }).where(eq10(users.id, userId));
   return total;
 }
 var TASK_DEFINITIONS = {
@@ -3148,16 +3538,16 @@ var userRouter = router({
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
       lastSignedIn: users.lastSignedIn
-    }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     return result[0] ?? null;
   }),
   // ─── Update profile ────────────────────────────────────────────────────────
   updateProfile: protectedProcedure.input(
-    z2.object({
-      name: z2.string().min(1).max(50).optional(),
-      username: z2.string().min(2).max(30).regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, underscores").optional(),
-      bio: z2.string().max(200).optional(),
-      avatar: z2.string().max(500).optional()
+    z4.object({
+      name: z4.string().min(1).max(50).optional(),
+      username: z4.string().min(2).max(30).regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, underscores").optional(),
+      bio: z4.string().max(200).optional(),
+      avatar: z4.string().max(500).optional()
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -3167,8 +3557,8 @@ var userRouter = router({
     if (input.username !== void 0) updateData.username = sanitizeUsername(input.username);
     if (input.bio !== void 0) updateData.bio = sanitizeInput(input.bio, 200);
     if (input.avatar !== void 0) updateData.avatar = input.avatar;
-    await db.update(users).set(updateData).where(eq8(users.id, ctx.user.id));
-    const updated = await db.select().from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    await db.update(users).set(updateData).where(eq10(users.id, ctx.user.id));
+    const updated = await db.select().from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     const u = updated[0];
     if (u && u.name && u.bio && u.avatar) {
       await _completeTask(ctx.user.id, "complete_profile", db);
@@ -3177,10 +3567,10 @@ var userRouter = router({
   }),
   // ─── Upload avatar to S3 ─────────────────────────────────────────────────
   uploadAvatar: protectedProcedure.input(
-    z2.object({
-      fileData: z2.string().max(6e6),
+    z4.object({
+      fileData: z4.string().max(6e6),
       // ~4.5MB base64
-      mimeType: z2.string().max(100)
+      mimeType: z4.string().max(100)
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const { fileData, mimeType } = input;
@@ -3196,22 +3586,22 @@ var userRouter = router({
     const { url } = await storagePut(key, buffer, mime);
     const db = await getDb();
     if (db) {
-      await db.update(users).set({ avatar: url }).where(eq8(users.id, ctx.user.id));
+      await db.update(users).set({ avatar: url }).where(eq10(users.id, ctx.user.id));
     }
     return { url };
   }),
   // ─── 公开名片:下载落地页给未登录访客显示"XXX 邀请你加为好友"。只暴露昵称+头像(本就在 searchUsers 公开) ──
-  getPublicCard: publicProcedure.input(z2.object({ userId: z2.number().int().positive() })).query(async ({ input }) => {
+  getPublicCard: publicProcedure.input(z4.object({ userId: z4.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq8(users.id, input.userId)).limit(1);
+    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq10(users.id, input.userId)).limit(1);
     if (!u) return null;
     return { id: u.id, name: u.name || u.username || "\u7528\u6237", avatar: u.avatar ?? null };
   }),
   // ─── Get leaderboard ──────────────────────────────────────────────────────
   leaderboard: publicProcedure.input(
-    z2.object({
-      limit: z2.number().min(1).max(100).default(50)
+    z4.object({
+      limit: z4.number().min(1).max(100).default(50)
     }).optional()
   ).query(async ({ input }) => {
     const db = await getDb();
@@ -3224,7 +3614,7 @@ var userRouter = router({
       avatar: users.avatar,
       npPoints: users.npPoints,
       walletAddress: users.walletAddress
-    }).from(users).orderBy(desc2(users.npPoints)).limit(limit);
+    }).from(users).orderBy(desc3(users.npPoints)).limit(limit);
     return rows.map((u, idx) => {
       const { walletAddress, ...pub } = u;
       return {
@@ -3239,9 +3629,9 @@ var userRouter = router({
   myRank: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     if (!me) return null;
-    const [{ count: count7 }] = await db.select({ count: sql4`COUNT(*)` }).from(users).where(sql4`npPoints > ${me.npPoints}`);
+    const [{ count: count7 }] = await db.select({ count: sql6`COUNT(*)` }).from(users).where(sql6`npPoints > ${me.npPoints}`);
     return {
       rank: Number(count7) + 1,
       npPoints: me.npPoints
@@ -3249,32 +3639,32 @@ var userRouter = router({
   }),
   // ─── Get task status for current user ─────────────────────────────────────
   // ─── 管理员：用户封禁 ─────────────────────────────────────────────
-  adminGetUser: adminProcedure.input(z2.object({ userId: z2.number() })).query(async ({ input }) => {
+  adminGetUser: adminProcedure.input(z4.object({ userId: z4.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, role: users.role, isBanned: users.isBanned, npPoints: users.npPoints }).from(users).where(eq8(users.id, input.userId)).limit(1);
+    const [u] = await db.select({ id: users.id, name: users.name, username: users.username, role: users.role, isBanned: users.isBanned, npPoints: users.npPoints }).from(users).where(eq10(users.id, input.userId)).limit(1);
     return u ?? null;
   }),
-  setBanned: adminProcedure.input(z2.object({ userId: z2.number(), banned: z2.boolean() })).mutation(async ({ ctx, input }) => {
-    if (input.userId === ctx.user.id) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u5C01\u7981\u81EA\u5DF1" });
+  setBanned: adminProcedure.input(z4.object({ userId: z4.number(), banned: z4.boolean() })).mutation(async ({ ctx, input }) => {
+    if (input.userId === ctx.user.id) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u5C01\u7981\u81EA\u5DF1" });
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     if (input.banned) {
-      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq8(users.id, input.userId)).limit(1);
-      if (!target) throw new TRPCError4({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
-      if (target.role === "admin" || target.isBot) throw new TRPCError4({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
+      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq10(users.id, input.userId)).limit(1);
+      if (!target) throw new TRPCError5({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
+      if (target.role === "admin" || target.isBot) throw new TRPCError5({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
     }
-    await db.update(users).set({ isBanned: input.banned }).where(eq8(users.id, input.userId));
+    await db.update(users).set({ isBanned: input.banned }).where(eq10(users.id, input.userId));
     if (!input.banned) {
       try {
-        await db.delete(contentViolations).where(eq8(contentViolations.userId, input.userId));
+        await db.delete(contentViolations).where(eq10(contentViolations.userId, input.userId));
       } catch {
       }
     }
     return { success: true, banned: input.banned };
   }),
   // ─── 管理员：内容违规记录（毒品/赌博/贩卖 等拦截记录，供审查封号）──────────
-  adminListViolations: adminProcedure.input(z2.object({ userId: z2.number().optional() }).optional()).query(async ({ input }) => {
+  adminListViolations: adminProcedure.input(z4.object({ userId: z4.number().optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const rows = await db.select({
@@ -3286,7 +3676,7 @@ var userRouter = router({
       createdAt: contentViolations.createdAt,
       userName: users.name,
       isBanned: users.isBanned
-    }).from(contentViolations).leftJoin(users, eq8(users.id, contentViolations.userId)).where(input?.userId ? eq8(contentViolations.userId, input.userId) : void 0).orderBy(desc2(contentViolations.createdAt)).limit(100);
+    }).from(contentViolations).leftJoin(users, eq10(users.id, contentViolations.userId)).where(input?.userId ? eq10(contentViolations.userId, input.userId) : void 0).orderBy(desc3(contentViolations.createdAt)).limit(100);
     return rows;
   }),
   // ─── 管理员：任务奖励配置 ─────────────────────────────────────────
@@ -3301,17 +3691,17 @@ var userRouter = router({
       defaultReward: def.npReward
     }));
   }),
-  setTaskRewards: adminProcedure.input(z2.object({ rewards: z2.record(z2.string(), z2.number().int().min(0).max(1e5)) })).mutation(async ({ input }) => {
+  setTaskRewards: adminProcedure.input(z4.object({ rewards: z4.record(z4.string(), z4.number().int().min(0).max(1e5)) })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const clean = {};
     for (const [k, v] of Object.entries(input.rewards)) {
       if (TASK_DEFINITIONS[k] && Number.isFinite(v)) clean[k] = v;
     }
     const json = JSON.stringify(clean);
-    const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq8(appConfig.platform, "all")).limit(1);
+    const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq10(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
-      await db.update(appConfig).set({ taskRewards: json }).where(eq8(appConfig.platform, "all"));
+      await db.update(appConfig).set({ taskRewards: json }).where(eq10(appConfig.platform, "all"));
     } else {
       await db.insert(appConfig).values({ platform: "all", taskRewards: json });
     }
@@ -3325,7 +3715,7 @@ var userRouter = router({
       taskType: userTasks.taskType,
       completedAt: userTasks.completedAt,
       npEarned: userTasks.npEarned
-    }).from(userTasks).where(eq8(userTasks.userId, ctx.user.id)).orderBy(desc2(userTasks.completedAt));
+    }).from(userTasks).where(eq10(userTasks.userId, ctx.user.id)).orderBy(desc3(userTasks.completedAt));
     const completionCount = {};
     const todayCount = {};
     const todayStart = startOfUtcDay2(ymdUtc3());
@@ -3360,32 +3750,32 @@ var userRouter = router({
     });
   }),
   // ─── Complete a task ───────────────────────────────────────────────────────
-  completeTask: protectedProcedure.input(z2.object({ taskType: z2.string().max(50) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  completeTask: protectedProcedure.input(z4.object({ taskType: z4.string().max(50) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const def = TASK_DEFINITIONS[input.taskType];
     if (!def) throw new Error("Unknown task type");
-    if (def.eventOnly) throw new TRPCError4({ code: "FORBIDDEN", message: "\u8BE5\u4EFB\u52A1\u7531\u7CFB\u7EDF\u81EA\u52A8\u53D1\u653E" });
+    if (def.eventOnly) throw new TRPCError5({ code: "FORBIDDEN", message: "\u8BE5\u4EFB\u52A1\u7531\u7CFB\u7EDF\u81EA\u52A8\u53D1\u653E" });
     return _completeTask(ctx.user.id, input.taskType, db);
   }),
   // ─── 上报设备指纹（防多号撸AC；App 启动后调用）────────────────────────────────
-  reportDevice: protectedProcedure.input(z2.object({ deviceId: z2.string().min(8).max(64) })).mutation(async ({ ctx, input }) => {
+  reportDevice: protectedProcedure.input(z4.object({ deviceId: z4.string().min(8).max(64) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { ok: false };
-    await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq8(users.id, ctx.user.id));
+    await db.update(users).set({ deviceId: input.deviceId.trim() }).where(eq10(users.id, ctx.user.id));
     return { ok: true };
   }),
   // ─── 意见反馈（help.tsx 反馈表单的真实落库）─────────────────────────────────────
-  submitFeedback: protectedProcedure.input(z2.object({
-    content: z2.string().min(1).max(1e3),
-    contact: z2.string().max(120).optional(),
-    appVersion: z2.string().max(24).optional(),
-    platform: z2.string().max(16).optional()
+  submitFeedback: protectedProcedure.input(z4.object({
+    content: z4.string().min(1).max(1e3),
+    contact: z4.string().max(120).optional(),
+    appVersion: z4.string().max(24).optional(),
+    platform: z4.string().max(16).optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const content = sanitizeInput(input.content, 1e3).trim();
-    if (!content) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u53CD\u9988\u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A" });
+    if (!content) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u53CD\u9988\u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A" });
     await db.insert(feedback).values({
       userId: ctx.user.id,
       content,
@@ -3395,27 +3785,27 @@ var userRouter = router({
     });
     return { ok: true };
   }),
-  adminListFeedback: adminProcedure.input(z2.object({ status: z2.enum(["new", "read", "resolved"]).optional(), limit: z2.number().min(1).max(200).default(100) }).optional()).query(async ({ input }) => {
+  adminListFeedback: adminProcedure.input(z4.object({ status: z4.enum(["new", "read", "resolved"]).optional(), limit: z4.number().min(1).max(200).default(100) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const conds = input?.status ? [eq8(feedback.status, input.status)] : [];
-    return db.select().from(feedback).where(conds.length ? and7(...conds) : void 0).orderBy(desc2(feedback.createdAt)).limit(input?.limit ?? 100);
+    const conds = input?.status ? [eq10(feedback.status, input.status)] : [];
+    return db.select().from(feedback).where(conds.length ? and8(...conds) : void 0).orderBy(desc3(feedback.createdAt)).limit(input?.limit ?? 100);
   }),
-  adminSetFeedbackStatus: adminProcedure.input(z2.object({ id: z2.number(), status: z2.enum(["new", "read", "resolved"]) })).mutation(async ({ input }) => {
+  adminSetFeedbackStatus: adminProcedure.input(z4.object({ id: z4.number(), status: z4.enum(["new", "read", "resolved"]) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(feedback).set({ status: input.status }).where(eq8(feedback.id, input.id));
+    await db.update(feedback).set({ status: input.status }).where(eq10(feedback.id, input.id));
     return { ok: true };
   }),
   // ─── 段位状态（累积贡献值 / 当前段位 / 加成 / 每日奖励 / 下一段进度 / 我的网体）──────
   getRankStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const [u] = await db.select({ score: users.rankScore, tier: users.rankTier, reputation: users.reputation }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    const [u] = await db.select({ score: users.rankScore, tier: users.rankTier, reputation: users.reputation }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     const score = u?.score ?? 0;
     const tier = u?.tier ?? 0;
     const next = tier < RANK_TIERS.length ? RANK_TIERS[tier] : null;
-    const refRows = await db.select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId }).from(referrals).where(eq8(referrals.status, "active"));
+    const refRows = await db.select({ inviteeId: referrals.inviteeId, referrerId: referrals.referrerId }).from(referrals).where(eq10(referrals.status, "active"));
     const children = /* @__PURE__ */ new Map();
     for (const r of refRows) {
       if (!children.has(r.referrerId)) children.set(r.referrerId, []);
@@ -3439,11 +3829,12 @@ var userRouter = router({
     if (team.length > 0) {
       const todayStart = startOfUtcDay2(ymdUtc3());
       const batch = team.slice(0, 1e4);
-      const [{ c: activeC = 0 } = { c: 0 }] = await db.select({ c: sql4`COUNT(DISTINCT ${userTasks.userId})` }).from(userTasks).where(and7(inArray4(userTasks.userId, batch), gte4(userTasks.completedAt, todayStart)));
+      const [{ c: activeC = 0 } = { c: 0 }] = await db.select({ c: sql6`COUNT(DISTINCT ${userTasks.userId})` }).from(userTasks).where(and8(inArray5(userTasks.userId, batch), gte4(userTasks.completedAt, todayStart)));
       teamActiveToday = Number(activeC);
     }
     const bitAirdrop = bitAirdropSchedule();
-    const myBitAirdropEstimate = tier >= 1 ? bitAirdrop.tierPot : 0;
+    const claimStatus = await getBitAirdropClaimStatus(db, ctx.user.id, tier);
+    const myBitAirdropEstimate = claimStatus.estimatedBit > 0 ? claimStatus.estimatedBit : tier >= 1 ? bitAirdrop.tierPot : 0;
     return {
       score,
       tier,
@@ -3458,17 +3849,129 @@ var userRouter = router({
       teamDirect: directCount,
       teamActiveToday,
       tiers: RANK_TIERS.map((t3, i) => ({ idx: i + 1, name: t3.name, min: t3.min, bonusPct: Math.round(t3.bonus * 100), daily: t3.daily })),
-      // BIT 段位空投（与 IT 日俸独立）
+      // BIT 段位空投：捐献 IT 后领取（V1=1000 … V10=10000）
       bitAirdrop: {
         ...bitAirdrop,
         myTierPot: myBitAirdropEstimate,
-        // 占位：前端可展示「段位份额」；真实到账按当日同段位活跃人数均分
-        note: "\u65E5\u989D\u5EA6\u5747\u5206 10 \u6BB5\u4F4D\uFF1B\u5F53\u5929\u6D3B\u8DC3\u624D\u53D1\uFF0C\u540C\u6BB5\u4F4D\u6D3B\u8DC3\u7528\u6237\u5747\u5206"
+        itCost: claimStatus.itCost,
+        estimatedBit: claimStatus.estimatedBit,
+        claimedToday: claimStatus.claimedToday,
+        claimedBit: claimStatus.claimedBit,
+        claimedItCost: claimStatus.claimedItCost,
+        canClaim: claimStatus.canClaim,
+        claimReason: claimStatus.reason,
+        note: "\u6350\u732E\u5BF9\u5E94\u6BB5\u4F4D IT \u540E\u9886\u53D6\u5F53\u65E5 BIT \u7A7A\u6295\uFF1B\u65E5\u989D\u5EA6\u5747\u5206 10 \u6BB5\u4F4D\uFF0C\u540C\u6BB5\u4F4D\u6D3B\u8DC3\u7528\u6237\u5747\u5206"
       }
     };
   }),
+  // ─── 捐献 IT 领取当日 BIT 段位空投 ───────────────────────────────────────────
+  claimBitAirdrop: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    try {
+      return await claimBitRankAirdrop(db, ctx.user.id);
+    } catch (e) {
+      const err = e;
+      const code = err.code === "CONFLICT" ? "CONFLICT" : err.code === "FORBIDDEN" ? "FORBIDDEN" : err.code === "INTERNAL_SERVER_ERROR" ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
+      throw new TRPCError5({ code, message: err.message || "\u9886\u53D6\u5931\u8D25" });
+    }
+  }),
+  // ─── BIT ↔ IT 互转（100 IT = 1 BIT）────────────────────────────────────────
+  convertCurrency: protectedProcedure.input(z4.object({
+    direction: z4.enum(["it_to_bit", "bit_to_it"]),
+    amount: z4.number().int().positive().max(1e7)
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (input.direction === "it_to_bit") {
+      if (input.amount % IT_PER_BIT !== 0) {
+        throw new TRPCError5({ code: "BAD_REQUEST", message: `IT \u6570\u91CF\u9700\u4E3A ${IT_PER_BIT} \u7684\u6574\u6570\u500D` });
+      }
+      const bitOut = Math.floor(input.amount / IT_PER_BIT);
+      if (bitOut <= 0) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+      const spent = await db.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and8(eq10(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
+      const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+      if (affected2 <= 0) throw new TRPCError5({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+      const ok = await grantNN(db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
+      if (!ok) {
+        await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq10(users.id, ctx.user.id));
+        throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
+      }
+    } else {
+      const itOut = input.amount * IT_PER_BIT;
+      const ok = await spendNN(db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
+      if (!ok) throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+      await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${itOut}` }).where(eq10(users.id, ctx.user.id));
+    }
+    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
+    return { ok: true, it: u?.npPoints ?? 0, bit: Number(u?.nnBalance ?? 0), rate: IT_PER_BIT };
+  }),
+  // ─── 用户间转账 BIT / IT ────────────────────────────────────────────────────
+  transferCurrency: protectedProcedure.input(z4.object({
+    currency: z4.enum(["it", "bit"]),
+    toUserId: z4.number().int().positive(),
+    amount: z4.number().int().positive().max(1e7),
+    memo: z4.string().max(80).optional()
+  })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (input.toUserId === ctx.user.id) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8F6C\u7ED9\u81EA\u5DF1" });
+    }
+    if (input.currency === "it" && input.amount > TRANSFER_MAX_IT) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: `\u5355\u7B14 IT \u6700\u591A ${TRANSFER_MAX_IT.toLocaleString()}` });
+    }
+    if (input.currency === "bit" && input.amount > TRANSFER_MAX_BIT) {
+      throw new TRPCError5({ code: "BAD_REQUEST", message: `\u5355\u7B14 BIT \u6700\u591A ${TRANSFER_MAX_BIT.toLocaleString()}` });
+    }
+    const [to] = await db.select({ id: users.id, name: users.name, username: users.username, isBanned: users.isBanned }).from(users).where(eq10(users.id, input.toUserId)).limit(1);
+    if (!to) throw new TRPCError5({ code: "NOT_FOUND", message: "\u6536\u6B3E\u7528\u6237\u4E0D\u5B58\u5728" });
+    if (to.isBanned) throw new TRPCError5({ code: "BAD_REQUEST", message: "\u6536\u6B3E\u7528\u6237\u4E0D\u53EF\u7528" });
+    const memo = sanitizeInput(input.memo?.trim() || "", 80) || void 0;
+    const toName = to.name ?? to.username ?? `\u7528\u6237 #${to.id}`;
+    const fromName = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237 #${ctx.user.id}`;
+    if (input.currency === "it") {
+      try {
+        await db.transaction(async (tx) => {
+          const spent = await tx.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and8(eq10(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
+          const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+          if (affected2 <= 0) throw new Error("INSUFFICIENT_IT");
+          await tx.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq10(users.id, input.toUserId));
+        });
+      } catch (e) {
+        if (e?.message === "INSUFFICIENT_IT") {
+          throw new TRPCError5({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+        }
+        throw e;
+      }
+    } else {
+      const ok = await transferNN(db, ctx.user.id, input.toUserId, input.amount, memo ?? `to ${toName}`);
+      if (!ok) throw new TRPCError5({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+    }
+    const symbol = input.currency === "it" ? "IT" : "BIT";
+    void createNotification({
+      db,
+      targetUserId: input.toUserId,
+      fromUserId: ctx.user.id,
+      fromUserName: fromName,
+      fromUserAvatar: ctx.user.avatar ?? "",
+      type: "system",
+      content: `${fromName} \u5411\u4F60\u8F6C\u8D26 ${input.amount.toLocaleString()} ${symbol}${memo ? `\uFF1A${memo}` : ""}`
+    }).catch(() => {
+    });
+    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
+    return {
+      ok: true,
+      currency: input.currency,
+      amount: input.amount,
+      toUserId: input.toUserId,
+      toName,
+      it: u?.npPoints ?? 0,
+      bit: Number(u?.nnBalance ?? 0)
+    };
+  }),
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
-  adminRunRankAgg: adminProcedure.input(z2.object({ ymd: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
+  adminRunRankAgg: adminProcedure.input(z4.object({ ymd: z4.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     return runRankAggregation(db, input.ymd);
@@ -3477,7 +3980,7 @@ var userRouter = router({
   // ─── Search users ─────────────────────────────────────────────────────────
   // 纯数字 query → 按唯一 ID 精确查找（移动端好友搜索走这条：用户名可重复，ID 唯一）
   // 非数字 query → 按昵称/用户名模糊匹配（保留给 Web 端等按名字搜人的入口）
-  searchUsers: protectedProcedure.input(z2.object({ query: z2.string().min(1).max(50) })).query(async ({ ctx, input }) => {
+  searchUsers: protectedProcedure.input(z4.object({ query: z4.string().min(1).max(50) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const raw = input.query.trim();
@@ -3492,7 +3995,7 @@ var userRouter = router({
     if (!/^\d+$/.test(raw)) return [];
     const idNum = Number(raw);
     if (!Number.isSafeInteger(idNum) || idNum <= 0) return [];
-    const rows = await db.select(cols).from(users).where(and7(ne2(users.id, ctx.user.id), eq8(users.id, idNum))).limit(1);
+    const rows = await db.select(cols).from(users).where(and8(ne2(users.id, ctx.user.id), eq10(users.id, idNum))).limit(1);
     return rows.map((u) => ({
       id: u.id,
       name: u.name ?? u.username ?? `User #${u.id}`,
@@ -3502,17 +4005,17 @@ var userRouter = router({
     }));
   }),
   // ─── Invite leaderboard (by referral count) ────────────────────────────
-  inviteLeaderboard: publicProcedure.input(z2.object({ limit: z2.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
+  inviteLeaderboard: publicProcedure.input(z4.object({ limit: z4.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const limit = input?.limit ?? 50;
     const rows = await db.select({
       referrerId: referrals.referrerId,
       cnt: count()
-    }).from(referrals).where(eq8(referrals.status, "active")).groupBy(referrals.referrerId).orderBy(desc2(count())).limit(limit);
+    }).from(referrals).where(eq10(referrals.status, "active")).groupBy(referrals.referrerId).orderBy(desc3(count())).limit(limit);
     if (rows.length === 0) return [];
     const userIds = rows.map((r) => r.referrerId);
-    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql4`${users.id} IN (${sql4.join(userIds.map((id) => sql4`${id}`), sql4`, `)})`);
+    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql6`${users.id} IN (${sql6.join(userIds.map((id) => sql6`${id}`), sql6`, `)})`);
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     return rows.map((r, idx) => {
       const u = userMap.get(r.referrerId);
@@ -3525,17 +4028,17 @@ var userRouter = router({
     });
   }),
   // ─── Profit leaderboard (by closed position count as proxy) ────────────
-  profitLeaderboard: publicProcedure.input(z2.object({ limit: z2.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
+  profitLeaderboard: publicProcedure.input(z4.object({ limit: z4.number().min(1).max(100).default(50) }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     const limit = input?.limit ?? 50;
     const rows = await db.select({
       userId: tradingPositions.userId,
       tradeCount: count()
-    }).from(tradingPositions).where(eq8(tradingPositions.status, "closed")).groupBy(tradingPositions.userId).orderBy(desc2(count())).limit(limit);
+    }).from(tradingPositions).where(eq10(tradingPositions.status, "closed")).groupBy(tradingPositions.userId).orderBy(desc3(count())).limit(limit);
     if (rows.length === 0) return [];
     const userIds = rows.map((r) => r.userId);
-    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql4`${users.id} IN (${sql4.join(userIds.map((id) => sql4`${id}`), sql4`, `)})`);
+    const userRows = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar }).from(users).where(sql6`${users.id} IN (${sql6.join(userIds.map((id) => sql6`${id}`), sql6`, `)})`);
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     return rows.map((r, idx) => {
       const u = userMap.get(r.userId);
@@ -3550,10 +4053,10 @@ var userRouter = router({
   getUserStats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [postCountRow] = await db.select({ count: count() }).from(posts).where(eq8(posts.authorId, ctx.user.id));
-    const [taskCountRow] = await db.select({ count: count() }).from(userTasks).where(eq8(userTasks.userId, ctx.user.id));
-    const [userRow] = await db.select({ npPoints: users.npPoints }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
-    const [rankRow] = await db.select({ count: count() }).from(users).where(sql4`npPoints > ${userRow?.npPoints ?? 0}`);
+    const [postCountRow] = await db.select({ count: count() }).from(posts).where(eq10(posts.authorId, ctx.user.id));
+    const [taskCountRow] = await db.select({ count: count() }).from(userTasks).where(eq10(userTasks.userId, ctx.user.id));
+    const [userRow] = await db.select({ npPoints: users.npPoints }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
+    const [rankRow] = await db.select({ count: count() }).from(users).where(sql6`npPoints > ${userRow?.npPoints ?? 0}`);
     return {
       postCount: postCountRow?.count ?? 0,
       taskCount: taskCountRow?.count ?? 0,
@@ -3575,27 +4078,27 @@ async function _completeTask(userId, taskType, db) {
   let granted = 0;
   let blocked = false;
   await db.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq8(users.id, userId)).for("update").limit(1);
+    await tx.select({ id: users.id }).from(users).where(eq10(users.id, userId)).for("update").limit(1);
     if (isDaily) {
       const todayStart = startOfUtcDay2(ymdUtc3());
-      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and7(eq8(userTasks.userId, userId), eq8(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
+      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and8(eq10(userTasks.userId, userId), eq10(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
       if (Number(todayCount) >= def.daily) {
         blocked = true;
         return;
       }
     } else {
-      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and7(eq8(userTasks.userId, userId), eq8(userTasks.taskType, taskType)));
+      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and8(eq10(userTasks.userId, userId), eq10(userTasks.taskType, taskType)));
       if (existing.length >= def.maxCompletions) {
         blocked = true;
         return;
       }
     }
     if (taskType === "daily_login") {
-      const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq8(users.id, userId)).limit(1);
+      const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq10(users.id, userId)).limit(1);
       const yesterday = ymdUtc3(new Date(Date.now() - 864e5));
       const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq8(users.id, userId));
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq10(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
     await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
@@ -3674,16 +4177,16 @@ async function fetchBscScanV2(params) {
 var walletRouter = router({
   //
   updateAddress: protectedProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
-      chain: z3.string().default("BSC")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid wallet address"),
+      chain: z5.string().default("BSC")
     })
   ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const [taken] = await db.select({ id: users.id }).from(users).where(sql5`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
+    const [taken] = await db.select({ id: users.id }).from(users).where(sql7`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
     if (taken) throw new Error("\u8BE5\u94B1\u5305\u5730\u5740\u5DF2\u88AB\u5176\u4ED6\u8D26\u53F7\u7ED1\u5B9A");
-    await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq9(users.id, ctx.user.id));
+    await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq11(users.id, ctx.user.id));
     void awardTaskEvent(db, ctx.user.id, "connect_wallet");
     return { success: true };
   }),
@@ -3691,7 +4194,7 @@ var walletRouter = router({
   unbindAddress: protectedProcedure.use(rateLimitWrite).mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(users).set({ walletAddress: null }).where(eq9(users.id, ctx.user.id));
+    await db.update(users).set({ walletAddress: null }).where(eq11(users.id, ctx.user.id));
     return { success: true };
   }),
   //
@@ -3705,13 +4208,13 @@ var walletRouter = router({
       username: users.username,
       bio: users.bio,
       avatar: users.avatar
-    }).from(users).where(eq9(users.id, ctx.user.id)).limit(1);
+    }).from(users).where(eq11(users.id, ctx.user.id)).limit(1);
     return result[0] ?? null;
   }),
   //
   getBalance: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const hexBalance = await callBscRpc("eth_getBalance", [input.address, "latest"]);
@@ -3735,8 +4238,8 @@ var walletRouter = router({
   }),
   //
   getTokenBalances: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const balanceResults = await Promise.all(
@@ -3797,11 +4300,11 @@ var walletRouter = router({
   }),
   //
   getSwapQuote: publicProcedure.input(
-    z3.object({
-      fromToken: z3.string(),
+    z5.object({
+      fromToken: z5.string(),
       // e.g. "BNB", "ETH", "SOL"
-      toToken: z3.string(),
-      amount: z3.number().positive()
+      toToken: z5.string(),
+      amount: z5.number().positive()
     })
   ).query(async ({ input }) => {
     const COINGECKO_IDS = {
@@ -3885,16 +4388,16 @@ var walletRouter = router({
   }),
   //
   saveSwapHistory: protectedProcedure.input(
-    z3.object({
-      walletAddress: z3.string(),
-      fromToken: z3.string().max(20),
-      toToken: z3.string().max(20),
-      fromAmount: z3.string(),
-      toAmount: z3.string(),
-      rate: z3.string(),
-      dex: z3.string().max(50),
-      txHash: z3.string().max(70),
-      slippage: z3.string().default("0.5")
+    z5.object({
+      walletAddress: z5.string(),
+      fromToken: z5.string().max(20),
+      toToken: z5.string().max(20),
+      fromAmount: z5.string(),
+      toAmount: z5.string(),
+      rate: z5.string(),
+      dex: z5.string().max(50),
+      txHash: z5.string().max(70),
+      slippage: z5.string().default("0.5")
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -3916,21 +4419,21 @@ var walletRouter = router({
   }),
   //
   getSwapHistory: protectedProcedure.input(
-    z3.object({
-      limit: z3.number().min(1).max(50).default(20)
+    z5.object({
+      limit: z5.number().min(1).max(50).default(20)
     })
   ).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(swapHistory).where(eq9(swapHistory.userId, ctx.user.id)).orderBy(desc3(swapHistory.createdAt)).limit(input.limit);
+    const rows = await db.select().from(swapHistory).where(eq11(swapHistory.userId, ctx.user.id)).orderBy(desc4(swapHistory.createdAt)).limit(input.limit);
     return rows;
   }),
   //
   getTransactions: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
-      page: z3.number().min(1).default(1),
-      offset: z3.number().min(1).max(50).default(20)
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
+      page: z5.number().min(1).default(1),
+      offset: z5.number().min(1).max(50).default(20)
     })
   ).query(async ({ input }) => {
     const data = await fetchBscScanV2({
@@ -3964,8 +4467,8 @@ var walletRouter = router({
   // Falls back to Etherscan free API if ALCHEMY_API_KEY is not set.
   // Enriches each token with USD price and 24h change from CoinGecko.
   getEthTokenBalances: publicProcedure.input(
-    z3.object({
-      address: z3.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
+    z5.object({
+      address: z5.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address")
     })
   ).query(async ({ input }) => {
     const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY ?? "";
@@ -4124,7 +4627,7 @@ import { z as z6 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq17, and as and14, desc as desc7, lt as lt4, sql as sql9, or as or5, gt as gt3, like, inArray as inArray7, isNull as isNull3 } from "drizzle-orm";
+import { eq as eq17, and as and14, desc as desc7, lt as lt4, sql as sql10, or as or5, gt as gt3, like, inArray as inArray7, isNull as isNull3 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 // server/socket.ts
@@ -4133,7 +4636,7 @@ import { parse as parseCookie } from "cookie";
 init_db();
 init_schema();
 init_logger();
-import { eq as eq11, and as and8 } from "drizzle-orm";
+import { eq as eq12, and as and9 } from "drizzle-orm";
 
 // server/_core/corsOrigin.ts
 init_env();
@@ -4160,124 +4663,12 @@ function corsOriginDelegate(origin, cb) {
   cb(null, isAllowedOrigin(origin));
 }
 
-// server/routers/webPush.ts
-init_schema();
-import { TRPCError as TRPCError5 } from "@trpc/server";
-import webpush from "web-push";
-import { eq as eq10, inArray as inArray5 } from "drizzle-orm";
-import { z as z4 } from "zod";
-init_db();
-var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BDELsotXx1M-DHSpJ998MHEUIlj8-GzJPzOuDXRaHOGS_9h_-apvpaN4v6cnvaZQr3HwwauehFHRN5ROV77Qh5w";
-var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "mzHowEZfED1ijF4CN1DsRVH3t0cALTZvmP3uy0UCxL0";
-var VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@nexuschat.best";
-webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-var webPushRouter = router({
-  /** Return the VAPID public key for client-side subscription */
-  getPublicKey: publicProcedure.query(() => {
-    return { publicKey: VAPID_PUBLIC_KEY };
-  }),
-  /** Register a push subscription for the current user */
-  subscribe: protectedProcedure.input(
-    z4.object({
-      endpoint: z4.string().url(),
-      p256dh: z4.string(),
-      auth: z4.string()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
-    const existing = await db.select().from(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id)).limit(10);
-    if (existing.length >= 5) {
-      await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id));
-    }
-    await db.insert(pushSubscriptions).values({
-      userId: ctx.user.id,
-      endpoint: input.endpoint,
-      p256dh: input.p256dh,
-      auth: input.auth
-    });
-    return { success: true };
-  }),
-  /** Unsubscribe (remove push subscription) */
-  unsubscribe: protectedProcedure.input(z4.object({ endpoint: z4.string() })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) return { success: false };
-    await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, ctx.user.id));
-    return { success: true };
-  }),
-  /** 注册原生推送（Expo Push）设备 token。同一 token 改归当前用户（换账号登录），幂等。 */
-  registerDeviceToken: protectedProcedure.input(z4.object({ token: z4.string().min(10).max(255), platform: z4.enum(["android", "ios"]).default("android") })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
-    await db.delete(devicePushTokens).where(eq10(devicePushTokens.token, input.token));
-    await db.insert(devicePushTokens).values({ userId: ctx.user.id, token: input.token, platform: input.platform });
-    return { success: true };
-  }),
-  /** 注销设备 token（退出登录时调用）。 */
-  unregisterDeviceToken: protectedProcedure.input(z4.object({ token: z4.string() })).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) return { success: false };
-    await db.delete(devicePushTokens).where(eq10(devicePushTokens.token, input.token));
-    return { success: true };
-  })
-});
-async function sendExpoPush(db, userId, payload) {
-  const tokens = await db.select().from(devicePushTokens).where(eq10(devicePushTokens.userId, userId));
-  const expoTokens = tokens.map((t3) => t3.token).filter((t3) => t3.startsWith("ExponentPushToken") || t3.startsWith("ExpoPushToken"));
-  if (expoTokens.length === 0) return;
-  const messages3 = expoTokens.map((to) => ({
-    to,
-    title: payload.title,
-    body: payload.body,
-    sound: "default",
-    data: { url: payload.url || "/notifications" }
-  }));
-  const resp = await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(messages3)
-  });
-  const json = await resp.json().catch(() => null);
-  const dead = (json?.data ?? []).map((r, i) => r?.status === "error" && r?.details?.error === "DeviceNotRegistered" ? expoTokens[i] : null).filter((t3) => !!t3);
-  if (dead.length) await db.delete(devicePushTokens).where(inArray5(devicePushTokens.token, dead));
-}
-async function sendPushToUser(userId, payload) {
-  const db = await getDb();
-  if (!db) return;
-  void sendExpoPush(db, userId, payload).catch(() => {
-  });
-  const subs = await db.select().from(pushSubscriptions).where(eq10(pushSubscriptions.userId, userId));
-  const notificationPayload = JSON.stringify({
-    title: payload.title,
-    body: payload.body,
-    url: payload.url || "/(tabs)",
-    // 兜底用 RN 路由(原 /app/chat 是 web 路由,原生点开跳空白页)
-    icon: payload.icon || "/icons/icon-192x192.png",
-    badge: "/icons/icon-72x72.png"
-  });
-  const results = await Promise.allSettled(
-    subs.map(
-      (sub) => webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth }
-        },
-        notificationPayload
-      )
-    )
-  );
-  const expiredEndpoints = results.map((r, i) => r.status === "rejected" ? subs[i].endpoint : null).filter(Boolean);
-  if (expiredEndpoints.length > 0) {
-    await db.delete(pushSubscriptions).where(eq10(pushSubscriptions.userId, userId));
-  }
-}
-
 // server/socket.ts
 async function isConversationMuted(userId, convKey) {
   try {
     const db = await getDb();
     if (!db) return false;
-    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and8(eq11(conversationPrefs.userId, userId), eq11(conversationPrefs.convKey, convKey))).limit(1);
+    const [p] = await db.select({ isMuted: conversationPrefs.isMuted }).from(conversationPrefs).where(and9(eq12(conversationPrefs.userId, userId), eq12(conversationPrefs.convKey, convKey))).limit(1);
     return !!p?.isMuted;
   } catch {
     return false;
@@ -4300,12 +4691,12 @@ async function authenticateSocket(socket) {
   if (!session) return null;
   const db = await getDb();
   if (!db) return null;
-  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq11(users.openId, session.openId)).limit(1);
+  const [row] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq12(users.openId, session.openId)).limit(1);
   if (!row) return null;
   return { id: row.id, name: row.name ?? "User", avatar: row.avatar ?? null };
 }
 async function isGroupMember(db, groupId, userId) {
-  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and8(eq11(groupMembers.groupId, groupId), eq11(groupMembers.userId, userId))).limit(1);
+  const [row] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and9(eq12(groupMembers.groupId, groupId), eq12(groupMembers.userId, userId))).limit(1);
   return !!row;
 }
 var _io = null;
@@ -4435,7 +4826,7 @@ init_schema();
 // server/groupBots.ts
 init_db();
 init_schema();
-import { eq as eq12, and as and9, gt, or as or3, isNull as isNull2, desc as desc4, sql as sql6, inArray as inArray6 } from "drizzle-orm";
+import { eq as eq13, and as and10, gt, or as or3, isNull as isNull2, desc as desc5, sql as sql8, inArray as inArray6 } from "drizzle-orm";
 
 // server/_core/llm.ts
 init_env();
@@ -4763,7 +5154,7 @@ function getBotMeta(type) {
   return catalogByType.get(type);
 }
 async function listGroupBots(db, groupId) {
-  const rows = await db.select().from(groupBots).where(eq12(groupBots.groupId, groupId));
+  const rows = await db.select().from(groupBots).where(eq13(groupBots.groupId, groupId));
   const byType = new Map(rows.map((r) => [r.botType, r]));
   const now = /* @__PURE__ */ new Date();
   return BOT_CATALOG.map((meta) => {
@@ -4803,10 +5194,10 @@ async function listGroupBots(db, groupId) {
 async function isBotActive(db, groupId, type) {
   const now = /* @__PURE__ */ new Date();
   const [row] = await db.select({ enabled: groupBots.enabled, expiresAt: groupBots.expiresAt }).from(groupBots).where(
-    and9(
-      eq12(groupBots.groupId, groupId),
-      eq12(groupBots.botType, type),
-      eq12(groupBots.enabled, true),
+    and10(
+      eq13(groupBots.groupId, groupId),
+      eq13(groupBots.botType, type),
+      eq13(groupBots.enabled, true),
       or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, now))
     )
   ).limit(1);
@@ -4815,7 +5206,7 @@ async function isBotActive(db, groupId, type) {
 var nexusBotId = null;
 async function getNexusBotId(db) {
   if (nexusBotId) return nexusBotId;
-  const [bot] = await db.select({ id: users.id }).from(users).where(eq12(users.openId, "bot_nexus_bot")).limit(1);
+  const [bot] = await db.select({ id: users.id }).from(users).where(eq13(users.openId, "bot_nexus_bot")).limit(1);
   if (bot) nexusBotId = bot.id;
   return nexusBotId;
 }
@@ -4832,7 +5223,7 @@ async function sendGroupBotMessage(db, groupId, content) {
       content,
       messageType: "text"
     }).$returningId();
-    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq12(users.id, botId)).limit(1);
+    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(eq13(users.id, botId)).limit(1);
     const io = getSocketIO();
     if (io) {
       io.to(`group:${groupId}`).emit("new_message", {
@@ -4852,7 +5243,7 @@ async function sendGroupBotMessage(db, groupId, content) {
 }
 async function runWelcomeBot(db, groupId, newMemberName) {
   if (!await isBotActive(db, groupId, "welcome")) return;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "welcome"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "welcome"))).limit(1);
   let template = "\u6B22\u8FCE {name} \u52A0\u5165\u672C\u7FA4\uFF01\u{1F389}";
   if (row?.config) {
     try {
@@ -4867,7 +5258,7 @@ async function runWelcomeBot(db, groupId, newMemberName) {
 async function runManageBot(db, groupId, text2) {
   if (!text2) return false;
   if (!await isBotActive(db, groupId, "manage")) return false;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "manage"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "manage"))).limit(1);
   let keywords = [];
   let warn = "\u8BF7\u6CE8\u610F\u7FA4\u5185\u53D1\u8A00\u89C4\u8303\u54E6~";
   if (row?.config) {
@@ -4891,7 +5282,7 @@ var GROWTH_MAX_REWARD = 100;
 async function runGrowthReward(db, groupId, inviterId, newMemberName) {
   if (!inviterId) return;
   if (!await isBotActive(db, groupId, "growth")) return;
-  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and9(eq12(groupBots.groupId, groupId), eq12(groupBots.botType, "growth"))).limit(1);
+  const [row] = await db.select({ config: groupBots.config }).from(groupBots).where(and10(eq13(groupBots.groupId, groupId), eq13(groupBots.botType, "growth"))).limit(1);
   let reward = 5;
   let announce = true;
   if (row?.config) {
@@ -4904,10 +5295,10 @@ async function runGrowthReward(db, groupId, inviterId, newMemberName) {
   }
   reward = Math.max(0, Math.min(GROWTH_MAX_REWARD, Math.floor(reward)));
   if (reward > 0) {
-    await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${reward}` }).where(eq12(users.id, inviterId));
+    await db.update(users).set({ npPoints: sql8`${users.npPoints} + ${reward}` }).where(eq13(users.id, inviterId));
   }
   if (announce) {
-    const [inv] = await db.select({ name: users.name, username: users.username }).from(users).where(eq12(users.id, inviterId)).limit(1);
+    const [inv] = await db.select({ name: users.name, username: users.username }).from(users).where(eq13(users.id, inviterId)).limit(1);
     const invName = inv?.name ?? inv?.username ?? "\u7FA4\u53CB";
     await sendGroupBotMessage(
       db,
@@ -4977,9 +5368,9 @@ async function runDueGroupBots(hour, minute) {
   const db = await getDb();
   if (!db) return;
   const now = Date.now();
-  const rows = await db.select({ groupId: groupBots.groupId, botType: groupBots.botType, config: groupBots.config }).from(groupBots).where(and9(
+  const rows = await db.select({ groupId: groupBots.groupId, botType: groupBots.botType, config: groupBots.config }).from(groupBots).where(and10(
     inArray6(groupBots.botType, ["price", "activity"]),
-    eq12(groupBots.enabled, true),
+    eq13(groupBots.enabled, true),
     or3(isNull2(groupBots.expiresAt), gt(groupBots.expiresAt, /* @__PURE__ */ new Date()))
   ));
   for (const r of rows) {
@@ -5012,135 +5403,9 @@ init_schema();
 init_membership();
 init_referralRewards();
 
-// server/routers/notificationsRouter.ts
-import { z as z5 } from "zod";
-init_db();
-init_schema();
-import { eq as eq13, and as and10, desc as desc5, sql as sql7 } from "drizzle-orm";
-var notificationsRouter = router({
-  // ─── Get notifications for current user ─────────────────────────────────────
-  list: protectedProcedure.input(
-    z5.object({
-      limit: z5.number().min(1).max(50).default(20),
-      unreadOnly: z5.boolean().default(false)
-    }).optional()
-  ).query(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) return { notifications: [], unreadCount: 0 };
-    const limit = input?.limit ?? 20;
-    const unreadOnly = input?.unreadOnly ?? false;
-    const conditions = [eq13(notifications.userId, ctx.user.id)];
-    if (unreadOnly) {
-      conditions.push(eq13(notifications.isRead, false));
-    }
-    const rows = await db.select().from(notifications).where(and10(...conditions)).orderBy(desc5(notifications.createdAt)).limit(limit);
-    const [unreadRow] = await db.select({ count: sql7`COUNT(*)` }).from(notifications).where(and10(eq13(notifications.userId, ctx.user.id), eq13(notifications.isRead, false)));
-    return {
-      notifications: rows,
-      unreadCount: Number(unreadRow?.count ?? 0)
-    };
-  }),
-  // ─── Get unread count only (for badge) ──────────────────────────────────────
-  unreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { count: 0 };
-    const [row] = await db.select({ count: sql7`COUNT(*)` }).from(notifications).where(and10(eq13(notifications.userId, ctx.user.id), eq13(notifications.isRead, false)));
-    return { count: Number(row?.count ?? 0) };
-  }),
-  // ─── Mark notification(s) as read ───────────────────────────────────────────
-  markRead: protectedProcedure.input(
-    z5.object({
-      notificationId: z5.number().optional()
-      // if omitted, mark all as read
-    }).optional()
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    if (input?.notificationId) {
-      await db.update(notifications).set({ isRead: true }).where(
-        and10(
-          eq13(notifications.id, input.notificationId),
-          eq13(notifications.userId, ctx.user.id)
-        )
-      );
-    } else {
-      await db.update(notifications).set({ isRead: true }).where(eq13(notifications.userId, ctx.user.id));
-    }
-    return { success: true };
-  }),
-  // ─── Create notification (internal helper, called by other routers) ─────────
-  // This is a protected procedure so only authenticated users can trigger it
-  // In practice, call createNotification() helper from other routers
-  create: protectedProcedure.input(
-    z5.object({
-      targetUserId: z5.number(),
-      // 安全:移除 "system"——否则任何用户可伪造"系统/官方"通知(如"账号异常,点此验证…")向任意人钓鱼。
-      // system 类通知只能由服务端 createNotification() 内部发起。
-      type: z5.enum(["like", "comment", "follow", "mention"]),
-      content: z5.string().max(500),
-      postId: z5.number().optional()
-    })
-  ).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    if (input.targetUserId === ctx.user.id) return { success: true };
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.insert(notifications).values({
-      userId: input.targetUserId,
-      type: input.type,
-      fromUserId: ctx.user.id,
-      fromUserName: ctx.user.name ?? "Anonymous",
-      fromUserAvatar: ctx.user.avatar ?? "\u{1F98A}",
-      postId: input.postId,
-      content: sanitizeInput(input.content, 500),
-      // 之前未净化,存原始 markup 再回显
-      isRead: false
-    });
-    return { success: true };
-  }),
-  // ─── Delete a notification ───────────────────────────────────────────────────
-  delete: protectedProcedure.input(z5.object({ notificationId: z5.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.delete(notifications).where(
-      and10(
-        eq13(notifications.id, input.notificationId),
-        eq13(notifications.userId, ctx.user.id)
-      )
-    );
-    return { success: true };
-  })
-});
-async function createNotification(params) {
-  if (!params.db) return;
-  if (params.targetUserId === params.fromUserId) return;
-  await params.db.insert(notifications).values({
-    userId: params.targetUserId,
-    type: params.type,
-    fromUserId: params.fromUserId,
-    fromUserName: params.fromUserName,
-    fromUserAvatar: params.fromUserAvatar,
-    postId: params.postId,
-    content: params.content,
-    isRead: false
-  });
-  const titleMap = {
-    like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
-    comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
-    follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
-    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
-    system: "AIChat \u901A\u77E5"
-  };
-  void sendPushToUser(params.targetUserId, {
-    title: titleMap[params.type] ?? "AIChat \u901A\u77E5",
-    body: params.content,
-    url: "/notifications"
-  }).catch(() => {
-  });
-}
-
 // server/moderation.ts
 init_schema();
-import { eq as eq14, and as and11, gt as gt2, sql as sql8 } from "drizzle-orm";
+import { eq as eq14, and as and11, gt as gt2, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError6 } from "@trpc/server";
 init_logger();
 var AUTO_BAN_THRESHOLD = 3;
@@ -5285,7 +5550,7 @@ async function recordAndMaybeBan(db, userId, category, source, snippet) {
   if (!AUTO_BAN) return { banned: false };
   try {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1e3);
-    const [cnt] = await db.select({ c: sql8`COUNT(*)` }).from(contentViolations).where(and11(eq14(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
+    const [cnt] = await db.select({ c: sql9`COUNT(*)` }).from(contentViolations).where(and11(eq14(contentViolations.userId, userId), gt2(contentViolations.createdAt, since)));
     if (Number(cnt?.c ?? 0) >= AUTO_BAN_THRESHOLD) {
       await db.update(users).set({ isBanned: true }).where(eq14(users.id, userId));
       logger_default.warn({ userId, category }, "moderation: \u7D2F\u8BA1\u8FDD\u89C4\u81EA\u52A8\u5C01\u53F7");
@@ -5436,7 +5701,7 @@ async function assertGroupMember(db, groupId, userId) {
 }
 async function initReadCursor(db, groupId, userId) {
   try {
-    const [row] = await db.select({ maxId: sql9`COALESCE(MAX(${messages.id}), 0)` }).from(messages).where(eq17(messages.groupId, groupId));
+    const [row] = await db.select({ maxId: sql10`COALESCE(MAX(${messages.id}), 0)` }).from(messages).where(eq17(messages.groupId, groupId));
     const maxId = Number(row?.maxId ?? 0);
     const existing = await db.select({ id: groupUnreadCounts.id }).from(groupUnreadCounts).where(and14(eq17(groupUnreadCounts.groupId, groupId), eq17(groupUnreadCounts.userId, userId))).limit(1);
     if (existing[0]) {
@@ -5467,7 +5732,7 @@ async function getClearedBeforeId(db, userId, convKey) {
 }
 async function spendNP(db, userId, cost) {
   if (cost <= 0) return true;
-  const res = await db.update(users).set({ npPoints: sql9`${users.npPoints} - ${cost}` }).where(and14(eq17(users.id, userId), sql9`${users.npPoints} >= ${cost}`));
+  const res = await db.update(users).set({ npPoints: sql10`${users.npPoints} - ${cost}` }).where(and14(eq17(users.id, userId), sql10`${users.npPoints} >= ${cost}`));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
   return affected2 > 0;
 }
@@ -5529,7 +5794,7 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const benefits = await getBenefits(db, ctx.user.id);
-    const [owned] = await db.select({ c: sql9`COUNT(*)` }).from(chatGroups).where(eq17(chatGroups.creatorId, ctx.user.id));
+    const [owned] = await db.select({ c: sql10`COUNT(*)` }).from(chatGroups).where(eq17(chatGroups.creatorId, ctx.user.id));
     if (Number(owned?.c ?? 0) >= benefits.maxGroups) {
       throw new TRPCError8({ code: "FORBIDDEN", message: `\u5F53\u524D\u4F1A\u5458\u6700\u591A\u53EF\u521B\u5EFA ${benefits.maxGroups} \u4E2A\u7FA4\uFF0C\u5347\u7EA7\u4F1A\u5458\u53EF\u63D0\u5347\u4E0A\u9650` });
     }
@@ -5580,7 +5845,7 @@ var chatRouter = router({
       role: "member"
     });
     await db.update(chatGroups).set({
-      memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
     }).where(eq17(chatGroups.id, input.groupId));
     await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
@@ -5601,7 +5866,7 @@ var chatRouter = router({
     const conditions = [
       eq17(messages.groupId, input.groupId),
       eq17(messages.isDeleted, false),
-      sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
     if (clearedG > 0) conditions.push(gt3(messages.id, clearedG));
@@ -5622,7 +5887,7 @@ var chatRouter = router({
       createdAt: messages.createdAt,
       expiresAt: messages.expiresAt,
       senderId: messages.senderId,
-      senderName: sql9`COALESCE(${groupMembers.alias}, ${users.name})`,
+      senderName: sql10`COALESCE(${groupMembers.alias}, ${users.name})`,
       senderAvatar: users.avatar,
       senderRole: groupMembers.role,
       replyContent: repliedMsg.content,
@@ -5630,6 +5895,47 @@ var chatRouter = router({
       replySenderName: repliedUser.name
     }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).leftJoin(groupMembers, and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, messages.senderId))).leftJoin(repliedMsg, eq17(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq17(repliedUser.id, repliedMsg.senderId)).where(and14(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
     return rows.reverse();
+  }),
+  // ─── 群聊历史搜索（服务端，不限本地已加载消息）────────────────────────────
+  searchMessages: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    query: z6.string().min(1).max(50),
+    limit: z6.number().int().min(1).max(50).default(30),
+    before: z6.number().optional()
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    await assertGroupMember(db, input.groupId, ctx.user.id);
+    const q = input.query.trim();
+    if (!q) return [];
+    const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    const conditions = [
+      eq17(messages.groupId, input.groupId),
+      eq17(messages.isDeleted, false),
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+      like(messages.content, `%${escaped}%`),
+      sql10`(${messages.recalledAt} IS NULL)`
+    ];
+    const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
+    if (clearedG > 0) conditions.push(gt3(messages.id, clearedG));
+    if (input.before) conditions.push(lt4(messages.id, input.before));
+    const rows = await db.select({
+      id: messages.id,
+      content: messages.content,
+      messageType: messages.messageType,
+      mediaUrl: messages.mediaUrl,
+      durationSeconds: messages.durationSeconds,
+      replyToId: messages.replyToId,
+      isPinned: messages.isPinned,
+      recalledAt: messages.recalledAt,
+      createdAt: messages.createdAt,
+      expiresAt: messages.expiresAt,
+      senderId: messages.senderId,
+      senderName: sql10`COALESCE(${groupMembers.alias}, ${users.name})`,
+      senderAvatar: users.avatar,
+      senderRole: groupMembers.role
+    }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).leftJoin(groupMembers, and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, messages.senderId))).where(and14(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
+    return rows;
   }),
   // Save a message (called from socket handler via REST fallback)
   saveMessage: protectedProcedure.input(z6.object({
@@ -5922,7 +6228,7 @@ var chatRouter = router({
         and14(eq17(messages.senderId, otherId), eq17(messages.receiverId, myId))
       ),
       eq17(messages.isDeleted, false),
-      sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
     ];
     const clearedD = await getClearedBeforeId(db, myId, `dm:${otherId}`);
     if (clearedD > 0) conditions.push(gt3(messages.id, clearedD));
@@ -5954,7 +6260,7 @@ var chatRouter = router({
           eq17(messages.senderId, otherId),
           eq17(messages.receiverId, myId),
           eq17(messages.isRead, false),
-          sql9`${messages.groupId} IS NULL`
+          sql10`${messages.groupId} IS NULL`
         )
       );
     } catch (err) {
@@ -5982,9 +6288,9 @@ var chatRouter = router({
           eq17(messages.receiverId, myId)
         ),
         eq17(messages.isDeleted, false),
-        sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+        sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
         // DM messages have no groupId
-        sql9`${messages.groupId} IS NULL`
+        sql10`${messages.groupId} IS NULL`
       )
     ).orderBy(desc7(messages.createdAt)).limit(200);
     const convMap = /* @__PURE__ */ new Map();
@@ -5994,13 +6300,13 @@ var chatRouter = router({
     }
     if (convMap.size === 0) return [];
     const partnerIds = Array.from(convMap.keys());
-    const partnerUsers = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(sql9`${users.id} IN (${sql9.join(partnerIds.map((id) => sql9`${id}`), sql9`, `)})`);
-    const unreadRows = await db.select({ senderId: messages.senderId, cnt: sql9`COUNT(*)` }).from(messages).where(
+    const partnerUsers = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(sql10`${users.id} IN (${sql10.join(partnerIds.map((id) => sql10`${id}`), sql10`, `)})`);
+    const unreadRows = await db.select({ senderId: messages.senderId, cnt: sql10`COUNT(*)` }).from(messages).where(
       and14(
         eq17(messages.receiverId, myId),
         eq17(messages.isRead, false),
         eq17(messages.isDeleted, false),
-        sql9`${messages.groupId} IS NULL`
+        sql10`${messages.groupId} IS NULL`
       )
     ).groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map((r) => [r.senderId, Number(r.cnt)]));
@@ -6043,11 +6349,11 @@ var chatRouter = router({
     if (groupIds.length > 0) {
       const latest = db.select({
         groupId: messages.groupId,
-        maxId: sql9`MAX(${messages.id})`.as("max_id")
+        maxId: sql10`MAX(${messages.id})`.as("max_id")
       }).from(messages).where(and14(
         inArray7(messages.groupId, groupIds),
         eq17(messages.isDeleted, false),
-        sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+        sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
         // 阅后即焚过期消息别当列表预览露原文
       )).groupBy(messages.groupId).as("latest");
       const latestRows = await db.select({
@@ -6085,7 +6391,7 @@ var chatRouter = router({
     return db.select({
       id: users.id,
       username: users.username,
-      name: sql9`COALESCE(${groupMembers.alias}, ${users.name})`,
+      name: sql10`COALESCE(${groupMembers.alias}, ${users.name})`,
       alias: groupMembers.alias,
       avatar: users.avatar,
       role: groupMembers.role,
@@ -6227,7 +6533,7 @@ var chatRouter = router({
     for (const id of groupIds) result[id] = 0;
     const rows = await db.select({
       groupId: messages.groupId,
-      count: sql9`count(*)`
+      count: sql10`count(*)`
     }).from(messages).leftJoin(
       groupUnreadCounts,
       and14(
@@ -6237,9 +6543,9 @@ var chatRouter = router({
     ).where(and14(
       inArray7(messages.groupId, groupIds),
       eq17(messages.isDeleted, false),
-      sql9`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
       // 焚毁消息不计未读(聊天页已看不到)
-      gt3(messages.id, sql9`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
+      gt3(messages.id, sql10`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
     )).groupBy(messages.groupId);
     for (const r of rows) {
       if (r.groupId != null) result[r.groupId] = Number(r.count);
@@ -6260,7 +6566,7 @@ var chatRouter = router({
         userId: ctx.user.id,
         role: "member"
       });
-      await db.update(chatGroups).set({ memberCount: sql9`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
+      await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
       joined++;
     }
     return { joined };
@@ -6391,7 +6697,7 @@ var chatRouter = router({
       eq17(messages.groupId, input.groupId),
       eq17(messages.isPinned, true),
       eq17(messages.isDeleted, false),
-      sql9`${messages.recalledAt} IS NULL`
+      sql10`${messages.recalledAt} IS NULL`
     )).orderBy(desc7(messages.id)).limit(10);
   }),
   // ─── Reactions ────────────────────────────────────────────────────────────
@@ -6411,7 +6717,7 @@ var chatRouter = router({
     if (input.messageIds.length === 0) return {};
     const db = await getDb();
     if (!db) return {};
-    const rows = await db.select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId }).from(messageReactions).where(sql9`${messageReactions.messageId} IN (${sql9.join(input.messageIds.map((id) => sql9`${id}`), sql9`, `)})`);
+    const rows = await db.select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId }).from(messageReactions).where(sql10`${messageReactions.messageId} IN (${sql10.join(input.messageIds.map((id) => sql10`${id}`), sql10`, `)})`);
     const result = {};
     for (const row of rows) {
       const mid = row.messageId;
@@ -6453,15 +6759,15 @@ var chatRouter = router({
       return { groupId: l.groupId, alreadyMember: false, pending: true };
     }
     if (l.maxUses > 0) {
-      const upd = await db.update(groupInviteLinks).set({ useCount: sql9`useCount + 1` }).where(and14(eq17(groupInviteLinks.id, l.id), sql9`${groupInviteLinks.useCount} < ${groupInviteLinks.maxUses}`));
+      const upd = await db.update(groupInviteLinks).set({ useCount: sql10`useCount + 1` }).where(and14(eq17(groupInviteLinks.id, l.id), sql10`${groupInviteLinks.useCount} < ${groupInviteLinks.maxUses}`));
       const aff = upd?.[0]?.affectedRows ?? upd?.affectedRows ?? upd?.rowsAffected ?? 0;
       if (aff < 1) throw new TRPCError8({ code: "FORBIDDEN", message: "\u9080\u8BF7\u94FE\u63A5\u5DF2\u8FBE\u4F7F\u7528\u4E0A\u9650" });
     } else {
-      await db.update(groupInviteLinks).set({ useCount: sql9`useCount + 1` }).where(eq17(groupInviteLinks.id, l.id));
+      await db.update(groupInviteLinks).set({ useCount: sql10`useCount + 1` }).where(eq17(groupInviteLinks.id, l.id));
     }
     await db.insert(groupMembers).values({ groupId: l.groupId, userId: ctx.user.id, role: "member" });
     await db.update(chatGroups).set({
-      memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${l.groupId})`
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${l.groupId})`
     }).where(eq17(chatGroups.id, l.groupId));
     await initReadCursor(db, l.groupId, ctx.user.id);
     const newMemberName = ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB";
@@ -6506,7 +6812,7 @@ var chatRouter = router({
     }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).where(and14(
       eq17(messages.groupId, input.groupId),
       eq17(messages.isDeleted, false),
-      sql9`${messages.recalledAt} IS NULL`,
+      sql10`${messages.recalledAt} IS NULL`,
       inArray7(messages.messageType, ["image", "video", "file"])
     )).orderBy(desc7(messages.id)).limit(input.limit);
   }),
@@ -6519,7 +6825,7 @@ var chatRouter = router({
     const existing = await db.select({ messageId: messageReadReceipts.messageId }).from(messageReadReceipts).where(and14(
       eq17(messageReadReceipts.userId, ctx.user.id),
       eq17(messageReadReceipts.groupId, input.groupId),
-      sql9`${messageReadReceipts.messageId} IN (${sql9.join(input.messageIds.map((id) => sql9`${id}`), sql9`, `)})`
+      sql10`${messageReadReceipts.messageId} IN (${sql10.join(input.messageIds.map((id) => sql10`${id}`), sql10`, `)})`
     ));
     const existingIds = new Set(existing.map((r) => r.messageId));
     const toInsert = input.messageIds.filter((id) => !existingIds.has(id));
@@ -6534,7 +6840,7 @@ var chatRouter = router({
     if (!db) return {};
     const allowedIds = await filterReadableMessageIds(db, input.messageIds, ctx.user.id);
     if (allowedIds.length === 0) return {};
-    const rows = await db.select({ messageId: messageReadReceipts.messageId, count: sql9`COUNT(*)` }).from(messageReadReceipts).where(inArray7(messageReadReceipts.messageId, allowedIds)).groupBy(messageReadReceipts.messageId);
+    const rows = await db.select({ messageId: messageReadReceipts.messageId, count: sql10`COUNT(*)` }).from(messageReadReceipts).where(inArray7(messageReadReceipts.messageId, allowedIds)).groupBy(messageReadReceipts.messageId);
     return Object.fromEntries(rows.map((r) => [r.messageId, r.count]));
   }),
   // Returns up to 5 readers (with avatar) for a specific message
@@ -6562,7 +6868,7 @@ var chatRouter = router({
     if (actor[0].role === "admin" && target[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u79FB\u9664\u5176\u4ED6\u7BA1\u7406\u5458");
     await db.delete(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, input.targetUserId)));
     await db.update(chatGroups).set({
-      memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
     }).where(eq17(chatGroups.id, input.groupId));
     try {
       evictUserFromGroupRoom(input.targetUserId, input.groupId);
@@ -6631,7 +6937,7 @@ var chatRouter = router({
     const now = /* @__PURE__ */ new Date();
     return db.select({ userId: groupMutes.userId, expiresAt: groupMutes.expiresAt, userName: users.name }).from(groupMutes).leftJoin(users, eq17(groupMutes.userId, users.id)).where(and14(
       eq17(groupMutes.groupId, input.groupId),
-      sql9`(${groupMutes.expiresAt} IS NULL OR ${groupMutes.expiresAt} > ${now})`
+      sql10`(${groupMutes.expiresAt} IS NULL OR ${groupMutes.expiresAt} > ${now})`
     ));
   }),
   // ─── Leave Group ──────────────────────────────────────────────────────────
@@ -6645,7 +6951,7 @@ var chatRouter = router({
       and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))
     );
     await db.update(chatGroups).set({
-      memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
     }).where(eq17(chatGroups.id, input.groupId));
     try {
       evictUserFromGroupRoom(ctx.user.id, input.groupId);
@@ -6774,7 +7080,7 @@ var chatRouter = router({
       if (already.length === 0) {
         await db.insert(groupMembers).values({ groupId: req.groupId, userId: req.userId, role: "member" });
         await db.update(chatGroups).set({
-          memberCount: sql9`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
+          memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
         }).where(eq17(chatGroups.id, req.groupId));
         await initReadCursor(db, req.groupId, req.userId);
       }
@@ -6807,7 +7113,7 @@ var chatRouter = router({
     const blessing = sanitizeInput(input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229", 100);
     let messageId = 0;
     await db.transaction(async (tx) => {
-      const deduct = await tx.update(users).set({ npPoints: sql9`npPoints - ${input.totalAmount}` }).where(and14(eq17(users.id, ctx.user.id), sql9`npPoints >= ${input.totalAmount}`));
+      const deduct = await tx.update(users).set({ npPoints: sql10`npPoints - ${input.totalAmount}` }).where(and14(eq17(users.id, ctx.user.id), sql10`npPoints >= ${input.totalAmount}`));
       const affected2 = deduct?.[0]?.affectedRows ?? deduct?.affectedRows ?? 0;
       if (!affected2) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u79EF\u5206\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u53D1\u7EA2\u5305" });
       const [msg] = await tx.insert(messages).values({
@@ -6896,8 +7202,8 @@ var chatRouter = router({
         claimedBy: ctx.user.id,
         amount
       });
-      await tx.update(redPackets).set({ remainingAmount: sql9`remainingAmount - ${amount}`, remainingShares: sql9`remainingShares - 1` }).where(eq17(redPackets.id, rp.id));
-      await tx.update(users).set({ npPoints: sql9`npPoints + ${amount}` }).where(eq17(users.id, ctx.user.id));
+      await tx.update(redPackets).set({ remainingAmount: sql10`remainingAmount - ${amount}`, remainingShares: sql10`remainingShares - 1` }).where(eq17(redPackets.id, rp.id));
+      await tx.update(users).set({ npPoints: sql10`npPoints + ${amount}` }).where(eq17(users.id, ctx.user.id));
       result = { ok: true, reason: "", amount };
     });
     return result;
@@ -6999,22 +7305,22 @@ var chatRouter = router({
     const dayAgo = new Date(now - 24 * 3600 * 1e3);
     const weekAgo = new Date(now - 7 * 24 * 3600 * 1e3);
     const prevWeekAgo = new Date(now - 14 * 24 * 3600 * 1e3);
-    const [memberCount] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, input.groupId));
-    const [newWeek] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), gt3(groupMembers.joinedAt, weekAgo)));
-    const [msgToday] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, dayAgo)));
-    const [msgWeek] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
-    const [msgPrevWeek] = await db.select({ c: sql9`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, prevWeekAgo), lt4(messages.createdAt, weekAgo)));
-    const [activeWeek] = await db.select({ c: sql9`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
+    const [memberCount] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, input.groupId));
+    const [newWeek] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), gt3(groupMembers.joinedAt, weekAgo)));
+    const [msgToday] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, dayAgo)));
+    const [msgWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
+    const [msgPrevWeek] = await db.select({ c: sql10`COUNT(*)` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, prevWeekAgo), lt4(messages.createdAt, weekAgo)));
+    const [activeWeek] = await db.select({ c: sql10`COUNT(DISTINCT ${messages.senderId})` }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo)));
     const daily = await db.select({
-      day: sql9`DATE(${messages.createdAt})`,
-      c: sql9`COUNT(*)`
-    }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(sql9`DATE(${messages.createdAt})`).orderBy(sql9`DATE(${messages.createdAt})`);
+      day: sql10`DATE(${messages.createdAt})`,
+      c: sql10`COUNT(*)`
+    }).from(messages).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(sql10`DATE(${messages.createdAt})`).orderBy(sql10`DATE(${messages.createdAt})`);
     const topRows = await db.select({
       userId: messages.senderId,
       name: users.name,
       avatar: users.avatar,
-      c: sql9`COUNT(*)`
-    }).from(messages).leftJoin(users, eq17(users.id, messages.senderId)).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc7(sql9`COUNT(*)`)).limit(5);
+      c: sql10`COUNT(*)`
+    }).from(messages).leftJoin(users, eq17(users.id, messages.senderId)).where(and14(eq17(messages.groupId, input.groupId), gt3(messages.createdAt, weekAgo))).groupBy(messages.senderId, users.name, users.avatar).orderBy(desc7(sql10`COUNT(*)`)).limit(5);
     const total = Number(memberCount?.c ?? 0);
     const active = Number(activeWeek?.c ?? 0);
     const mw = Number(msgWeek?.c ?? 0);
@@ -7227,7 +7533,7 @@ var chatRouter = router({
     let added = 0, remaining = 0, ctr = Date.now() * 1e3;
     const summary = [];
     for (const g of groups) {
-      const [cnt] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
+      const [cnt] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
       const have = Number(cnt?.c ?? 0);
       const target = lo + Math.floor(Math.random() * (hi - lo + 1));
       const want = target - have;
@@ -7251,7 +7557,7 @@ var chatRouter = router({
         await db.insert(groupMembers).values(Array.from({ length: n2 }, (_, i) => ({ groupId: g.id, userId: Number(firstId) + i, role: "member", joinedAt: pastDate(60) })));
         done += n2;
       }
-      const [c2] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
+      const [c2] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
       await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq17(chatGroups.id, g.id));
       added += done;
       if (want > done) remaining += want - done;
@@ -7287,7 +7593,7 @@ var chatRouter = router({
         await db.insert(groupMembers).values({ groupId: g.id, userId: bot.id, role: "member" });
         joins++;
       }
-      const [c2] = await db.select({ c: sql9`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
+      const [c2] = await db.select({ c: sql10`COUNT(*)` }).from(groupMembers).where(eq17(groupMembers.groupId, g.id));
       await db.update(chatGroups).set({ memberCount: Number(c2?.c ?? 0) }).where(eq17(chatGroups.id, g.id));
     }
     return { createdBots: created, totalBots: bots.length, groups: groups.length, joins };
@@ -7296,11 +7602,11 @@ var chatRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const now = /* @__PURE__ */ new Date();
-    const active = await db.select({ botType: groupBots.botType, c: sql9`COUNT(*)` }).from(groupBots).where(and14(eq17(groupBots.enabled, true), or5(isNull3(groupBots.expiresAt), gt3(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
+    const active = await db.select({ botType: groupBots.botType, c: sql10`COUNT(*)` }).from(groupBots).where(and14(eq17(groupBots.enabled, true), or5(isNull3(groupBots.expiresAt), gt3(groupBots.expiresAt, now)))).groupBy(groupBots.botType);
     const soon = new Date(now.getTime() + 7 * 24 * 3600 * 1e3);
-    const [expiring] = await db.select({ c: sql9`COUNT(*)` }).from(groupBots).where(and14(eq17(groupBots.enabled, true), gt3(groupBots.expiresAt, now), lt4(groupBots.expiresAt, soon)));
+    const [expiring] = await db.select({ c: sql10`COUNT(*)` }).from(groupBots).where(and14(eq17(groupBots.enabled, true), gt3(groupBots.expiresAt, now), lt4(groupBots.expiresAt, soon)));
     const revenue = await getNNRevenue(db);
-    const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql9`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
+    const orderAgg = await db.select({ status: nnNodeOrders.status, c: sql10`COUNT(*)` }).from(nnNodeOrders).groupBy(nnNodeOrders.status);
     const token = await getTokenInfo(db);
     return {
       activeBots: active.map((a) => ({ botType: a.botType, count: Number(a.c) })),
@@ -7805,7 +8111,7 @@ init_db();
 init_schema();
 init_membership();
 init_storage();
-import { eq as eq19, and as and16, desc as desc9, sql as sql10, gt as gt4 } from "drizzle-orm";
+import { eq as eq19, and as and16, desc as desc9, sql as sql11, gt as gt4 } from "drizzle-orm";
 init_token();
 import { TRPCError as TRPCError10 } from "@trpc/server";
 var PROMOTE_PLANS = [
@@ -7819,13 +8125,15 @@ var postsRouter = router({
     z8.object({
       limit: z8.number().min(1).max(50).default(20),
       offset: z8.number().min(0).default(0),
-      tag: z8.string().optional()
+      tag: z8.string().optional(),
+      authorId: z8.number().int().positive().optional()
     }).optional()
   ).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { posts: [], hasMore: false };
     const limit = input?.limit ?? 20;
     const offset = input?.offset ?? 0;
+    const authorId = input?.authorId;
     const rows = await db.select({
       id: posts.id,
       content: posts.content,
@@ -7846,8 +8154,8 @@ var postsRouter = router({
       authorWallet: users.walletAddress,
       authorProTier: users.proTier,
       authorProUntil: users.proUntil
-    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).orderBy(
-      desc9(sql10`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
+    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).where(authorId ? eq19(posts.authorId, authorId) : void 0).orderBy(
+      desc9(sql11`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
       desc9(posts.isPinned),
       desc9(posts.createdAt),
       desc9(posts.id)
@@ -7988,7 +8296,7 @@ var postsRouter = router({
         eq19(posts.authorId, ctx.user.id),
         eq19(posts.content, sanitizeInput(input.content, 2e3)),
         gt4(posts.createdAt, todayStart),
-        sql10`${posts.id} != ${result.insertId}`
+        sql11`${posts.id} != ${result.insertId}`
       )).limit(1);
       if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
     }
@@ -8004,11 +8312,11 @@ var postsRouter = router({
       const existing = await tx.select({ id: postLikes.id }).from(postLikes).where(and16(eq19(postLikes.postId, input.postId), eq19(postLikes.userId, ctx.user.id))).limit(1);
       if (existing.length > 0) {
         await tx.delete(postLikes).where(and16(eq19(postLikes.postId, input.postId), eq19(postLikes.userId, ctx.user.id)));
-        await tx.update(posts).set({ likeCount: sql10`GREATEST(likeCount - 1, 0)` }).where(eq19(posts.id, input.postId));
+        await tx.update(posts).set({ likeCount: sql11`GREATEST(likeCount - 1, 0)` }).where(eq19(posts.id, input.postId));
         return { liked: false, authorId: p.authorId };
       }
       await tx.insert(postLikes).values({ postId: input.postId, userId: ctx.user.id });
-      await tx.update(posts).set({ likeCount: sql10`likeCount + 1` }).where(eq19(posts.id, input.postId));
+      await tx.update(posts).set({ likeCount: sql11`likeCount + 1` }).where(eq19(posts.id, input.postId));
       return { liked: true, authorId: p.authorId };
     });
     if (!result.liked) return { liked: false };
@@ -8106,7 +8414,7 @@ var postsRouter = router({
     if (input.content.trim().length >= 5) {
       void awardTaskEvent(db, ctx.user.id, "comment_made");
     }
-    await db.update(posts).set({ commentCount: sql10`commentCount + 1` }).where(eq19(posts.id, input.postId));
+    await db.update(posts).set({ commentCount: sql11`commentCount + 1` }).where(eq19(posts.id, input.postId));
     const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
     if (post && post.authorId !== ctx.user.id) {
       const [commenter] = await db.select({ name: users.name, avatar: users.avatar }).from(users).where(eq19(users.id, ctx.user.id)).limit(1);
@@ -8178,7 +8486,7 @@ var postsRouter = router({
   repost: protectedProcedure.input(z8.object({ postId: z8.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(posts).set({ shareCount: sql10`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
+    await db.update(posts).set({ shareCount: sql11`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
     const [original] = await db.select({ content: posts.content, authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
     if (!original) throw new Error("Post not found");
     const [originalAuthor] = await db.select({ name: users.name }).from(users).where(eq19(users.id, original.authorId)).limit(1);
@@ -8214,7 +8522,7 @@ ${original.content.slice(0, 500)}`;
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(posts).set({ shareCount: sql10`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
+    await db.update(posts).set({ shareCount: sql11`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
     const [original] = await db.select({ content: posts.content, authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
     if (!original) throw new Error("Post not found");
     const [originalAuthor] = await db.select({ name: users.name }).from(users).where(eq19(users.id, original.authorId)).limit(1);
@@ -8271,7 +8579,7 @@ ${original.content.slice(0, 500)}`;
       authorAvatar: users.avatar,
       authorUsername: users.username,
       authorWallet: users.walletAddress
-    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).where(sql10`${posts.content} LIKE ${keyword} OR ${posts.tags} LIKE ${keyword}`).orderBy(desc9(posts.createdAt)).limit(input.limit);
+    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).where(sql11`${posts.content} LIKE ${keyword} OR ${posts.tags} LIKE ${keyword}`).orderBy(desc9(posts.createdAt)).limit(input.limit);
     let likedPostIds = /* @__PURE__ */ new Set();
     if (ctx.user) {
       const likes = await db.select({ postId: postLikes.postId }).from(postLikes).where(eq19(postLikes.userId, ctx.user.id));
@@ -8768,7 +9076,7 @@ var tradingRouter = router({
 import { z as z10 } from "zod";
 init_db();
 init_schema();
-import { eq as eq21, and as and18, count as count4 } from "drizzle-orm";
+import { eq as eq21, and as and18, count as count4, sql as sql12, desc as desc11 } from "drizzle-orm";
 async function createFollowNotification(db, fromUser, toUserId) {
   if (!db || fromUser.id === toUserId) return;
   await db.insert(notifications).values({
@@ -8833,30 +9141,49 @@ var followRouter = router({
     ).limit(1);
     return { following: result.length > 0 };
   }),
-  // Get follower/following counts for a user
+  // Get follower/following/likes counts for a user
   getCounts: publicProcedure.input(z10.object({ userId: z10.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) return { followers: 0, following: 0 };
-    const [followerResult, followingResult] = await Promise.all([
+    if (!db) return { followers: 0, following: 0, likes: 0, posts: 0 };
+    const [followerResult, followingResult, likeResult, postResult] = await Promise.all([
       db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followingId, input.userId)),
-      db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followerId, input.userId))
+      db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followerId, input.userId)),
+      db.select({ cnt: sql12`COALESCE(SUM(${posts.likeCount}), 0)` }).from(posts).where(eq21(posts.authorId, input.userId)),
+      db.select({ cnt: count4() }).from(posts).where(eq21(posts.authorId, input.userId))
     ]);
     return {
-      followers: followerResult[0]?.cnt ?? 0,
-      following: followingResult[0]?.cnt ?? 0
+      followers: Number(followerResult[0]?.cnt ?? 0),
+      following: Number(followingResult[0]?.cnt ?? 0),
+      likes: Number(likeResult[0]?.cnt ?? 0),
+      posts: Number(postResult[0]?.cnt ?? 0)
     };
   }),
   // Get list of users that the current user follows
-  getFollowing: protectedProcedure.input(z10.object({ limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
+  getFollowing: protectedProcedure.input(z10.object({ userId: z10.number().optional(), limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
+    const uid = input?.userId ?? ctx.user.id;
     const rows = await db.select({
       id: users.id,
       name: users.name,
       username: users.username,
       avatar: users.avatar,
       bio: users.bio
-    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followingId)).where(eq21(userFollows.followerId, ctx.user.id)).limit(input?.limit ?? 50);
+    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followingId)).where(eq21(userFollows.followerId, uid)).orderBy(desc11(userFollows.id)).limit(input?.limit ?? 50);
+    return rows;
+  }),
+  // Get followers of a user
+  getFollowers: protectedProcedure.input(z10.object({ userId: z10.number().optional(), limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const uid = input?.userId ?? ctx.user.id;
+    const rows = await db.select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatar: users.avatar,
+      bio: users.bio
+    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followerId)).where(eq21(userFollows.followingId, uid)).orderBy(desc11(userFollows.id)).limit(input?.limit ?? 50);
     return rows;
   })
 });
@@ -8866,7 +9193,7 @@ import { z as z11 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and19, eq as eq22, or as or6, desc as desc11 } from "drizzle-orm";
+import { and as and19, eq as eq22, or as or6, desc as desc12 } from "drizzle-orm";
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -8931,7 +9258,7 @@ var contactsRouter = router({
       username: users.username,
       avatar: users.avatar,
       blockedAt: userBlocklist.createdAt
-    }).from(userBlocklist).innerJoin(users, eq22(users.id, userBlocklist.blockedId)).where(eq22(userBlocklist.blockerId, ctx.user.id)).orderBy(desc11(userBlocklist.createdAt));
+    }).from(userBlocklist).innerJoin(users, eq22(users.id, userBlocklist.blockedId)).where(eq22(userBlocklist.blockerId, ctx.user.id)).orderBy(desc12(userBlocklist.createdAt));
   }),
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure.input(z11.object({ receiverId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9034,7 +9361,7 @@ var contactsRouter = router({
         eq22(friendRequests.receiverId, ctx.user.id),
         eq22(friendRequests.status, "pending")
       )
-    ).orderBy(desc11(friendRequests.createdAt)).limit(50);
+    ).orderBy(desc12(friendRequests.createdAt)).limit(50);
     return rows.map((r) => ({
       id: r.id,
       senderId: r.senderId,
@@ -9059,7 +9386,7 @@ var contactsRouter = router({
         eq22(friendRequests.senderId, ctx.user.id),
         eq22(friendRequests.status, "pending")
       )
-    ).orderBy(desc11(friendRequests.createdAt)).limit(50);
+    ).orderBy(desc12(friendRequests.createdAt)).limit(50);
     return rows.map((r) => ({
       id: r.id,
       receiverId: r.receiverId,
@@ -9221,13 +9548,13 @@ var contactsRouter = router({
 import { z as z12 } from "zod";
 init_db();
 init_schema();
-import { and as and20, eq as eq23, desc as desc12 } from "drizzle-orm";
+import { and as and20, eq as eq23, desc as desc13 } from "drizzle-orm";
 var watchlistRouter = router({
   // ─── Get user's watchlist ────────────────────────────────────────────────────
   getWatchlist: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(userWatchlist).where(eq23(userWatchlist.userId, ctx.user.id)).orderBy(desc12(userWatchlist.createdAt));
+    return db.select().from(userWatchlist).where(eq23(userWatchlist.userId, ctx.user.id)).orderBy(desc13(userWatchlist.createdAt));
   }),
   // ─── Add token to watchlist ──────────────────────────────────────────────────
   addToken: protectedProcedure.input(
@@ -9284,7 +9611,7 @@ var watchlistRouter = router({
 import { z as z13 } from "zod";
 init_db();
 init_schema();
-import { eq as eq24, and as and21, desc as desc13, sql as sql12 } from "drizzle-orm";
+import { eq as eq24, and as and21, desc as desc14, sql as sql13 } from "drizzle-orm";
 var copyTradingRouter = router({
   // ─── List all active copy traders ──────────────────────────────────────────
   listTraders: publicProcedure.query(async () => {
@@ -9303,8 +9630,8 @@ var copyTradingRouter = router({
       trades30d: copyTraders.trades30d,
       maxDrawdown: copyTraders.maxDrawdown,
       topPairs: copyTraders.topPairs,
-      followerCount: sql12`(SELECT COUNT(*) FROM copy_trader_follows WHERE traderId = ${copyTraders.id})`
-    }).from(copyTraders).where(eq24(copyTraders.isActive, true)).orderBy(desc13(copyTraders.winRate)).limit(50);
+      followerCount: sql13`(SELECT COUNT(*) FROM copy_trader_follows WHERE traderId = ${copyTraders.id})`
+    }).from(copyTraders).where(eq24(copyTraders.isActive, true)).orderBy(desc14(copyTraders.winRate)).limit(50);
     return rows.map((r) => ({
       ...r,
       topPairs: r.topPairs ? JSON.parse(r.topPairs) : []
@@ -9373,7 +9700,7 @@ var copyTradingRouter = router({
   listStrategies: publicProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.isActive, true)).orderBy(desc13(tradingStrategies.winRate)).limit(50);
+    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.isActive, true)).orderBy(desc14(tradingStrategies.winRate)).limit(50);
   }),
   // ─── Create / update a strategy ────────────────────────────────────────────
   upsertStrategy: protectedProcedure.input(z13.object({
@@ -9424,7 +9751,7 @@ var copyTradingRouter = router({
   myStrategies: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.userId, ctx.user.id)).orderBy(desc13(tradingStrategies.createdAt));
+    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.userId, ctx.user.id)).orderBy(desc14(tradingStrategies.createdAt));
   }),
   // ─── Toggle strategy active status ─────────────────────────────────────────
   toggleStrategy: protectedProcedure.input(z13.object({ id: z13.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9458,7 +9785,7 @@ var copyTradingRouter = router({
 import { z as z14 } from "zod";
 init_db();
 init_schema();
-import { eq as eq25, and as and22, desc as desc14 } from "drizzle-orm";
+import { eq as eq25, and as and22, desc as desc15 } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 function hashApiKey(key) {
   return createHash("sha256").update(key).digest("hex");
@@ -9519,7 +9846,7 @@ var settingsRouter = router({
       isActive: userApiKeys.isActive,
       lastUsedAt: userApiKeys.lastUsedAt,
       createdAt: userApiKeys.createdAt
-    }).from(userApiKeys).where(eq25(userApiKeys.userId, ctx.user.id)).orderBy(desc14(userApiKeys.createdAt));
+    }).from(userApiKeys).where(eq25(userApiKeys.userId, ctx.user.id)).orderBy(desc15(userApiKeys.createdAt));
     return keys.map((k) => ({
       ...k,
       maskedKey: `${k.keyPrefix}${"\u2022".repeat(40)}`
@@ -9571,7 +9898,7 @@ var settingsRouter = router({
 import { z as z15 } from "zod";
 init_db();
 init_schema();
-import { eq as eq26, and as and23, or as or7, desc as desc15, count as count5, sql as sql13 } from "drizzle-orm";
+import { eq as eq26, and as and23, or as or7, desc as desc16, count as count5, sql as sql14 } from "drizzle-orm";
 init_env();
 var REFERRER_REWARD = 100;
 var INVITEE_REWARD = 200;
@@ -9592,7 +9919,7 @@ var referralRouter = router({
     const inviteCode = await ensureInviteCode(db, userId, userName);
     const [totalResult] = await db.select({ cnt: count5() }).from(referrals).where(eq26(referrals.referrerId, userId));
     const [activeResult] = await db.select({ cnt: count5() }).from(referrals).where(and23(eq26(referrals.referrerId, userId), eq26(referrals.status, "active")));
-    const [rewardResult] = await db.select({ total: sql13`COALESCE(SUM(${referrals.referrerReward}), 0)` }).from(referrals).where(eq26(referrals.referrerId, userId));
+    const [rewardResult] = await db.select({ total: sql14`COALESCE(SUM(${referrals.referrerReward}), 0)` }).from(referrals).where(eq26(referrals.referrerId, userId));
     const totalInvited = totalResult?.cnt ?? 0;
     const activeInvited = activeResult?.cnt ?? 0;
     const totalRewards = rewardResult?.total ?? 0;
@@ -9625,7 +9952,7 @@ var referralRouter = router({
       inviteeName: users.name,
       inviteeAvatar: users.avatar,
       inviteeUsername: users.username
-    }).from(referrals).leftJoin(users, eq26(referrals.inviteeId, users.id)).where(eq26(referrals.referrerId, userId)).orderBy(desc15(referrals.createdAt)).limit(100);
+    }).from(referrals).leftJoin(users, eq26(referrals.inviteeId, users.id)).where(eq26(referrals.referrerId, userId)).orderBy(desc16(referrals.createdAt)).limit(100);
     return rows.map((r) => ({
       id: String(r.id),
       name: r.inviteeUsername || r.inviteeName || `User #${r.inviteeId}`,
@@ -9692,8 +10019,8 @@ var referralRouter = router({
         inviteeReward: INVITEE_REWARD,
         activatedAt: /* @__PURE__ */ new Date()
       });
-      await tx.update(users).set({ npPoints: sql13`${users.npPoints} + ${REFERRER_REWARD}` }).where(eq26(users.id, referrer.id));
-      await tx.update(users).set({ npPoints: sql13`${users.npPoints} + ${INVITEE_REWARD}` }).where(eq26(users.id, inviteeId));
+      await tx.update(users).set({ npPoints: sql14`${users.npPoints} + ${REFERRER_REWARD}` }).where(eq26(users.id, referrer.id));
+      await tx.update(users).set({ npPoints: sql14`${users.npPoints} + ${INVITEE_REWARD}` }).where(eq26(users.id, inviteeId));
       return "ok";
     });
     if (outcome === "dup") return { success: false, message: "Already referred" };
@@ -9705,7 +10032,7 @@ var referralRouter = router({
 init_schema();
 import { TRPCError as TRPCError12 } from "@trpc/server";
 import bcrypt from "bcryptjs";
-import { eq as eq27, and as and24, gt as gt5, isNull as isNull4, sql as sql14 } from "drizzle-orm";
+import { eq as eq27, and as and24, gt as gt5, isNull as isNull4, sql as sql15 } from "drizzle-orm";
 import { z as z16 } from "zod";
 import { randomBytes as randomBytes2 } from "crypto";
 init_db();
@@ -10381,7 +10708,7 @@ var emailAuthRouter = router({
     }
     const deviceId = input.deviceId?.trim() || null;
     if (deviceId) {
-      const [{ c: devCount = 0 } = { c: 0 }] = await db.select({ c: sql14`COUNT(*)` }).from(users).where(eq27(users.deviceId, deviceId));
+      const [{ c: devCount = 0 } = { c: 0 }] = await db.select({ c: sql15`COUNT(*)` }).from(users).where(eq27(users.deviceId, deviceId));
       if (Number(devCount) >= 3) {
         throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: "\u8BE5\u8BBE\u5907\u6CE8\u518C\u8D26\u53F7\u6570\u5DF2\u8FBE\u4E0A\u9650" });
       }
@@ -10763,7 +11090,7 @@ import { TRPCError as TRPCError14 } from "@trpc/server";
 init_db();
 init_schema();
 init_env();
-import { eq as eq28, and as and25, desc as desc16, sql as sql15, gte as gte6 } from "drizzle-orm";
+import { eq as eq28, and as and25, desc as desc17, sql as sql16, gte as gte6 } from "drizzle-orm";
 
 // server/_core/livekitToken.ts
 import crypto2 from "crypto";
@@ -10869,7 +11196,7 @@ function startOfMonth() {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 async function roomsThisMonth(db, userId) {
-  const [row] = await db.select({ cnt: sql15`count(*)` }).from(voiceRooms).where(and25(eq28(voiceRooms.hostUserId, userId), gte6(voiceRooms.createdAt, startOfMonth())));
+  const [row] = await db.select({ cnt: sql16`count(*)` }).from(voiceRooms).where(and25(eq28(voiceRooms.hostUserId, userId), gte6(voiceRooms.createdAt, startOfMonth())));
   return Number(row?.cnt ?? 0);
 }
 var VOICE_GIFTS = [
@@ -10882,7 +11209,7 @@ var VOICE_GIFTS = [
 ];
 async function spendAC(db, userId, cost) {
   if (cost <= 0) return true;
-  const res = await db.update(users).set({ npPoints: sql15`${users.npPoints} - ${cost}` }).where(and25(eq28(users.id, userId), sql15`${users.npPoints} >= ${cost}`));
+  const res = await db.update(users).set({ npPoints: sql16`${users.npPoints} - ${cost}` }).where(and25(eq28(users.id, userId), sql16`${users.npPoints} >= ${cost}`));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? res?.rowsAffected ?? 0;
   return affected2 > 0;
 }
@@ -10932,7 +11259,7 @@ var voiceRoomRouter = router({
       hostName: users.name,
       hostUsername: users.username,
       hostAvatar: users.avatar
-    }).from(voiceRooms).leftJoin(users, eq28(users.id, voiceRooms.hostUserId)).where(cat === "all" ? and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true)) : and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true), eq28(voiceRooms.category, cat))).orderBy(desc16(voiceRooms.listenerCount), desc16(voiceRooms.createdAt)).limit(50);
+    }).from(voiceRooms).leftJoin(users, eq28(users.id, voiceRooms.hostUserId)).where(cat === "all" ? and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true)) : and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true), eq28(voiceRooms.category, cat))).orderBy(desc17(voiceRooms.listenerCount), desc17(voiceRooms.createdAt)).limit(50);
     const lkOn = liveKitConfigured();
     const mapped = await Promise.all(rows.map(async (r) => {
       const real = lkOn ? await realOnline(r.room.roomId) : null;
@@ -11027,7 +11354,7 @@ var voiceRoomRouter = router({
       if (!benefits.badge) throw new TRPCError14({ code: "FORBIDDEN", message: "\u8BE5\u623F\u4E3A\u4F1A\u5458\u4E13\u5C5E\uFF0C\u5347\u7EA7 Plus/Pro \u540E\u53EF\u8FDB\u5165" });
     }
     if (!isHost) {
-      await db.update(voiceRooms).set({ listenerCount: sql15`${voiceRooms.listenerCount} + 1` }).where(eq28(voiceRooms.id, rid));
+      await db.update(voiceRooms).set({ listenerCount: sql16`${voiceRooms.listenerCount} + 1` }).where(eq28(voiceRooms.id, rid));
     }
     const name = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237${ctx.user.id}`;
     const token = signToken(
@@ -11057,7 +11384,7 @@ var voiceRoomRouter = router({
     const rid = Number.parseInt(input.id, 10);
     const [room] = await db.select().from(voiceRooms).where(eq28(voiceRooms.id, rid)).limit(1);
     if (room && room.hostUserId !== ctx.user.id) {
-      await db.update(voiceRooms).set({ listenerCount: sql15`GREATEST(${voiceRooms.listenerCount} - 1, 0)` }).where(eq28(voiceRooms.id, rid));
+      await db.update(voiceRooms).set({ listenerCount: sql16`GREATEST(${voiceRooms.listenerCount} - 1, 0)` }).where(eq28(voiceRooms.id, rid));
     }
     return { ok: true };
   }),
@@ -11104,7 +11431,7 @@ var voiceRoomRouter = router({
     if (input.targetUserId === room.hostUserId) return { ok: true };
     if (room.speakerCount >= MAX_SPEAKERS) throw new TRPCError14({ code: "BAD_REQUEST", message: `\u9EA6\u4F4D\u5DF2\u6EE1\uFF08\u4E0A\u9650 ${MAX_SPEAKERS}\uFF09` });
     await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), true);
-    await db.update(voiceRooms).set({ speakerCount: sql15`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq28(voiceRooms.id, rid));
+    await db.update(voiceRooms).set({ speakerCount: sql16`LEAST(${voiceRooms.speakerCount} + 1, ${MAX_SPEAKERS})` }).where(eq28(voiceRooms.id, rid));
     return { ok: true };
   }),
   /** 房主请人下麦：canPublish=false。 */
@@ -11117,7 +11444,7 @@ var voiceRoomRouter = router({
     if (room.hostUserId !== ctx.user.id) throw new TRPCError14({ code: "FORBIDDEN", message: "\u53EA\u6709\u623F\u4E3B\u53EF\u4EE5\u64CD\u4F5C" });
     if (input.targetUserId === room.hostUserId) throw new TRPCError14({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u8BF7\u623F\u4E3B\u4E0B\u9EA6" });
     await setParticipantCanPublish(`voice_${room.roomId}`, String(input.targetUserId), false);
-    await db.update(voiceRooms).set({ speakerCount: sql15`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq28(voiceRooms.id, rid));
+    await db.update(voiceRooms).set({ speakerCount: sql16`GREATEST(${voiceRooms.speakerCount} - 1, 1)` }).where(eq28(voiceRooms.id, rid));
     return { ok: true };
   })
 });
@@ -11128,7 +11455,7 @@ import { TRPCError as TRPCError15 } from "@trpc/server";
 init_db();
 init_schema();
 init_token();
-import { eq as eq29, and as and26, desc as desc17, gt as gt6, asc as asc2, inArray as inArray8, sql as sql16, ne as ne4 } from "drizzle-orm";
+import { eq as eq29, and as and26, desc as desc18, gt as gt6, asc as asc2, inArray as inArray8, sql as sql17, ne as ne4 } from "drizzle-orm";
 
 // server/ico/pricing.ts
 function priceAtFraction(c, x) {
@@ -11326,13 +11653,13 @@ async function settleOrder(db, orderId, paidUsdt) {
       if (n(acc0?.locked) + tokens > n(c.perWalletCap)) throw new TRPCError15({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u5355\u94B1\u5305\u8BA4\u8D2D\u4E0A\u9650" });
     }
     const q = quote(curve, sold, tokens);
-    const [{ prevUsdt }] = await tx.select({ prevUsdt: sql16`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq29(icoPurchases.userId, o.userId));
+    const [{ prevUsdt }] = await tx.select({ prevUsdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq29(icoPurchases.userId, o.userId));
     const cumUsdt = n(prevUsdt) + usdt;
     const tier = deriveIcoTier(cumUsdt);
     const bonusPct = tier?.bonusPct ?? 0;
     const bonus = tokens * bonusPct;
     const credited = tokens + bonus;
-    await tx.update(icoConfig).set({ tokensSold: sql16`${icoConfig.tokensSold} + ${tokens}` }).where(eq29(icoConfig.id, 1));
+    await tx.update(icoConfig).set({ tokensSold: sql17`${icoConfig.tokensSold} + ${tokens}` }).where(eq29(icoConfig.id, 1));
     const [pr] = await tx.insert(icoPurchases).values({
       userId: o.userId,
       usdtAmount: String(usdt),
@@ -11348,8 +11675,8 @@ async function settleOrder(db, orderId, paidUsdt) {
       stakedBalance: String(credited),
       firstPurchaseAt: /* @__PURE__ */ new Date()
     }).onDuplicateKeyUpdate({ set: {
-      lockedTotal: sql16`${icoAccounts.lockedTotal} + ${credited}`,
-      stakedBalance: sql16`${icoAccounts.stakedBalance} + ${credited}`
+      lockedTotal: sql17`${icoAccounts.lockedTotal} + ${credited}`,
+      stakedBalance: sql17`${icoAccounts.stakedBalance} + ${credited}`
     } });
     await tx.insert(icoStakeLots).values({ userId: o.userId, amount: String(credited), stakedAt: /* @__PURE__ */ new Date(), source: "purchase" });
     if (tier) await tx.update(users).set({ icoTier: tier.level }).where(eq29(users.id, o.userId));
@@ -11401,13 +11728,13 @@ async function settleIcoRewards(date) {
         if (reward <= 0) continue;
         const acc = accs.find((a) => a.userId === userId);
         if (acc.autoCompound) {
-          await tx.update(icoAccounts).set({ stakedBalance: sql16`${icoAccounts.stakedBalance} + ${reward}` }).where(eq29(icoAccounts.userId, userId));
+          await tx.update(icoAccounts).set({ stakedBalance: sql17`${icoAccounts.stakedBalance} + ${reward}` }).where(eq29(icoAccounts.userId, userId));
           await tx.insert(icoStakeLots).values({ userId, amount: String(reward), stakedAt: /* @__PURE__ */ new Date(), source: "compound" });
         } else {
-          await tx.update(icoAccounts).set({ pendingReward: sql16`${icoAccounts.pendingReward} + ${reward}` }).where(eq29(icoAccounts.userId, userId));
+          await tx.update(icoAccounts).set({ pendingReward: sql17`${icoAccounts.pendingReward} + ${reward}` }).where(eq29(icoAccounts.userId, userId));
         }
       }
-      await tx.update(icoConfig).set({ rewardEmitted: sql16`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq29(icoConfig.id, 1));
+      await tx.update(icoConfig).set({ rewardEmitted: sql17`${icoConfig.rewardEmitted} + ${emitted}` }).where(eq29(icoConfig.id, 1));
       await tx.insert(icoRewardRuns).values({ runDate: date, stakers: perUser.size, totalWeight: String(uncapped), emitted: String(emitted) });
       out = { ok: true, skipped: false, emitted, stakers: perUser.size, factor, poolLeft: Math.max(0, remaining - emitted) };
     });
@@ -11518,7 +11845,7 @@ var icoRouter = router({
   myOrders: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(icoOrders).where(eq29(icoOrders.userId, ctx.user.id)).orderBy(desc17(icoOrders.createdAt)).limit(50);
+    const rows = await db.select().from(icoOrders).where(eq29(icoOrders.userId, ctx.user.id)).orderBy(desc18(icoOrders.createdAt)).limit(50);
     return rows.map((o) => ({ id: o.id, usdtAmount: n(o.usdtAmount), status: o.status, txHash: o.txHash, createdAt: o.createdAt }));
   }),
   /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 + 释放进度参数 */
@@ -11543,7 +11870,7 @@ var icoRouter = router({
       asum += amt;
     }
     const currentApr = asum > 0 ? wsum / asum : n(c.aprStart);
-    const [{ usdt }] = await db.select({ usdt: sql16`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq29(icoPurchases.userId, ctx.user.id));
+    const [{ usdt }] = await db.select({ usdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(eq29(icoPurchases.userId, ctx.user.id));
     const subscribedUsdt = n(usdt);
     const t3 = deriveIcoTier(subscribedUsdt);
     const ng = nextTierGap(subscribedUsdt);
@@ -11581,8 +11908,8 @@ var icoRouter = router({
       const withdrawable = Math.max(0, vested - n(acc.withdrawnPrincipal));
       if (input.amount > withdrawable + 1e-8) throw new TRPCError15({ code: "BAD_REQUEST", message: `\u53EF\u63D0\u4F59\u989D\u4E0D\u8DB3,\u5F53\u524D\u53EF\u63D0 ${withdrawable.toFixed(4)}` });
       await tx.update(icoAccounts).set({
-        withdrawnPrincipal: sql16`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
-        stakedBalance: sql16`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`
+        withdrawnPrincipal: sql17`${icoAccounts.withdrawnPrincipal} + ${input.amount}`,
+        stakedBalance: sql17`GREATEST(${icoAccounts.stakedBalance} - ${input.amount}, 0)`
       }).where(eq29(icoAccounts.userId, ctx.user.id));
       let toReduce = input.amount;
       const lots = await tx.select().from(icoStakeLots).where(and26(eq29(icoStakeLots.userId, ctx.user.id), gt6(icoStakeLots.amount, "0"))).orderBy(asc2(icoStakeLots.stakedAt));
@@ -11608,7 +11935,7 @@ var icoRouter = router({
       if (pending <= 0) return;
       await tx.update(icoAccounts).set({
         pendingReward: "0",
-        claimedReward: sql16`${icoAccounts.claimedReward} + ${pending}`
+        claimedReward: sql17`${icoAccounts.claimedReward} + ${pending}`
       }).where(eq29(icoAccounts.userId, ctx.user.id));
       const ok = await grantNN(tx, ctx.user.id, pending, { type: "ico_reward", refType: "user", refId: ctx.user.id });
       if (!ok) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "\u53D1\u653E\u5931\u8D25" });
@@ -11656,7 +11983,7 @@ var icoRouter = router({
     const db = await getDb();
     if (!db) return [];
     const st = input?.status ?? "pending";
-    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq29(users.id, icoOrders.userId)).where(st === "all" ? sql16`1=1` : eq29(icoOrders.status, st)).orderBy(desc17(icoOrders.createdAt)).limit(100);
+    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq29(users.id, icoOrders.userId)).where(st === "all" ? sql17`1=1` : eq29(icoOrders.status, st)).orderBy(desc18(icoOrders.createdAt)).limit(100);
     return rows.map((r) => ({
       id: r.o.id,
       userId: r.o.userId,
@@ -11743,11 +12070,34 @@ function isOwnDownloadLoop(url, publicOrigin = ENV.publicOrigin) {
   try {
     const origin = new URL(publicOrigin);
     const target = new URL(raw, origin);
-    const path4 = target.pathname.replace(/\/+$/, "") || "/";
-    return target.origin === origin.origin && LOOP_PATHS.has(path4);
+    const path5 = target.pathname.replace(/\/+$/, "") || "/";
+    return target.origin === origin.origin && LOOP_PATHS.has(path5);
   } catch {
     return true;
   }
+}
+function isExpoBuildPageUrl(url) {
+  const raw = url?.trim();
+  if (!raw) return false;
+  try {
+    const u = new URL(raw);
+    if (!/(^|\.)expo\.dev$/i.test(u.hostname)) return false;
+    if (/\/artifacts\/eas\//i.test(u.pathname) && /\.apk$/i.test(u.pathname)) return false;
+    return /\/builds\//i.test(u.pathname) || !/\/artifacts\//i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+function assertAndroidApkSource(url) {
+  const raw = url?.trim();
+  if (!raw) return null;
+  if (isOwnDownloadLoop(raw)) {
+    return "Android \u4E0B\u8F7D\u5730\u5740\u5FC5\u987B\u662F APK \u6587\u4EF6\u6E90\uFF0C\u4E0D\u80FD\u586B\u5199\u672C\u7AD9 /apk \u6216 /download";
+  }
+  if (isExpoBuildPageUrl(raw)) {
+    return "\u8BF7\u586B\u5199 APK \u76F4\u94FE\uFF08\u2026/artifacts/eas/xxx.apk\uFF09\uFF0C\u4E0D\u8981\u586B\u6784\u5EFA\u8BE6\u60C5\u9875\uFF08\u2026/builds/\u2026\uFF09";
+  }
+  return null;
 }
 function resolveAndroidApkSource(url, publicOrigin = ENV.publicOrigin, fallbackUrl = ENV.androidApkFallbackUrl) {
   const raw = url?.trim() ?? "";
@@ -11766,7 +12116,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 }
 
 // server/routers/appVersion.ts
-var CURRENT_APP_VERSION = "1.9.0";
+var CURRENT_APP_VERSION = "1.9.1";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -11854,11 +12204,9 @@ var appVersionRouter = router({
     }
     const db = await getDb();
     if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR" });
-    if (input.downloadUrlAndroid && isOwnDownloadLoop(input.downloadUrlAndroid)) {
-      throw new TRPCError16({
-        code: "BAD_REQUEST",
-        message: "Android \u4E0B\u8F7D\u5730\u5740\u5FC5\u987B\u662F APK \u6587\u4EF6\u6E90\uFF0C\u4E0D\u80FD\u586B\u5199\u672C\u7AD9 /apk \u6216 /download"
-      });
+    const apkErr = assertAndroidApkSource(input.downloadUrlAndroid);
+    if (apkErr) {
+      throw new TRPCError16({ code: "BAD_REQUEST", message: apkErr });
     }
     const existing = await db.select().from(appConfig).where(eq30(appConfig.platform, "all")).limit(1);
     if (existing.length > 0) {
@@ -11891,7 +12239,7 @@ var appVersionRouter = router({
 init_db();
 init_schema();
 import { z as z21 } from "zod";
-import { eq as eq31, desc as desc18, and as and27 } from "drizzle-orm";
+import { eq as eq31, desc as desc19, and as and27 } from "drizzle-orm";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 init_logger();
 var BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
@@ -12170,7 +12518,7 @@ var consultingRouter = router({
       status: consultingReports.status,
       txHash: consultingReports.txHash,
       createdAt: consultingReports.createdAt
-    }).from(consultingReports).where(eq31(consultingReports.userId, ctx.user.id)).orderBy(desc18(consultingReports.createdAt)).limit(input?.limit ?? 20);
+    }).from(consultingReports).where(eq31(consultingReports.userId, ctx.user.id)).orderBy(desc19(consultingReports.createdAt)).limit(input?.limit ?? 20);
   }),
   /**
    * Manually retry payment verification (for cases where auto-verify failed)
@@ -12229,7 +12577,7 @@ import { z as z22 } from "zod";
 import { TRPCError as TRPCError18 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq32, and as and28, gte as gte7, desc as desc19, asc as asc3, sql as sql17, inArray as inArray9 } from "drizzle-orm";
+import { eq as eq32, and as and28, gte as gte7, desc as desc20, asc as asc3, sql as sql18, inArray as inArray9 } from "drizzle-orm";
 init_token();
 
 // server/swap/floorAmm.ts
@@ -12325,7 +12673,7 @@ function affected(r) {
   return a?.[0]?.affectedRows ?? a?.affectedRows ?? a?.rowsAffected ?? 0;
 }
 async function sumNn(d) {
-  const [r] = await d.select({ s: sql17`COALESCE(SUM(${users.nnBalance}),0)` }).from(users);
+  const [r] = await d.select({ s: sql18`COALESCE(SUM(${users.nnBalance}),0)` }).from(users);
   return Number(r?.s ?? 0);
 }
 var swapRouter = router({
@@ -12337,7 +12685,7 @@ var swapRouter = router({
     const ps = poolFromRow(pool);
     const now = Date.now();
     const price = spotPrice(ps);
-    const recent = await db.select().from(aiSwapTrades).orderBy(desc19(aiSwapTrades.createdAt)).limit(30);
+    const recent = await db.select().from(aiSwapTrades).orderBy(desc20(aiSwapTrades.createdAt)).limit(30);
     const trades = recent.map((t3) => ({
       side: t3.side,
       ai: Number(t3.aiAmount),
@@ -12421,16 +12769,16 @@ var swapRouter = router({
         if (aiOut >= ps.aiReserve) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u552E\u5E93\u5B58" });
         const net2 = usdtIn - q.toReserve;
         await tx.update(aiAmmPool).set({
-          usdtReserve: sql17`${aiAmmPool.usdtReserve} + ${net2}`,
-          aiReserve: sql17`${aiAmmPool.aiReserve} - ${aiOut}`,
-          reserveR: sql17`${aiAmmPool.reserveR} + ${q.toReserve}`,
-          circulatingAi: sql17`${aiAmmPool.circulatingAi} + ${aiOut}`,
-          cumBoughtUsdt: sql17`${aiAmmPool.cumBoughtUsdt} + ${usdtIn}`,
-          totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${usdtIn}`
+          usdtReserve: sql18`${aiAmmPool.usdtReserve} + ${net2}`,
+          aiReserve: sql18`${aiAmmPool.aiReserve} - ${aiOut}`,
+          reserveR: sql18`${aiAmmPool.reserveR} + ${q.toReserve}`,
+          circulatingAi: sql18`${aiAmmPool.circulatingAi} + ${aiOut}`,
+          cumBoughtUsdt: sql18`${aiAmmPool.cumBoughtUsdt} + ${usdtIn}`,
+          totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${usdtIn}`
         }).where(eq32(aiAmmPool.id, 1));
         const r = await tx.update(users).set({
-          usdtBalance: sql17`${users.usdtBalance} - ${usdtIn}`,
-          nnBalance: sql17`${users.nnBalance} + ${aiOut}`
+          usdtBalance: sql18`${users.usdtBalance} - ${usdtIn}`,
+          nnBalance: sql18`${users.nnBalance} + ${aiOut}`
         }).where(and28(eq32(users.id, ctx.user.id), gte7(users.usdtBalance, usdtIn.toFixed(8))));
         if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
         out = aiOut;
@@ -12449,26 +12797,26 @@ var swapRouter = router({
         if (q.viaFloor) {
           if (q.usdtOut >= ps.reserveR) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u50A8\u5907\u6682\u4E0D\u8DB3,\u8BF7\u51CF\u5C11\u6570\u91CF" });
           await tx.update(aiAmmPool).set({
-            reserveR: sql17`${aiAmmPool.reserveR} - ${q.usdtOut}`,
-            circulatingAi: sql17`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
-            totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${q.usdtOut}`
+            reserveR: sql18`${aiAmmPool.reserveR} - ${q.usdtOut}`,
+            circulatingAi: sql18`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
+            totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${q.usdtOut}`
           }).where(eq32(aiAmmPool.id, 1));
           marketPrice = floorPrice(ps, supply);
         } else {
           if (q.grossUsdt >= ps.usdtReserve) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u8D85\u8FC7\u6C60\u53EF\u4ED8\u989D\u5EA6" });
           await tx.update(aiAmmPool).set({
-            aiReserve: sql17`${aiAmmPool.aiReserve} + ${aiIn}`,
-            usdtReserve: sql17`${aiAmmPool.usdtReserve} - ${q.grossUsdt}`,
-            circulatingAi: sql17`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
-            divPool: sql17`${aiAmmPool.divPool} + ${q.baseTax.toFixed(8)}`,
-            crisisFund: sql17`${aiAmmPool.crisisFund} + ${q.excessTax.toFixed(8)}`,
-            totalVolUsdt: sql17`${aiAmmPool.totalVolUsdt} + ${q.grossUsdt}`
+            aiReserve: sql18`${aiAmmPool.aiReserve} + ${aiIn}`,
+            usdtReserve: sql18`${aiAmmPool.usdtReserve} - ${q.grossUsdt}`,
+            circulatingAi: sql18`GREATEST(${aiAmmPool.circulatingAi} - ${aiIn}, 0)`,
+            divPool: sql18`${aiAmmPool.divPool} + ${q.baseTax.toFixed(8)}`,
+            crisisFund: sql18`${aiAmmPool.crisisFund} + ${q.excessTax.toFixed(8)}`,
+            totalVolUsdt: sql18`${aiAmmPool.totalVolUsdt} + ${q.grossUsdt}`
           }).where(eq32(aiAmmPool.id, 1));
           marketPrice = (ps.usdtReserve - q.grossUsdt) / (ps.aiReserve + aiIn);
         }
         const r = await tx.update(users).set({
-          nnBalance: sql17`${users.nnBalance} - ${aiIn}`,
-          usdtBalance: sql17`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
+          nnBalance: sql18`${users.nnBalance} - ${aiIn}`,
+          usdtBalance: sql18`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
         }).where(and28(eq32(users.id, ctx.user.id), gte7(users.nnBalance, aiIn)));
         if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
         out = q.usdtOut;
@@ -12536,8 +12884,8 @@ var swapRouter = router({
       if (input.amount > ps.crisisFund) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
       if (input.amount > ps.crisisFund / 3 + 1e-6) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5355\u6B21\u2264\u5371\u673A\u91D1 1/3" });
       await tx.update(aiAmmPool).set({
-        crisisFund: sql17`${aiAmmPool.crisisFund} - ${input.amount.toFixed(8)}`,
-        reserveR: sql17`${aiAmmPool.reserveR} + ${input.amount.toFixed(8)}`
+        crisisFund: sql18`${aiAmmPool.crisisFund} - ${input.amount.toFixed(8)}`,
+        reserveR: sql18`${aiAmmPool.reserveR} + ${input.amount.toFixed(8)}`
       }).where(eq32(aiAmmPool.id, 1));
       return { ok: true };
     });
@@ -12559,15 +12907,15 @@ var swapRouter = router({
       if (!row || !row.seeded) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u672A\u5F00\u5E02,\u8BF7\u5148 adminSeed \u64AD\u79CD" });
       const ps = poolFromRow(row);
       const set = {};
-      if (input.addReserveR > 0) set.reserveR = sql17`${aiAmmPool.reserveR} + ${input.addReserveR.toFixed(8)}`;
-      if (input.addCrisis > 0) set.crisisFund = sql17`${aiAmmPool.crisisFund} + ${input.addCrisis.toFixed(8)}`;
+      if (input.addReserveR > 0) set.reserveR = sql18`${aiAmmPool.reserveR} + ${input.addReserveR.toFixed(8)}`;
+      if (input.addCrisis > 0) set.crisisFund = sql18`${aiAmmPool.crisisFund} + ${input.addCrisis.toFixed(8)}`;
       let addAi = 0;
       if (input.addLiquidityUsdt > 0) {
         const price = spotPrice(ps);
         if (price <= 0) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u6C60\u4EF7\u5F02\u5E38,\u65E0\u6CD5\u914D\u6BD4\u6CE8\u8D44" });
         addAi = input.addLiquidityUsdt / price;
-        set.usdtReserve = sql17`${aiAmmPool.usdtReserve} + ${input.addLiquidityUsdt.toFixed(8)}`;
-        set.aiReserve = sql17`${aiAmmPool.aiReserve} + ${addAi.toFixed(8)}`;
+        set.usdtReserve = sql18`${aiAmmPool.usdtReserve} + ${input.addLiquidityUsdt.toFixed(8)}`;
+        set.aiReserve = sql18`${aiAmmPool.aiReserve} + ${addAi.toFixed(8)}`;
       }
       await tx.update(aiAmmPool).set(set).where(eq32(aiAmmPool.id, 1));
       return { ok: true, addReserveR: input.addReserveR, addCrisis: input.addCrisis, addLiquidityUsdt: input.addLiquidityUsdt, addAi };
@@ -12588,8 +12936,8 @@ var swapRouter = router({
       if (input.fromReserveR > ps.reserveR + 1e-9) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u50A8\u5907R\u4E0D\u8DB3" });
       if (input.fromCrisis > ps.crisisFund + 1e-9) throw new TRPCError18({ code: "BAD_REQUEST", message: "\u5371\u673A\u91D1\u4E0D\u8DB3" });
       const set = {};
-      if (input.fromReserveR > 0) set.reserveR = sql17`GREATEST(${aiAmmPool.reserveR} - ${input.fromReserveR.toFixed(8)}, 0)`;
-      if (input.fromCrisis > 0) set.crisisFund = sql17`GREATEST(${aiAmmPool.crisisFund} - ${input.fromCrisis.toFixed(8)}, 0)`;
+      if (input.fromReserveR > 0) set.reserveR = sql18`GREATEST(${aiAmmPool.reserveR} - ${input.fromReserveR.toFixed(8)}, 0)`;
+      if (input.fromCrisis > 0) set.crisisFund = sql18`GREATEST(${aiAmmPool.crisisFund} - ${input.fromCrisis.toFixed(8)}, 0)`;
       await tx.update(aiAmmPool).set(set).where(eq32(aiAmmPool.id, 1));
       return { ok: true, fromReserveR: input.fromReserveR, fromCrisis: input.fromCrisis };
     });
@@ -12597,7 +12945,7 @@ var swapRouter = router({
   adminCreditUsdt: adminProcedure.input(z22.object({ userId: z22.number(), amount: z22.number().positive().max(1e6) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
-    await db.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${input.amount}` }).where(eq32(users.id, input.userId));
+    await db.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${input.amount}` }).where(eq32(users.id, input.userId));
     return { ok: true };
   }),
   // ─── USDT 出入金(充值=转账+回填哈希待确认;提现=申请即冻结余额待打款)─────────────────
@@ -12621,7 +12969,7 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     return db.transaction(async (tx) => {
-      const r = await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} - ${input.amount.toFixed(8)}` }).where(and28(eq32(users.id, ctx.user.id), gte7(users.usdtBalance, input.amount.toFixed(8))));
+      const r = await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} - ${input.amount.toFixed(8)}` }).where(and28(eq32(users.id, ctx.user.id), gte7(users.usdtBalance, input.amount.toFixed(8))));
       if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "USDT \u4F59\u989D\u4E0D\u8DB3" });
       await tx.insert(usdtWithdrawals).values({ userId: ctx.user.id, amount: input.amount.toFixed(8), address: sanitizeInput(input.address, 80) });
       return { ok: true };
@@ -12631,8 +12979,8 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return { deposits: [], withdrawals: [] };
     const [deposits, withdrawals] = await Promise.all([
-      db.select().from(usdtDeposits).where(eq32(usdtDeposits.userId, ctx.user.id)).orderBy(desc19(usdtDeposits.createdAt)).limit(30),
-      db.select().from(usdtWithdrawals).where(eq32(usdtWithdrawals.userId, ctx.user.id)).orderBy(desc19(usdtWithdrawals.createdAt)).limit(30)
+      db.select().from(usdtDeposits).where(eq32(usdtDeposits.userId, ctx.user.id)).orderBy(desc20(usdtDeposits.createdAt)).limit(30),
+      db.select().from(usdtWithdrawals).where(eq32(usdtWithdrawals.userId, ctx.user.id)).orderBy(desc20(usdtWithdrawals.createdAt)).limit(30)
     ]);
     return { deposits, withdrawals };
   }),
@@ -12640,7 +12988,7 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq32(usdtDeposits.status, input.status)] : [];
-    return db.select().from(usdtDeposits).where(conds.length ? and28(...conds) : void 0).orderBy(desc19(usdtDeposits.createdAt)).limit(100);
+    return db.select().from(usdtDeposits).where(conds.length ? and28(...conds) : void 0).orderBy(desc20(usdtDeposits.createdAt)).limit(100);
   }),
   adminConfirmDeposit: adminProcedure.input(z22.object({ id: z22.number(), amount: z22.number().positive().max(1e6).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -12650,7 +12998,7 @@ var swapRouter = router({
       if (!d || d.status !== "pending") throw new TRPCError18({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
       const credit = (input.amount ?? Number(d.amount)).toFixed(8);
       await tx.update(usdtDeposits).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), amount: credit }).where(eq32(usdtDeposits.id, input.id));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${credit}` }).where(eq32(users.id, d.userId));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${credit}` }).where(eq32(users.id, d.userId));
       return { ok: true, credited: Number(credit) };
     });
   }),
@@ -12664,7 +13012,7 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq32(usdtWithdrawals.status, input.status)] : [];
-    return db.select().from(usdtWithdrawals).where(conds.length ? and28(...conds) : void 0).orderBy(desc19(usdtWithdrawals.createdAt)).limit(100);
+    return db.select().from(usdtWithdrawals).where(conds.length ? and28(...conds) : void 0).orderBy(desc20(usdtWithdrawals.createdAt)).limit(100);
   }),
   adminCompleteWithdrawal: adminProcedure.input(z22.object({ id: z22.number(), txHash: z22.string().min(6).max(120) })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -12679,7 +13027,7 @@ var swapRouter = router({
       const [w] = await tx.select().from(usdtWithdrawals).where(eq32(usdtWithdrawals.id, input.id)).for("update").limit(1);
       if (!w || w.status !== "pending") throw new TRPCError18({ code: "BAD_REQUEST", message: "\u72B6\u6001\u4E0D\u53EF\u6539" });
       await tx.update(usdtWithdrawals).set({ status: "rejected", processedAt: /* @__PURE__ */ new Date() }).where(eq32(usdtWithdrawals.id, input.id));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${w.amount}` }).where(eq32(users.id, w.userId));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${w.amount}` }).where(eq32(users.id, w.userId));
       return { ok: true };
     });
   }),
@@ -12703,7 +13051,7 @@ var swapRouter = router({
       const tierRatio = { 1: 0.2, 2: 0.24, 3: 0.3 };
       const all = await tx.select({ id: users.id, tier: users.icoTier }).from(users).where(inArray9(users.icoTier, [1, 2, 3]));
       const ids = all.map((m) => m.id);
-      const subs = ids.length ? await tx.select({ uid: icoPurchases.userId, usdt: sql17`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(inArray9(icoPurchases.userId, ids)).groupBy(icoPurchases.userId) : [];
+      const subs = ids.length ? await tx.select({ uid: icoPurchases.userId, usdt: sql18`COALESCE(SUM(${icoPurchases.usdtAmount}),0)` }).from(icoPurchases).where(inArray9(icoPurchases.userId, ids)).groupBy(icoPurchases.userId) : [];
       const subMap = new Map(subs.map((s) => [s.uid, Number(s.usdt)]));
       const byTier = { 1: [], 2: [], 3: [] };
       for (const m of all) {
@@ -12725,7 +13073,7 @@ var swapRouter = router({
         for (const m of members) {
           const share = Number((tierAmount * (m.w / totalW)).toFixed(8));
           if (share > 0) {
-            await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq32(users.id, m.id));
+            await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${share.toFixed(8)}` }).where(eq32(users.id, m.id));
             paid += share;
           }
         }
@@ -12733,10 +13081,10 @@ var swapRouter = router({
         summary.push({ tier, members: members.length, amount: paid });
       }
       const tech = Number((divPool * 0.26).toFixed(8));
-      await tx.update(users).set({ usdtBalance: sql17`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq32(users.id, input.teamUserId));
-      if (unclaimed > 1e-9) await tx.update(aiAmmPool).set({ crisisFund: sql17`${aiAmmPool.crisisFund} + ${unclaimed.toFixed(8)}` }).where(eq32(aiAmmPool.id, 1));
+      await tx.update(users).set({ usdtBalance: sql18`${users.usdtBalance} + ${tech.toFixed(8)}` }).where(eq32(users.id, input.teamUserId));
+      if (unclaimed > 1e-9) await tx.update(aiAmmPool).set({ crisisFund: sql18`${aiAmmPool.crisisFund} + ${unclaimed.toFixed(8)}` }).where(eq32(aiAmmPool.id, 1));
       const drained = paidToPartners + tech + unclaimed;
-      await tx.update(aiAmmPool).set({ divPool: sql17`GREATEST(${aiAmmPool.divPool} - ${drained.toFixed(8)}, 0)` }).where(eq32(aiAmmPool.id, 1));
+      await tx.update(aiAmmPool).set({ divPool: sql18`GREATEST(${aiAmmPool.divPool} - ${drained.toFixed(8)}, 0)` }).where(eq32(aiAmmPool.id, 1));
       return { ok: true, distributed: drained, paidToPartners, tech, unclaimedToCrisis: unclaimed, summary };
     });
   })
@@ -12744,7 +13092,7 @@ var swapRouter = router({
 
 // server/routers/ai.ts
 import { z as z23 } from "zod";
-import { and as and29, desc as desc20, eq as eq33, sql as sql18 } from "drizzle-orm";
+import { and as and29, desc as desc21, eq as eq33, sql as sql19 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 init_db();
 init_schema();
@@ -12761,7 +13109,7 @@ async function getAiUsedToday(db, userId) {
 }
 async function incrAiUsedToday(db, userId) {
   const day = todayStr();
-  const res = await db.update(aiDailyUsage).set({ count: sql18`${aiDailyUsage.count} + 1` }).where(and29(eq33(aiDailyUsage.userId, userId), eq33(aiDailyUsage.day, day)));
+  const res = await db.update(aiDailyUsage).set({ count: sql19`${aiDailyUsage.count} + 1` }).where(and29(eq33(aiDailyUsage.userId, userId), eq33(aiDailyUsage.day, day)));
   const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
   if (!affected2) {
     try {
@@ -12898,7 +13246,7 @@ async function execTool(name, args, userId) {
     }
     case "get_my_alerts": {
       if (!db) return { alerts: [] };
-      const rows = await db.select().from(priceAlerts).where(and29(eq33(priceAlerts.userId, userId), eq33(priceAlerts.isActive, true))).orderBy(desc20(priceAlerts.createdAt));
+      const rows = await db.select().from(priceAlerts).where(and29(eq33(priceAlerts.userId, userId), eq33(priceAlerts.isActive, true))).orderBy(desc21(priceAlerts.createdAt));
       return { alerts: rows.map((r) => ({ symbol: r.tokenSymbol, targetPrice: r.targetPrice, condition: r.condition, triggered: r.isTriggered })) };
     }
   }
@@ -13039,7 +13387,7 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989
       status: consultingReports.status,
       pricePaid: consultingReports.pricePaid,
       createdAt: consultingReports.createdAt
-    }).from(consultingReports).where(eq33(consultingReports.userId, ctx.user.id)).orderBy(desc20(consultingReports.createdAt)).limit(50);
+    }).from(consultingReports).where(eq33(consultingReports.userId, ctx.user.id)).orderBy(desc21(consultingReports.createdAt)).limit(50);
   }),
   // 研报详情（仅本人可看全文）
   getReport: protectedProcedure.input(z23.object({ reportId: z23.number() })).query(async ({ ctx, input }) => {
@@ -13097,7 +13445,7 @@ import { z as z24 } from "zod";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq34, and as and30, desc as desc21, sql as sql19, count as count6, gte as gte8 } from "drizzle-orm";
+import { eq as eq34, and as and30, desc as desc22, sql as sql20, count as count6, gte as gte8 } from "drizzle-orm";
 init_referralRewards();
 var HORIZONS = [24, 72, 168, 720];
 var DAILY_CALL_LIMIT = 5;
@@ -13155,7 +13503,7 @@ var callsRouter = router({
   listMine: protectedProcedure.input(z24.object({ limit: z24.number().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(calls).where(eq34(calls.userId, ctx.user.id)).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 50);
+    return db.select().from(calls).where(eq34(calls.userId, ctx.user.id)).orderBy(desc22(calls.createdAt)).limit(input?.limit ?? 50);
   }),
   // ─── 战绩榜（按胜场排序，达最低样本量才上榜）──────────────────────────────────
   leaderboard: publicProcedure.input(z24.object({ limit: z24.number().min(1).max(50).default(20) }).optional()).query(async ({ input }) => {
@@ -13165,9 +13513,9 @@ var callsRouter = router({
       userId: calls.userId,
       userName: users.name,
       avatar: users.avatar,
-      wins: sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`,
-      loses: sql19`SUM(CASE WHEN ${calls.status} = 'lose' THEN 1 ELSE 0 END)`
-    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(sql19`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc21(sql19`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
+      wins: sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`,
+      loses: sql20`SUM(CASE WHEN ${calls.status} = 'lose' THEN 1 ELSE 0 END)`
+    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(sql20`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc22(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
     return rows.map((r) => {
       const wins = Number(r.wins ?? 0);
       const loses = Number(r.loses ?? 0);
@@ -13212,10 +13560,10 @@ var callsRouter = router({
       note: calls.note,
       createdAt: calls.createdAt,
       resolveAt: calls.resolveAt,
-      stakerCount: sql19`(SELECT COUNT(*) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
-      totalStaked: sql19`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
-      myStake: sql19`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`
-    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(eq34(calls.status, "pending")).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 30);
+      stakerCount: sql20`(SELECT COUNT(*) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
+      totalStaked: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
+      myStake: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`
+    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(eq34(calls.status, "pending")).orderBy(desc22(calls.createdAt)).limit(input?.limit ?? 30);
     return rows.map((r) => ({
       ...r,
       userName: r.userName ?? `\u7528\u6237 #${r.userId}`,
@@ -13239,7 +13587,7 @@ var callsRouter = router({
     const [existing] = await db.select({ id: curationStakes.id }).from(curationStakes).where(and30(eq34(curationStakes.stakerId, ctx.user.id), eq34(curationStakes.callId, input.callId))).limit(1);
     if (existing) throw new TRPCError20({ code: "BAD_REQUEST", message: "\u4F60\u5DF2\u8D28\u62BC\u8FC7\u8FD9\u6761 Call" });
     await db.transaction(async (tx) => {
-      const res = await tx.update(users).set({ npPoints: sql19`npPoints - ${input.amount}` }).where(and30(eq34(users.id, ctx.user.id), gte8(users.npPoints, input.amount)));
+      const res = await tx.update(users).set({ npPoints: sql20`npPoints - ${input.amount}` }).where(and30(eq34(users.id, ctx.user.id), gte8(users.npPoints, input.amount)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
       if (affected2 < 1) throw new TRPCError20({ code: "BAD_REQUEST", message: "AC \u4F59\u989D\u4E0D\u8DB3" });
       await tx.insert(curationStakes).values({ stakerId: ctx.user.id, callId: input.callId, amount: input.amount });
@@ -13260,7 +13608,7 @@ var callsRouter = router({
       tokenSymbol: calls.tokenSymbol,
       direction: calls.direction,
       callStatus: calls.status
-    }).from(curationStakes).leftJoin(calls, eq34(curationStakes.callId, calls.id)).where(eq34(curationStakes.stakerId, ctx.user.id)).orderBy(desc21(curationStakes.createdAt)).limit(50);
+    }).from(curationStakes).leftJoin(calls, eq34(curationStakes.callId, calls.id)).where(eq34(curationStakes.stakerId, ctx.user.id)).orderBy(desc22(curationStakes.createdAt)).limit(50);
   })
 });
 
@@ -13270,7 +13618,7 @@ init_db();
 init_schema();
 init_membership();
 import { eq as eq35, and as and31, gte as gte9 } from "drizzle-orm";
-import { sql as sql20 } from "drizzle-orm";
+import { sql as sql21 } from "drizzle-orm";
 var TRIAL_NP_COST = 3e3;
 var TRIAL_DAYS = 3;
 var npStoreRouter = router({
@@ -13284,7 +13632,7 @@ var npStoreRouter = router({
     }
     const proUntil = new Date(Date.now() + TRIAL_DAYS * 24 * 3600 * 1e3);
     await db.transaction(async (tx) => {
-      const res = await tx.update(users).set({ npPoints: sql20`npPoints - ${TRIAL_NP_COST}` }).where(and31(eq35(users.id, ctx.user.id), gte9(users.npPoints, TRIAL_NP_COST)));
+      const res = await tx.update(users).set({ npPoints: sql21`npPoints - ${TRIAL_NP_COST}` }).where(and31(eq35(users.id, ctx.user.id), gte9(users.npPoints, TRIAL_NP_COST)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
       if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `AC \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
       await tx.update(users).set({ proTier: "plus", proUntil }).where(eq35(users.id, ctx.user.id));
@@ -13303,7 +13651,7 @@ import { TRPCError as TRPCError22 } from "@trpc/server";
 init_db();
 init_schema();
 init_token();
-import { eq as eq36, and as and32, sql as sql21 } from "drizzle-orm";
+import { eq as eq36, and as and32, sql as sql22 } from "drizzle-orm";
 async function loadConfig2(db) {
   const [c] = await db.select().from(tgeConfig).where(eq36(tgeConfig.id, 1)).limit(1);
   return c ?? null;
@@ -13347,7 +13695,7 @@ var tgeRouter = router({
       if (affected2 < 1) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
       const ok = await grantNN(tx, ctx.user.id, nn, { type: "tge_claim", refType: "user", refId: ctx.user.id });
       if (!ok) throw new TRPCError22({ code: "PRECONDITION_FAILED", message: "\u91D1\u5E93\u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u53D1\u653E" });
-      await tx.update(users).set({ npPoints: sql21`GREATEST(0, npPoints - ${claim.npSnapshot})` }).where(eq36(users.id, ctx.user.id));
+      await tx.update(users).set({ npPoints: sql22`GREATEST(0, npPoints - ${claim.npSnapshot})` }).where(eq36(users.id, ctx.user.id));
     });
     return { ok: true, nn };
   }),
@@ -13361,9 +13709,9 @@ var tgeRouter = router({
     if (claimed) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u6709\u7528\u6237\u9886\u53D6\u8FC7 AI\uFF0C\u7981\u6B62\u91CD\u62CD\u5FEB\u7167\uFF08\u4F1A\u5BFC\u81F4\u91CD\u590D\u53D1\u653E\uFF09" });
     const maxPool = NN_TOTAL_SUPPLY - await getCirculating(db);
     if (input.nnPool > maxPool) throw new TRPCError22({ code: "BAD_REQUEST", message: `\u5956\u52B1\u6C60(${input.nnPool})\u8D85\u8FC7\u91D1\u5E93\u53EF\u7528\u4F59\u989D,\u6700\u591A ${maxPool}` });
-    const [{ total = 0 } = { total: 0 }] = await db.select({ total: sql21`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
+    const [{ total = 0 } = { total: 0 }] = await db.select({ total: sql22`COALESCE(SUM(${users.npPoints}),0)` }).from(users);
     await db.delete(tgeClaims);
-    await db.execute(sql21`INSERT INTO tge_claims (userId, npSnapshot) SELECT id, npPoints FROM users WHERE npPoints > 0`);
+    await db.execute(sql22`INSERT INTO tge_claims (userId, npSnapshot) SELECT id, npPoints FROM users WHERE npPoints > 0`);
     await db.insert(tgeConfig).values({ id: 1, nnPool: input.nnPool, totalNpSnapshot: Number(total), snapshotAt: /* @__PURE__ */ new Date(), enabled: false }).onDuplicateKeyUpdate({ set: { nnPool: input.nnPool, totalNpSnapshot: Number(total), snapshotAt: /* @__PURE__ */ new Date() } });
     return { ok: true, totalNpSnapshot: Number(total), nnPool: input.nnPool };
   }),
@@ -13381,13 +13729,13 @@ import { z as z26 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and34, eq as eq38, desc as desc23, sql as sql23 } from "drizzle-orm";
+import { and as and34, eq as eq38, desc as desc24, sql as sql24 } from "drizzle-orm";
 
 // server/partner.ts
 init_db();
 init_schema();
 init_token();
-import { and as and33, eq as eq37, sql as sql22, desc as desc22, inArray as inArray10, gte as gte10, lt as lt5, isNotNull } from "drizzle-orm";
+import { and as and33, eq as eq37, sql as sql23, desc as desc23, inArray as inArray10, gte as gte10, lt as lt5, isNotNull } from "drizzle-orm";
 var REVENUE_POOL_PCT = 20;
 var REVENUE_TYPES = ["membership", "report", "promote", "bot_sub", "package", "ai_chat"];
 var BONUS_PERIODS = 6;
@@ -13479,7 +13827,7 @@ function tierOrder(key) {
   return i === -1 ? 0 : i + 1;
 }
 async function listConfirmedPartners(db) {
-  const rows = await db.select({ id: users.id, tier: users.partnerTier, stake: users.partnerStakeUsdt }).from(users).where(and33(isNotNull(users.partnerTier), sql22`${users.partnerStakeUsdt} > 0`));
+  const rows = await db.select({ id: users.id, tier: users.partnerTier, stake: users.partnerStakeUsdt }).from(users).where(and33(isNotNull(users.partnerTier), sql23`${users.partnerStakeUsdt} > 0`));
   return rows.filter((r) => r.tier && getPartnerTier(r.tier)).map((r) => ({ id: r.id, tier: r.tier, stake: Number(r.stake) }));
 }
 async function distribute(db, members, totalNN, kind, ymd, weightOf) {
@@ -13529,9 +13877,9 @@ async function runPartnerSettlement(now = /* @__PURE__ */ new Date()) {
   }
   try {
     await db.insert(partnerSettleRuns).values({ ymd, kind: "revenue", poolNN: 0 });
-    const [r] = await db.select({ s: sql22`COALESCE(SUM(-${nnTransactions.amount}), 0)` }).from(nnTransactions).where(and33(
+    const [r] = await db.select({ s: sql23`COALESCE(SUM(-${nnTransactions.amount}), 0)` }).from(nnTransactions).where(and33(
       inArray10(nnTransactions.type, REVENUE_TYPES),
-      sql22`${nnTransactions.amount} < 0`,
+      sql23`${nnTransactions.amount} < 0`,
       gte10(nnTransactions.createdAt, dayStart),
       lt5(nnTransactions.createdAt, dayEnd)
     ));
@@ -13549,8 +13897,8 @@ async function runPartnerSettlement(now = /* @__PURE__ */ new Date()) {
   return { fee: feePaid, revenue: revPaid };
 }
 async function getMyEarnings(db, userId) {
-  const agg = await db.select({ kind: partnerEarnings.kind, total: sql22`COALESCE(SUM(${partnerEarnings.amountNN}), 0)` }).from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).groupBy(partnerEarnings.kind);
-  const recent = await db.select().from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).orderBy(desc22(partnerEarnings.createdAt)).limit(30);
+  const agg = await db.select({ kind: partnerEarnings.kind, total: sql23`COALESCE(SUM(${partnerEarnings.amountNN}), 0)` }).from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).groupBy(partnerEarnings.kind);
+  const recent = await db.select().from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).orderBy(desc23(partnerEarnings.createdAt)).limit(30);
   let fee = 0;
   let revenue = 0;
   for (const a of agg) {
@@ -13565,7 +13913,7 @@ async function getMyEarnings(db, userId) {
   };
 }
 async function getSeatUsage(db) {
-  const rows = await db.select({ tier: users.partnerTier, c: sql22`COUNT(*)` }).from(users).where(isNotNull(users.partnerTier)).groupBy(users.partnerTier);
+  const rows = await db.select({ tier: users.partnerTier, c: sql23`COUNT(*)` }).from(users).where(isNotNull(users.partnerTier)).groupBy(users.partnerTier);
   const out = {};
   for (const r of rows) if (r.tier) out[r.tier] = Number(r.c);
   return out;
@@ -13652,10 +14000,10 @@ var partnerRouter = router({
     if (!db) throw new Error("DB unavailable");
     const [u] = await db.select({ tier: users.partnerTier, stake: users.partnerStakeUsdt, lastSigninYmd: users.lastSigninYmd }).from(users).where(eq38(users.id, ctx.user.id)).limit(1);
     const tier = u?.tier ? getPartnerTier(u.tier) : null;
-    const orders = await db.select().from(nnNodeOrders).where(eq38(nnNodeOrders.userId, ctx.user.id)).orderBy(desc23(nnNodeOrders.createdAt)).limit(50);
+    const orders = await db.select().from(nnNodeOrders).where(eq38(nnNodeOrders.userId, ctx.user.id)).orderBy(desc24(nnNodeOrders.createdAt)).limit(50);
     const earnings = await getMyEarnings(db, ctx.user.id);
-    const bonuses = await db.select().from(partnerBonuses).where(eq38(partnerBonuses.userId, ctx.user.id)).orderBy(desc23(partnerBonuses.createdAt));
-    const payouts = await db.select().from(partnerPayouts).where(eq38(partnerPayouts.userId, ctx.user.id)).orderBy(desc23(partnerPayouts.createdAt)).limit(50);
+    const bonuses = await db.select().from(partnerBonuses).where(eq38(partnerBonuses.userId, ctx.user.id)).orderBy(desc24(partnerBonuses.createdAt));
+    const payouts = await db.select().from(partnerPayouts).where(eq38(partnerPayouts.userId, ctx.user.id)).orderBy(desc24(partnerPayouts.createdAt)).limit(50);
     const claimedKeys = new Set(payouts.filter((p) => p.status !== "rejected").map((p) => `${p.bonusId}:${p.period}`));
     const now = Date.now();
     const bonusList = bonuses.map((b) => {
@@ -13727,8 +14075,8 @@ var partnerRouter = router({
       throw new TRPCError23({ code: "BAD_REQUEST", message: "\u8BE5\u671F\u5DF2\u7533\u8BF7\u8FC7\u9886\u53D6" });
     }
     await db.update(partnerBonuses).set({
-      claimedPeriods: sql23`${partnerBonuses.claimedPeriods} + 1`,
-      claimedUsdt: sql23`${partnerBonuses.claimedUsdt} + ${amount}`
+      claimedPeriods: sql24`${partnerBonuses.claimedPeriods} + 1`,
+      claimedUsdt: sql24`${partnerBonuses.claimedUsdt} + ${amount}`
     }).where(eq38(partnerBonuses.id, b.id));
     return { ok: true, amountUsdt: amount };
   }),
@@ -13749,7 +14097,7 @@ var partnerRouter = router({
       await db.update(nnNodeOrders).set({ nnAmount: nnNow }).where(eq38(nnNodeOrders.id, o.id));
     }
     await createVesting(db, o.userId, "partner", o.id, nnNow, tier.cliffMonths, tier.durationMonths);
-    await db.update(users).set({ partnerStakeUsdt: sql23`${users.partnerStakeUsdt} + ${o.usdtAmount}` }).where(eq38(users.id, o.userId));
+    await db.update(users).set({ partnerStakeUsdt: sql24`${users.partnerStakeUsdt} + ${o.usdtAmount}` }).where(eq38(users.id, o.userId));
     const [u] = await db.select({ stake: users.partnerStakeUsdt, cur: users.partnerTier, proUntil: users.proUntil }).from(users).where(eq38(users.id, o.userId)).limit(1);
     const newTier = tierForStake(Number(u?.stake ?? 0));
     const effectiveTier2 = newTier && tierOrder(newTier.key) > tierOrder(u?.cur ?? null) ? newTier : u?.cur ? getPartnerTier(u.cur) : newTier;
@@ -13790,7 +14138,7 @@ var partnerRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq38(partnerPayouts.status, input.status)] : [];
-    const rows = await db.select().from(partnerPayouts).where(conds.length ? and34(...conds) : void 0).orderBy(desc23(partnerPayouts.createdAt)).limit(100);
+    const rows = await db.select().from(partnerPayouts).where(conds.length ? and34(...conds) : void 0).orderBy(desc24(partnerPayouts.createdAt)).limit(100);
     return rows;
   }),
   // 运营：标记打款完成 / 驳回
@@ -13810,8 +14158,8 @@ var partnerRouter = router({
       if (affected2 < 1) throw new TRPCError23({ code: "BAD_REQUEST", message: "\u5DF2\u5904\u7406" });
       if (input.action === "rejected") {
         await tx.update(partnerBonuses).set({
-          claimedPeriods: sql23`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
-          claimedUsdt: sql23`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`
+          claimedPeriods: sql24`GREATEST(${partnerBonuses.claimedPeriods} - 1, 0)`,
+          claimedUsdt: sql24`GREATEST(${partnerBonuses.claimedUsdt} - ${p.amountUsdt}, 0)`
         }).where(eq38(partnerBonuses.id, p.bonusId));
         await tx.delete(partnerPayouts).where(eq38(partnerPayouts.id, p.id));
       }
@@ -14330,6 +14678,21 @@ function serveStatic(app) {
     maxAge: "1h",
     etag: true
   }));
+  app.get(["/about", "/about/"], (_req, res, next) => {
+    const candidates = [
+      path2.resolve(distPath, "about.html"),
+      path2.resolve(process.cwd(), "dist", "public", "about.html"),
+      path2.resolve(process.cwd(), "client", "public", "about.html")
+    ];
+    for (const file of candidates) {
+      if (fs2.existsSync(file)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(file);
+        return;
+      }
+    }
+    next();
+  });
   app.use("*", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path2.resolve(distPath, "index.html"));
@@ -14418,7 +14781,7 @@ function startPriceAlertChecker() {
 // server/botScheduler.ts
 init_db();
 init_schema();
-import { eq as eq40, and as and36, desc as desc24 } from "drizzle-orm";
+import { eq as eq40, and as and36, desc as desc25 } from "drizzle-orm";
 import pino2 from "pino";
 var logger2 = pino2({ level: "info" });
 var BOT_OPEN_IDS = {
@@ -14593,7 +14956,7 @@ async function runAmbientChatter() {
   const personaOpenIds = new Set(Object.values(BOT_PERSONAS).map((p) => p.openId));
   const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq40(users.id, groupMembers.userId)).where(and36(eq40(groupMembers.groupId, group.id), eq40(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
   if (bots.length === 0) return;
-  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq40(messages.senderId, users.id)).where(and36(eq40(messages.groupId, group.id), eq40(messages.isDeleted, false))).orderBy(desc24(messages.createdAt)).limit(6);
+  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq40(messages.senderId, users.id)).where(and36(eq40(messages.groupId, group.id), eq40(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
   const lastAge = recent[0]?.createdAt ? now - new Date(recent[0].createdAt).getTime() : Infinity;
   const pool = bots.filter((b) => b.id !== recent[0]?.senderId);
   const cand = pool.length ? pool : bots;
@@ -14688,7 +15051,7 @@ init_rankEngine();
 // server/callResolver.ts
 init_db();
 init_schema();
-import { eq as eq41, and as and38, lte, sql as sql24 } from "drizzle-orm";
+import { eq as eq41, and as and38, lte, sql as sql25 } from "drizzle-orm";
 init_logger();
 var DEADBAND_BP = 100;
 var WIN_NP = 150;
@@ -14707,7 +15070,7 @@ async function settleStakesForCall(db, callId, callStatus) {
     const status = callStatus === "win" ? "won" : callStatus === "void" ? "void" : "lost";
     await db.update(curationStakes).set({ status, payout, settledAt: /* @__PURE__ */ new Date() }).where(eq41(curationStakes.id, s.id));
     if (payout > 0) {
-      await db.update(users).set({ npPoints: sql24`npPoints + ${payout}` }).where(eq41(users.id, s.stakerId));
+      await db.update(users).set({ npPoints: sql25`npPoints + ${payout}` }).where(eq41(users.id, s.stakerId));
     }
   }
 }
@@ -14748,9 +15111,9 @@ async function resolveDueCalls(db) {
       const changed = Number(upd?.[0]?.affectedRows ?? upd?.rowsAffected ?? 0);
       if (changed < 1) continue;
       if (status === "win") {
-        await db.update(users).set({ npPoints: sql24`npPoints + ${WIN_NP}`, reputation: sql24`reputation + ${WIN_REP}` }).where(eq41(users.id, c.userId));
+        await db.update(users).set({ npPoints: sql25`npPoints + ${WIN_NP}`, reputation: sql25`reputation + ${WIN_REP}` }).where(eq41(users.id, c.userId));
       } else if (status === "lose") {
-        await db.update(users).set({ reputation: sql24`GREATEST(0, reputation - ${LOSE_REP})` }).where(eq41(users.id, c.userId));
+        await db.update(users).set({ reputation: sql25`GREATEST(0, reputation - ${LOSE_REP})` }).where(eq41(users.id, c.userId));
       }
       await settleStakesForCall(db, c.id, status);
       processed++;
@@ -14817,6 +15180,19 @@ var PATCHES = [
     \`processedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (\`id\`),
     UNIQUE KEY \`uniq_bit_rank_airdrop_ymd\` (\`ymd\`)
+  )`,
+  // BIT 空投领取：捐献 IT 领 BIT（Publish 不跑迁移时兜底建表）
+  `CREATE TABLE IF NOT EXISTS \`bit_rank_airdrop_claim\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`ymd\` varchar(10) NOT NULL,
+    \`tier\` int NOT NULL,
+    \`itCost\` int NOT NULL,
+    \`bitAmount\` int NOT NULL,
+    \`claimedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_bit_airdrop_claim_user_ymd\` (\`userId\`, \`ymd\`),
+    KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
   )`
 ];
 async function applySchemaPatches() {
@@ -14825,11 +15201,11 @@ async function applySchemaPatches() {
   let conn = null;
   try {
     conn = await mysql.createConnection(url);
-    for (const sql25 of PATCHES) {
+    for (const sql26 of PATCHES) {
       try {
-        await conn.query(sql25);
+        await conn.query(sql26);
       } catch (e) {
-        console.error(`[SchemaPatch] failed: ${sql25}`, e);
+        console.error(`[SchemaPatch] failed: ${sql26}`, e);
       }
     }
   } catch (e) {
@@ -15804,6 +16180,20 @@ async function startServer() {
   app.get("/i/:code", (req, res) => {
     const code = String(req.params.code || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
     res.redirect(302, code ? `/download?ref=${encodeURIComponent(code)}` : "/download");
+  });
+  app.get(["/about", "/about/"], (req, res, next) => {
+    const candidates = [
+      path4.resolve(process.cwd(), "dist", "public", "about.html"),
+      path4.resolve(process.cwd(), "client", "public", "about.html")
+    ];
+    for (const file of candidates) {
+      if (fs4.existsSync(file)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(file);
+        return;
+      }
+    }
+    next();
   });
   app.post("/api/upload/video", express2.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
   app.post("/api/upload/file", express2.raw({ type: () => true, limit: "510mb" }), handleFileUpload);
