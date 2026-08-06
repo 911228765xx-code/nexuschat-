@@ -405,7 +405,7 @@ export default function Settings() {
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/30 flex items-center justify-center mb-3">
             <span className="text-4xl">🔗</span>
           </div>
-          <h2 className="text-xl font-bold font-display">NexusChat</h2>
+          <h2 className="text-xl font-bold font-display">比特AI</h2>
           <p className="text-sm text-muted-foreground mt-2">{t("settings.version")} {CURRENT_APP_VERSION}</p>
           <p className="text-sm text-muted-foreground mt-1">{t("settings.buildDate")}: 2026-02-27</p>
         </div>
@@ -435,7 +435,7 @@ export default function Settings() {
 
         {/* Footer */}
         <div className="text-center mt-8 pb-4">
-          <p className="text-sm text-muted-foreground">© 2026 NexusChat. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground">© 2026 Crestline Technologies · 比特AI（Bitchat）</p>
           <p className="text-sm text-muted-foreground mt-2">{t("settings.builtWith")}</p>
         </div>
       </div>
@@ -803,7 +803,7 @@ export default function Settings() {
 
         {/* Version info */}
         <div className="text-center py-2">
-          <p className="text-sm text-muted-foreground/40 font-mono">NexusChat v{CURRENT_APP_VERSION} (Build 2026.03)</p>
+          <p className="text-sm text-muted-foreground/40 font-mono">比特AI v{CURRENT_APP_VERSION} (Build 2026.03)</p>
           <p className="text-sm text-muted-foreground/30 mt-1">{t("settings.builtWith")}</p>
         </div>
 

@@ -28,6 +28,7 @@ export const postsRouter = router({
         limit: z.number().min(1).max(50).default(20),
         offset: z.number().min(0).default(0),
         tag: z.string().optional(),
+        authorId: z.number().int().positive().optional(),
       }).optional()
     )
     .query(async ({ ctx, input }) => {
@@ -36,6 +37,7 @@ export const postsRouter = router({
 
       const limit = input?.limit ?? 20;
       const offset = input?.offset ?? 0;
+      const authorId = input?.authorId;
 
       const rows = await db
         .select({
@@ -61,6 +63,7 @@ export const postsRouter = router({
         })
         .from(posts)
         .leftJoin(users, eq(posts.authorId, users.id))
+        .where(authorId ? eq(posts.authorId, authorId) : undefined)
         // 推广中(promotedUntil > now)优先置顶，其次置顶贴，再按时间倒序
         .orderBy(
           desc(sql`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),

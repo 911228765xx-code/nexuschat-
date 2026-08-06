@@ -100,7 +100,8 @@ export function bitAirdropSchedule(ymd = ymdUtc()) {
   const monthIndex = bitAirdropMonthIndex(ymd);
   const dailyPool = bitAirdropDailyPool(monthIndex);
   const tierPot = bitAirdropTierPot(dailyPool);
-  const months = Array.from({ length: 11 }, (_, i) => {
+  // 展示前 10 个月（去掉第 11 月）
+  const months = Array.from({ length: 10 }, (_, i) => {
     const idx = i + 1;
     const daily = bitAirdropDailyPool(idx);
     return { month: idx, daily, monthly: daily * BIT_AIRDROP_MONTH_DAYS };

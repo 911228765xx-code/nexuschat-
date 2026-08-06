@@ -70,14 +70,14 @@ describe("tier pot / per user", () => {
 });
 
 describe("bitAirdropSchedule", () => {
-  it("返回 11 个月进度表", () => {
+  it("返回 10 个月进度表", () => {
     const s = bitAirdropSchedule("2026-08-15");
     expect(s.monthIndex).toBe(1);
     expect(s.dailyPool).toBe(1000);
     expect(s.tierPot).toBe(100);
-    expect(s.schedule).toHaveLength(11);
+    expect(s.schedule).toHaveLength(10);
     expect(s.schedule[0]).toEqual({ month: 1, daily: 1000, monthly: 30000 });
-    expect(s.schedule[10]).toEqual({ month: 11, daily: 6000, monthly: 180000 });
+    expect(s.schedule[9]).toEqual({ month: 10, daily: 5500, monthly: 165000 });
     expect(s.tiers).toHaveLength(10);
     expect(s.donateLadder).toHaveLength(10);
   });

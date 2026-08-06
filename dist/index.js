@@ -2031,7 +2031,7 @@ function bitAirdropSchedule(ymd = ymdUtc()) {
   const monthIndex = bitAirdropMonthIndex(ymd);
   const dailyPool = bitAirdropDailyPool(monthIndex);
   const tierPot = bitAirdropTierPot(dailyPool);
-  const months = Array.from({ length: 11 }, (_, i) => {
+  const months = Array.from({ length: 10 }, (_, i) => {
     const idx = i + 1;
     const daily = bitAirdropDailyPool(idx);
     return { month: idx, daily, monthly: daily * BIT_AIRDROP_MONTH_DAYS };
@@ -2361,6 +2361,8 @@ var init_image = __esm({
 import "dotenv/config";
 import express2 from "express";
 import { createServer } from "http";
+import fs4 from "fs";
+import path4 from "path";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
@@ -2699,9 +2701,9 @@ function registerOAuthRoutes(app) {
       try {
         const statePayload = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
         if (statePayload?.returnPath && typeof statePayload.returnPath === "string") {
-          const path4 = statePayload.returnPath;
-          if (path4.startsWith("/") && !path4.startsWith("//")) {
-            returnPath = path4;
+          const path5 = statePayload.returnPath;
+          if (path5.startsWith("/") && !path5.startsWith("//")) {
+            returnPath = path5;
           }
         }
       } catch {
@@ -3101,6 +3103,7 @@ function sanitizeUsername(input) {
 init_rankEngine();
 init_bitRankAirdrop();
 init_referralRewards();
+init_token();
 async function getTaskRewardOverrides(db) {
   try {
     const [row] = await db.select({ tr: appConfig.taskRewards }).from(appConfig).where(eq8(appConfig.platform, "all")).limit(1);
@@ -3112,6 +3115,7 @@ async function getTaskRewardOverrides(db) {
   }
   return {};
 }
+var IT_PER_BIT = 100;
 var REQUIRES_BINDING = /* @__PURE__ */ new Set(["first_research", "research_daily"]);
 function ymdUtc3(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
@@ -3595,6 +3599,36 @@ var userRouter = router({
       const code = err.code === "CONFLICT" ? "CONFLICT" : err.code === "FORBIDDEN" ? "FORBIDDEN" : err.code === "INTERNAL_SERVER_ERROR" ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
       throw new TRPCError4({ code, message: err.message || "\u9886\u53D6\u5931\u8D25" });
     }
+  }),
+  // ─── BIT ↔ IT 互转（100 IT = 1 BIT）────────────────────────────────────────
+  convertCurrency: protectedProcedure.input(z2.object({
+    direction: z2.enum(["it_to_bit", "bit_to_it"]),
+    amount: z2.number().int().positive().max(1e7)
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    if (input.direction === "it_to_bit") {
+      if (input.amount % IT_PER_BIT !== 0) {
+        throw new TRPCError4({ code: "BAD_REQUEST", message: `IT \u6570\u91CF\u9700\u4E3A ${IT_PER_BIT} \u7684\u6574\u6570\u500D` });
+      }
+      const bitOut = Math.floor(input.amount / IT_PER_BIT);
+      if (bitOut <= 0) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
+      const spent = await db.update(users).set({ npPoints: sql5`${users.npPoints} - ${input.amount}` }).where(and7(eq8(users.id, ctx.user.id), sql5`${users.npPoints} >= ${input.amount}`));
+      const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+      if (affected2 <= 0) throw new TRPCError4({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+      const ok = await grantNN(db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
+      if (!ok) {
+        await db.update(users).set({ npPoints: sql5`${users.npPoints} + ${input.amount}` }).where(eq8(users.id, ctx.user.id));
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
+      }
+    } else {
+      const itOut = input.amount * IT_PER_BIT;
+      const ok = await spendNN(db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
+      if (!ok) throw new TRPCError4({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+      await db.update(users).set({ npPoints: sql5`${users.npPoints} + ${itOut}` }).where(eq8(users.id, ctx.user.id));
+    }
+    const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq8(users.id, ctx.user.id)).limit(1);
+    return { ok: true, it: u?.npPoints ?? 0, bit: Number(u?.nnBalance ?? 0), rate: IT_PER_BIT };
   }),
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
   adminRunRankAgg: adminProcedure.input(z2.object({ ymd: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
@@ -7948,13 +7982,15 @@ var postsRouter = router({
     z8.object({
       limit: z8.number().min(1).max(50).default(20),
       offset: z8.number().min(0).default(0),
-      tag: z8.string().optional()
+      tag: z8.string().optional(),
+      authorId: z8.number().int().positive().optional()
     }).optional()
   ).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { posts: [], hasMore: false };
     const limit = input?.limit ?? 20;
     const offset = input?.offset ?? 0;
+    const authorId = input?.authorId;
     const rows = await db.select({
       id: posts.id,
       content: posts.content,
@@ -7975,7 +8011,7 @@ var postsRouter = router({
       authorWallet: users.walletAddress,
       authorProTier: users.proTier,
       authorProUntil: users.proUntil
-    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).orderBy(
+    }).from(posts).leftJoin(users, eq19(posts.authorId, users.id)).where(authorId ? eq19(posts.authorId, authorId) : void 0).orderBy(
       desc9(sql11`CASE WHEN ${posts.promotedUntil} > NOW() THEN 1 ELSE 0 END`),
       desc9(posts.isPinned),
       desc9(posts.createdAt),
@@ -8897,7 +8933,7 @@ var tradingRouter = router({
 import { z as z10 } from "zod";
 init_db();
 init_schema();
-import { eq as eq21, and as and18, count as count4 } from "drizzle-orm";
+import { eq as eq21, and as and18, count as count4, sql as sql12, desc as desc11 } from "drizzle-orm";
 async function createFollowNotification(db, fromUser, toUserId) {
   if (!db || fromUser.id === toUserId) return;
   await db.insert(notifications).values({
@@ -8962,30 +8998,49 @@ var followRouter = router({
     ).limit(1);
     return { following: result.length > 0 };
   }),
-  // Get follower/following counts for a user
+  // Get follower/following/likes counts for a user
   getCounts: publicProcedure.input(z10.object({ userId: z10.number() })).query(async ({ input }) => {
     const db = await getDb();
-    if (!db) return { followers: 0, following: 0 };
-    const [followerResult, followingResult] = await Promise.all([
+    if (!db) return { followers: 0, following: 0, likes: 0, posts: 0 };
+    const [followerResult, followingResult, likeResult, postResult] = await Promise.all([
       db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followingId, input.userId)),
-      db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followerId, input.userId))
+      db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followerId, input.userId)),
+      db.select({ cnt: sql12`COALESCE(SUM(${posts.likeCount}), 0)` }).from(posts).where(eq21(posts.authorId, input.userId)),
+      db.select({ cnt: count4() }).from(posts).where(eq21(posts.authorId, input.userId))
     ]);
     return {
-      followers: followerResult[0]?.cnt ?? 0,
-      following: followingResult[0]?.cnt ?? 0
+      followers: Number(followerResult[0]?.cnt ?? 0),
+      following: Number(followingResult[0]?.cnt ?? 0),
+      likes: Number(likeResult[0]?.cnt ?? 0),
+      posts: Number(postResult[0]?.cnt ?? 0)
     };
   }),
   // Get list of users that the current user follows
-  getFollowing: protectedProcedure.input(z10.object({ limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
+  getFollowing: protectedProcedure.input(z10.object({ userId: z10.number().optional(), limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
+    const uid = input?.userId ?? ctx.user.id;
     const rows = await db.select({
       id: users.id,
       name: users.name,
       username: users.username,
       avatar: users.avatar,
       bio: users.bio
-    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followingId)).where(eq21(userFollows.followerId, ctx.user.id)).limit(input?.limit ?? 50);
+    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followingId)).where(eq21(userFollows.followerId, uid)).orderBy(desc11(userFollows.id)).limit(input?.limit ?? 50);
+    return rows;
+  }),
+  // Get followers of a user
+  getFollowers: protectedProcedure.input(z10.object({ userId: z10.number().optional(), limit: z10.number().default(50) }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const uid = input?.userId ?? ctx.user.id;
+    const rows = await db.select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatar: users.avatar,
+      bio: users.bio
+    }).from(userFollows).innerJoin(users, eq21(users.id, userFollows.followerId)).where(eq21(userFollows.followingId, uid)).orderBy(desc11(userFollows.id)).limit(input?.limit ?? 50);
     return rows;
   })
 });
@@ -8995,7 +9050,7 @@ import { z as z11 } from "zod";
 import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and19, eq as eq22, or as or6, desc as desc11 } from "drizzle-orm";
+import { and as and19, eq as eq22, or as or6, desc as desc12 } from "drizzle-orm";
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -9060,7 +9115,7 @@ var contactsRouter = router({
       username: users.username,
       avatar: users.avatar,
       blockedAt: userBlocklist.createdAt
-    }).from(userBlocklist).innerJoin(users, eq22(users.id, userBlocklist.blockedId)).where(eq22(userBlocklist.blockerId, ctx.user.id)).orderBy(desc11(userBlocklist.createdAt));
+    }).from(userBlocklist).innerJoin(users, eq22(users.id, userBlocklist.blockedId)).where(eq22(userBlocklist.blockerId, ctx.user.id)).orderBy(desc12(userBlocklist.createdAt));
   }),
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure.input(z11.object({ receiverId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9163,7 +9218,7 @@ var contactsRouter = router({
         eq22(friendRequests.receiverId, ctx.user.id),
         eq22(friendRequests.status, "pending")
       )
-    ).orderBy(desc11(friendRequests.createdAt)).limit(50);
+    ).orderBy(desc12(friendRequests.createdAt)).limit(50);
     return rows.map((r) => ({
       id: r.id,
       senderId: r.senderId,
@@ -9188,7 +9243,7 @@ var contactsRouter = router({
         eq22(friendRequests.senderId, ctx.user.id),
         eq22(friendRequests.status, "pending")
       )
-    ).orderBy(desc11(friendRequests.createdAt)).limit(50);
+    ).orderBy(desc12(friendRequests.createdAt)).limit(50);
     return rows.map((r) => ({
       id: r.id,
       receiverId: r.receiverId,
@@ -9350,13 +9405,13 @@ var contactsRouter = router({
 import { z as z12 } from "zod";
 init_db();
 init_schema();
-import { and as and20, eq as eq23, desc as desc12 } from "drizzle-orm";
+import { and as and20, eq as eq23, desc as desc13 } from "drizzle-orm";
 var watchlistRouter = router({
   // ─── Get user's watchlist ────────────────────────────────────────────────────
   getWatchlist: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(userWatchlist).where(eq23(userWatchlist.userId, ctx.user.id)).orderBy(desc12(userWatchlist.createdAt));
+    return db.select().from(userWatchlist).where(eq23(userWatchlist.userId, ctx.user.id)).orderBy(desc13(userWatchlist.createdAt));
   }),
   // ─── Add token to watchlist ──────────────────────────────────────────────────
   addToken: protectedProcedure.input(
@@ -9413,7 +9468,7 @@ var watchlistRouter = router({
 import { z as z13 } from "zod";
 init_db();
 init_schema();
-import { eq as eq24, and as and21, desc as desc13, sql as sql13 } from "drizzle-orm";
+import { eq as eq24, and as and21, desc as desc14, sql as sql13 } from "drizzle-orm";
 var copyTradingRouter = router({
   // ─── List all active copy traders ──────────────────────────────────────────
   listTraders: publicProcedure.query(async () => {
@@ -9433,7 +9488,7 @@ var copyTradingRouter = router({
       maxDrawdown: copyTraders.maxDrawdown,
       topPairs: copyTraders.topPairs,
       followerCount: sql13`(SELECT COUNT(*) FROM copy_trader_follows WHERE traderId = ${copyTraders.id})`
-    }).from(copyTraders).where(eq24(copyTraders.isActive, true)).orderBy(desc13(copyTraders.winRate)).limit(50);
+    }).from(copyTraders).where(eq24(copyTraders.isActive, true)).orderBy(desc14(copyTraders.winRate)).limit(50);
     return rows.map((r) => ({
       ...r,
       topPairs: r.topPairs ? JSON.parse(r.topPairs) : []
@@ -9502,7 +9557,7 @@ var copyTradingRouter = router({
   listStrategies: publicProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.isActive, true)).orderBy(desc13(tradingStrategies.winRate)).limit(50);
+    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.isActive, true)).orderBy(desc14(tradingStrategies.winRate)).limit(50);
   }),
   // ─── Create / update a strategy ────────────────────────────────────────────
   upsertStrategy: protectedProcedure.input(z13.object({
@@ -9553,7 +9608,7 @@ var copyTradingRouter = router({
   myStrategies: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.userId, ctx.user.id)).orderBy(desc13(tradingStrategies.createdAt));
+    return db.select().from(tradingStrategies).where(eq24(tradingStrategies.userId, ctx.user.id)).orderBy(desc14(tradingStrategies.createdAt));
   }),
   // ─── Toggle strategy active status ─────────────────────────────────────────
   toggleStrategy: protectedProcedure.input(z13.object({ id: z13.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9587,7 +9642,7 @@ var copyTradingRouter = router({
 import { z as z14 } from "zod";
 init_db();
 init_schema();
-import { eq as eq25, and as and22, desc as desc14 } from "drizzle-orm";
+import { eq as eq25, and as and22, desc as desc15 } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 function hashApiKey(key) {
   return createHash("sha256").update(key).digest("hex");
@@ -9648,7 +9703,7 @@ var settingsRouter = router({
       isActive: userApiKeys.isActive,
       lastUsedAt: userApiKeys.lastUsedAt,
       createdAt: userApiKeys.createdAt
-    }).from(userApiKeys).where(eq25(userApiKeys.userId, ctx.user.id)).orderBy(desc14(userApiKeys.createdAt));
+    }).from(userApiKeys).where(eq25(userApiKeys.userId, ctx.user.id)).orderBy(desc15(userApiKeys.createdAt));
     return keys.map((k) => ({
       ...k,
       maskedKey: `${k.keyPrefix}${"\u2022".repeat(40)}`
@@ -9700,7 +9755,7 @@ var settingsRouter = router({
 import { z as z15 } from "zod";
 init_db();
 init_schema();
-import { eq as eq26, and as and23, or as or7, desc as desc15, count as count5, sql as sql14 } from "drizzle-orm";
+import { eq as eq26, and as and23, or as or7, desc as desc16, count as count5, sql as sql14 } from "drizzle-orm";
 init_env();
 var REFERRER_REWARD = 100;
 var INVITEE_REWARD = 200;
@@ -9754,7 +9809,7 @@ var referralRouter = router({
       inviteeName: users.name,
       inviteeAvatar: users.avatar,
       inviteeUsername: users.username
-    }).from(referrals).leftJoin(users, eq26(referrals.inviteeId, users.id)).where(eq26(referrals.referrerId, userId)).orderBy(desc15(referrals.createdAt)).limit(100);
+    }).from(referrals).leftJoin(users, eq26(referrals.inviteeId, users.id)).where(eq26(referrals.referrerId, userId)).orderBy(desc16(referrals.createdAt)).limit(100);
     return rows.map((r) => ({
       id: String(r.id),
       name: r.inviteeUsername || r.inviteeName || `User #${r.inviteeId}`,
@@ -10892,7 +10947,7 @@ import { TRPCError as TRPCError14 } from "@trpc/server";
 init_db();
 init_schema();
 init_env();
-import { eq as eq28, and as and25, desc as desc16, sql as sql16, gte as gte6 } from "drizzle-orm";
+import { eq as eq28, and as and25, desc as desc17, sql as sql16, gte as gte6 } from "drizzle-orm";
 
 // server/_core/livekitToken.ts
 import crypto2 from "crypto";
@@ -11061,7 +11116,7 @@ var voiceRoomRouter = router({
       hostName: users.name,
       hostUsername: users.username,
       hostAvatar: users.avatar
-    }).from(voiceRooms).leftJoin(users, eq28(users.id, voiceRooms.hostUserId)).where(cat === "all" ? and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true)) : and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true), eq28(voiceRooms.category, cat))).orderBy(desc16(voiceRooms.listenerCount), desc16(voiceRooms.createdAt)).limit(50);
+    }).from(voiceRooms).leftJoin(users, eq28(users.id, voiceRooms.hostUserId)).where(cat === "all" ? and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true)) : and25(eq28(voiceRooms.status, "live"), eq28(voiceRooms.isPublic, true), eq28(voiceRooms.category, cat))).orderBy(desc17(voiceRooms.listenerCount), desc17(voiceRooms.createdAt)).limit(50);
     const lkOn = liveKitConfigured();
     const mapped = await Promise.all(rows.map(async (r) => {
       const real = lkOn ? await realOnline(r.room.roomId) : null;
@@ -11257,7 +11312,7 @@ import { TRPCError as TRPCError15 } from "@trpc/server";
 init_db();
 init_schema();
 init_token();
-import { eq as eq29, and as and26, desc as desc17, gt as gt6, asc as asc2, inArray as inArray8, sql as sql17, ne as ne4 } from "drizzle-orm";
+import { eq as eq29, and as and26, desc as desc18, gt as gt6, asc as asc2, inArray as inArray8, sql as sql17, ne as ne4 } from "drizzle-orm";
 
 // server/ico/pricing.ts
 function priceAtFraction(c, x) {
@@ -11647,7 +11702,7 @@ var icoRouter = router({
   myOrders: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(icoOrders).where(eq29(icoOrders.userId, ctx.user.id)).orderBy(desc17(icoOrders.createdAt)).limit(50);
+    const rows = await db.select().from(icoOrders).where(eq29(icoOrders.userId, ctx.user.id)).orderBy(desc18(icoOrders.createdAt)).limit(50);
     return rows.map((o) => ({ id: o.id, usdtAmount: n(o.usdtAmount), status: o.status, txHash: o.txHash, createdAt: o.createdAt }));
   }),
   /** 我的 ICO 账户:锁仓/已释放/可提/质押中/待领收益 + 释放进度参数 */
@@ -11785,7 +11840,7 @@ var icoRouter = router({
     const db = await getDb();
     if (!db) return [];
     const st = input?.status ?? "pending";
-    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq29(users.id, icoOrders.userId)).where(st === "all" ? sql17`1=1` : eq29(icoOrders.status, st)).orderBy(desc17(icoOrders.createdAt)).limit(100);
+    const rows = await db.select({ o: icoOrders, name: users.name, username: users.username }).from(icoOrders).leftJoin(users, eq29(users.id, icoOrders.userId)).where(st === "all" ? sql17`1=1` : eq29(icoOrders.status, st)).orderBy(desc18(icoOrders.createdAt)).limit(100);
     return rows.map((r) => ({
       id: r.o.id,
       userId: r.o.userId,
@@ -11872,8 +11927,8 @@ function isOwnDownloadLoop(url, publicOrigin = ENV.publicOrigin) {
   try {
     const origin = new URL(publicOrigin);
     const target = new URL(raw, origin);
-    const path4 = target.pathname.replace(/\/+$/, "") || "/";
-    return target.origin === origin.origin && LOOP_PATHS.has(path4);
+    const path5 = target.pathname.replace(/\/+$/, "") || "/";
+    return target.origin === origin.origin && LOOP_PATHS.has(path5);
   } catch {
     return true;
   }
@@ -12041,7 +12096,7 @@ var appVersionRouter = router({
 init_db();
 init_schema();
 import { z as z21 } from "zod";
-import { eq as eq31, desc as desc18, and as and27 } from "drizzle-orm";
+import { eq as eq31, desc as desc19, and as and27 } from "drizzle-orm";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 init_logger();
 var BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
@@ -12320,7 +12375,7 @@ var consultingRouter = router({
       status: consultingReports.status,
       txHash: consultingReports.txHash,
       createdAt: consultingReports.createdAt
-    }).from(consultingReports).where(eq31(consultingReports.userId, ctx.user.id)).orderBy(desc18(consultingReports.createdAt)).limit(input?.limit ?? 20);
+    }).from(consultingReports).where(eq31(consultingReports.userId, ctx.user.id)).orderBy(desc19(consultingReports.createdAt)).limit(input?.limit ?? 20);
   }),
   /**
    * Manually retry payment verification (for cases where auto-verify failed)
@@ -12379,7 +12434,7 @@ import { z as z22 } from "zod";
 import { TRPCError as TRPCError18 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq32, and as and28, gte as gte7, desc as desc19, asc as asc3, sql as sql18, inArray as inArray9 } from "drizzle-orm";
+import { eq as eq32, and as and28, gte as gte7, desc as desc20, asc as asc3, sql as sql18, inArray as inArray9 } from "drizzle-orm";
 init_token();
 
 // server/swap/floorAmm.ts
@@ -12487,7 +12542,7 @@ var swapRouter = router({
     const ps = poolFromRow(pool);
     const now = Date.now();
     const price = spotPrice(ps);
-    const recent = await db.select().from(aiSwapTrades).orderBy(desc19(aiSwapTrades.createdAt)).limit(30);
+    const recent = await db.select().from(aiSwapTrades).orderBy(desc20(aiSwapTrades.createdAt)).limit(30);
     const trades = recent.map((t3) => ({
       side: t3.side,
       ai: Number(t3.aiAmount),
@@ -12781,8 +12836,8 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return { deposits: [], withdrawals: [] };
     const [deposits, withdrawals] = await Promise.all([
-      db.select().from(usdtDeposits).where(eq32(usdtDeposits.userId, ctx.user.id)).orderBy(desc19(usdtDeposits.createdAt)).limit(30),
-      db.select().from(usdtWithdrawals).where(eq32(usdtWithdrawals.userId, ctx.user.id)).orderBy(desc19(usdtWithdrawals.createdAt)).limit(30)
+      db.select().from(usdtDeposits).where(eq32(usdtDeposits.userId, ctx.user.id)).orderBy(desc20(usdtDeposits.createdAt)).limit(30),
+      db.select().from(usdtWithdrawals).where(eq32(usdtWithdrawals.userId, ctx.user.id)).orderBy(desc20(usdtWithdrawals.createdAt)).limit(30)
     ]);
     return { deposits, withdrawals };
   }),
@@ -12790,7 +12845,7 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq32(usdtDeposits.status, input.status)] : [];
-    return db.select().from(usdtDeposits).where(conds.length ? and28(...conds) : void 0).orderBy(desc19(usdtDeposits.createdAt)).limit(100);
+    return db.select().from(usdtDeposits).where(conds.length ? and28(...conds) : void 0).orderBy(desc20(usdtDeposits.createdAt)).limit(100);
   }),
   adminConfirmDeposit: adminProcedure.input(z22.object({ id: z22.number(), amount: z22.number().positive().max(1e6).optional() })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -12814,7 +12869,7 @@ var swapRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq32(usdtWithdrawals.status, input.status)] : [];
-    return db.select().from(usdtWithdrawals).where(conds.length ? and28(...conds) : void 0).orderBy(desc19(usdtWithdrawals.createdAt)).limit(100);
+    return db.select().from(usdtWithdrawals).where(conds.length ? and28(...conds) : void 0).orderBy(desc20(usdtWithdrawals.createdAt)).limit(100);
   }),
   adminCompleteWithdrawal: adminProcedure.input(z22.object({ id: z22.number(), txHash: z22.string().min(6).max(120) })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -12894,7 +12949,7 @@ var swapRouter = router({
 
 // server/routers/ai.ts
 import { z as z23 } from "zod";
-import { and as and29, desc as desc20, eq as eq33, sql as sql19 } from "drizzle-orm";
+import { and as and29, desc as desc21, eq as eq33, sql as sql19 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 init_db();
 init_schema();
@@ -13048,7 +13103,7 @@ async function execTool(name, args, userId) {
     }
     case "get_my_alerts": {
       if (!db) return { alerts: [] };
-      const rows = await db.select().from(priceAlerts).where(and29(eq33(priceAlerts.userId, userId), eq33(priceAlerts.isActive, true))).orderBy(desc20(priceAlerts.createdAt));
+      const rows = await db.select().from(priceAlerts).where(and29(eq33(priceAlerts.userId, userId), eq33(priceAlerts.isActive, true))).orderBy(desc21(priceAlerts.createdAt));
       return { alerts: rows.map((r) => ({ symbol: r.tokenSymbol, targetPrice: r.targetPrice, condition: r.condition, triggered: r.isTriggered })) };
     }
   }
@@ -13189,7 +13244,7 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989
       status: consultingReports.status,
       pricePaid: consultingReports.pricePaid,
       createdAt: consultingReports.createdAt
-    }).from(consultingReports).where(eq33(consultingReports.userId, ctx.user.id)).orderBy(desc20(consultingReports.createdAt)).limit(50);
+    }).from(consultingReports).where(eq33(consultingReports.userId, ctx.user.id)).orderBy(desc21(consultingReports.createdAt)).limit(50);
   }),
   // 研报详情（仅本人可看全文）
   getReport: protectedProcedure.input(z23.object({ reportId: z23.number() })).query(async ({ ctx, input }) => {
@@ -13247,7 +13302,7 @@ import { z as z24 } from "zod";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq34, and as and30, desc as desc21, sql as sql20, count as count6, gte as gte8 } from "drizzle-orm";
+import { eq as eq34, and as and30, desc as desc22, sql as sql20, count as count6, gte as gte8 } from "drizzle-orm";
 init_referralRewards();
 var HORIZONS = [24, 72, 168, 720];
 var DAILY_CALL_LIMIT = 5;
@@ -13305,7 +13360,7 @@ var callsRouter = router({
   listMine: protectedProcedure.input(z24.object({ limit: z24.number().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(calls).where(eq34(calls.userId, ctx.user.id)).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 50);
+    return db.select().from(calls).where(eq34(calls.userId, ctx.user.id)).orderBy(desc22(calls.createdAt)).limit(input?.limit ?? 50);
   }),
   // ─── 战绩榜（按胜场排序，达最低样本量才上榜）──────────────────────────────────
   leaderboard: publicProcedure.input(z24.object({ limit: z24.number().min(1).max(50).default(20) }).optional()).query(async ({ input }) => {
@@ -13317,7 +13372,7 @@ var callsRouter = router({
       avatar: users.avatar,
       wins: sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`,
       loses: sql20`SUM(CASE WHEN ${calls.status} = 'lose' THEN 1 ELSE 0 END)`
-    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(sql20`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc21(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
+    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(sql20`${calls.status} IN ('win','lose')`).groupBy(calls.userId, users.name, users.avatar).having(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END) > 0`).orderBy(desc22(sql20`SUM(CASE WHEN ${calls.status} = 'win' THEN 1 ELSE 0 END)`)).limit(input?.limit ?? 20);
     return rows.map((r) => {
       const wins = Number(r.wins ?? 0);
       const loses = Number(r.loses ?? 0);
@@ -13365,7 +13420,7 @@ var callsRouter = router({
       stakerCount: sql20`(SELECT COUNT(*) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
       totalStaked: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.status = 'active')`,
       myStake: sql20`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`
-    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(eq34(calls.status, "pending")).orderBy(desc21(calls.createdAt)).limit(input?.limit ?? 30);
+    }).from(calls).leftJoin(users, eq34(calls.userId, users.id)).where(eq34(calls.status, "pending")).orderBy(desc22(calls.createdAt)).limit(input?.limit ?? 30);
     return rows.map((r) => ({
       ...r,
       userName: r.userName ?? `\u7528\u6237 #${r.userId}`,
@@ -13410,7 +13465,7 @@ var callsRouter = router({
       tokenSymbol: calls.tokenSymbol,
       direction: calls.direction,
       callStatus: calls.status
-    }).from(curationStakes).leftJoin(calls, eq34(curationStakes.callId, calls.id)).where(eq34(curationStakes.stakerId, ctx.user.id)).orderBy(desc21(curationStakes.createdAt)).limit(50);
+    }).from(curationStakes).leftJoin(calls, eq34(curationStakes.callId, calls.id)).where(eq34(curationStakes.stakerId, ctx.user.id)).orderBy(desc22(curationStakes.createdAt)).limit(50);
   })
 });
 
@@ -13531,13 +13586,13 @@ import { z as z26 } from "zod";
 import { TRPCError as TRPCError23 } from "@trpc/server";
 init_db();
 init_schema();
-import { and as and34, eq as eq38, desc as desc23, sql as sql24 } from "drizzle-orm";
+import { and as and34, eq as eq38, desc as desc24, sql as sql24 } from "drizzle-orm";
 
 // server/partner.ts
 init_db();
 init_schema();
 init_token();
-import { and as and33, eq as eq37, sql as sql23, desc as desc22, inArray as inArray10, gte as gte10, lt as lt5, isNotNull } from "drizzle-orm";
+import { and as and33, eq as eq37, sql as sql23, desc as desc23, inArray as inArray10, gte as gte10, lt as lt5, isNotNull } from "drizzle-orm";
 var REVENUE_POOL_PCT = 20;
 var REVENUE_TYPES = ["membership", "report", "promote", "bot_sub", "package", "ai_chat"];
 var BONUS_PERIODS = 6;
@@ -13700,7 +13755,7 @@ async function runPartnerSettlement(now = /* @__PURE__ */ new Date()) {
 }
 async function getMyEarnings(db, userId) {
   const agg = await db.select({ kind: partnerEarnings.kind, total: sql23`COALESCE(SUM(${partnerEarnings.amountNN}), 0)` }).from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).groupBy(partnerEarnings.kind);
-  const recent = await db.select().from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).orderBy(desc22(partnerEarnings.createdAt)).limit(30);
+  const recent = await db.select().from(partnerEarnings).where(eq37(partnerEarnings.userId, userId)).orderBy(desc23(partnerEarnings.createdAt)).limit(30);
   let fee = 0;
   let revenue = 0;
   for (const a of agg) {
@@ -13802,10 +13857,10 @@ var partnerRouter = router({
     if (!db) throw new Error("DB unavailable");
     const [u] = await db.select({ tier: users.partnerTier, stake: users.partnerStakeUsdt, lastSigninYmd: users.lastSigninYmd }).from(users).where(eq38(users.id, ctx.user.id)).limit(1);
     const tier = u?.tier ? getPartnerTier(u.tier) : null;
-    const orders = await db.select().from(nnNodeOrders).where(eq38(nnNodeOrders.userId, ctx.user.id)).orderBy(desc23(nnNodeOrders.createdAt)).limit(50);
+    const orders = await db.select().from(nnNodeOrders).where(eq38(nnNodeOrders.userId, ctx.user.id)).orderBy(desc24(nnNodeOrders.createdAt)).limit(50);
     const earnings = await getMyEarnings(db, ctx.user.id);
-    const bonuses = await db.select().from(partnerBonuses).where(eq38(partnerBonuses.userId, ctx.user.id)).orderBy(desc23(partnerBonuses.createdAt));
-    const payouts = await db.select().from(partnerPayouts).where(eq38(partnerPayouts.userId, ctx.user.id)).orderBy(desc23(partnerPayouts.createdAt)).limit(50);
+    const bonuses = await db.select().from(partnerBonuses).where(eq38(partnerBonuses.userId, ctx.user.id)).orderBy(desc24(partnerBonuses.createdAt));
+    const payouts = await db.select().from(partnerPayouts).where(eq38(partnerPayouts.userId, ctx.user.id)).orderBy(desc24(partnerPayouts.createdAt)).limit(50);
     const claimedKeys = new Set(payouts.filter((p) => p.status !== "rejected").map((p) => `${p.bonusId}:${p.period}`));
     const now = Date.now();
     const bonusList = bonuses.map((b) => {
@@ -13940,7 +13995,7 @@ var partnerRouter = router({
     const db = await getDb();
     if (!db) return [];
     const conds = input?.status ? [eq38(partnerPayouts.status, input.status)] : [];
-    const rows = await db.select().from(partnerPayouts).where(conds.length ? and34(...conds) : void 0).orderBy(desc23(partnerPayouts.createdAt)).limit(100);
+    const rows = await db.select().from(partnerPayouts).where(conds.length ? and34(...conds) : void 0).orderBy(desc24(partnerPayouts.createdAt)).limit(100);
     return rows;
   }),
   // 运营：标记打款完成 / 驳回
@@ -14480,6 +14535,21 @@ function serveStatic(app) {
     maxAge: "1h",
     etag: true
   }));
+  app.get(["/about", "/about/"], (_req, res, next) => {
+    const candidates = [
+      path2.resolve(distPath, "about.html"),
+      path2.resolve(process.cwd(), "dist", "public", "about.html"),
+      path2.resolve(process.cwd(), "client", "public", "about.html")
+    ];
+    for (const file of candidates) {
+      if (fs2.existsSync(file)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(file);
+        return;
+      }
+    }
+    next();
+  });
   app.use("*", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path2.resolve(distPath, "index.html"));
@@ -14568,7 +14638,7 @@ function startPriceAlertChecker() {
 // server/botScheduler.ts
 init_db();
 init_schema();
-import { eq as eq40, and as and36, desc as desc24 } from "drizzle-orm";
+import { eq as eq40, and as and36, desc as desc25 } from "drizzle-orm";
 import pino2 from "pino";
 var logger2 = pino2({ level: "info" });
 var BOT_OPEN_IDS = {
@@ -14743,7 +14813,7 @@ async function runAmbientChatter() {
   const personaOpenIds = new Set(Object.values(BOT_PERSONAS).map((p) => p.openId));
   const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq40(users.id, groupMembers.userId)).where(and36(eq40(groupMembers.groupId, group.id), eq40(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
   if (bots.length === 0) return;
-  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq40(messages.senderId, users.id)).where(and36(eq40(messages.groupId, group.id), eq40(messages.isDeleted, false))).orderBy(desc24(messages.createdAt)).limit(6);
+  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq40(messages.senderId, users.id)).where(and36(eq40(messages.groupId, group.id), eq40(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
   const lastAge = recent[0]?.createdAt ? now - new Date(recent[0].createdAt).getTime() : Infinity;
   const pool = bots.filter((b) => b.id !== recent[0]?.senderId);
   const cand = pool.length ? pool : bots;
@@ -15967,6 +16037,20 @@ async function startServer() {
   app.get("/i/:code", (req, res) => {
     const code = String(req.params.code || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
     res.redirect(302, code ? `/download?ref=${encodeURIComponent(code)}` : "/download");
+  });
+  app.get(["/about", "/about/"], (req, res, next) => {
+    const candidates = [
+      path4.resolve(process.cwd(), "dist", "public", "about.html"),
+      path4.resolve(process.cwd(), "client", "public", "about.html")
+    ];
+    for (const file of candidates) {
+      if (fs4.existsSync(file)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(file);
+        return;
+      }
+    }
+    next();
   });
   app.post("/api/upload/video", express2.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
   app.post("/api/upload/file", express2.raw({ type: () => true, limit: "510mb" }), handleFileUpload);
