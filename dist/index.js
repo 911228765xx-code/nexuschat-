@@ -5896,6 +5896,47 @@ var chatRouter = router({
     }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).leftJoin(groupMembers, and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, messages.senderId))).leftJoin(repliedMsg, eq17(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq17(repliedUser.id, repliedMsg.senderId)).where(and14(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
     return rows.reverse();
   }),
+  // ─── 群聊历史搜索（服务端，不限本地已加载消息）────────────────────────────
+  searchMessages: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    query: z6.string().min(1).max(50),
+    limit: z6.number().int().min(1).max(50).default(30),
+    before: z6.number().optional()
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    await assertGroupMember(db, input.groupId, ctx.user.id);
+    const q = input.query.trim();
+    if (!q) return [];
+    const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    const conditions = [
+      eq17(messages.groupId, input.groupId),
+      eq17(messages.isDeleted, false),
+      sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+      like(messages.content, `%${escaped}%`),
+      sql10`(${messages.recalledAt} IS NULL)`
+    ];
+    const clearedG = await getClearedBeforeId(db, ctx.user.id, `group:${input.groupId}`);
+    if (clearedG > 0) conditions.push(gt3(messages.id, clearedG));
+    if (input.before) conditions.push(lt4(messages.id, input.before));
+    const rows = await db.select({
+      id: messages.id,
+      content: messages.content,
+      messageType: messages.messageType,
+      mediaUrl: messages.mediaUrl,
+      durationSeconds: messages.durationSeconds,
+      replyToId: messages.replyToId,
+      isPinned: messages.isPinned,
+      recalledAt: messages.recalledAt,
+      createdAt: messages.createdAt,
+      expiresAt: messages.expiresAt,
+      senderId: messages.senderId,
+      senderName: sql10`COALESCE(${groupMembers.alias}, ${users.name})`,
+      senderAvatar: users.avatar,
+      senderRole: groupMembers.role
+    }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).leftJoin(groupMembers, and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, messages.senderId))).where(and14(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
+    return rows;
+  }),
   // Save a message (called from socket handler via REST fallback)
   saveMessage: protectedProcedure.input(z6.object({
     groupId: z6.number(),
