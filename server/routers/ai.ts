@@ -215,10 +215,10 @@ export const aiRouter = router({
       // 非免费且余额不足 → 友好提示
       if (!isFree && balance < cost) {
         const quotaLine = freeQuota > 0
-          ? `你的会员每日 **${freeQuota} 次**免费 AI，已用完；`
-          : `免费用户 AI 按次计费；`;
+          ? `你的会员每日 **${freeQuota} 次**免费对话，已用完；`
+          : `免费用户对话按次计费；`;
         return {
-          reply: `${freeQuota > 0 ? "今日免费额度已用完" : "AI 按次计费"} 💡\n\n${quotaLine}每次消耗 **${cost} AI**，当前余额 **${balance} AI**。\n开通会员可享每日免费额度（Plus 3 次 / Pro 10 次），或先获取 AI。`,
+          reply: `${freeQuota > 0 ? "今日免费额度已用完" : "对话按次计费"} 💡\n\n${quotaLine}每次消耗 **${cost} BIT**，当前余额 **${balance} BIT**。\n开通会员可享每日免费额度（Plus 3 次 / Pro 10 次），或先获取 BIT。`,
           actions: [],
           insufficient: true,
           cost,
