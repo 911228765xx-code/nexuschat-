@@ -13562,12 +13562,12 @@ function startCallResolver() {
   };
   setInterval(() => {
     void tick();
-  }, 30 * 60 * 1e3);
+  }, 60 * 1e3);
   void tick();
 }
 
 // server/routers/calls.ts
-var HORIZONS = [24, 72, 168, 720];
+var HORIZONS = [15, 60, 240, 1440];
 var BET_SYMBOLS = ["BTC", "ETH"];
 var DAILY_CALL_LIMIT = 5;
 var MIN_STAKE = 10;
@@ -13604,7 +13604,7 @@ var callsRouter = router({
     if (!price || price <= 0) {
       throw new TRPCError20({ code: "BAD_REQUEST", message: `\u6682\u65F6\u65E0\u6CD5\u83B7\u53D6 ${symbol} \u4EF7\u683C\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5` });
     }
-    const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1e3);
+    const resolveAt = new Date(Date.now() + input.horizonHours * 60 * 1e3);
     const potentialWin = stakePayout(input.amount, "win");
     const callId = await db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq35(users.id, ctx.user.id)).for("update").limit(1);

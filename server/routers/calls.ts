@@ -16,8 +16,9 @@ import { sanitizeInput } from "../utils/sanitize";
 import { isReferralBound } from "../referralRewards";
 import { STAKE_ODDS, stakePayout } from "../callResolver";
 
-/** 允许的时间窗（小时）：1天 / 3天 / 7天 / 30天 */
-const HORIZONS = [24, 72, 168, 720] as const;
+/** 允许的时间窗（分钟）：15分钟 / 1小时 / 4小时 / 1天
+ *  存进 horizonHours 列（历史字段名）；新建注按分钟计，旧单的 resolveAt 已算好不受影响。 */
+const HORIZONS = [15, 60, 240, 1440] as const;
 const BET_SYMBOLS = ["BTC", "ETH"] as const;
 const DAILY_CALL_LIMIT = 5;
 /** IT 下注单笔上下限 */
@@ -62,7 +63,8 @@ export const callsRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `暂时无法获取 ${symbol} 价格，请稍后重试` });
       }
 
-      const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1000);
+      // horizonHours 字段现表示分钟（15/60/240/1440）
+      const resolveAt = new Date(Date.now() + input.horizonHours * 60 * 1000);
       const potentialWin = stakePayout(input.amount, "win");
 
       const callId = await db.transaction(async (tx) => {
