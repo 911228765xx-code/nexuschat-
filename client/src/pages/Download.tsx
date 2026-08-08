@@ -26,6 +26,10 @@ const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https:/
 // 下载页走分块下载,人人可用。
 const PAGE_LINK = `${ORIGIN}/download`;
 
+const APK_MIME = "application/vnd.android.package-archive";
+/** OPFS 里的临时落盘文件名：固定名字，才能在每次重试前把上次的残留和写锁清掉 */
+const OPFS_NAME = "bitchat-download.apk";
+
 const isWeChat = typeof navigator !== "undefined" && /MicroMessenger/i.test(navigator.userAgent);
 const isQQ = typeof navigator !== "undefined" && /\bQQ\/|QQBrowser/i.test(navigator.userAgent);
 const inAppBrowser = isWeChat || isQQ;
@@ -151,31 +155,30 @@ export default function DownloadPage() {
     setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
   }
 
-  async function onDownloadClick(e: React.MouseEvent) {
-    e.preventDefault();
-    if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
-    if (dlProgress !== null) return; // 正在下
+  /**
+   * 分块拉取整包并返回可下载的 Blob。
+   * 托管链路对单次响应约有 32MiB 上限（整包 /apk 恒 500 吐 HTML），所以只能按 4MB 有界 Range 取；
+   * 每块严格校验 Content-Range 与字节数——边缘兜底的 SPA 网页不可能恰好等于请求区间长度，残包不落地。
+   */
+  async function fetchApkChunked(): Promise<Blob> {
+    const CHUNK = 4 * 1024 * 1024;
+    let start = 0;
+    let total = 0;
+    // Chrome Android 支持 OPFS：边下边写盘，避免 180MB 全扛在 JS 内存里被系统杀掉
+    const root = typeof navigator !== "undefined" && navigator.storage && "getDirectory" in navigator.storage
+      ? await navigator.storage.getDirectory().catch(() => null)
+      : null;
+    // 先删上一次的残留：一是不白占用户 180MB，二是上次异常留下的写锁会让本次 createWritable 失败
+    if (root) await root.removeEntry(OPFS_NAME).catch(() => {});
+    const fileHandle = root
+      ? await root.getFileHandle(OPFS_NAME, { create: true }).catch(() => null)
+      : null;
+    const writable = fileHandle
+      ? await fileHandle.createWritable().catch(() => null)
+      : null;
+    const parts: BlobPart[] = [];
 
-    // 托管链路对单次响应约有 32MiB 上限:整包 /apk 会被掐成空/500。
-    // 分块下载:每块 4MB、明确上下界；优先写 OPFS 避免手机内存把 180MB 全扛进 JS 导致失败。
-    const filename = `Bitchat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
     try {
-      setDlProgress(0);
-      const CHUNK = 4 * 1024 * 1024;
-      let start = 0;
-      let total = 0;
-      // Chrome Android 支持 OPFS:边下边写盘,显著降低「分享下载链接后装不上」的内存失败率
-      const root = typeof navigator !== "undefined" && navigator.storage && "getDirectory" in navigator.storage
-        ? await navigator.storage.getDirectory().catch(() => null)
-        : null;
-      const fileHandle = root
-        ? await root.getFileHandle("bitchat-download.apk", { create: true }).catch(() => null)
-        : null;
-      const writable = fileHandle
-        ? await fileHandle.createWritable().catch(() => null)
-        : null;
-      const parts: BlobPart[] = [];
-
       for (;;) {
         const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
         const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
@@ -188,14 +191,16 @@ export default function DownloadPage() {
         const returnedStart = Number(range[1]);
         const returnedEnd = Number(range[2]);
         const returnedTotal = Number(range[3]);
-        if (returnedStart !== start || returnedEnd !== end || !Number.isFinite(returnedTotal)) {
+        if (returnedStart !== start || !Number.isFinite(returnedTotal) || !returnedTotal) {
           throw new Error("mismatched content-range");
         }
         if (!total) total = returnedTotal;
         if (total !== returnedTotal) throw new Error("total length changed");
-        if (!total || !Number.isFinite(total)) throw new Error("no total length");
+        // 按固定块长请求可能越过文件尾（末块 / 小于一块的包）：允许服务端把上界收窄到 total-1
+        const expectedEnd = Math.min(end, total - 1);
+        if (returnedEnd !== expectedEnd) throw new Error("mismatched content-range");
         const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.length !== end - start + 1) throw new Error(`chunk ${start}-${end} got ${buf.length}`);
+        if (buf.length !== expectedEnd - start + 1) throw new Error(`chunk ${start}-${expectedEnd} got ${buf.length}`);
         if (start === 0 && (buf[0] !== 0x50 || buf[1] !== 0x4b)) throw new Error("not an apk/zip");
         if (writable) await writable.write(buf);
         else parts.push(buf);
@@ -208,12 +213,28 @@ export default function DownloadPage() {
         await writable.close();
         const file = await fileHandle.getFile();
         if (file.size !== total) throw new Error(`opfs ${file.size} != ${total}`);
-        await saveApkBlob(file, filename);
-      } else {
-        const blob = new Blob(parts, { type: "application/vnd.android.package-archive" });
-        if (blob.size !== total) throw new Error(`blob ${blob.size} != ${total}`);
-        await saveApkBlob(blob, filename);
+        return file;
       }
+      const blob = new Blob(parts, { type: APK_MIME });
+      if (blob.size !== total) throw new Error(`blob ${blob.size} != ${total}`);
+      return blob;
+    } catch (err) {
+      // 中途失败必须 abort：没关闭的 writable 会一直占着 OPFS 文件的写锁，
+      // 下次重试拿不到 writable 就会退回「180MB 全进内存」，手机上基本必崩。
+      if (writable) await writable.abort().catch(() => {});
+      throw err;
+    }
+  }
+
+  async function onDownloadClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
+    if (dlProgress !== null) return; // 正在下
+
+    const filename = `Bitchat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
+    try {
+      setDlProgress(0);
+      await saveApkBlob(await fetchApkChunked(), filename);
       setDlProgress(null);
     } catch {
       setDlProgress(null);

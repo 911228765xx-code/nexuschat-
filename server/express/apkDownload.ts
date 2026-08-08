@@ -11,12 +11,12 @@ import { resolveAndroidApkSource } from "../utils/androidApkSource";
  * 行为：
  *  1) 读 appConfig.downloadUrlAndroid（后台「版本发布」里配置的地址，随版本更新）。
  *  2) 同源相对路径（如 /manus-storage/xxx.apk）→ 302 跳过去（本域名已有多端点容灾）。
- *  3) 外部绝对 URL（如 expo.dev 的 EAS 构建产物）→ 【流式中转】而非 302：
+ *  3) 外部绝对 URL（如 expo.dev 的 EAS 构建产物）+ 客户端带 Range → 【流式中转】而非 302：
  *     大陆网络直连海外 CDN 常被掐/超时（与 storageProxy 同一结构性原因），
  *     服务器到 CDN 链路稳定，用户只需连通本 API 域名。
-     *     顺带把文件名规范成 Bitchat-v{版本}.apk（EAS 原始链接是一串乱码哈希名）。
+ *     顺带把文件名规范成 Bitchat-v{版本}.apk（EAS 原始链接是一串乱码哈希名）。
  *
- * 支持 Range 断点续传透传（系统下载器/浏览器分段下载依赖它）。
+ * 只服务带 Range 的客户端；不带 Range 的整包请求改道 /download 或上游直链（见下方注释）。
  */
 export async function handleApkDownload(req: Request, res: Response) {
   try {
@@ -43,21 +43,29 @@ export async function handleApkDownload(req: Request, res: Response) {
       return;
     }
 
-    // 外部 URL：流式中转 + 规范文件名。
-    // 关键:对上游【一律】用 Range 取(非 Range 客户端也强制 bytes=0-)。实测非 Range 完整 GET 会让
-    //   Cloud Run 实例 500 崩溃(应内更新首次下载正是非 Range→装不上→反复提示),而分片通道稳定可用。
-    //   非 Range 客户端仍回 200 + 完整 Content-Length(用上游 content-range 里的总长),行为等价一次完整下载。
     const clientRange = req.headers.range;
-    const upstreamHeaders: Record<string, string> = {
-      Range: typeof clientRange === "string" ? clientRange : "bytes=0-",
-    };
+
+    // 不带 Range 的整包请求：本路由无法服务（2026-08-08 实测恒 500 + text/html）。
+    // 中转 180MB 单响应会中平台边缘 32MiB 上限，边缘吐回 HTML → 手机把网页当 APK 装
+    // →「解析包出现问题」。这正是「分享下载链接装不上」的根因，所以整包请求一律改道：
+    //   浏览器(Accept: text/html) → /download 页面（页内 JS 走 4MB 有界 Range 分块，可用）
+    //   其它下载器/curl        → 302 到上游 .apk 直链（让它自己去 CDN 分段，不经本站边缘）
+    // 带 Range 的客户端（应内更新、下载页分块）继续走下面的流式中转：块小、链路稳。
+    if (typeof clientRange !== "string") {
+      const wantsHtml = (req.headers.accept ?? "").includes("text/html");
+      res.redirect(302, wantsHtml ? "/download" : url);
+      return;
+    }
+
+    // 外部 URL：流式中转 + 规范文件名（EAS 原始链接是一串乱码哈希名）。
+    const upstreamHeaders: Record<string, string> = { Range: clientRange };
 
     const upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
     if (!upstream.ok && upstream.status !== 206) {
       res.status(502).send(`下载源暂不可用（${upstream.status}），请稍后再试`);
       return;
     }
-    if (typeof clientRange === "string" && upstream.status !== 206) {
+    if (upstream.status !== 206) {
       res.status(502).send("下载源不支持分段读取，请使用备用下载线路");
       return;
     }
@@ -71,7 +79,7 @@ export async function handleApkDownload(req: Request, res: Response) {
       return;
     }
     const cr = upstream.headers.get("content-range"); // "bytes 0-N/TOTAL"
-    if (typeof clientRange === "string" && !/^bytes\s+\d+-\d+\/\d+$/i.test(cr ?? "")) {
+    if (!/^bytes\s+\d+-\d+\/\d+$/i.test(cr ?? "")) {
       res.status(502).send("下载源缺少有效 Content-Range，无法保证文件完整");
       return;
     }
@@ -86,26 +94,17 @@ export async function handleApkDownload(req: Request, res: Response) {
     res.setHeader("Content-Encoding", "identity");
     res.setHeader("Cache-Control", "no-store, no-transform");
     res.setHeader("Accept-Ranges", "bytes");
-    const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
-    if (typeof clientRange === "string") {
-      // 客户端确实请求了范围:如实回 206 + Content-Range
-      res.status(206);
-      if (cr) res.setHeader("Content-Range", cr);
-      const len = upstream.headers.get("content-length");
-      if (len) res.setHeader("Content-Length", len);
-    } else {
-      // 客户端要整包:回 200 + 完整长度(而非 206,符合 HTTP 语义,进度条/下载器正常)
-      res.status(200);
-      if (total) res.setHeader("Content-Length", String(total));
-    }
+    // 到这里必然是带 Range 的客户端：如实回 206 + Content-Range
+    res.status(206);
+    if (cr) res.setHeader("Content-Range", cr);
+    const len = upstream.headers.get("content-length");
+    if (len) res.setHeader("Content-Length", len);
 
     const nodeStream = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]);
     // 完整性守卫:上游若"干净地"早收(收到字节<应有长度),绝不能让响应看起来正常结束——
     // 那会被客户端当完整文件安装(解析包错误)、还可能被边缘缓存成残包。硬 destroy 造成
     // 传输错误,下载器会报错/重试,残包不落地。
-    const expected = typeof clientRange === "string"
-      ? Number(upstream.headers.get("content-length") || 0)
-      : total;
+    const expected = Number(len || 0);
     let piped = 0;
     nodeStream.on("data", (c: Buffer) => { piped += c.length; });
     nodeStream.on("end", () => {
