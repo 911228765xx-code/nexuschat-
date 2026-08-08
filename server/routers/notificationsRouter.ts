@@ -176,11 +176,14 @@ export async function createNotification(params: {
   });
 
   // 原生 / Web 推送（失败不影响通知入库）
+  const mentionTitle = params.content.startsWith("【@所有人】")
+    ? `${params.fromUserName} @了所有人`
+    : `${params.fromUserName} 提到了你`;
   const titleMap: Record<string, string> = {
     like: `${params.fromUserName} 赞了你`,
     comment: `${params.fromUserName} 评论了你`,
     follow: `${params.fromUserName} 关注了你`,
-    mention: `${params.fromUserName} 提到了你`,
+    mention: mentionTitle,
     system: "AIChat 通知",
   };
   void sendPushToUser(params.targetUserId, {

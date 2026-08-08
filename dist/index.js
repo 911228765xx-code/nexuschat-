@@ -3362,11 +3362,12 @@ async function createNotification(params) {
     content: params.content,
     isRead: false
   });
+  const mentionTitle = params.content.startsWith("\u3010@\u6240\u6709\u4EBA\u3011") ? `${params.fromUserName} @\u4E86\u6240\u6709\u4EBA` : `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`;
   const titleMap = {
     like: `${params.fromUserName} \u8D5E\u4E86\u4F60`,
     comment: `${params.fromUserName} \u8BC4\u8BBA\u4E86\u4F60`,
     follow: `${params.fromUserName} \u5173\u6CE8\u4E86\u4F60`,
-    mention: `${params.fromUserName} \u63D0\u5230\u4E86\u4F60`,
+    mention: mentionTitle,
     system: "AIChat \u901A\u77E5"
   };
   void sendPushToUser(params.targetUserId, {
@@ -4627,7 +4628,7 @@ import { z as z6 } from "zod";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq17, and as and14, desc as desc7, lt as lt4, sql as sql10, or as or5, gt as gt3, like, inArray as inArray7, isNull as isNull3 } from "drizzle-orm";
+import { eq as eq17, and as and14, desc as desc7, lt as lt4, sql as sql10, or as or5, ne as ne3, gt as gt3, like, inArray as inArray7, isNull as isNull3 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 // server/socket.ts
@@ -5946,8 +5947,10 @@ var chatRouter = router({
     durationSeconds: z6.number().int().min(0).max(600).optional(),
     replyToId: z6.number().int().optional(),
     ttlSeconds: z6.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
-    mentionedUserIds: z6.array(z6.number().int()).max(20).optional()
+    mentionedUserIds: z6.array(z6.number().int()).max(20).optional(),
     // 被 @ 的成员 id,后端据此发提及通知
+    /** @所有人：仅群主/管理员可发；通知本群其余成员（上限见下方） */
+    mentionAll: z6.boolean().optional()
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -5999,25 +6002,41 @@ var chatRouter = router({
     } catch {
     }
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
-    if (input.mentionedUserIds?.length) {
-      const targets = Array.from(new Set(input.mentionedUserIds)).filter((id) => id !== ctx.user.id).slice(0, 20);
-      if (targets.length) {
-        void db.select({ userId: groupMembers.userId }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), inArray7(groupMembers.userId, targets))).then((rows) => {
+    if (input.mentionAll || input.mentionedUserIds?.length) {
+      void (async () => {
+        try {
           const fromName = ctx.user.name ?? ctx.user.username ?? `\u7528\u6237 #${ctx.user.id}`;
           const preview = sanitizeInput(input.content, 120);
-          for (const r of rows) {
+          let targetIds = [];
+          if (input.mentionAll) {
+            const [me] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+            if (me?.role !== "owner" && me?.role !== "admin") {
+              return;
+            }
+            const rows = await db.select({ userId: groupMembers.userId }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), ne3(groupMembers.userId, ctx.user.id))).limit(200);
+            targetIds = rows.map((r) => r.userId);
+          } else {
+            const wanted = Array.from(new Set(input.mentionedUserIds ?? [])).filter((id) => id !== ctx.user.id).slice(0, 20);
+            if (!wanted.length) return;
+            const rows = await db.select({ userId: groupMembers.userId }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), inArray7(groupMembers.userId, wanted)));
+            targetIds = rows.map((r) => r.userId);
+          }
+          const content = input.mentionAll ? `\u3010@\u6240\u6709\u4EBA\u3011${preview}` : preview;
+          for (const uid of targetIds) {
             void createNotification({
               db,
-              targetUserId: r.userId,
+              targetUserId: uid,
               fromUserId: ctx.user.id,
               fromUserName: fromName,
               fromUserAvatar: ctx.user.avatar ?? "",
               type: "mention",
-              content: preview
+              content
             });
           }
-        }).catch((err) => logger_default.warn({ err }, "mention notify failed"));
-      }
+        } catch (err) {
+          logger_default.warn({ err }, "mention notify failed");
+        }
+      })();
     }
     if (input.messageType === "text") {
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
