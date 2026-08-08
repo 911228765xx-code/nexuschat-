@@ -14,7 +14,7 @@ import { resolveAndroidApkSource } from "../utils/androidApkSource";
  *  3) 外部绝对 URL（如 expo.dev 的 EAS 构建产物）→ 【流式中转】而非 302：
  *     大陆网络直连海外 CDN 常被掐/超时（与 storageProxy 同一结构性原因），
  *     服务器到 CDN 链路稳定，用户只需连通本 API 域名。
- *     顺带把文件名规范成 AIChat-v{版本}.apk（EAS 原始链接是一串乱码哈希名）。
+     *     顺带把文件名规范成 Bitchat-v{版本}.apk（EAS 原始链接是一串乱码哈希名）。
  *
  * 支持 Range 断点续传透传（系统下载器/浏览器分段下载依赖它）。
  */
@@ -77,7 +77,7 @@ export async function handleApkDownload(req: Request, res: Response) {
     }
 
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
+    const fname = `Bitchat${version ? `-v${version}` : ""}.apk`;
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
     // identity + no-transform:APK 已是压缩包,禁二次 gzip(0 收益、丢 Content-Length 让进度失效)。
     // no-store(2026-07-12 事故):曾用 public max-age=1800,一次被截断的传输(384KB)被边缘当完整

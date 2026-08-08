@@ -132,21 +132,50 @@ export default function DownloadPage() {
     } catch { /* 剪贴板不可用则忽略,用户可手抄横幅上的码 */ }
   }
 
+  function openInSystemBrowser() {
+    // 微信/QQ 内置浏览器拦 APK；尽量跳到系统 Chrome/默认浏览器再下
+    const target = `${ORIGIN}/download${rawInviteCode ? `?ref=${encodeURIComponent(rawInviteCode)}` : ""}`;
+    const hostPath = target.replace(/^https?:\/\//, "");
+    const intent = `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(target)};end`;
+    window.location.href = /Android/i.test(navigator.userAgent) ? intent : target;
+  }
+
+  async function saveApkBlob(blob: Blob, filename: string) {
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+  }
+
   async function onDownloadClick(e: React.MouseEvent) {
     e.preventDefault();
     if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
     if (dlProgress !== null) return; // 正在下
 
-    // 托管链路(平台边缘→Cloud Run)对带 Content-Length 的响应有 32MiB 上限:整包或无界 Range
-    // 会被掐 → 边缘兜底吐回 SPA 网页 → 存成 .apk 装不上(「解析包出现问题」)。
-    // 分块下载:每块 8MB(<32MiB)、明确上下界、逐块拼成完整 APK。
-    // 每块字节数严格校验(SPA 兜底页不可能恰好等于请求区间长度),污染块立即中止而非默默拼进去。
+    // 托管链路对单次响应约有 32MiB 上限:整包 /apk 会被掐成空/500。
+    // 分块下载:每块 4MB、明确上下界；优先写 OPFS 避免手机内存把 180MB 全扛进 JS 导致失败。
+    const filename = `Bitchat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
     try {
       setDlProgress(0);
-      const CHUNK = 8 * 1024 * 1024;
-      const parts: BlobPart[] = [];
+      const CHUNK = 4 * 1024 * 1024;
       let start = 0;
       let total = 0;
+      // Chrome Android 支持 OPFS:边下边写盘,显著降低「分享下载链接后装不上」的内存失败率
+      const root = typeof navigator !== "undefined" && navigator.storage && "getDirectory" in navigator.storage
+        ? await navigator.storage.getDirectory().catch(() => null)
+        : null;
+      const fileHandle = root
+        ? await root.getFileHandle("bitchat-download.apk", { create: true }).catch(() => null)
+        : null;
+      const writable = fileHandle
+        ? await fileHandle.createWritable().catch(() => null)
+        : null;
+      const parts: BlobPart[] = [];
+
       for (;;) {
         const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
         const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
@@ -166,36 +195,35 @@ export default function DownloadPage() {
         if (total !== returnedTotal) throw new Error("total length changed");
         if (!total || !Number.isFinite(total)) throw new Error("no total length");
         const buf = new Uint8Array(await res.arrayBuffer());
-        // 完整性防线:拿回字节数必须正好等于请求区间(边缘吐 SPA 页时长度必然对不上)
         if (buf.length !== end - start + 1) throw new Error(`chunk ${start}-${end} got ${buf.length}`);
         if (start === 0 && (buf[0] !== 0x50 || buf[1] !== 0x4b)) throw new Error("not an apk/zip");
-        parts.push(buf);
+        if (writable) await writable.write(buf);
+        else parts.push(buf);
         start += buf.length;
         setDlProgress(Math.min(0.999, start / total));
         if (start >= total) break;
       }
-      const blob = new Blob(parts, { type: "application/vnd.android.package-archive" });
-      // 最终总长校验:任何缺斤少两都不落地(宁可报错重试,绝不给用户一个装不上的残包)
-      if (blob.size !== total) throw new Error(`blob ${blob.size} != ${total}`);
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objUrl;
-      a.download = `Bitchat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+
+      if (writable && fileHandle) {
+        await writable.close();
+        const file = await fileHandle.getFile();
+        if (file.size !== total) throw new Error(`opfs ${file.size} != ${total}`);
+        await saveApkBlob(file, filename);
+      } else {
+        const blob = new Blob(parts, { type: "application/vnd.android.package-archive" });
+        if (blob.size !== total) throw new Error(`blob ${blob.size} != ${total}`);
+        await saveApkBlob(blob, filename);
+      }
       setDlProgress(null);
     } catch {
       setDlProgress(null);
-      // 分块失败(内存不足/浏览器不支持 fetch Range/网络中断)→ 退到【绕平台边缘】的整包直链:
-      // directUrl 是 expo.dev 等外部直链,不经本边缘,不受 32MiB 上限,任何浏览器都能整包下完。
-      // 绝不退回 /apk 裸链(走本边缘,整包必中上限吐 SPA、装不上)。
+      // 分块失败 → 退到外部整包直链(绕平台 32MiB 上限)。绝不退回裸 /apk。
       const directUrl = usableDirectUrl(ver?.directUrl);
       if (directUrl) {
-        window.location.href = directUrl;
+        const ok = window.confirm("本地下载未完成。是否改用备用线路继续下载？（约 180MB，建议 Wi‑Fi）");
+        if (ok) window.location.href = directUrl;
       } else {
-        alert("下载未完成，请检查网络后重新点击下载按钮。");
+        alert("下载未完成。请用系统浏览器（Chrome/自带浏览器）打开本页重试，勿在微信内下载。");
       }
     }
   }
@@ -226,10 +254,7 @@ export default function DownloadPage() {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* 微信/QQ 内置浏览器引导蒙层 */}
       {guideOpen && inAppBrowser && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center px-8 pt-8"
-          onClick={() => setGuideOpen(false)}
-        >
+        <div className="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center px-8 pt-8">
           <div className="self-end text-5xl leading-none select-none" aria-hidden>↗</div>
           <div className="mt-6 max-w-xs text-center">
             <p className="text-white text-lg font-bold leading-relaxed">
@@ -239,7 +264,27 @@ export default function DownloadPage() {
               请点击右上角 <span className="inline-block px-2 rounded bg-white/20 font-bold">···</span> 菜单
               <br />选择「<strong>在浏览器打开</strong>」后再下载
             </p>
-            <p className="text-white/50 text-xs mt-6">点击任意处关闭提示</p>
+            <button
+              type="button"
+              onClick={openInSystemBrowser}
+              className="mt-6 w-full rounded-xl bg-[#00d4ff] px-4 py-3 text-sm font-bold text-black"
+            >
+              尝试用系统浏览器打开
+            </button>
+            <button
+              type="button"
+              onClick={() => { void copyLink(); }}
+              className="mt-3 w-full rounded-xl border border-white/30 px-4 py-3 text-sm font-semibold text-white"
+            >
+              复制下载页链接
+            </button>
+            <button
+              type="button"
+              onClick={() => setGuideOpen(false)}
+              className="mt-6 text-white/50 text-xs"
+            >
+              关闭提示
+            </button>
           </div>
         </div>
       )}
@@ -398,7 +443,7 @@ export default function DownloadPage() {
             {/* 下载卡:大按钮 + 动态二维码 + 直链复制 */}
             <div className="rounded-2xl border border-[#00d4ff]/20 bg-gradient-to-br from-[#00d4ff]/10 to-transparent p-6 flex flex-col items-center gap-4">
               <a
-                href="/apk"
+                href="/download"
                 onClick={onDownloadClick}
                 aria-disabled={dlProgress !== null}
                 className="relative w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white text-base font-bold hover:opacity-90 transition-opacity overflow-hidden"
@@ -416,6 +461,10 @@ export default function DownloadPage() {
                     : `下载 Android 版${versionLabel ? ` ${versionLabel}` : ""}`}
                 </span>
               </a>
+              <p className="text-[11px] text-muted-foreground/80 text-center leading-relaxed">
+                安装包约 180MB，请用 Wi‑Fi · 勿在微信内直接下载
+                {inAppBrowser ? " · 请先点右上角用浏览器打开" : ""}
+              </p>
 
               {/* 直链(复制发给好友/下载器) */}
               <div className="w-full flex items-center gap-2">

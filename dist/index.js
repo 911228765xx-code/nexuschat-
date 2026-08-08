@@ -1966,7 +1966,7 @@ var init_membership = __esm({
         color: "#94A3B8",
         tagline: "\u57FA\u7840\u793E\u4EA4\u4F53\u9A8C",
         benefits: { maxGroups: 5, maxGroupMembers: 100, aiDailyFree: 0, maxFileMB: 60, maxVideoMB: 60, adFree: false, badge: null, publicGroups: false, bannerSlot: false, voiceRoomFreeMonthly: 0 },
-        perks: ["\u5EFA\u7FA4\u4E0A\u9650 5 \u4E2A\uFF08\u4EC5\u79C1\u5BC6\u7FA4\uFF09", "\u7FA4\u4EBA\u6570\u4E0A\u9650 100", "AI \u6309\u6B21\u4ED8\u8D39 10 AI/\u6B21", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F 10 AI/\u6B21\u5F00\u623F", "\u6587\u4EF6 \u2264 60MB", "\u89C6\u9891 \u2264 60MB"]
+        perks: ["\u5EFA\u7FA4\u4E0A\u9650 5 \u4E2A\uFF08\u4EC5\u79C1\u5BC6\u7FA4\uFF09", "\u7FA4\u4EBA\u6570\u4E0A\u9650 100", "\u5BF9\u8BDD\u6309\u6B21\u4ED8\u8D39 10 BIT/\u6B21", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F 10 BIT/\u6B21\u5F00\u623F", "\u6587\u4EF6 \u2264 60MB", "\u89C6\u9891 \u2264 60MB"]
       },
       {
         key: "plus",
@@ -1975,7 +1975,7 @@ var init_membership = __esm({
         color: "#6366F1",
         tagline: "\u8FDB\u9636\u793E\u7FA4\u8FD0\u8425",
         benefits: { maxGroups: 10, maxGroupMembers: 5e4, aiDailyFree: 3, maxFileMB: 100, maxVideoMB: 120, adFree: true, badge: "Plus", publicGroups: true, bannerSlot: false, voiceRoomFreeMonthly: 10 },
-        perks: ["\u53EF\u521B\u5EFA\u516C\u5F00\u7FA4\uFF08\u53D1\u73B0\u793E\u533A\u66DD\u5149\uFF09", "\u5EFA\u7FA4\u4E0A\u9650 10 \u4E2A", "\u7FA4\u4EBA\u6570\u4E0A\u9650 5 \u4E07", "\u6BCF\u65E5 3 \u6B21\u514D\u8D39 AI\uFF08\u8D85\u51FA 10 AI/\u6B21\uFF09", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F\u6BCF\u6708 10 \u6B21\u514D\u8D39\u5F00\u623F", "\u6587\u4EF6 \u2264 100MB", "\u89C6\u9891 \u2264 120MB", "\u514D\u5E7F\u544A", "Plus \u4E13\u5C5E\u5FBD\u7AE0"]
+        perks: ["\u53EF\u521B\u5EFA\u516C\u5F00\u7FA4\uFF08\u53D1\u73B0\u793E\u533A\u66DD\u5149\uFF09", "\u5EFA\u7FA4\u4E0A\u9650 10 \u4E2A", "\u7FA4\u4EBA\u6570\u4E0A\u9650 5 \u4E07", "\u6BCF\u65E5 3 \u6B21\u514D\u8D39\u5BF9\u8BDD\uFF08\u8D85\u51FA 10 BIT/\u6B21\uFF09", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F\u6BCF\u6708 10 \u6B21\u514D\u8D39\u5F00\u623F", "\u6587\u4EF6 \u2264 100MB", "\u89C6\u9891 \u2264 120MB", "\u514D\u5E7F\u544A", "Plus \u4E13\u5C5E\u5FBD\u7AE0"]
       },
       {
         key: "pro",
@@ -1984,7 +1984,7 @@ var init_membership = __esm({
         color: "#F59E0B",
         tagline: "\u4E13\u4E1A\u73A9\u5BB6 / KOL",
         benefits: { maxGroups: 50, maxGroupMembers: 2e5, aiDailyFree: 10, maxFileMB: 500, maxVideoMB: 250, adFree: true, badge: "Pro", publicGroups: true, bannerSlot: true, voiceRoomFreeMonthly: 20 },
-        perks: ["\u53D1\u73B0\u9875\u6EDA\u52A8\u5E7F\u544A\u4F4D\u6295\u653E\uFF08Pro \u4E13\u5C5E\uFF09", "\u53EF\u521B\u5EFA\u516C\u5F00\u7FA4\uFF08\u53D1\u73B0\u793E\u533A\u66DD\u5149\uFF09", "\u5EFA\u7FA4\u4E0A\u9650 50 \u4E2A", "\u7FA4\u4EBA\u6570\u4E0A\u9650 20 \u4E07", "\u6BCF\u65E5 10 \u6B21\u514D\u8D39 AI\uFF08\u8D85\u51FA 10 AI/\u6B21\uFF09", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F\u6BCF\u6708 20 \u6B21\u514D\u8D39\u5F00\u623F", "\u6587\u4EF6 \u2264 500MB", "\u89C6\u9891 \u2264 250MB", "\u514D\u5E7F\u544A", "Pro \u91D1\u8272\u5FBD\u7AE0", "AI \u4F18\u5148\u54CD\u5E94"]
+        perks: ["\u53D1\u73B0\u9875\u6EDA\u52A8\u5E7F\u544A\u4F4D\u6295\u653E\uFF08Pro \u4E13\u5C5E\uFF09", "\u53EF\u521B\u5EFA\u516C\u5F00\u7FA4\uFF08\u53D1\u73B0\u793E\u533A\u66DD\u5149\uFF09", "\u5EFA\u7FA4\u4E0A\u9650 50 \u4E2A", "\u7FA4\u4EBA\u6570\u4E0A\u9650 20 \u4E07", "\u6BCF\u65E5 10 \u6B21\u514D\u8D39\u5BF9\u8BDD\uFF08\u8D85\u51FA 10 BIT/\u6B21\uFF09", "\u667A\u80FD\u4F53\u8BED\u97F3\u623F\u6BCF\u6708 20 \u6B21\u514D\u8D39\u5F00\u623F", "\u6587\u4EF6 \u2264 500MB", "\u89C6\u9891 \u2264 250MB", "\u514D\u5E7F\u544A", "Pro \u91D1\u8272\u5FBD\u7AE0", "\u5BF9\u8BDD\u4F18\u5148\u54CD\u5E94"]
       }
     ];
     MEMBERSHIP_TERMS = [
@@ -13271,12 +13271,12 @@ var aiRouter = router({
     const [row] = await db.select({ nn: users.nnBalance }).from(users).where(eq33(users.id, ctx.user.id)).limit(1);
     const balance = Number(row?.nn ?? 0);
     if (!isFree && balance < cost) {
-      const quotaLine = freeQuota > 0 ? `\u4F60\u7684\u4F1A\u5458\u6BCF\u65E5 **${freeQuota} \u6B21**\u514D\u8D39 AI\uFF0C\u5DF2\u7528\u5B8C\uFF1B` : `\u514D\u8D39\u7528\u6237 AI \u6309\u6B21\u8BA1\u8D39\uFF1B`;
+      const quotaLine = freeQuota > 0 ? `\u4F60\u7684\u4F1A\u5458\u6BCF\u65E5 **${freeQuota} \u6B21**\u514D\u8D39\u5BF9\u8BDD\uFF0C\u5DF2\u7528\u5B8C\uFF1B` : `\u514D\u8D39\u7528\u6237\u5BF9\u8BDD\u6309\u6B21\u8BA1\u8D39\uFF1B`;
       return {
-        reply: `${freeQuota > 0 ? "\u4ECA\u65E5\u514D\u8D39\u989D\u5EA6\u5DF2\u7528\u5B8C" : "AI \u6309\u6B21\u8BA1\u8D39"} \u{1F4A1}
+        reply: `${freeQuota > 0 ? "\u4ECA\u65E5\u514D\u8D39\u989D\u5EA6\u5DF2\u7528\u5B8C" : "\u5BF9\u8BDD\u6309\u6B21\u8BA1\u8D39"} \u{1F4A1}
 
-${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} AI**\uFF0C\u5F53\u524D\u4F59\u989D **${balance} AI**\u3002
-\u5F00\u901A\u4F1A\u5458\u53EF\u4EAB\u6BCF\u65E5\u514D\u8D39\u989D\u5EA6\uFF08Plus 3 \u6B21 / Pro 10 \u6B21\uFF09\uFF0C\u6216\u5148\u83B7\u53D6 AI\u3002`,
+${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} BIT**\uFF0C\u5F53\u524D\u4F59\u989D **${balance} BIT**\u3002
+\u5F00\u901A\u4F1A\u5458\u53EF\u4EAB\u6BCF\u65E5\u514D\u8D39\u989D\u5EA6\uFF08Plus 3 \u6B21 / Pro 10 \u6B21\uFF09\uFF0C\u6216\u5148\u83B7\u53D6 BIT\u3002`,
         actions: [],
         insufficient: true,
         cost,
@@ -15444,7 +15444,7 @@ async function handleApkDownload(req, res) {
       return;
     }
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    const fname = `AIChat${version ? `-v${version}` : ""}.apk`;
+    const fname = `Bitchat${version ? `-v${version}` : ""}.apk`;
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
     res.setHeader("Content-Encoding", "identity");
     res.setHeader("Cache-Control", "no-store, no-transform");
