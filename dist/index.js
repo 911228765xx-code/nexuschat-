@@ -15417,15 +15417,18 @@ async function handleApkDownload(req, res) {
       return;
     }
     const clientRange = req.headers.range;
-    const upstreamHeaders = {
-      Range: typeof clientRange === "string" ? clientRange : "bytes=0-"
-    };
+    if (typeof clientRange !== "string") {
+      const wantsHtml = (req.headers.accept ?? "").includes("text/html");
+      res.redirect(302, wantsHtml ? "/download" : url);
+      return;
+    }
+    const upstreamHeaders = { Range: clientRange };
     const upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
     if (!upstream.ok && upstream.status !== 206) {
       res.status(502).send(`\u4E0B\u8F7D\u6E90\u6682\u4E0D\u53EF\u7528\uFF08${upstream.status}\uFF09\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5`);
       return;
     }
-    if (typeof clientRange === "string" && upstream.status !== 206) {
+    if (upstream.status !== 206) {
       res.status(502).send("\u4E0B\u8F7D\u6E90\u4E0D\u652F\u6301\u5206\u6BB5\u8BFB\u53D6\uFF0C\u8BF7\u4F7F\u7528\u5907\u7528\u4E0B\u8F7D\u7EBF\u8DEF");
       return;
     }
@@ -15439,7 +15442,7 @@ async function handleApkDownload(req, res) {
       return;
     }
     const cr = upstream.headers.get("content-range");
-    if (typeof clientRange === "string" && !/^bytes\s+\d+-\d+\/\d+$/i.test(cr ?? "")) {
+    if (!/^bytes\s+\d+-\d+\/\d+$/i.test(cr ?? "")) {
       res.status(502).send("\u4E0B\u8F7D\u6E90\u7F3A\u5C11\u6709\u6548 Content-Range\uFF0C\u65E0\u6CD5\u4FDD\u8BC1\u6587\u4EF6\u5B8C\u6574");
       return;
     }
@@ -15449,18 +15452,12 @@ async function handleApkDownload(req, res) {
     res.setHeader("Content-Encoding", "identity");
     res.setHeader("Cache-Control", "no-store, no-transform");
     res.setHeader("Accept-Ranges", "bytes");
-    const total = cr ? Number(cr.split("/")[1]) : Number(upstream.headers.get("content-length") || 0);
-    if (typeof clientRange === "string") {
-      res.status(206);
-      if (cr) res.setHeader("Content-Range", cr);
-      const len = upstream.headers.get("content-length");
-      if (len) res.setHeader("Content-Length", len);
-    } else {
-      res.status(200);
-      if (total) res.setHeader("Content-Length", String(total));
-    }
+    res.status(206);
+    if (cr) res.setHeader("Content-Range", cr);
+    const len = upstream.headers.get("content-length");
+    if (len) res.setHeader("Content-Length", len);
     const nodeStream = Readable2.fromWeb(upstream.body);
-    const expected = typeof clientRange === "string" ? Number(upstream.headers.get("content-length") || 0) : total;
+    const expected = Number(len || 0);
     let piped = 0;
     nodeStream.on("data", (c) => {
       piped += c.length;
