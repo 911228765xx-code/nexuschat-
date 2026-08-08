@@ -1,8 +1,8 @@
 /**
- * Alpha 战绩系统（AC 模型 Phase 3）：
- *  - 用户发结构化 Call（标的 + 方向 + 时间窗）；系统在窗口到期后按行情自动判定对错。
- *  - 判对 → AC + 声誉 + 上战绩榜；判错 → 扣声誉。沉淀可验证的公开战绩。
- *  - 声誉反过来抬高个人产出加成（见 rankEngine.reputationBonus），形成正循环。
+ * Alpha 猜涨跌（固定赔率）：
+ *  - 用 IT 猜 BTC / ETH 未来涨跌；到期按行情结算。
+ *  - 押对按固定赔率 1.8 返还（含本金），押错销毁，死区内 void 退本。
+ *  - 战绩榜 / 声誉仍保留。
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -14,18 +14,110 @@ import { eq, and, desc, sql, count, gte } from "drizzle-orm";
 import { fetchTokenData } from "./research";
 import { sanitizeInput } from "../utils/sanitize";
 import { isReferralBound } from "../referralRewards";
+import { STAKE_ODDS, stakePayout } from "../callResolver";
 
 /** 允许的时间窗（小时）：1天 / 3天 / 7天 / 30天 */
 const HORIZONS = [24, 72, 168, 720] as const;
+const BET_SYMBOLS = ["BTC", "ETH"] as const;
 const DAILY_CALL_LIMIT = 5;
-/** 策展质押：单笔上下限 */
+/** IT 下注单笔上下限 */
 const MIN_STAKE = 10;
 const MAX_STAKE = 5000;
 
 function ymdUtc(d: Date = new Date()): string { return d.toISOString().slice(0, 10); }
 
 export const callsRouter = router({
-  // ─── 发一条 Call ─────────────────────────────────────────────────────────────
+  /** 固定赔率与可选标的（前端展示用） */
+  meta: publicProcedure.query(() => ({
+    odds: STAKE_ODDS,
+    symbols: [...BET_SYMBOLS],
+    horizons: [...HORIZONS],
+    minStake: MIN_STAKE,
+    maxStake: MAX_STAKE,
+    dailyLimit: DAILY_CALL_LIMIT,
+  })),
+
+  // ─── 用 IT 猜涨跌（主入口）────────────────────────────────────────────────
+  placeBet: protectedProcedure
+    .input(z.object({
+      tokenSymbol: z.enum(BET_SYMBOLS),
+      direction: z.enum(["long", "short"]),
+      horizonHours: z.number().refine((h) => (HORIZONS as readonly number[]).includes(h), "无效的时间窗"),
+      amount: z.number().int().min(MIN_STAKE).max(MAX_STAKE),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      if (!(await isReferralBound(db, ctx.user.id))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与猜涨跌" });
+      }
+
+      const ymd = ymdUtc();
+      const symbol = input.tokenSymbol;
+      const token = await fetchTokenData(symbol);
+      const price = token?.price;
+      if (!price || price <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `暂时无法获取 ${symbol} 价格，请稍后重试` });
+      }
+
+      const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1000);
+      const potentialWin = stakePayout(input.amount, "win");
+
+      const callId = await db.transaction(async (tx) => {
+        await tx.select({ id: users.id }).from(users).where(eq(users.id, ctx.user.id)).for("update").limit(1);
+
+        const [{ c = 0 } = { c: 0 }] = await tx
+          .select({ c: count() }).from(calls)
+          .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
+        if (Number(c) >= DAILY_CALL_LIMIT) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多下注 ${DAILY_CALL_LIMIT} 次` });
+        }
+        const [openSame] = await tx.select({ id: calls.id }).from(calls)
+          .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
+        if (openSame) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `你已有未结算的 ${symbol} 下注，结算后再来` });
+        }
+
+        // 原子扣 IT
+        const res = await tx.update(users)
+          .set({ npPoints: sql`npPoints - ${input.amount}` })
+          .where(and(eq(users.id, ctx.user.id), gte(users.npPoints, input.amount)));
+        const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "IT 余额不足" });
+
+        const [result] = await tx.insert(calls).values({
+          userId: ctx.user.id,
+          tokenSymbol: symbol,
+          direction: input.direction,
+          horizonHours: input.horizonHours,
+          entryPrice: String(price),
+          note: `bet:${input.amount}`,
+          createdYmd: ymd,
+          resolveAt,
+        });
+        const insertId = (result as any).insertId as number;
+        // 自押：结算时按固定赔率返还（允许押自己的场）
+        await tx.insert(curationStakes).values({
+          stakerId: ctx.user.id,
+          callId: insertId,
+          amount: input.amount,
+        });
+        return insertId;
+      });
+
+      return {
+        callId,
+        entryPrice: price,
+        resolveAt: resolveAt.toISOString(),
+        amount: input.amount,
+        odds: STAKE_ODDS,
+        potentialWin,
+      };
+    }),
+
+  // ─── 兼容旧客户端：免费发 Call 已关闭，引导走 placeBet ─────────────────────
   create: protectedProcedure
     .input(z.object({
       tokenSymbol: z.string().min(1).max(20),
@@ -34,65 +126,46 @@ export const callsRouter = router({
       note: z.string().max(280).optional(),
     }))
     .use(rateLimitWrite)
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      // C 折中：发 Call 是高价值玩法，需先绑定邀请人
-      if (!(await isReferralBound(db, ctx.user.id))) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再发 Call" });
-      }
-
-      const ymd = ymdUtc();
-      const symbol = input.tokenSymbol.trim().toUpperCase();
-      const token = await fetchTokenData(symbol);
-      const price = token?.price;
-      if (!price || price <= 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "无法获取该代币价格，请确认标的" });
-      }
-
-      const resolveAt = new Date(Date.now() + input.horizonHours * 3600 * 1000);
-      // 事务内锁用户行,防刷分:① 原来"count→insert"非原子,并发发 Call 可绕过每日上限;
-      // ② 禁止同标的并存未结算 Call——否则同标的同时发 long+short 对冲,行情一动必有一条判对稳拿 AC
-      // (AC 可经 TGE 兑换成 AI/真金),farmable。
-      const insertId = await db.transaction(async (tx) => {
-        await tx.select({ id: users.id }).from(users).where(eq(users.id, ctx.user.id)).for("update").limit(1);
-        const [{ c = 0 } = { c: 0 }] = await tx
-          .select({ c: count() }).from(calls)
-          .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
-        if (Number(c) >= DAILY_CALL_LIMIT) {
-          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多发 ${DAILY_CALL_LIMIT} 条 Call` });
-        }
-        const [openSame] = await tx.select({ id: calls.id }).from(calls)
-          .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
-        if (openSame) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "该标的你已有未结算的 Call，结算后再发" });
-        }
-        const [result] = await tx.insert(calls).values({
-          userId: ctx.user.id,
-          tokenSymbol: symbol,
-          direction: input.direction,
-          horizonHours: input.horizonHours,
-          entryPrice: String(price),
-          note: input.note ? sanitizeInput(input.note, 280) : undefined,
-          createdYmd: ymd,
-          resolveAt,
-        });
-        return (result as any).insertId as number;
+    .mutation(async () => {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "请改用 IT 猜涨跌下注（仅 BTC / ETH，固定赔率 1.8）",
       });
-      return { callId: insertId, entryPrice: price, resolveAt: resolveAt.toISOString() };
     }),
 
-  // ─── 我的 Call 列表 ──────────────────────────────────────────────────────────
+  // ─── 我的下注列表 ──────────────────────────────────────────────────────────
   listMine: protectedProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(50) }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      return db.select().from(calls)
+      const rows = await db
+        .select({
+          id: calls.id,
+          tokenSymbol: calls.tokenSymbol,
+          direction: calls.direction,
+          horizonHours: calls.horizonHours,
+          entryPrice: calls.entryPrice,
+          resolvedPrice: calls.resolvedPrice,
+          changeBp: calls.changeBp,
+          status: calls.status,
+          note: calls.note,
+          createdAt: calls.createdAt,
+          resolveAt: calls.resolveAt,
+          resolvedAt: calls.resolvedAt,
+          stakeAmount: sql<number>`(SELECT COALESCE(SUM(cs.amount),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`,
+          payout: sql<number>`(SELECT COALESCE(SUM(cs.payout),0) FROM curation_stakes cs WHERE cs.callId = ${calls.id} AND cs.stakerId = ${ctx.user.id})`,
+        })
+        .from(calls)
         .where(eq(calls.userId, ctx.user.id))
         .orderBy(desc(calls.createdAt))
         .limit(input?.limit ?? 50);
+      return rows.map((r) => ({
+        ...r,
+        stakeAmount: Number(r.stakeAmount ?? 0),
+        payout: Number(r.payout ?? 0),
+        odds: STAKE_ODDS,
+      }));
     }),
 
   // ─── 战绩榜（按胜场排序，达最低样本量才上榜）──────────────────────────────────
@@ -206,7 +279,7 @@ export const callsRouter = router({
           .set({ npPoints: sql`npPoints - ${input.amount}` })
           .where(and(eq(users.id, ctx.user.id), gte(users.npPoints, input.amount)));
         const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
-        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "AC 余额不足" });
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "IT 余额不足" });
         await tx.insert(curationStakes).values({ stakerId: ctx.user.id, callId: input.callId, amount: input.amount });
       });
       return { ok: true };

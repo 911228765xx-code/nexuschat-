@@ -13,14 +13,16 @@ import logger from "./utils/logger";
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
 const DEADBAND_BP = 100;        // ±1% 死区（基点）
-const WIN_NP = 150;             // 判对 AC 奖励
+const WIN_NP = 150;             // 旧版「免费 Call」判对 IT 奖励（有自押下注时不再发）
 const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
-const STAKE_WIN_BONUS = 0.3;    // 策展质押命中奖励比例（押对 +30%，押错销毁 → 净 AC 出口）
+/** 固定赔率 1.8：押对返还本金×1.8（含本金），押错销毁，void 退本 */
+export const STAKE_ODDS = 1.8;
+const STAKE_WIN_BONUS = STAKE_ODDS - 1; // 0.8
 
-/** 策展质押结算返还额：押对=本金+30%，void=退本金，押错=0（销毁）。 */
+/** 质押/下注结算返还额：押对=本金×1.8，void=退本金，押错=0（销毁）。 */
 export function stakePayout(amount: number, callStatus: "win" | "lose" | "void"): number {
-  if (callStatus === "win") return amount + Math.round(amount * STAKE_WIN_BONUS);
+  if (callStatus === "win") return Math.round(amount * STAKE_ODDS);
   if (callStatus === "void") return amount;
   return 0;
 }
@@ -96,16 +98,26 @@ export async function resolveDueCalls(db: Db): Promise<number> {
       const changed = Number((upd as any)?.[0]?.affectedRows ?? (upd as any)?.rowsAffected ?? 0);
       if (changed < 1) continue;
 
+      // 自己用 IT 下注的场次：只走质押返还（×1.8），不再额外发 150 IT，避免双倍补贴
+      const [selfBet] = await db.select({ id: curationStakes.id }).from(curationStakes)
+        .where(and(eq(curationStakes.callId, c.id), eq(curationStakes.stakerId, c.userId)))
+        .limit(1);
       if (status === "win") {
-        await db.update(users)
-          .set({ npPoints: sql`npPoints + ${WIN_NP}`, reputation: sql`reputation + ${WIN_REP}` })
-          .where(eq(users.id, c.userId));
+        if (selfBet) {
+          await db.update(users)
+            .set({ reputation: sql`reputation + ${WIN_REP}` })
+            .where(eq(users.id, c.userId));
+        } else {
+          await db.update(users)
+            .set({ npPoints: sql`npPoints + ${WIN_NP}`, reputation: sql`reputation + ${WIN_REP}` })
+            .where(eq(users.id, c.userId));
+        }
       } else if (status === "lose") {
         await db.update(users)
           .set({ reputation: sql`GREATEST(0, reputation - ${LOSE_REP})` })
           .where(eq(users.id, c.userId));
       }
-      // 结算这条 Call 上的策展质押
+      // 结算这条 Call 上的质押/自押下注
       await settleStakesForCall(db, c.id, status);
       processed++;
     } catch (err) {
