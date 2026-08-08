@@ -28,10 +28,12 @@ import { callsRouter } from "./routers/calls";
 import { npStoreRouter } from "./routers/npStore";
 import { tgeRouter } from "./routers/tge";
 import { partnerRouter } from "./routers/partner";
+import { statsRouter } from "./routers/stats";
 
 export const appRouter = router({
   system: systemRouter,
   ai: aiRouter,
+  stats: statsRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       const user = opts.ctx.user;
