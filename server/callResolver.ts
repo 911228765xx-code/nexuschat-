@@ -128,7 +128,7 @@ export async function resolveDueCalls(db: Db): Promise<number> {
   return processed;
 }
 
-/** 注册战绩结算定时任务（每 30 分钟）。 */
+/** 注册战绩结算定时任务（每 1 分钟；支持 15 分钟短窗盘口）。 */
 export function startCallResolver(): void {
   const tick = async () => {
     try {
@@ -138,6 +138,6 @@ export function startCallResolver(): void {
       logger.warn({ err }, "callResolver: 结算任务异常");
     }
   };
-  setInterval(() => { void tick(); }, 30 * 60 * 1000);
+  setInterval(() => { void tick(); }, 60 * 1000);
   void tick();
 }
