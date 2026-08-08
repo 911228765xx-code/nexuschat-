@@ -40,6 +40,8 @@ const PATCHES: string[] = [
     UNIQUE KEY \`uniq_bit_airdrop_claim_user_ymd\` (\`userId\`, \`ymd\`),
     KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
   )`,
+  // 发现页生态仪表盘配置（加成 + 额外指标行）
+  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
 ];
 
 export async function applySchemaPatches(): Promise<void> {

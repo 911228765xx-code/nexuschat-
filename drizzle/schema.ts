@@ -877,6 +877,8 @@ export const appConfig = mysqlTable("app_config", {
   aiChatCost: int("aiChatCost").default(10).notNull(),
   // 任务奖励覆盖（JSON: { [taskType]: npReward }），后台可改，无需改代码
   taskRewards: text("taskRewards"),
+  // 发现页「社区生态」仪表盘：展示加成 + 额外指标行（JSON，见 stats router）
+  dashboardConfig: text("dashboardConfig"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type AppConfig = typeof appConfig.$inferSelect;

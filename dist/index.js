@@ -822,6 +822,8 @@ var init_schema = __esm({
       aiChatCost: int("aiChatCost").default(10).notNull(),
       // 任务奖励覆盖（JSON: { [taskType]: npReward }），后台可改，无需改代码
       taskRewards: text("taskRewards"),
+      // 发现页「社区生态」仪表盘：展示加成 + 额外指标行（JSON，见 stats router）
+      dashboardConfig: text("dashboardConfig"),
       updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
     });
     redPacketClaims = mysqlTable(
@@ -3632,9 +3634,9 @@ var userRouter = router({
     if (!db) return null;
     const [me] = await db.select({ npPoints: users.npPoints }).from(users).where(eq10(users.id, ctx.user.id)).limit(1);
     if (!me) return null;
-    const [{ count: count7 }] = await db.select({ count: sql6`COUNT(*)` }).from(users).where(sql6`npPoints > ${me.npPoints}`);
+    const [{ count: count8 }] = await db.select({ count: sql6`COUNT(*)` }).from(users).where(sql6`npPoints > ${me.npPoints}`);
     return {
-      rank: Number(count7) + 1,
+      rank: Number(count8) + 1,
       npPoints: me.npPoints
     };
   }),
@@ -14192,10 +14194,149 @@ var partnerRouter = router({
   })
 });
 
+// server/routers/stats.ts
+import { z as z27 } from "zod";
+import { TRPCError as TRPCError24 } from "@trpc/server";
+import { and as and35, count as count7, eq as eq39, gt as gt7, inArray as inArray11 } from "drizzle-orm";
+init_db();
+init_schema();
+var DEFAULT_BOOSTS = { usersTotal: 0, activeToday: 0, subscribers: 0 };
+var extraSchema = z27.object({
+  id: z27.string().min(1).max(40),
+  label: z27.string().min(1).max(20),
+  value: z27.number().int().min(0).max(1e9),
+  icon: z27.string().max(40).optional()
+});
+var configSchema = z27.object({
+  boosts: z27.object({
+    usersTotal: z27.number().int().min(0).max(1e9),
+    activeToday: z27.number().int().min(0).max(1e9),
+    subscribers: z27.number().int().min(0).max(1e9)
+  }),
+  extras: z27.array(extraSchema).max(8)
+});
+function parseConfig(raw) {
+  if (!raw) return { boosts: { ...DEFAULT_BOOSTS }, extras: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    const b = parsed.boosts ?? {};
+    return {
+      boosts: {
+        usersTotal: Math.max(0, Math.floor(Number(b.usersTotal) || 0)),
+        activeToday: Math.max(0, Math.floor(Number(b.activeToday) || 0)),
+        subscribers: Math.max(0, Math.floor(Number(b.subscribers) || 0))
+      },
+      extras: Array.isArray(parsed.extras) ? parsed.extras.filter((e) => e && typeof e.label === "string" && Number.isFinite(Number(e.value))).slice(0, 8).map((e, i) => ({
+        id: String(e.id || `e${i + 1}`).slice(0, 40),
+        label: String(e.label).slice(0, 20),
+        value: Math.max(0, Math.floor(Number(e.value) || 0)),
+        icon: e.icon ? String(e.icon).slice(0, 40) : void 0
+      })) : []
+    };
+  } catch {
+    return { boosts: { ...DEFAULT_BOOSTS }, extras: [] };
+  }
+}
+var cache2 = null;
+var CACHE_MS = 6e4;
+async function loadConfigRow() {
+  const db = await getDb();
+  if (!db) return { db: null, config: parseConfig(null) };
+  const [row] = await db.select({ dashboardConfig: appConfig.dashboardConfig }).from(appConfig).where(eq39(appConfig.platform, "all")).limit(1);
+  return { db, config: parseConfig(row?.dashboardConfig) };
+}
+async function computeDashboard() {
+  const { db, config } = await loadConfigRow();
+  let realUsers = 0;
+  let realActive = 0;
+  let realSubs = 0;
+  if (db) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1e3);
+    const now = /* @__PURE__ */ new Date();
+    const [[usersRow], [activeRow], [subsRow]] = await Promise.all([
+      db.select({ n: count7() }).from(users).where(eq39(users.isBot, false)),
+      db.select({ n: count7() }).from(users).where(and35(eq39(users.isBot, false), gt7(users.lastSignedIn, since))),
+      db.select({ n: count7() }).from(users).where(and35(
+        eq39(users.isBot, false),
+        inArray11(users.proTier, ["plus", "pro"]),
+        gt7(users.proUntil, now)
+      ))
+    ]);
+    realUsers = Number(usersRow?.n ?? 0);
+    realActive = Number(activeRow?.n ?? 0);
+    realSubs = Number(subsRow?.n ?? 0);
+  }
+  return {
+    usersTotal: realUsers + config.boosts.usersTotal,
+    activeToday: realActive + config.boosts.activeToday,
+    subscribers: realSubs + config.boosts.subscribers,
+    extras: config.extras,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    // 管理端预览用：真实数（用户侧接口不返回这些字段也可，但一并返回无妨；App 用户侧忽略）
+    _real: { usersTotal: realUsers, activeToday: realActive, subscribers: realSubs }
+  };
+}
+var statsRouter = router({
+  /** 发现页：所有登录用户可见的展示数字（已含加成） */
+  getCommunityDashboard: protectedProcedure.query(async () => {
+    const now = Date.now();
+    if (cache2 && now - cache2.at < CACHE_MS) {
+      const { _real: _2, ...publicPayload2 } = cache2.payload;
+      return publicPayload2;
+    }
+    const payload = await computeDashboard();
+    cache2 = { at: now, payload };
+    const { _real: _, ...publicPayload } = payload;
+    return publicPayload;
+  }),
+  /** 管理端：原始配置 + 真实数预览 */
+  adminGetDashboardConfig: adminProcedure.query(async () => {
+    const payload = await computeDashboard();
+    const { config } = await loadConfigRow();
+    return {
+      boosts: config.boosts,
+      extras: config.extras,
+      real: payload._real,
+      display: {
+        usersTotal: payload.usersTotal,
+        activeToday: payload.activeToday,
+        subscribers: payload.subscribers
+      }
+    };
+  }),
+  adminSetDashboardConfig: adminProcedure.input(configSchema).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const clean = {
+      boosts: {
+        usersTotal: input.boosts.usersTotal,
+        activeToday: input.boosts.activeToday,
+        subscribers: input.boosts.subscribers
+      },
+      extras: input.extras.map((e, i) => ({
+        id: e.id || `e${i + 1}`,
+        label: e.label.trim(),
+        value: e.value,
+        icon: e.icon?.trim() || void 0
+      }))
+    };
+    const json = JSON.stringify(clean);
+    const existing = await db.select({ id: appConfig.id }).from(appConfig).where(eq39(appConfig.platform, "all")).limit(1);
+    if (existing.length > 0) {
+      await db.update(appConfig).set({ dashboardConfig: json }).where(eq39(appConfig.platform, "all"));
+    } else {
+      await db.insert(appConfig).values({ platform: "all", dashboardConfig: json });
+    }
+    cache2 = null;
+    return { success: true };
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   system: systemRouter,
   ai: aiRouter,
+  stats: statsRouter,
   auth: router({
     me: publicProcedure.query((opts) => {
       const user = opts.ctx.user;
@@ -14721,7 +14862,7 @@ function serveStatic(app) {
 // server/priceAlertChecker.ts
 init_db();
 init_schema();
-import { eq as eq39, and as and35 } from "drizzle-orm";
+import { eq as eq40, and as and36 } from "drizzle-orm";
 init_logger();
 var COINGECKO_BASE2 = "https://api.coingecko.com/api/v3";
 var CHECK_INTERVAL_MS = 2 * 60 * 1e3;
@@ -14746,7 +14887,7 @@ async function fetchPrices(tokenIds) {
 }
 async function checkAlerts() {
   const activeAlerts = await withDbRetry(
-    (db) => db.select().from(priceAlerts).where(and35(eq39(priceAlerts.isActive, true), eq39(priceAlerts.isTriggered, false)))
+    (db) => db.select().from(priceAlerts).where(and36(eq40(priceAlerts.isActive, true), eq40(priceAlerts.isTriggered, false)))
   );
   if (!activeAlerts || activeAlerts.length === 0) return;
   const tokenIds = activeAlerts.map((a) => a.tokenId);
@@ -14760,7 +14901,7 @@ async function checkAlerts() {
     const triggered = alert.condition === "above" && currentPrice >= target || alert.condition === "below" && currentPrice <= target;
     if (!triggered) continue;
     await withDbRetry(
-      (db) => db.update(priceAlerts).set({ isTriggered: true, isActive: false }).where(eq39(priceAlerts.id, alert.id))
+      (db) => db.update(priceAlerts).set({ isTriggered: true, isActive: false }).where(eq40(priceAlerts.id, alert.id))
     );
     const directionLabel = alert.condition === "above" ? "above \u2191" : "below \u2193";
     const content = `\u{1F514} Price Alert: ${alert.tokenSymbol} is now $${currentPrice.toLocaleString()} \u2014 your target of $${target.toLocaleString()} (${directionLabel}) has been reached!`;
@@ -14800,7 +14941,7 @@ function startPriceAlertChecker() {
 // server/botScheduler.ts
 init_db();
 init_schema();
-import { eq as eq40, and as and36, desc as desc25 } from "drizzle-orm";
+import { eq as eq41, and as and37, desc as desc25 } from "drizzle-orm";
 import pino2 from "pino";
 var logger2 = pino2({ level: "info" });
 var BOT_OPEN_IDS = {
@@ -14817,7 +14958,7 @@ async function loadBotIds() {
   const db = await getDb();
   if (!db) return;
   for (const [name, openId] of Object.entries(BOT_OPEN_IDS)) {
-    const [bot] = await db.select({ id: users.id }).from(users).where(eq40(users.openId, openId)).limit(1);
+    const [bot] = await db.select({ id: users.id }).from(users).where(eq41(users.openId, openId)).limit(1);
     if (bot) botIds[name] = bot.id;
   }
 }
@@ -14921,7 +15062,7 @@ async function sendBotMessage(groupId, botName, content) {
     messageType: "text"
   }).$returningId();
   try {
-    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(eq40(users.id, botId)).limit(1);
+    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(eq41(users.id, botId)).limit(1);
     const messagePayload = {
       id: result.id,
       groupId,
@@ -14967,15 +15108,15 @@ async function runAmbientChatter() {
   if (Math.random() > AMBIENT_TICK_PROB) return;
   const db = await getDb();
   if (!db) return;
-  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq40(chatGroups.isPublic, true)).limit(500);
+  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq41(chatGroups.isPublic, true)).limit(500);
   const now = Date.now();
   const eligible = groups.filter((g) => !lastAmbientPerGroup[g.id] || now - lastAmbientPerGroup[g.id] > AMBIENT_COOLDOWN_MS);
   if (eligible.length === 0) return;
   const group = eligible[Math.floor(Math.random() * eligible.length)];
   const personaOpenIds = new Set(Object.values(BOT_PERSONAS).map((p) => p.openId));
-  const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq40(users.id, groupMembers.userId)).where(and36(eq40(groupMembers.groupId, group.id), eq40(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
+  const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq41(users.id, groupMembers.userId)).where(and37(eq41(groupMembers.groupId, group.id), eq41(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
   if (bots.length === 0) return;
-  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq40(messages.senderId, users.id)).where(and36(eq40(messages.groupId, group.id), eq40(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
+  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq41(messages.senderId, users.id)).where(and37(eq41(messages.groupId, group.id), eq41(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
   const lastAge = recent[0]?.createdAt ? now - new Date(recent[0].createdAt).getTime() : Infinity;
   const pool = bots.filter((b) => b.id !== recent[0]?.senderId);
   const cand = pool.length ? pool : bots;
@@ -15047,12 +15188,12 @@ function startBotScheduler() {
 init_db();
 init_schema();
 init_logger();
-import { and as and37, isNotNull as isNotNull2, lt as lt6 } from "drizzle-orm";
+import { and as and38, isNotNull as isNotNull2, lt as lt6 } from "drizzle-orm";
 var INTERVAL_MS = 10 * 60 * 1e3;
 async function purgeExpired() {
   const db = await getDb();
   if (!db) return;
-  const res = await db.delete(messages).where(and37(isNotNull2(messages.expiresAt), lt6(messages.expiresAt, /* @__PURE__ */ new Date())));
+  const res = await db.delete(messages).where(and38(isNotNull2(messages.expiresAt), lt6(messages.expiresAt, /* @__PURE__ */ new Date())));
   const removed = res?.[0]?.affectedRows ?? res?.rowsAffected ?? res?.affectedRows;
   if (removed) logger_default.info({ removed }, "MessageCleanup: purged expired messages");
 }
@@ -15070,7 +15211,7 @@ init_rankEngine();
 // server/callResolver.ts
 init_db();
 init_schema();
-import { eq as eq41, and as and38, lte, sql as sql25 } from "drizzle-orm";
+import { eq as eq42, and as and39, lte, sql as sql25 } from "drizzle-orm";
 init_logger();
 var DEADBAND_BP = 100;
 var WIN_NP = 150;
@@ -15083,18 +15224,18 @@ function stakePayout(amount, callStatus) {
   return 0;
 }
 async function settleStakesForCall(db, callId, callStatus) {
-  const stakes = await db.select().from(curationStakes).where(and38(eq41(curationStakes.callId, callId), eq41(curationStakes.status, "active")));
+  const stakes = await db.select().from(curationStakes).where(and39(eq42(curationStakes.callId, callId), eq42(curationStakes.status, "active")));
   for (const s of stakes) {
     const payout = stakePayout(s.amount, callStatus);
     const status = callStatus === "win" ? "won" : callStatus === "void" ? "void" : "lost";
-    await db.update(curationStakes).set({ status, payout, settledAt: /* @__PURE__ */ new Date() }).where(eq41(curationStakes.id, s.id));
+    await db.update(curationStakes).set({ status, payout, settledAt: /* @__PURE__ */ new Date() }).where(eq42(curationStakes.id, s.id));
     if (payout > 0) {
-      await db.update(users).set({ npPoints: sql25`npPoints + ${payout}` }).where(eq41(users.id, s.stakerId));
+      await db.update(users).set({ npPoints: sql25`npPoints + ${payout}` }).where(eq42(users.id, s.stakerId));
     }
   }
 }
 async function resolveDueCalls(db) {
-  const due = await db.select().from(calls).where(and38(eq41(calls.status, "pending"), lte(calls.resolveAt, /* @__PURE__ */ new Date()))).limit(200);
+  const due = await db.select().from(calls).where(and39(eq42(calls.status, "pending"), lte(calls.resolveAt, /* @__PURE__ */ new Date()))).limit(200);
   if (due.length === 0) return 0;
   const priceCache2 = /* @__PURE__ */ new Map();
   let processed = 0;
@@ -15113,7 +15254,7 @@ async function resolveDueCalls(db) {
       if (!cur || !entry || entry <= 0) {
         const overdueMs = Date.now() - new Date(c.resolveAt).getTime();
         if (overdueMs > 3 * 864e5) {
-          await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq41(calls.id, c.id));
+          await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq42(calls.id, c.id));
           await settleStakesForCall(db, c.id, "void");
           processed++;
         }
@@ -15126,13 +15267,13 @@ async function resolveDueCalls(db) {
         const up = changeBp > 0;
         status = c.direction === "long" && up || c.direction === "short" && !up ? "win" : "lose";
       }
-      const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and38(eq41(calls.id, c.id), eq41(calls.status, "pending")));
+      const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and39(eq42(calls.id, c.id), eq42(calls.status, "pending")));
       const changed = Number(upd?.[0]?.affectedRows ?? upd?.rowsAffected ?? 0);
       if (changed < 1) continue;
       if (status === "win") {
-        await db.update(users).set({ npPoints: sql25`npPoints + ${WIN_NP}`, reputation: sql25`reputation + ${WIN_REP}` }).where(eq41(users.id, c.userId));
+        await db.update(users).set({ npPoints: sql25`npPoints + ${WIN_NP}`, reputation: sql25`reputation + ${WIN_REP}` }).where(eq42(users.id, c.userId));
       } else if (status === "lose") {
-        await db.update(users).set({ reputation: sql25`GREATEST(0, reputation - ${LOSE_REP})` }).where(eq41(users.id, c.userId));
+        await db.update(users).set({ reputation: sql25`GREATEST(0, reputation - ${LOSE_REP})` }).where(eq42(users.id, c.userId));
       }
       await settleStakesForCall(db, c.id, status);
       processed++;
@@ -15212,7 +15353,9 @@ var PATCHES = [
     PRIMARY KEY (\`id\`),
     UNIQUE KEY \`uniq_bit_airdrop_claim_user_ymd\` (\`userId\`, \`ymd\`),
     KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
-  )`
+  )`,
+  // 发现页生态仪表盘配置（加成 + 额外指标行）
+  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT"
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;
@@ -15413,14 +15556,14 @@ ${tokenContext}
 init_db();
 init_schema();
 import { Readable as Readable2 } from "stream";
-import { eq as eq42 } from "drizzle-orm";
+import { eq as eq43 } from "drizzle-orm";
 async function handleApkDownload(req, res) {
   try {
     const db = await getDb();
     let url = "";
     let version = "";
     if (db) {
-      const rows = await db.select().from(appConfig).where(eq42(appConfig.platform, "all")).limit(1);
+      const rows = await db.select().from(appConfig).where(eq43(appConfig.platform, "all")).limit(1);
       if (rows.length > 0) {
         url = rows[0].downloadUrlAndroid ?? "";
         version = rows[0].latestVersion ?? "";
@@ -15799,9 +15942,9 @@ function checkRateLimit2(key) {
   entry.count++;
   return true;
 }
-var cache2 = /* @__PURE__ */ new Map();
+var cache3 = /* @__PURE__ */ new Map();
 async function fetchWithCache(key, url, ttlMs) {
-  const cached = cache2.get(key);
+  const cached = cache3.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
   try {
     const controller = new AbortController();
@@ -15810,7 +15953,7 @@ async function fetchWithCache(key, url, ttlMs) {
     clearTimeout(id);
     if (!res.ok) return cached?.data ?? null;
     const data = await res.json();
-    cache2.set(key, { data, expiresAt: Date.now() + ttlMs });
+    cache3.set(key, { data, expiresAt: Date.now() + ttlMs });
     return data;
   } catch {
     return cached?.data ?? null;
