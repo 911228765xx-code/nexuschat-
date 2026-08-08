@@ -140,14 +140,14 @@ describe("团队价值分加权求和", () => {
 });
 
 // ─── 策展质押结算 ────────────────────────────────────────────────────────────────
-describe("stakePayout（押对+30% / 押错销毁 / void退本）", () => {
-  it("押对：100 → 130", () => expect(stakePayout(100, "win")).toBe(130));
+describe("stakePayout（固定赔率 1.8 / 押错销毁 / void退本）", () => {
+  it("押对：100 → 180", () => expect(stakePayout(100, "win")).toBe(180));
   it("押错：100 → 0（销毁）", () => expect(stakePayout(100, "lose")).toBe(0));
   it("void：100 → 100（退本）", () => expect(stakePayout(100, "void")).toBe(100));
-  it("净 AC 出口：胜率40%时平均返还 < 本金（净销毁）", () => {
-    const winRate = 0.4;
+  it("净 IT 出口：胜率50%时平均返还 < 本金（净销毁）", () => {
+    const winRate = 0.5;
     const avg = winRate * stakePayout(100, "win") + (1 - winRate) * stakePayout(100, "lose");
-    expect(avg).toBeLessThan(100); // 0.4*130 + 0.6*0 = 52 < 100
+    expect(avg).toBeLessThan(100); // 0.5*180 + 0.5*0 = 90 < 100
   });
 });
 
