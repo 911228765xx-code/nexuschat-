@@ -399,6 +399,8 @@ export const chatRouter = router({
       replyToId: z.number().int().optional(),
       ttlSeconds: z.number().int().min(0).max(60 * 60 * 24 * 90).optional(),
       mentionedUserIds: z.array(z.number().int()).max(20).optional(), // 被 @ 的成员 id,后端据此发提及通知
+      /** @所有人：仅群主/管理员可发；通知本群其余成员（上限见下方） */
+      mentionAll: z.boolean().optional(),
     }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
@@ -457,24 +459,48 @@ export const chatRouter = router({
       // 异步 AI 内容审核（违规则删消息+记+封号，不阻塞发送）：任何带非空 content 的消息都过,与类型解耦防绕过
       if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "group");
       // @提及:给被 @ 的群成员发通知(通知中心+离线推送)。校验确为本群成员、去重、排除自己;不阻塞发送
-      if (input.mentionedUserIds?.length) {
-        const targets = Array.from(new Set(input.mentionedUserIds)).filter((id) => id !== ctx.user.id).slice(0, 20);
-        if (targets.length) {
-          void db.select({ userId: groupMembers.userId }).from(groupMembers)
-            .where(and(eq(groupMembers.groupId, input.groupId), inArray(groupMembers.userId, targets)))
-            .then((rows) => {
-              const fromName = ctx.user.name ?? ctx.user.username ?? `用户 #${ctx.user.id}`;
-              const preview = sanitizeInput(input.content, 120);
-              for (const r of rows) {
-                void createNotification({
-                  db, targetUserId: r.userId, fromUserId: ctx.user.id,
-                  fromUserName: fromName, fromUserAvatar: (ctx.user as any).avatar ?? "",
-                  type: "mention", content: preview,
-                });
+      // @所有人:仅群主/管理员；通知本群其余成员(上限 200,防超大群打爆推送队列)
+      if (input.mentionAll || input.mentionedUserIds?.length) {
+        void (async () => {
+          try {
+            const fromName = ctx.user.name ?? ctx.user.username ?? `用户 #${ctx.user.id}`;
+            const preview = sanitizeInput(input.content, 120);
+            let targetIds: number[] = [];
+
+            if (input.mentionAll) {
+              const [me] = await db.select({ role: groupMembers.role }).from(groupMembers)
+                .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
+                .limit(1);
+              if (me?.role !== "owner" && me?.role !== "admin") {
+                // 权限不足:不发全员通知,但不回滚消息(文案里的「@所有人」仍可见)
+                return;
               }
-            })
-            .catch((err) => logger.warn({ err }, "mention notify failed"));
-        }
+              const rows = await db.select({ userId: groupMembers.userId }).from(groupMembers)
+                .where(and(eq(groupMembers.groupId, input.groupId), ne(groupMembers.userId, ctx.user.id)))
+                .limit(200);
+              targetIds = rows.map((r) => r.userId);
+            } else {
+              const wanted = Array.from(new Set(input.mentionedUserIds ?? []))
+                .filter((id) => id !== ctx.user.id)
+                .slice(0, 20);
+              if (!wanted.length) return;
+              const rows = await db.select({ userId: groupMembers.userId }).from(groupMembers)
+                .where(and(eq(groupMembers.groupId, input.groupId), inArray(groupMembers.userId, wanted)));
+              targetIds = rows.map((r) => r.userId);
+            }
+
+            const content = input.mentionAll ? `【@所有人】${preview}` : preview;
+            for (const uid of targetIds) {
+              void createNotification({
+                db, targetUserId: uid, fromUserId: ctx.user.id,
+                fromUserName: fromName, fromUserAvatar: (ctx.user as any).avatar ?? "",
+                type: "mention", content,
+              });
+            }
+          } catch (err) {
+            logger.warn({ err }, "mention notify failed");
+          }
+        })();
       }
       // 管理机器人：文本消息做关键词检测（命中自动提醒；不阻塞发送）
       if (input.messageType === "text") {
