@@ -133,49 +133,42 @@ function parseBybitKlines(json: unknown): CallCandle[] {
   return out;
 }
 
+function klineQuality(bars: CallCandle[]): number {
+  if (bars.length < 2) return 0;
+  const ranged = bars.filter((b) => b.h > b.l).length;
+  const closes = bars.map((b) => b.c);
+  const span = Math.max(...closes) - Math.min(...closes);
+  const rel = span / (closes[0] || 1);
+  return ranged * 20 + rel * 10_000 + bars.length;
+}
+
 const SPARK_CACHE_MS = 8_000;
 const sparkCache = new Map<string, { at: number; bars: CallCandle[] }>();
 
 async function fetchSymbolKlines(symbol: "BTC" | "ETH"): Promise<CallCandle[]> {
   const hit = sparkCache.get(symbol);
-  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && hit.bars.length >= 2) return hit.bars;
+  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && klineQuality(hit.bars) > 40) return hit.bars;
 
   const pair = `${symbol}USDT`;
-  const bnHosts = [
-    `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+  const sources: Array<{ url: string; parse: (raw: unknown) => CallCandle[] }> = [
+    { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`, parse: parseBybitKlines },
   ];
-  const bars = await new Promise<CallCandle[]>((resolve) => {
-    let left = bnHosts.length;
-    let settled = false;
-    for (const u of bnHosts) {
-      void fetchJsonQuick(u, 3500).then((raw) => {
-        const parsed = parseKlines(raw);
-        if (!settled && parsed.length >= 2) {
-          settled = true;
-          resolve(parsed);
-          return;
-        }
-        left -= 1;
-        if (!settled && left <= 0) resolve([]);
-      });
+  const results = await Promise.all(sources.map(async (s) => s.parse(await fetchJsonQuick(s.url, 3500))));
+  let best: CallCandle[] = [];
+  let bestQ = -1;
+  for (const bars of results) {
+    const q = klineQuality(bars);
+    if (q > bestQ) {
+      bestQ = q;
+      best = bars;
     }
-  });
-  if (bars.length >= 2) {
-    sparkCache.set(symbol, { at: Date.now(), bars });
-    return bars;
   }
-
-  const bybit = await fetchJsonQuick(
-    `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`,
-    4500,
-  );
-  const bybitBars = parseBybitKlines(bybit);
-  if (bybitBars.length >= 2) {
-    sparkCache.set(symbol, { at: Date.now(), bars: bybitBars });
-    return bybitBars;
+  if (best.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars: best });
+    return best;
   }
   return hit?.bars ?? [];
 }
