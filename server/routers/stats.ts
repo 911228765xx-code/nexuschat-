@@ -1,13 +1,14 @@
 /**
  * 社区生态仪表盘：真实统计 + 后台展示加成 / 额外指标行。
- * 用户侧只看到最终数字，不暴露加成。
+ * 用户侧只看到最终数字，不暴露加成；最终数字再叠一层按时段波动，避免钉死。
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, count, eq, gt, inArray } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { appConfig, users } from "../../drizzle/schema";
+import { appConfig, chatGroups, posts, users } from "../../drizzle/schema";
+import { applyDashboardLive } from "../utils/dashboardLive";
 
 export type DashboardBoosts = {
   usersTotal: number;
@@ -74,7 +75,7 @@ function parseConfig(raw: string | null | undefined): DashboardConfig {
 }
 
 let cache: { at: number; payload: Awaited<ReturnType<typeof computeDashboard>> } | null = null;
-const CACHE_MS = 60_000;
+const CACHE_MS = 30_000;
 
 async function loadConfigRow() {
   const db = await getDb();
@@ -92,11 +93,15 @@ async function computeDashboard() {
   let realUsers = 0;
   let realActive = 0;
   let realSubs = 0;
+  let realOnline = 0;
+  let realGroups = 0;
+  let realPostsToday = 0;
 
   if (db) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const onlineSince = new Date(Date.now() - 15 * 60 * 1000);
     const now = new Date();
-    const [[usersRow], [activeRow], [subsRow]] = await Promise.all([
+    const [[usersRow], [activeRow], [subsRow], [onlineRow], [groupRow], [postRow]] = await Promise.all([
       db.select({ n: count() }).from(users).where(eq(users.isBot, false)),
       db.select({ n: count() }).from(users).where(and(eq(users.isBot, false), gt(users.lastSignedIn, since))),
       db.select({ n: count() }).from(users).where(and(
@@ -104,49 +109,73 @@ async function computeDashboard() {
         inArray(users.proTier, ["plus", "pro"]),
         gt(users.proUntil, now),
       )),
+      db.select({ n: count() }).from(users).where(and(eq(users.isBot, false), gt(users.lastSignedIn, onlineSince))),
+      db.select({ n: count() }).from(chatGroups).where(eq(chatGroups.isPublic, true)),
+      db.select({ n: count() }).from(posts).where(gt(posts.createdAt, since)),
     ]);
     realUsers = Number(usersRow?.n ?? 0);
     realActive = Number(activeRow?.n ?? 0);
     realSubs = Number(subsRow?.n ?? 0);
+    realOnline = Number(onlineRow?.n ?? 0);
+    realGroups = Number(groupRow?.n ?? 0);
+    realPostsToday = Number(postRow?.n ?? 0);
   }
+
+  const extras = config.extras.length > 0
+    ? config.extras
+    : [
+        { id: "online", label: "当前在线", value: realOnline },
+        { id: "groups", label: "公开社群", value: realGroups },
+        { id: "posts", label: "今日动态", value: realPostsToday },
+      ];
 
   return {
     usersTotal: realUsers + config.boosts.usersTotal,
     activeToday: realActive + config.boosts.activeToday,
     subscribers: realSubs + config.boosts.subscribers,
-    extras: config.extras,
+    extras,
     updatedAt: new Date().toISOString(),
-    // 管理端预览用：真实数（用户侧接口不返回这些字段也可，但一并返回无妨；App 用户侧忽略）
-    _real: { usersTotal: realUsers, activeToday: realActive, subscribers: realSubs },
+    _real: {
+      usersTotal: realUsers,
+      activeToday: realActive,
+      subscribers: realSubs,
+      online: realOnline,
+      groups: realGroups,
+      postsToday: realPostsToday,
+    },
   };
 }
 
 export const statsRouter = router({
-  /** 发现页：所有登录用户可见的展示数字（已含加成） */
+  /** 发现页：所有登录用户可见的展示数字（已含加成 + 时段波动） */
   getCommunityDashboard: protectedProcedure.query(async () => {
     const now = Date.now();
-    if (cache && now - cache.at < CACHE_MS) {
-      const { _real: _, ...publicPayload } = cache.payload;
-      return publicPayload;
+    if (!cache || now - cache.at >= CACHE_MS) {
+      cache = { at: now, payload: await computeDashboard() };
     }
-    const payload = await computeDashboard();
-    cache = { at: now, payload };
-    const { _real: _, ...publicPayload } = payload;
-    return publicPayload;
+    const { _real: _, ...publicPayload } = cache.payload;
+    const live = applyDashboardLive(publicPayload, now);
+    return { ...live, updatedAt: new Date(now).toISOString() };
   }),
 
   /** 管理端：原始配置 + 真实数预览 */
   adminGetDashboardConfig: adminProcedure.query(async () => {
     const payload = await computeDashboard();
     const { config } = await loadConfigRow();
+    const live = applyDashboardLive({
+      usersTotal: payload.usersTotal,
+      activeToday: payload.activeToday,
+      subscribers: payload.subscribers,
+      extras: payload.extras,
+    }, Date.now());
     return {
       boosts: config.boosts,
       extras: config.extras,
       real: payload._real,
       display: {
-        usersTotal: payload.usersTotal,
-        activeToday: payload.activeToday,
-        subscribers: payload.subscribers,
+        usersTotal: live.usersTotal,
+        activeToday: live.activeToday,
+        subscribers: live.subscribers,
       },
     };
   }),
