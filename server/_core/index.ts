@@ -169,7 +169,7 @@ async function startServer() {
   startMessageCleanup();
   // AC 段位：每日全网体价值分聚合（每 6h 检查，每个 UTC 日只跑一次）
   startRankAggregation();
-  // Alpha 战绩：每 30 分钟结算到期 Call
+  // Alpha 战绩：每 1 分钟结算到期 Call（短窗盘口）
   startCallResolver();
   // 合伙人双池分红：每日结算（幂等）
   startPartnerSettlement();

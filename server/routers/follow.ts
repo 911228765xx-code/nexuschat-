@@ -4,6 +4,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { userFollows, users, notifications, posts } from "../../drizzle/schema";
 import { eq, and, count, sql, desc } from "drizzle-orm";
+import { canViewFullProfile } from "../utils/relations";
 
 // Helper: create a follow notification
 async function createFollowNotification(
@@ -110,9 +111,12 @@ export const followRouter = router({
   // Get follower/following/likes counts for a user
   getCounts: publicProcedure
     .input(z.object({ userId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { followers: 0, following: 0, likes: 0, posts: 0 };
+      if (!(await canViewFullProfile(db, ctx.user?.id, input.userId))) {
+        return { followers: 0, following: 0, likes: 0, posts: 0 };
+      }
 
       const [followerResult, followingResult, likeResult, postResult] = await Promise.all([
         db

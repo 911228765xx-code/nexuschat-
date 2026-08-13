@@ -1,18 +1,19 @@
 /**
  * Alpha 战绩判定（AC 模型 Phase 3）：定时结算到期的 Call。
- *  - 取当前行情，与建仓价比较；±1% 死区内视为 void（波动太小不计）。
+ *  - 短窗按整根 K 线开盘价对收盘价判涨跌；几乎持平才 void。
  *  - 方向判对 → +AC（直接入账，不farmable：受 5/天发 Call 限频且需真命中）+ 声誉。
  *  - 判错 → 扣声誉（不为负）。声誉抬高个人产出加成，形成正循环。
  */
 import { eq, and, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { calls, users, curationStakes } from "../drizzle/schema";
-import { fetchTokenData } from "./routers/research";
+import { fetchCallSpotPrice, fetchCallWindowOHLC } from "./callSpot";
+import { deadbandBpForHorizon, horizonToMinutes, isAlignedWindow, overdueVoidMs } from "./callWindow";
 import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-const DEADBAND_BP = 100;        // ±1% 死区（基点）
+const DEADBAND_BP = 100;        // 旧长窗 ±1% 死区（基点）；短窗见 deadbandBpForHorizon
 const WIN_NP = 150;             // 旧版「免费 Call」判对 IT 奖励（有自押下注时不再发）
 const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
@@ -56,26 +57,47 @@ export async function resolveDueCalls(db: Db): Promise<number> {
     .limit(200);
   if (due.length === 0) return 0;
 
-  // 同标的的现价取一次（fetchTokenData 自带缓存）
+  // 同标的的现价取一次
   const priceCache = new Map<string, number | null>();
   let processed = 0;
 
   for (const c of due) {
     try {
-      let cur: number | null;
-      const cached = priceCache.get(c.tokenSymbol);
-      if (cached !== undefined) {
-        cur = cached;
+      const horizonMin = horizonToMinutes(c.horizonHours);
+      const closeMs = new Date(c.resolveAt).getTime();
+      const openMs = closeMs - horizonMin * 60_000;
+      let entry = Number(c.entryPrice);
+      let cur: number | null = null;
+
+      if (horizonMin <= 60 && isAlignedWindow(closeMs, horizonMin)) {
+        const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
+        if (ohlc) {
+          entry = ohlc.open;
+          cur = ohlc.close;
+        } else {
+          // K 线未出齐：等下一分钟，不要拿现价把整段 5 分钟比成「当下 vs 收盘」
+          if (Date.now() - closeMs > overdueVoidMs(horizonMin)) {
+            await db.update(calls).set({ status: "void", resolvedAt: new Date() }).where(eq(calls.id, c.id));
+            await settleStakesForCall(db, c.id, "void");
+            processed++;
+          }
+          continue;
+        }
       } else {
-        const token = await fetchTokenData(c.tokenSymbol);
-        cur = token?.price ?? null;
-        priceCache.set(c.tokenSymbol, cur);
+        let spot: number | null;
+        const cached = priceCache.get(c.tokenSymbol);
+        if (cached !== undefined) {
+          spot = cached;
+        } else {
+          spot = await fetchCallSpotPrice(c.tokenSymbol);
+          priceCache.set(c.tokenSymbol, spot);
+        }
+        cur = spot;
       }
-      const entry = Number(c.entryPrice);
+
       if (!cur || !entry || entry <= 0) {
-        // 拿不到现价：超期 3 天兜底 void（退还质押，避免 Call/质押永久卡死）；否则下轮再试
-        const overdueMs = Date.now() - new Date(c.resolveAt).getTime();
-        if (overdueMs > 3 * 86_400_000) {
+        const overdueMs = Date.now() - closeMs;
+        if (overdueMs > overdueVoidMs(horizonMin)) {
           await db.update(calls).set({ status: "void", resolvedAt: new Date() }).where(eq(calls.id, c.id));
           await settleStakesForCall(db, c.id, "void");
           processed++;
@@ -84,14 +106,15 @@ export async function resolveDueCalls(db: Db): Promise<number> {
       }
       const changeBp = Math.round(((cur - entry) / entry) * 10_000);
       let status: "win" | "lose" | "void";
-      if (Math.abs(changeBp) < DEADBAND_BP) status = "void";
+      const deadband = deadbandBpForHorizon(horizonMin) || DEADBAND_BP;
+      if (Math.abs(changeBp) < deadband) status = "void";
       else {
         const up = changeBp > 0;
         status = (c.direction === "long" && up) || (c.direction === "short" && !up) ? "win" : "lose";
       }
 
       const upd = await db.update(calls)
-        .set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: new Date() })
+        .set({ status, resolvedPrice: String(cur), entryPrice: String(entry), changeBp, resolvedAt: new Date() })
         .where(and(eq(calls.id, c.id), eq(calls.status, "pending")));
       // 幂等门闩:更新条件加 status='pending'。并发 tick(或将来新增手动触发)若已结算过这条,
       // affectedRows=0 → 跳过,不重复发 AC/声誉/质押返还。

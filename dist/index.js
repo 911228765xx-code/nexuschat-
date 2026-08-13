@@ -5626,6 +5626,17 @@ async function hasBlocked(db, blocker, blocked) {
   const [r] = await db.select({ id: userBlocklist.id }).from(userBlocklist).where(and12(eq15(userBlocklist.blockerId, blocker), eq15(userBlocklist.blockedId, blocked))).limit(1);
   return !!r;
 }
+async function canViewFullProfile(db, viewerId, targetId) {
+  if (viewerId === targetId) return true;
+  try {
+    const [st] = await db.select({ v: userSettings.profileVisible }).from(userSettings).where(eq15(userSettings.userId, targetId)).limit(1);
+    if (!st || st.v) return true;
+  } catch {
+    return true;
+  }
+  if (viewerId && await areFriends(db, viewerId, targetId)) return true;
+  return false;
+}
 async function assertCanDM(db, from, to) {
   if (from === to) return;
   if (await isBlockedEither(db, from, to)) throw new TRPCError7({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u53D1\u9001(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
@@ -6275,17 +6286,22 @@ var chatRouter = router({
       replyType: repliedMsg.messageType,
       replySenderName: repliedUser.name
     }).from(messages).leftJoin(users, eq17(messages.senderId, users.id)).leftJoin(repliedMsg, eq17(repliedMsg.id, messages.replyToId)).leftJoin(repliedUser, eq17(repliedUser.id, repliedMsg.senderId)).where(and14(...conditions)).orderBy(desc7(messages.id)).limit(input.limit);
-    try {
-      await db.update(messages).set({ isRead: true }).where(
-        and14(
-          eq17(messages.senderId, otherId),
-          eq17(messages.receiverId, myId),
-          eq17(messages.isRead, false),
-          sql10`${messages.groupId} IS NULL`
-        )
-      );
-    } catch (err) {
-      logger_default.warn({ err, otherId, myId }, "markDMsRead failed");
+    if (!input.before) {
+      try {
+        const [mine] = await db.select({ v: userSettings.readReceipts }).from(userSettings).where(eq17(userSettings.userId, myId)).limit(1);
+        if (mine?.v !== false) {
+          await db.update(messages).set({ isRead: true }).where(
+            and14(
+              eq17(messages.senderId, otherId),
+              eq17(messages.receiverId, myId),
+              eq17(messages.isRead, false),
+              sql10`${messages.groupId} IS NULL`
+            )
+          );
+        }
+      } catch (err) {
+        logger_default.warn({ err, otherId, myId }, "markDMsRead failed");
+      }
     }
     return rows.reverse();
   }),
@@ -6404,12 +6420,34 @@ var chatRouter = router({
     return result.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }),
   // Get members of a group
-  getGroupMembers: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
+  getGroupMembers: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    query: z6.string().max(50).optional(),
+    limit: z6.number().int().min(1).max(100).optional(),
+    offset: z6.number().int().min(0).max(5e3).optional()
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return [];
     const [me] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
     if (!me) return [];
-    return db.select({
+    const q = input.query?.trim() ?? "";
+    const limit = input.limit ?? (q ? 50 : 200);
+    const offset = input.offset ?? 0;
+    const where = [eq17(groupMembers.groupId, input.groupId)];
+    if (q) {
+      const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      const likeQ = `%${escaped}%`;
+      const idNum = /^\d+$/.test(q) ? Number(q) : NaN;
+      const nameMatch = or5(
+        like(users.name, likeQ),
+        like(users.username, likeQ),
+        like(groupMembers.alias, likeQ),
+        ...Number.isFinite(idNum) ? [eq17(users.id, idNum)] : []
+      );
+      if (nameMatch) where.push(nameMatch);
+    }
+    const now = /* @__PURE__ */ new Date();
+    const rows = await db.select({
       id: users.id,
       username: users.username,
       name: sql10`COALESCE(${groupMembers.alias}, ${users.name})`,
@@ -6417,9 +6455,16 @@ var chatRouter = router({
       avatar: users.avatar,
       role: groupMembers.role,
       joinedAt: groupMembers.joinedAt,
-      isBot: users.isBot
+      isBot: users.isBot,
       // 供前端把机器人/静默填充号从 @提及 候选里排除
-    }).from(groupMembers).innerJoin(users, eq17(groupMembers.userId, users.id)).where(eq17(groupMembers.groupId, input.groupId)).orderBy(groupMembers.role, groupMembers.joinedAt).limit(200);
+      muteId: groupMutes.id,
+      mutedUntil: groupMutes.expiresAt
+    }).from(groupMembers).innerJoin(users, eq17(groupMembers.userId, users.id)).leftJoin(groupMutes, and14(
+      eq17(groupMutes.groupId, groupMembers.groupId),
+      eq17(groupMutes.userId, groupMembers.userId),
+      or5(isNull3(groupMutes.expiresAt), gt3(groupMutes.expiresAt, now))
+    )).where(and14(...where)).orderBy(groupMembers.role, groupMembers.joinedAt).limit(limit).offset(offset);
+    return rows.map(({ muteId, ...r }) => ({ ...r, isMuted: muteId != null }));
   }),
   // 设置/清除自己在某群的群昵称(仅本人,空字符串=清除回全局名)
   setGroupAlias: protectedProcedure.input(z6.object({ groupId: z6.number(), alias: z6.string().max(50) })).mutation(async ({ ctx, input }) => {
@@ -6432,7 +6477,7 @@ var chatRouter = router({
     return { ok: true, alias: aliasVal || null };
   }),
   // Get group info (name, description, memberCount, avatar)
-  getGroupInfo: publicProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ input }) => {
+  getGroupInfo: publicProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return null;
     const rows = await db.select({
@@ -6452,7 +6497,14 @@ var chatRouter = router({
       creatorId: chatGroups.creatorId
       // 客户端 group/[id].tsx 靠它判 isManager;仅创建者 id,不敏感。真正敏感的 tokenGateContract 仍不投影。
     }).from(chatGroups).where(eq17(chatGroups.id, input.groupId)).limit(1);
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    let myRole = null;
+    if (ctx.user?.id) {
+      const [m] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+      myRole = m?.role ?? null;
+    }
+    return { ...row, myRole };
   }),
   // 我在某群的禁言态:客户端进群据此禁用输入框 + 顶部横幅提示,而非打字发出去才被后端拒
   getMyMuteState: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
@@ -6898,7 +6950,12 @@ var chatRouter = router({
     }
     return { ok: true };
   }),
-  muteMember: protectedProcedure.input(z6.object({ groupId: z6.number(), targetUserId: z6.number(), durationHours: z6.number().default(24) })).mutation(async ({ ctx, input }) => {
+  muteMember: protectedProcedure.input(z6.object({
+    groupId: z6.number(),
+    targetUserId: z6.number(),
+    durationHours: z6.number().min(0).max(24 * 365).optional(),
+    durationMinutes: z6.number().int().min(0).max(365 * 24 * 60).optional()
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("DB unavailable");
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
@@ -6907,7 +6964,8 @@ var chatRouter = router({
     if (!mt[0]) throw new Error("User not in group");
     if (mt[0].role === "owner") throw new Error("\u4E0D\u80FD\u7981\u8A00\u7FA4\u4E3B");
     if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("\u7BA1\u7406\u5458\u4E0D\u80FD\u7981\u8A00\u5176\u4ED6\u7BA1\u7406\u5458");
-    const expiresAt = new Date(Date.now() + input.durationHours * 36e5);
+    const minutes = input.durationMinutes !== void 0 ? input.durationMinutes : Math.round((input.durationHours ?? 24) * 60);
+    const expiresAt = minutes <= 0 ? null : new Date(Date.now() + minutes * 6e4);
     const existing = await db.select({ id: groupMutes.id }).from(groupMutes).where(and14(eq17(groupMutes.groupId, input.groupId), eq17(groupMutes.userId, input.targetUserId))).limit(1);
     if (existing[0]) {
       await db.update(groupMutes).set({ expiresAt, mutedBy: ctx.user.id }).where(eq17(groupMutes.id, existing[0].id));
@@ -7296,6 +7354,15 @@ var chatRouter = router({
     const groupName = groupInfo?.name ?? `Group #${input.groupId}`;
     const safeContent = sanitizeInput(input.content);
     const preview = safeContent.length > 60 ? safeContent.slice(0, 60) + "..." : safeContent;
+    try {
+      getSocketIO()?.to(`group:${input.groupId}`).emit("group_announcement", {
+        groupId: input.groupId,
+        content: safeContent,
+        deleted: false,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch {
+    }
     for (const member of members) {
       if (member.userId === ctx.user.id) continue;
       emitToUser(member.userId, "group_announcement", {
@@ -7315,6 +7382,15 @@ var chatRouter = router({
     const actor = await db.select({ role: groupMembers.role }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
     if (!actor[0] || actor[0].role !== "owner" && actor[0].role !== "admin") throw new Error("Not authorized");
     await db.delete(groupAnnouncements).where(and14(eq17(groupAnnouncements.groupId, input.groupId), eq17(groupAnnouncements.isPinned, true)));
+    try {
+      getSocketIO()?.to(`group:${input.groupId}`).emit("group_announcement", {
+        groupId: input.groupId,
+        content: "",
+        deleted: true,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch {
+    }
     return { ok: true };
   }),
   // ─── 群数据看板（群成员可看；数据机器人解锁周报，但实时数据对成员开放） ──────
@@ -8155,6 +8231,9 @@ var postsRouter = router({
     const limit = input?.limit ?? 20;
     const offset = input?.offset ?? 0;
     const authorId = input?.authorId;
+    if (authorId && !await canViewFullProfile(db, ctx.user?.id, authorId)) {
+      return { posts: [], hasMore: false };
+    }
     const rows = await db.select({
       id: posts.id,
       content: posts.content,
@@ -8501,6 +8580,20 @@ var postsRouter = router({
     await db.delete(postLikes).where(eq19(postLikes.postId, input.postId));
     await db.delete(posts).where(eq19(posts.id, input.postId));
     return { success: true };
+  }),
+  // ─── Delete comment（评论作者或帖子作者）──────────────────────────────────
+  deleteComment: protectedProcedure.input(z8.object({ commentId: z8.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [c] = await db.select({ id: postComments.id, authorId: postComments.authorId, postId: postComments.postId }).from(postComments).where(eq19(postComments.id, input.commentId)).limit(1);
+    if (!c) throw new TRPCError10({ code: "NOT_FOUND", message: "\u8BC4\u8BBA\u4E0D\u5B58\u5728" });
+    const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq19(posts.id, c.postId)).limit(1);
+    if (c.authorId !== ctx.user.id && post?.authorId !== ctx.user.id) {
+      throw new TRPCError10({ code: "FORBIDDEN", message: "\u53EA\u80FD\u5220\u9664\u81EA\u5DF1\u7684\u8BC4\u8BBA" });
+    }
+    await db.delete(postComments).where(eq19(postComments.id, input.commentId));
+    await db.update(posts).set({ commentCount: sql11`GREATEST(commentCount - 1, 0)` }).where(eq19(posts.id, c.postId));
+    return { ok: true };
   }),
   // ─── Search posts ───────────────────────────────────────────────────────
   // ─── Repost (increment shareCount on original post) ─────────────────────
@@ -9163,9 +9256,12 @@ var followRouter = router({
     return { following: result.length > 0 };
   }),
   // Get follower/following/likes counts for a user
-  getCounts: publicProcedure.input(z10.object({ userId: z10.number() })).query(async ({ input }) => {
+  getCounts: publicProcedure.input(z10.object({ userId: z10.number() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) return { followers: 0, following: 0, likes: 0, posts: 0 };
+    if (!await canViewFullProfile(db, ctx.user?.id, input.userId)) {
+      return { followers: 0, following: 0, likes: 0, posts: 0 };
+    }
     const [followerResult, followingResult, likeResult, postResult] = await Promise.all([
       db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followingId, input.userId)),
       db.select({ cnt: count4() }).from(userFollows).where(eq21(userFollows.followerId, input.userId)),
@@ -9215,6 +9311,7 @@ import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
 import { and as and19, eq as eq22, or as or6, desc as desc12 } from "drizzle-orm";
+import { alias as alias2 } from "drizzle-orm/mysql-core";
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -9243,7 +9340,40 @@ var contactsRouter = router({
       else if (rel?.status === "pending") requestPending = true;
       blockedByMe = await hasBlocked(db, ctx.user.id, input.userId);
     }
-    return { ...u, isSelf, isFriend, requestPending, blockedByMe };
+    let canDM = false;
+    if (!isSelf) {
+      try {
+        await assertCanDM(db, ctx.user.id, input.userId);
+        canDM = true;
+      } catch {
+        canDM = false;
+      }
+    }
+    let profileVisible = true;
+    try {
+      const [st] = await db.select({ v: userSettings.profileVisible }).from(userSettings).where(eq22(userSettings.userId, input.userId)).limit(1);
+      if (st) profileVisible = !!st.v;
+    } catch {
+    }
+    const profileHidden = !isSelf && !isFriend && !profileVisible;
+    if (profileHidden) {
+      return {
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        avatar: u.avatar,
+        bio: null,
+        isBot: u.isBot,
+        createdAt: null,
+        isSelf,
+        isFriend,
+        requestPending,
+        blockedByMe,
+        profileHidden: true,
+        canDM
+      };
+    }
+    return { ...u, isSelf, isFriend, requestPending, blockedByMe, profileHidden: false, canDM };
   }),
   // ─── 拉黑 / 解除拉黑 / 黑名单列表 ─────────────────────────────────────────────
   blockUser: protectedProcedure.input(z11.object({ targetId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9287,6 +9417,14 @@ var contactsRouter = router({
     if (!db) throw new Error("Database not available");
     if (input.receiverId === ctx.user.id) throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u6DFB\u52A0\u81EA\u5DF1\u4E3A\u597D\u53CB" });
     if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError11({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u6DFB\u52A0\u597D\u53CB(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
+    const meM = alias2(groupMembers, "forbid_me");
+    const themM = alias2(groupMembers, "forbid_them");
+    const [forbidHit] = await db.select({ id: chatGroups.id }).from(chatGroups).innerJoin(meM, and19(eq22(meM.groupId, chatGroups.id), eq22(meM.userId, ctx.user.id))).innerJoin(themM, and19(eq22(themM.groupId, chatGroups.id), eq22(themM.userId, input.receiverId))).where(and19(
+      eq22(chatGroups.forbidAddFriend, true),
+      eq22(meM.role, "member"),
+      eq22(themM.role, "member")
+    )).limit(1);
+    if (forbidHit) throw new TRPCError11({ code: "FORBIDDEN", message: "\u8BE5\u7FA4\u5DF2\u7981\u6B62\u6210\u5458\u4E92\u52A0\u597D\u53CB" });
     const existing = await db.select({ id: friendRequests.id, status: friendRequests.status }).from(friendRequests).where(
       or6(
         and19(eq22(friendRequests.senderId, ctx.user.id), eq22(friendRequests.receiverId, input.receiverId)),
@@ -13466,13 +13604,107 @@ import { z as z24 } from "zod";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
-import { eq as eq35, and as and31, desc as desc22, sql as sql21, count as count6, gte as gte8 } from "drizzle-orm";
 init_referralRewards();
+import { eq as eq35, and as and31, desc as desc22, sql as sql21, count as count6, gte as gte8 } from "drizzle-orm";
 
 // server/callResolver.ts
 init_db();
 init_schema();
 import { eq as eq34, and as and30, lte, sql as sql20 } from "drizzle-orm";
+
+// server/callSpot.ts
+var CG_ID = { BTC: "bitcoin", ETH: "ethereum" };
+async function fetchCallSpotPrice(symbol) {
+  const sym = symbol.toUpperCase();
+  const id = CG_ID[sym];
+  if (!id) return null;
+  const cg = await cachedFetch(
+    `call-spot-cg:${id}`,
+    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
+    TTL.prices,
+    (res) => res.json()
+  );
+  const cgPx = cg?.[id]?.usd;
+  if (typeof cgPx === "number" && cgPx > 0) return cgPx;
+  const cc = await cachedFetch(
+    `call-spot-cc:${sym}`,
+    `https://min-api.cryptocompare.com/data/price?fsym=${sym}&tsyms=USD`,
+    TTL.prices,
+    (res) => res.json()
+  );
+  const ccPx = cc?.USD;
+  return typeof ccPx === "number" && ccPx > 0 ? ccPx : null;
+}
+var BINANCE_PAIR = { BTC: "BTCUSDT", ETH: "ETHUSDT" };
+function binanceInterval(horizonMin) {
+  if (horizonMin === 60) return "1h";
+  if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return `${horizonMin}m`;
+  return null;
+}
+async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
+  const sym = symbol.toUpperCase();
+  const pair = BINANCE_PAIR[sym];
+  const interval = binanceInterval(horizonMin);
+  if (pair && interval) {
+    const rows = await cachedFetch(
+      `call-kline:${pair}:${interval}:${openMs}`,
+      `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${openMs}&limit=1`,
+      15e3,
+      (res) => res.json()
+    );
+    const k = Array.isArray(rows) ? rows[0] : null;
+    if (k && Number(k[0]) === openMs) {
+      const open = Number(k[1]);
+      const close = Number(k[4]);
+      if (open > 0 && close > 0) return { open, close };
+    }
+  }
+  const toTs = Math.floor((openMs + horizonMin * 6e4) / 1e3);
+  const cc = await cachedFetch(
+    `call-histominute:${sym}:${openMs}:${horizonMin}`,
+    `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${sym}&tsym=USD&limit=${Math.min(horizonMin, 60)}&toTs=${toTs}`,
+    15e3,
+    (res) => res.json()
+  );
+  const pts = cc?.Data?.Data ?? [];
+  if (pts.length >= 2) {
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (first?.open > 0 && last?.close > 0) return { open: first.open, close: last.close };
+  }
+  return null;
+}
+
+// server/callWindow.ts
+var CALL_HORIZONS_MIN = [5, 15, 30, 60];
+var CALL_LOCK_MINUTES = 1;
+function horizonToMinutes(horizonHoursField) {
+  if (horizonHoursField === 24 || horizonHoursField === 72 || horizonHoursField === 168 || horizonHoursField === 720) {
+    return horizonHoursField * 60;
+  }
+  return horizonHoursField;
+}
+function deadbandBpForHorizon(horizonMin) {
+  return horizonMin <= 60 ? 1 : 100;
+}
+function overdueVoidMs(horizonMin) {
+  return horizonMin <= 60 ? 2 * 36e5 : 3 * 864e5;
+}
+function isAlignedWindow(closeMs, horizonMin) {
+  const period = Math.max(1, horizonMin) * 6e4;
+  return closeMs % period === 0;
+}
+function nextFullWindow(horizonMin, nowMs = Date.now(), lockMin = CALL_LOCK_MINUTES) {
+  const period = Math.max(1, horizonMin) * 6e4;
+  const lock = Math.max(0, lockMin) * 6e4;
+  const currentOpen = Math.floor(nowMs / period) * period;
+  let open = currentOpen;
+  if (nowMs - currentOpen > 2e3) open = currentOpen + period;
+  if (open - nowMs > 0 && open - nowMs <= lock) open += period;
+  return { openMs: open, closeMs: open + period };
+}
+
+// server/callResolver.ts
 init_logger();
 var DEADBAND_BP = 100;
 var WIN_NP = 150;
@@ -13503,19 +13735,38 @@ async function resolveDueCalls(db) {
   let processed = 0;
   for (const c of due) {
     try {
-      let cur;
-      const cached = priceCache2.get(c.tokenSymbol);
-      if (cached !== void 0) {
-        cur = cached;
+      const horizonMin = horizonToMinutes(c.horizonHours);
+      const closeMs = new Date(c.resolveAt).getTime();
+      const openMs = closeMs - horizonMin * 6e4;
+      let entry = Number(c.entryPrice);
+      let cur = null;
+      if (horizonMin <= 60 && isAlignedWindow(closeMs, horizonMin)) {
+        const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
+        if (ohlc) {
+          entry = ohlc.open;
+          cur = ohlc.close;
+        } else {
+          if (Date.now() - closeMs > overdueVoidMs(horizonMin)) {
+            await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq34(calls.id, c.id));
+            await settleStakesForCall(db, c.id, "void");
+            processed++;
+          }
+          continue;
+        }
       } else {
-        const token = await fetchTokenData(c.tokenSymbol);
-        cur = token?.price ?? null;
-        priceCache2.set(c.tokenSymbol, cur);
+        let spot;
+        const cached = priceCache2.get(c.tokenSymbol);
+        if (cached !== void 0) {
+          spot = cached;
+        } else {
+          spot = await fetchCallSpotPrice(c.tokenSymbol);
+          priceCache2.set(c.tokenSymbol, spot);
+        }
+        cur = spot;
       }
-      const entry = Number(c.entryPrice);
       if (!cur || !entry || entry <= 0) {
-        const overdueMs = Date.now() - new Date(c.resolveAt).getTime();
-        if (overdueMs > 3 * 864e5) {
+        const overdueMs = Date.now() - closeMs;
+        if (overdueMs > overdueVoidMs(horizonMin)) {
           await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq34(calls.id, c.id));
           await settleStakesForCall(db, c.id, "void");
           processed++;
@@ -13524,12 +13775,13 @@ async function resolveDueCalls(db) {
       }
       const changeBp = Math.round((cur - entry) / entry * 1e4);
       let status;
-      if (Math.abs(changeBp) < DEADBAND_BP) status = "void";
+      const deadband = deadbandBpForHorizon(horizonMin) || DEADBAND_BP;
+      if (Math.abs(changeBp) < deadband) status = "void";
       else {
         const up = changeBp > 0;
         status = c.direction === "long" && up || c.direction === "short" && !up ? "win" : "lose";
       }
-      const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and30(eq34(calls.id, c.id), eq34(calls.status, "pending")));
+      const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), entryPrice: String(entry), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and30(eq34(calls.id, c.id), eq34(calls.status, "pending")));
       const changed = Number(upd?.[0]?.affectedRows ?? upd?.rowsAffected ?? 0);
       if (changed < 1) continue;
       const [selfBet] = await db.select({ id: curationStakes.id }).from(curationStakes).where(and30(eq34(curationStakes.callId, c.id), eq34(curationStakes.stakerId, c.userId))).limit(1);
@@ -13567,7 +13819,7 @@ function startCallResolver() {
 }
 
 // server/routers/calls.ts
-var HORIZONS = [15, 60, 240, 1440];
+var HORIZONS = CALL_HORIZONS_MIN;
 var BET_SYMBOLS = ["BTC", "ETH"];
 var DAILY_CALL_LIMIT = 5;
 var MIN_STAKE = 10;
@@ -13581,6 +13833,7 @@ var callsRouter = router({
     odds: STAKE_ODDS,
     symbols: [...BET_SYMBOLS],
     horizons: [...HORIZONS],
+    lockMinutes: CALL_LOCK_MINUTES,
     minStake: MIN_STAKE,
     maxStake: MAX_STAKE,
     dailyLimit: DAILY_CALL_LIMIT
@@ -13599,12 +13852,12 @@ var callsRouter = router({
     }
     const ymd = ymdUtc4();
     const symbol = input.tokenSymbol;
-    const token = await fetchTokenData(symbol);
-    const price = token?.price;
+    const price = await fetchCallSpotPrice(symbol);
     if (!price || price <= 0) {
       throw new TRPCError20({ code: "BAD_REQUEST", message: `\u6682\u65F6\u65E0\u6CD5\u83B7\u53D6 ${symbol} \u4EF7\u683C\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5` });
     }
-    const resolveAt = new Date(Date.now() + input.horizonHours * 60 * 1e3);
+    const window = nextFullWindow(input.horizonHours);
+    const resolveAt = new Date(window.closeMs);
     const potentialWin = stakePayout(input.amount, "win");
     const callId = await db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq35(users.id, ctx.user.id)).for("update").limit(1);
@@ -13640,6 +13893,7 @@ var callsRouter = router({
     return {
       callId,
       entryPrice: price,
+      windowOpenAt: new Date(window.openMs).toISOString(),
       resolveAt: resolveAt.toISOString(),
       amount: input.amount,
       odds: STAKE_ODDS,
