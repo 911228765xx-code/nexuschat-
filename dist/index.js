@@ -13974,46 +13974,39 @@ function parseBybitKlines(json) {
   out.sort((a, b) => a.t - b.t);
   return out;
 }
+function klineQuality(bars) {
+  if (bars.length < 2) return 0;
+  const ranged = bars.filter((b) => b.h > b.l).length;
+  const closes = bars.map((b) => b.c);
+  const span = Math.max(...closes) - Math.min(...closes);
+  const rel = span / (closes[0] || 1);
+  return ranged * 20 + rel * 1e4 + bars.length;
+}
 var SPARK_CACHE_MS = 8e3;
 var sparkCache = /* @__PURE__ */ new Map();
 async function fetchSymbolKlines(symbol) {
   const hit = sparkCache.get(symbol);
-  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && hit.bars.length >= 2) return hit.bars;
+  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && klineQuality(hit.bars) > 40) return hit.bars;
   const pair = `${symbol}USDT`;
-  const bnHosts = [
-    `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
-    `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`
+  const sources = [
+    { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`, parse: parseBybitKlines }
   ];
-  const bars = await new Promise((resolve) => {
-    let left = bnHosts.length;
-    let settled = false;
-    for (const u of bnHosts) {
-      void fetchJsonQuick(u, 3500).then((raw) => {
-        const parsed = parseKlines(raw);
-        if (!settled && parsed.length >= 2) {
-          settled = true;
-          resolve(parsed);
-          return;
-        }
-        left -= 1;
-        if (!settled && left <= 0) resolve([]);
-      });
+  const results = await Promise.all(sources.map(async (s) => s.parse(await fetchJsonQuick(s.url, 3500))));
+  let best = [];
+  let bestQ = -1;
+  for (const bars of results) {
+    const q = klineQuality(bars);
+    if (q > bestQ) {
+      bestQ = q;
+      best = bars;
     }
-  });
-  if (bars.length >= 2) {
-    sparkCache.set(symbol, { at: Date.now(), bars });
-    return bars;
   }
-  const bybit = await fetchJsonQuick(
-    `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`,
-    4500
-  );
-  const bybitBars = parseBybitKlines(bybit);
-  if (bybitBars.length >= 2) {
-    sparkCache.set(symbol, { at: Date.now(), bars: bybitBars });
-    return bybitBars;
+  if (best.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars: best });
+    return best;
   }
   return hit?.bars ?? [];
 }
