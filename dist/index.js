@@ -4841,11 +4841,6 @@ function initSocketIO(httpServer) {
         return;
       }
       socket.join(`group:${groupId}`);
-      socket.to(`group:${groupId}`).emit("user_joined", {
-        userId,
-        userName,
-        groupId
-      });
     });
     socket.on("leave_group", (groupId) => {
       socket.leave(`group:${groupId}`);
@@ -5731,6 +5726,18 @@ async function initReadCursor(db, groupId, userId) {
   } catch {
   }
 }
+async function countHumanMembers(db, groupId) {
+  const [row] = await db.select({ n: sql10`COUNT(*)` }).from(groupMembers).innerJoin(users, eq17(users.id, groupMembers.userId)).where(and14(eq17(groupMembers.groupId, groupId), eq17(users.isBot, false)));
+  return Number(row?.n ?? 0);
+}
+async function assertGroupHasCapacity(db, groupId, extra = 1) {
+  const [grp] = await db.select({ maxMembers: chatGroups.maxMembers }).from(chatGroups).where(eq17(chatGroups.id, groupId)).limit(1);
+  if (!grp || grp.maxMembers <= 0) return;
+  const humans = await countHumanMembers(db, groupId);
+  if (humans + extra > grp.maxMembers) {
+    throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
+  }
+}
 async function filterReadableMessageIds(db, messageIds, userId) {
   if (messageIds.length === 0) return [];
   const msgs = await db.select({ id: messages.id, groupId: messages.groupId, senderId: messages.senderId, receiverId: messages.receiverId }).from(messages).where(inArray7(messages.id, messageIds));
@@ -5844,13 +5851,11 @@ var chatRouter = router({
     if (!db) throw new Error("Database not available");
     const existing = await db.select().from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
     if (existing.length > 0) return { success: true, alreadyMember: true };
-    const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, isPublic: chatGroups.isPublic }).from(chatGroups).where(eq17(chatGroups.id, input.groupId)).limit(1);
+    const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, isPublic: chatGroups.isPublic }).from(chatGroups).where(eq17(chatGroups.id, input.groupId)).limit(1);
     if (grp && !grp.isPublic) {
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u8BE5\u7FA4\u4E3A\u79C1\u5BC6\u7FA4\uFF0C\u9700\u901A\u8FC7\u7FA4\u6210\u5458\u9080\u8BF7\u6216\u4E8C\u7EF4\u7801\u52A0\u5165" });
     }
-    if (grp && grp.maxMembers > 0 && grp.memberCount >= grp.maxMembers) {
-      throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
-    }
+    await assertGroupHasCapacity(db, input.groupId);
     if (grp?.joinApproval) {
       const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and14(eq17(groupJoinRequests.groupId, input.groupId), eq17(groupJoinRequests.userId, ctx.user.id), eq17(groupJoinRequests.status, "pending"))).limit(1);
       if (pending.length === 0) {
@@ -5869,6 +5874,127 @@ var chatRouter = router({
     await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
     return { success: true, alreadyMember: false };
+  }),
+  /** 从好友列表拉人进群（微信式多选）。须为群成员；只能拉自己的好友。 */
+  addMembers: protectedProcedure.input(z6.object({
+    groupId: z6.number().int().positive(),
+    userIds: z6.array(z6.number().int().positive()).min(1).max(50)
+  })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const wanted = Array.from(new Set(input.userIds)).filter((id) => id !== ctx.user.id);
+    if (wanted.length === 0) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u8BF7\u9009\u62E9\u8981\u9080\u8BF7\u7684\u597D\u53CB" });
+    const [me] = await db.select({ role: groupMembers.role, alias: groupMembers.alias }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+    if (!me) throw new TRPCError8({ code: "FORBIDDEN", message: "\u4F60\u4E0D\u5728\u8BE5\u7FA4\u4E2D" });
+    const [grp] = await db.select({
+      name: chatGroups.name,
+      joinApproval: chatGroups.joinApproval,
+      memberCount: chatGroups.memberCount,
+      maxMembers: chatGroups.maxMembers
+    }).from(chatGroups).where(eq17(chatGroups.id, input.groupId)).limit(1);
+    if (!grp) throw new TRPCError8({ code: "NOT_FOUND", message: "\u7FA4\u4E0D\u5B58\u5728" });
+    const alreadyRows = await db.select({ userId: groupMembers.userId }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), inArray7(groupMembers.userId, wanted)));
+    const already = new Set(alreadyRows.map((r) => r.userId));
+    const friendRows = await db.select({
+      senderId: friendRequests.senderId,
+      receiverId: friendRequests.receiverId
+    }).from(friendRequests).where(and14(
+      eq17(friendRequests.status, "accepted"),
+      or5(
+        and14(eq17(friendRequests.senderId, ctx.user.id), inArray7(friendRequests.receiverId, wanted)),
+        and14(eq17(friendRequests.receiverId, ctx.user.id), inArray7(friendRequests.senderId, wanted))
+      )
+    ));
+    const friends = /* @__PURE__ */ new Set();
+    for (const r of friendRows) {
+      friends.add(r.senderId === ctx.user.id ? r.receiverId : r.senderId);
+    }
+    const candidates = wanted.filter((id) => !already.has(id) && friends.has(id));
+    if (candidates.length === 0) {
+      throw new TRPCError8({ code: "BAD_REQUEST", message: already.size ? "\u6240\u9009\u597D\u53CB\u5DF2\u5728\u7FA4\u91CC" : "\u53EA\u80FD\u9080\u8BF7\u5DF2\u6DFB\u52A0\u7684\u597D\u53CB" });
+    }
+    const isManager = me.role === "owner" || me.role === "admin";
+    const needApproval = !!grp.joinApproval && !isManager;
+    if (needApproval) {
+      let pending = 0;
+      for (const uid of candidates) {
+        const [exist] = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and14(
+          eq17(groupJoinRequests.groupId, input.groupId),
+          eq17(groupJoinRequests.userId, uid),
+          eq17(groupJoinRequests.status, "pending")
+        )).limit(1);
+        if (exist) {
+          pending += 1;
+          continue;
+        }
+        await db.insert(groupJoinRequests).values({ groupId: input.groupId, userId: uid });
+        pending += 1;
+      }
+      return { added: 0, pending, skipped: wanted.length - candidates.length };
+    }
+    const slots = grp.maxMembers > 0 ? Math.max(0, grp.maxMembers - await countHumanMembers(db, input.groupId)) : candidates.length;
+    if (slots <= 0) throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
+    const toAdd = candidates.slice(0, slots);
+    const profiles = await db.select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      isBot: users.isBot
+    }).from(users).where(inArray7(users.id, toAdd));
+    const addable = profiles.filter((u) => !u.isBot);
+    if (addable.length === 0) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u6CA1\u6709\u53EF\u9080\u8BF7\u7684\u597D\u53CB" });
+    await db.insert(groupMembers).values(addable.map((u) => ({
+      groupId: input.groupId,
+      userId: u.id,
+      role: "member"
+    })));
+    await db.update(chatGroups).set({
+      memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`
+    }).where(eq17(chatGroups.id, input.groupId));
+    await Promise.all(addable.map((u) => initReadCursor(db, input.groupId, u.id)));
+    const myName = me.alias || ctx.user.name || ctx.user.username || "\u6210\u5458";
+    const names = addable.map((u) => u.name || u.username || `\u7528\u6237#${u.id}`);
+    const content = names.length === 1 ? `${myName} \u9080\u8BF7 ${names[0]} \u52A0\u5165\u4E86\u7FA4\u804A` : `${myName} \u9080\u8BF7 ${names.join("\u3001")} \u52A0\u5165\u4E86\u7FA4\u804A`;
+    const [msgIns] = await db.insert(messages).values({
+      groupId: input.groupId,
+      senderId: ctx.user.id,
+      content,
+      messageType: "system"
+    });
+    const messageId = Number(msgIns?.insertId ?? 0);
+    try {
+      getSocketIO()?.to(`group:${input.groupId}`).emit("new_message", {
+        id: messageId,
+        groupId: input.groupId,
+        senderId: ctx.user.id,
+        senderName: myName,
+        senderAvatar: ctx.user.avatar ?? null,
+        content,
+        messageType: "system",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch {
+    }
+    const fromName = ctx.user.name || ctx.user.username || "\u597D\u53CB";
+    const fromAvatar = ctx.user.avatar ?? "";
+    for (const u of addable) {
+      void createNotification({
+        db,
+        targetUserId: u.id,
+        fromUserId: ctx.user.id,
+        fromUserName: fromName,
+        fromUserAvatar: fromAvatar,
+        type: "system",
+        content: `${fromName} \u9080\u8BF7\u4F60\u52A0\u5165\u4E86\u7FA4\u804A\u300C${grp.name}\u300D`
+      }).catch(() => {
+      });
+    }
+    return {
+      added: addable.length,
+      pending: 0,
+      skipped: wanted.length - addable.length,
+      truncated: candidates.length > slots
+    };
   }),
   // Get messages for a group
   getMessages: protectedProcedure.input(z6.object({
@@ -6827,10 +6953,8 @@ var chatRouter = router({
     if (l.maxUses > 0 && l.useCount >= l.maxUses) throw new Error("Invite link has reached max uses");
     const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, l.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
     if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
-    const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups).where(eq17(chatGroups.id, l.groupId)).limit(1);
-    if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
-      throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1" });
-    }
+    const [cap] = await db.select({ joinApproval: chatGroups.joinApproval }).from(chatGroups).where(eq17(chatGroups.id, l.groupId)).limit(1);
+    await assertGroupHasCapacity(db, l.groupId);
     if (cap?.joinApproval) {
       const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests).where(and14(eq17(groupJoinRequests.groupId, l.groupId), eq17(groupJoinRequests.userId, ctx.user.id), eq17(groupJoinRequests.status, "pending"))).limit(1);
       if (!pending[0]) await db.insert(groupJoinRequests).values({ groupId: l.groupId, userId: ctx.user.id });
@@ -6850,7 +6974,14 @@ var chatRouter = router({
     await initReadCursor(db, l.groupId, ctx.user.id);
     const newMemberName = ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB";
     void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger_default.warn({ err }, "growth bot failed"));
-    void runWelcomeBot(db, l.groupId, newMemberName).catch((err) => logger_default.warn({ err }, "welcome bot failed"));
+    void (async () => {
+      try {
+        if (await isBotActive(db, l.groupId, "growth")) return;
+        await runWelcomeBot(db, l.groupId, newMemberName);
+      } catch (err) {
+        logger_default.warn({ err }, "welcome bot failed");
+      }
+    })();
     return { groupId: l.groupId, alreadyMember: false };
   }),
   getGroupInviteLinks: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
@@ -7151,10 +7282,7 @@ var chatRouter = router({
       throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B/\u7BA1\u7406\u5458\u53EF\u5BA1\u6279" });
     }
     if (input.approve) {
-      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers }).from(chatGroups).where(eq17(chatGroups.id, req.groupId)).limit(1);
-      if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
-        throw new TRPCError8({ code: "FORBIDDEN", message: "\u7FA4\u6210\u5458\u5DF2\u6EE1,\u65E0\u6CD5\u901A\u8FC7\u7533\u8BF7" });
-      }
+      await assertGroupHasCapacity(db, req.groupId);
     }
     const flip = await db.update(groupJoinRequests).set({ status: input.approve ? "approved" : "rejected" }).where(and14(eq17(groupJoinRequests.id, input.requestId), eq17(groupJoinRequests.status, "pending")));
     const flipped = flip?.[0]?.affectedRows ?? flip?.affectedRows ?? flip?.rowsAffected ?? 0;
@@ -14622,6 +14750,73 @@ import { TRPCError as TRPCError24 } from "@trpc/server";
 import { and as and36, count as count7, eq as eq40, gt as gt7, inArray as inArray11 } from "drizzle-orm";
 init_db();
 init_schema();
+
+// server/utils/dashboardLive.ts
+var SH_MS = 8 * 3600 * 1e3;
+var EPOCH = Date.UTC(2026, 7, 1);
+function extraKind(label) {
+  return /今日|当天|24h|消息|动态|活跃|在线|发言/i.test(label) ? "daily" : "stock";
+}
+function shanghaiParts(nowMs) {
+  const shifted = nowMs + SH_MS;
+  const dayIndex = Math.floor(shifted / 864e5);
+  const sec = Math.floor(shifted % 864e5 / 1e3);
+  return { sec, dayIndex };
+}
+function activityFactor(sec) {
+  const h = sec / 3600;
+  const p1 = Math.exp(-((h - 11.5) ** 2) / 10);
+  const p2 = Math.exp(-((h - 21) ** 2) / 7);
+  return Math.min(1, 0.16 + 0.52 * p1 + 0.84 * p2);
+}
+function mix01(key, salt) {
+  let h = (salt ^ 2166136261) >>> 0;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+  return h % 1e4 / 1e4;
+}
+function liveDelta(kind, base, key, nowMs) {
+  const { sec, dayIndex } = shanghaiParts(nowMs);
+  const act = activityFactor(sec);
+  const jitter = mix01(key, dayIndex);
+  const floor = Math.max(0, Math.floor(base));
+  if (kind === "users") {
+    const perHour2 = Math.max(0.35, floor * 7e-5);
+    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
+  }
+  if (kind === "subs") {
+    const perHour2 = Math.max(0.08, floor * 4e-5);
+    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
+  }
+  if (kind === "active") {
+    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
+    const wave2 = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
+    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
+    return Math.floor(span * act * (0.7 + 0.24 * wave2 + 0.06 * micro));
+  }
+  if (kind === "daily") {
+    const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));
+    const progress = sec / 86400 * (0.38 + 0.62 * act);
+    const wave2 = Math.sin(sec / 43 + jitter * 5) * 0.5 + 0.5;
+    return Math.floor(daily * progress + wave2 * Math.max(2, daily * 0.02));
+  }
+  const perHour = Math.max(0.12, floor * 5e-5);
+  const wave = Math.sin(sec / 67 + jitter * 3) * 0.5 + 0.5;
+  return Math.floor((nowMs - EPOCH) / 36e5 * perHour + wave * Math.max(1, floor * 2e-3));
+}
+function applyDashboardLive(base, nowMs) {
+  return {
+    ...base,
+    usersTotal: base.usersTotal + liveDelta("users", base.usersTotal, "users", nowMs),
+    activeToday: base.activeToday + liveDelta("active", base.activeToday, "active", nowMs),
+    subscribers: base.subscribers + liveDelta("subs", base.subscribers, "subs", nowMs),
+    extras: base.extras.map((e) => ({
+      ...e,
+      value: e.value + liveDelta(extraKind(e.label), e.value, e.id || e.label, nowMs)
+    }))
+  };
+}
+
+// server/routers/stats.ts
 var DEFAULT_BOOSTS = { usersTotal: 0, activeToday: 0, subscribers: 0 };
 var extraSchema = z27.object({
   id: z27.string().min(1).max(40),
@@ -14660,7 +14855,7 @@ function parseConfig(raw) {
   }
 }
 var cache2 = null;
-var CACHE_MS = 6e4;
+var CACHE_MS = 3e4;
 async function loadConfigRow() {
   const db = await getDb();
   if (!db) return { db: null, config: parseConfig(null) };
@@ -14672,57 +14867,88 @@ async function computeDashboard() {
   let realUsers = 0;
   let realActive = 0;
   let realSubs = 0;
+  let realOnline2 = 0;
+  let realGroups = 0;
+  let realPostsToday = 0;
   if (db) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1e3);
+    const onlineSince = new Date(Date.now() - 15 * 60 * 1e3);
     const now = /* @__PURE__ */ new Date();
-    const [[usersRow], [activeRow], [subsRow]] = await Promise.all([
+    const [[usersRow], [activeRow], [subsRow], [onlineRow], [groupRow], [postRow]] = await Promise.all([
       db.select({ n: count7() }).from(users).where(eq40(users.isBot, false)),
       db.select({ n: count7() }).from(users).where(and36(eq40(users.isBot, false), gt7(users.lastSignedIn, since))),
       db.select({ n: count7() }).from(users).where(and36(
         eq40(users.isBot, false),
         inArray11(users.proTier, ["plus", "pro"]),
         gt7(users.proUntil, now)
-      ))
+      )),
+      db.select({ n: count7() }).from(users).where(and36(eq40(users.isBot, false), gt7(users.lastSignedIn, onlineSince))),
+      db.select({ n: count7() }).from(chatGroups).where(eq40(chatGroups.isPublic, true)),
+      db.select({ n: count7() }).from(posts).where(gt7(posts.createdAt, since))
     ]);
     realUsers = Number(usersRow?.n ?? 0);
     realActive = Number(activeRow?.n ?? 0);
     realSubs = Number(subsRow?.n ?? 0);
+    realOnline2 = Number(onlineRow?.n ?? 0);
+    realGroups = Number(groupRow?.n ?? 0);
+    realPostsToday = Number(postRow?.n ?? 0);
   }
+  const autoExtras = [
+    { id: "online", label: "\u5F53\u524D\u5728\u7EBF", value: realOnline2 },
+    { id: "groups", label: "\u516C\u5F00\u793E\u7FA4", value: realGroups },
+    { id: "posts", label: "\u4ECA\u65E5\u52A8\u6001", value: realPostsToday }
+  ];
+  const extras = [
+    ...autoExtras,
+    ...config.extras.filter(
+      (e) => !autoExtras.some((a) => a.id === e.id || a.label === e.label)
+    )
+  ].slice(0, 8);
   return {
     usersTotal: realUsers + config.boosts.usersTotal,
     activeToday: realActive + config.boosts.activeToday,
     subscribers: realSubs + config.boosts.subscribers,
-    extras: config.extras,
+    extras,
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    // 管理端预览用：真实数（用户侧接口不返回这些字段也可，但一并返回无妨；App 用户侧忽略）
-    _real: { usersTotal: realUsers, activeToday: realActive, subscribers: realSubs }
+    _real: {
+      usersTotal: realUsers,
+      activeToday: realActive,
+      subscribers: realSubs,
+      online: realOnline2,
+      groups: realGroups,
+      postsToday: realPostsToday
+    }
   };
 }
 var statsRouter = router({
-  /** 发现页：所有登录用户可见的展示数字（已含加成） */
+  /** 发现页：所有登录用户可见的展示数字（已含加成 + 时段波动） */
   getCommunityDashboard: protectedProcedure.query(async () => {
     const now = Date.now();
-    if (cache2 && now - cache2.at < CACHE_MS) {
-      const { _real: _2, ...publicPayload2 } = cache2.payload;
-      return publicPayload2;
+    if (!cache2 || now - cache2.at >= CACHE_MS) {
+      cache2 = { at: now, payload: await computeDashboard() };
     }
-    const payload = await computeDashboard();
-    cache2 = { at: now, payload };
-    const { _real: _, ...publicPayload } = payload;
-    return publicPayload;
+    const { _real: _, ...publicPayload } = cache2.payload;
+    const live = applyDashboardLive(publicPayload, now);
+    return { ...live, updatedAt: new Date(now).toISOString() };
   }),
   /** 管理端：原始配置 + 真实数预览 */
   adminGetDashboardConfig: adminProcedure.query(async () => {
     const payload = await computeDashboard();
     const { config } = await loadConfigRow();
+    const live = applyDashboardLive({
+      usersTotal: payload.usersTotal,
+      activeToday: payload.activeToday,
+      subscribers: payload.subscribers,
+      extras: payload.extras
+    }, Date.now());
     return {
       boosts: config.boosts,
       extras: config.extras,
       real: payload._real,
       display: {
-        usersTotal: payload.usersTotal,
-        activeToday: payload.activeToday,
-        subscribers: payload.subscribers
+        usersTotal: live.usersTotal,
+        activeToday: live.activeToday,
+        subscribers: live.subscribers
       }
     };
   }),

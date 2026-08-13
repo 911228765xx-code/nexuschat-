@@ -205,11 +205,8 @@ export function initSocketIO(httpServer: HttpServer) {
         return;
       }
       socket.join(`group:${groupId}`);
-      socket.to(`group:${groupId}`).emit("user_joined", {
-        userId,
-        userName,
-        groupId,
-      });
+      // 不再广播 user_joined：这是「打开聊天页/断线重连进房间」，不是入群。
+      // 每次进房都会打一次，看起来像进进出出重复刷屏。
     });
 
     // Leave a chat room
