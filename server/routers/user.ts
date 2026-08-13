@@ -23,6 +23,7 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 }
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
+import { canViewFullProfile } from "../utils/relations";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 import { bitAirdropSchedule, claimBitRankAirdrop, getBitAirdropClaimStatus } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
@@ -852,13 +853,18 @@ export const userRouter = router({
         .from(users)
         .where(and(ne(users.id, ctx.user.id), eq(users.id, idNum)))
         .limit(1);
-      return rows.map(u => ({
-        id: u.id,
-        name: u.name ?? u.username ?? `User #${u.id}`,
-        username: u.username,
-        avatar: u.avatar,
-        bio: u.bio,
-      }));
+      const out = [];
+      for (const u of rows) {
+        const visible = await canViewFullProfile(db, ctx.user.id, u.id);
+        out.push({
+          id: u.id,
+          name: u.name ?? u.username ?? `User #${u.id}`,
+          username: u.username,
+          avatar: u.avatar,
+          bio: visible ? u.bio : null,
+        });
+      }
+      return out;
     }),
 
   // ─── Invite leaderboard (by referral count) ────────────────────────────

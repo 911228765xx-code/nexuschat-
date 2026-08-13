@@ -152,6 +152,7 @@ export const followRouter = router({
       const db = await getDb();
       if (!db) return [];
       const uid = input?.userId ?? ctx.user.id;
+      if (!(await canViewFullProfile(db, ctx.user.id, uid))) return [];
 
       const rows = await db
         .select({
@@ -177,6 +178,7 @@ export const followRouter = router({
       const db = await getDb();
       if (!db) return [];
       const uid = input?.userId ?? ctx.user.id;
+      if (!(await canViewFullProfile(db, ctx.user.id, uid))) return [];
 
       const rows = await db
         .select({
