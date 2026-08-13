@@ -204,7 +204,7 @@ export const contactsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      await db
+      const upd = await db
         .update(friendRequests)
         .set({ status: "accepted" })
         .where(
@@ -214,6 +214,8 @@ export const contactsRouter = router({
             eq(friendRequests.status, "pending")
           )
         );
+      const affected = (upd as any)?.[0]?.affectedRows ?? (upd as any)?.affectedRows ?? (upd as any)?.rowsAffected ?? 0;
+      if (!affected) throw new TRPCError({ code: "BAD_REQUEST", message: "申请不存在或已处理" });
       return { success: true };
     }),
 
