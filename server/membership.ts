@@ -10,6 +10,7 @@ import { getDb } from "./db";
 import { chatGroups, users } from "../drizzle/schema";
 import { spendNN } from "./token";
 import { awardMembershipShare, awardReferrerMilestone } from "./referralRewards";
+import { isAppAdmin } from "./appAdmin";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -88,11 +89,37 @@ export function effectiveTier(proTier: string | null, proUntil: Date | null): Pr
   return (proTier as ProTier) ?? "free";
 }
 
+const ADMIN_BENEFITS: TierBenefits = {
+  maxGroups: 9999,
+  maxGroupMembers: 1_000_000,
+  aiDailyFree: 9999,
+  maxFileMB: 2000,
+  maxVideoMB: 2000,
+  adFree: true,
+  badge: "Admin",
+  publicGroups: true,
+  bannerSlot: true,
+  voiceRoomFreeMonthly: 9999,
+};
+
 /** 读取用户会员信息（含有效等级与权益） */
 export async function getMembership(db: Db, userId: number) {
   const [u] = await db
-    .select({ proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance })
+    .select({ id: users.id, role: users.role, proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance })
     .from(users).where(eq(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) {
+    const daysLeft = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1000)) : null;
+    return {
+      tier: "pro" as ProTier,
+      name: "管理员",
+      benefits: ADMIN_BENEFITS,
+      proUntil: u?.proUntil ? u.proUntil.toISOString() : null,
+      daysLeft,
+      nnBalance: Number(u?.nn ?? 0),
+      tiers: MEMBERSHIP_TIERS,
+      terms: MEMBERSHIP_TERMS,
+    };
+  }
   const eff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
   const tier = getTier(eff);
   const daysLeft = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1000)) : null;
@@ -115,8 +142,9 @@ export async function getMembership(db: Db, userId: number) {
 /** 当前有效权益（用于后端各处限额校验） */
 export async function getBenefits(db: Db, userId: number): Promise<TierBenefits> {
   const [u] = await db
-    .select({ proTier: users.proTier, proUntil: users.proUntil })
+    .select({ proTier: users.proTier, proUntil: users.proUntil, role: users.role })
     .from(users).where(eq(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) return ADMIN_BENEFITS;
   return getTier(effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null)).benefits;
 }
 

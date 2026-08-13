@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { userWatchlist } from "../../drizzle/schema";
 import { and, eq, desc } from "drizzle-orm";
+import { awardTaskEvent } from "./user";
 
 export const watchlistRouter = router({
   // ─── Get user's watchlist ────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ export const watchlistRouter = router({
         tokenSymbol: input.tokenSymbol,
         tokenName: input.tokenName,
       });
+      void awardTaskEvent(db, ctx.user.id, "watchlist_daily");
       return { success: true, alreadyExists: false };
     }),
 

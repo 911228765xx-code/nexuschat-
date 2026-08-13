@@ -13,6 +13,7 @@
 import { TRPCError } from "@trpc/server";
 import { initTRPC } from "@trpc/server";
 import type { TrpcContext } from "./_core/context";
+import { isAppAdmin } from "./appAdmin";
 
 // ── bucket store ──────────────────────────────────────────────────────
 interface Bucket {
@@ -62,6 +63,7 @@ const t = initTRPC.context<TrpcContext>().create();
  * Suitable for general read endpoints.
  */
 export const rateLimitDefault = t.middleware(async ({ ctx, next }) => {
+  if (isAppAdmin((ctx as TrpcContext).user)) return next({ ctx });
   const ip = getClientIp(ctx.req);
   const key = `default:${ip}`;
   if (!checkRate(key, 60_000, 60)) {
@@ -78,6 +80,7 @@ export const rateLimitDefault = t.middleware(async ({ ctx, next }) => {
  * For expensive operations (LLM calls, AI report generation).
  */
 export const rateLimitStrict = t.middleware(async (opts) => {
+  if (isAppAdmin((opts.ctx as TrpcContext).user)) return opts.next();
   const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `strict:${identifier}`;
   if (!checkRate(key, 60_000, 10)) {
@@ -96,6 +99,7 @@ export const rateLimitStrict = t.middleware(async (opts) => {
  * Note: uses next() without ctx override to preserve upstream type narrowing (e.g. protectedProcedure's non-null user).
  */
 export const rateLimitWrite = t.middleware(async (opts) => {
+  if (isAppAdmin((opts.ctx as TrpcContext).user)) return opts.next();
   const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `write:${identifier}`;
   if (!checkRate(key, 60_000, 30)) {
@@ -112,6 +116,7 @@ export const rateLimitWrite = t.middleware(async (opts) => {
  */
 export function createRateLimiter(limits: { windowMs: number; maxRequests: number }) {
   return t.middleware(async (opts) => {
+    if (isAppAdmin((opts.ctx as TrpcContext).user)) return opts.next();
     const identifier = (opts.ctx as any).user?.id?.toString() || getClientIp(opts.ctx.req);
     const key = `custom:${limits.windowMs}:${limits.maxRequests}:${identifier}`;
     if (!checkRate(key, limits.windowMs, limits.maxRequests)) {

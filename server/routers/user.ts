@@ -27,6 +27,7 @@ import { canViewFullProfile } from "../utils/relations";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 import { bitAirdropSchedule, claimBitRankAirdrop, getBitAirdropClaimStatus } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
+import { isAppAdmin } from "../appAdmin";
 import { grantNN, spendNN, transferNN } from "../token";
 import { createNotification } from "./notificationsRouter";
 
@@ -77,9 +78,11 @@ async function creditNp(
   let total = amount;
   if (capped) {
     const [u] = await tx
-      .select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId })
+      .select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId, role: users.role })
       .from(users).where(eq(users.id, userId)).limit(1);
     if (!u) return 0;
+    const admin = isAppAdmin({ id: userId, role: u.role });
+    if (!admin) {
     const cap = dailyNpCap(u.createdAt);
     const ymd = ymdUtc();
     // 防多号撸AC：同一设备每天最多 3 个账号正常发放 AC，第 4 个起当日不发
@@ -107,7 +110,8 @@ async function creditNp(
     // 仅 base 计入每日上限台账（行锁内更新，确定值不会超 cap）
     await tx.update(userDailyNp).set({ earned: earned + base })
       .where(and(eq(userDailyNp.userId, userId), eq(userDailyNp.ymd, ymd)));
-    // 段位加成 + 声誉加成，只乘 base
+    }
+    // 段位加成 + 声誉加成，只乘 base（管理员不受每日上限，仍享受加成）
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
   }
@@ -167,6 +171,55 @@ export const TASK_DEFINITIONS: Record<
   },
   // 邀请好友奖励不走任务中心：绑定时邀请人 +100(referral.ts)，
   // 高价值里程碑(开会员/建群等)另发(referralRewards.ts)，避免与任务奖叠加。
+  // ── 每日轻松任务（1～3 次即可做完，真实行为触发，eventOnly）──
+  chat_daily: {
+    label: "发一条消息",
+    description: "在群聊或私信里发一条消息（每日 1 次）",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true,
+  },
+  like_given: {
+    label: "给动态点个赞",
+    description: "在广场给别人的动态点赞（每日 3 次）",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 3,
+    eventOnly: true,
+  },
+  follow_daily: {
+    label: "关注一位用户",
+    description: "关注一位你感兴趣的人（每日 1 次）",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true,
+  },
+  join_group_daily: {
+    label: "加入一个社区",
+    description: "在发现页加入一个公开社区（每日 1 次）",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true,
+  },
+  watchlist_daily: {
+    label: "添加一个自选",
+    description: "在 AI 分析页把代币加入自选（每日 1 次）",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true,
+  },
+  predict_daily: {
+    label: "猜一次涨跌",
+    description: "用 IT 猜一次 BTC / ETH 涨跌（每日 1 次，需先绑定邀请人）",
+    npReward: 20,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true,
+  },
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "发布动态",
@@ -399,9 +452,9 @@ export const userRouter = router({
       // 保护:封禁前查目标角色,禁封管理员/机器人(防单个 admin 互封/封 owner 自锁群、封机器人打断运营;
       // 与清零工具"保留管理员+机器人"的护栏一致)。服务端权威——原来仅客户端 disabled,直连 API 可绕过。
       if (input.banned) {
-        const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq(users.id, input.userId)).limit(1);
+        const [target] = await db.select({ id: users.id, role: users.role, isBot: users.isBot }).from(users).where(eq(users.id, input.userId)).limit(1);
         if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
-        if (target.role === "admin" || target.isBot) throw new TRPCError({ code: "FORBIDDEN", message: "不能封禁管理员或系统机器人" });
+        if (isAppAdmin(target) || target.isBot) throw new TRPCError({ code: "FORBIDDEN", message: "不能封禁管理员或系统机器人" });
       }
       await db.update(users).set({ isBanned: input.banned }).where(eq(users.id, input.userId));
       // 解封 = 违规记录清零重新开始:否则 30 天窗口内旧记录仍 ≥ 阈值,
@@ -992,8 +1045,8 @@ async function _completeTask(
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
 
-  // C 折中：高价值任务需先绑定邀请人才发 AC（基础任务不受限；报告等功能仍可正常使用）
-  if (REQUIRES_BINDING.has(taskType) && !(await isReferralBound(db, userId))) {
+  // C 折中：高价值任务需先绑定邀请人才发 AC（管理员不受限）
+  if (REQUIRES_BINDING.has(taskType) && !isAppAdmin({ id: userId }) && !(await isReferralBound(db, userId))) {
     return { success: false, npEarned: 0, alreadyCompleted: false };
   }
 
@@ -1006,8 +1059,10 @@ async function _completeTask(
   let blocked = false;
   // 全程一个事务 + 锁用户行:并发同任务调用串行化,频次校验与写入原子,杜绝并发双领
   await db.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1); // 行锁:串行化本用户
-    // 频次校验(拿锁后,事务内)
+    const [locked] = await tx.select({ id: users.id, role: users.role }).from(users).where(eq(users.id, userId)).for("update").limit(1); // 行锁:串行化本用户
+    const admin = isAppAdmin({ id: userId, role: locked?.role });
+    // 频次校验(拿锁后,事务内)。管理员不受每日/一次性次数限制。
+    if (!admin) {
     if (isDaily) {
       const todayStart = startOfUtcDay(ymdUtc());
       const [{ c: todayCount } = { c: 0 }] = await tx
@@ -1019,6 +1074,7 @@ async function _completeTask(
         .select({ id: userTasks.id }).from(userTasks)
         .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType)));
       if (existing.length >= def.maxCompletions) { blocked = true; return; }
+    }
     }
     // 连续签到:拿锁后读改一致,奖励递增封顶
     if (taskType === "daily_login") {
