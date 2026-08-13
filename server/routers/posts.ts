@@ -12,6 +12,7 @@ import { sanitizeInput } from "../utils/sanitize";
 import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
 import { enforceContent } from "../moderation";
+import { canViewFullProfile } from "../utils/relations";
 
 // 广场推广档位（AI 计价，按天）
 export const PROMOTE_PLANS = [
@@ -38,6 +39,9 @@ export const postsRouter = router({
       const limit = input?.limit ?? 20;
       const offset = input?.offset ?? 0;
       const authorId = input?.authorId;
+      if (authorId && !(await canViewFullProfile(db, ctx.user?.id, authorId))) {
+        return { posts: [], hasMore: false };
+      }
 
       const rows = await db
         .select({
@@ -525,6 +529,26 @@ export const postsRouter = router({
       await db.delete(posts).where(eq(posts.id, input.postId));
 
       return { success: true };
+    }),
+
+  // ─── Delete comment（评论作者或帖子作者）──────────────────────────────────
+  deleteComment: protectedProcedure
+    .input(z.object({ commentId: z.number().int().positive() }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [c] = await db
+        .select({ id: postComments.id, authorId: postComments.authorId, postId: postComments.postId })
+        .from(postComments).where(eq(postComments.id, input.commentId)).limit(1);
+      if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "评论不存在" });
+      const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq(posts.id, c.postId)).limit(1);
+      if (c.authorId !== ctx.user.id && post?.authorId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "只能删除自己的评论" });
+      }
+      await db.delete(postComments).where(eq(postComments.id, input.commentId));
+      await db.update(posts).set({ commentCount: sql`GREATEST(commentCount - 1, 0)` }).where(eq(posts.id, c.postId));
+      return { ok: true };
     }),
 
   // ─── Search posts ───────────────────────────────────────────────────────

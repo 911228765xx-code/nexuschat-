@@ -3,10 +3,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { friendRequests, users, contactMetadata, userBlocklist } from "../../drizzle/schema";
+import { friendRequests, users, contactMetadata, userBlocklist, chatGroups, groupMembers, userSettings } from "../../drizzle/schema";
 import { and, eq, or, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { createNotification } from "./notificationsRouter";
-import { hasBlocked, isBlockedEither } from "../utils/relations";
+import { hasBlocked, isBlockedEither, assertCanDM } from "../utils/relations";
 
 export const contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
@@ -39,7 +40,26 @@ export const contactsRouter = router({
         else if (rel?.status === "pending") requestPending = true;
         blockedByMe = await hasBlocked(db, ctx.user.id, input.userId);
       }
-      return { ...u, isSelf, isFriend, requestPending, blockedByMe };
+      let canDM = false;
+      if (!isSelf) {
+        try { await assertCanDM(db, ctx.user.id, input.userId); canDM = true; } catch { canDM = false; }
+      }
+      let profileVisible = true;
+      try {
+        const [st] = await db.select({ v: userSettings.profileVisible }).from(userSettings)
+          .where(eq(userSettings.userId, input.userId)).limit(1);
+        if (st) profileVisible = !!st.v;
+      } catch { /* 列未补齐时按公开 */ }
+      const profileHidden = !isSelf && !isFriend && !profileVisible;
+      if (profileHidden) {
+        return {
+          id: u.id, name: u.name, username: u.username, avatar: u.avatar,
+          bio: null, isBot: u.isBot, createdAt: null,
+          isSelf, isFriend, requestPending, blockedByMe,
+          profileHidden: true, canDM,
+        };
+      }
+      return { ...u, isSelf, isFriend, requestPending, blockedByMe, profileHidden: false, canDM };
     }),
 
   // ─── 拉黑 / 解除拉黑 / 黑名单列表 ─────────────────────────────────────────────
@@ -95,6 +115,21 @@ export const contactsRouter = router({
       if (!db) throw new Error("Database not available");
       if (input.receiverId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能添加自己为好友" });
       if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError({ code: "FORBIDDEN", message: "无法添加好友(存在拉黑关系)" });
+
+      // 共同群开了「禁止互加好友」，且双方都是普通成员 → 拒绝（群主/管理仍可加）
+      const meM = alias(groupMembers, "forbid_me");
+      const themM = alias(groupMembers, "forbid_them");
+      const [forbidHit] = await db.select({ id: chatGroups.id })
+        .from(chatGroups)
+        .innerJoin(meM, and(eq(meM.groupId, chatGroups.id), eq(meM.userId, ctx.user.id)))
+        .innerJoin(themM, and(eq(themM.groupId, chatGroups.id), eq(themM.userId, input.receiverId)))
+        .where(and(
+          eq(chatGroups.forbidAddFriend, true),
+          eq(meM.role, "member"),
+          eq(themM.role, "member"),
+        ))
+        .limit(1);
+      if (forbidHit) throw new TRPCError({ code: "FORBIDDEN", message: "该群已禁止成员互加好友" });
 
       // Check if request already exists
       const existing = await db

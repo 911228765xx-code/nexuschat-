@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests } from "../../drizzle/schema";
+import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests, userSettings } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, gte, asc, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { emitToUser, evictUserFromGroupRoom, getSocketIO, notifyDmOffline } from "../socket";
@@ -733,18 +733,24 @@ export const chatRouter = router({
         // 按 id 排序，与 before 游标(lt id)保持一致
         .orderBy(desc(messages.id))
         .limit(input.limit);
-      // 打开会话即把对方发来的未读私信标记为已读
-      try {
-        await db.update(messages).set({ isRead: true }).where(
-          and(
-            eq(messages.senderId, otherId),
-            eq(messages.receiverId, myId),
-            eq(messages.isRead, false),
-            sql`${messages.groupId} IS NULL`,
-          )
-        );
-      } catch (err) {
-        logger.warn({ err, otherId, myId }, "markDMsRead failed");
+      // 打开会话标已读：翻页(before)不再刷；自己关了已读回执则不写，对方看不到「已读」
+      if (!input.before) {
+        try {
+          const [mine] = await db.select({ v: userSettings.readReceipts }).from(userSettings)
+            .where(eq(userSettings.userId, myId)).limit(1);
+          if (mine?.v !== false) {
+            await db.update(messages).set({ isRead: true }).where(
+              and(
+                eq(messages.senderId, otherId),
+                eq(messages.receiverId, myId),
+                eq(messages.isRead, false),
+                sql`${messages.groupId} IS NULL`,
+              )
+            );
+          }
+        } catch (err) {
+          logger.warn({ err, otherId, myId }, "markDMsRead failed");
+        }
       }
       return rows.reverse();
     }),
@@ -904,7 +910,12 @@ export const chatRouter = router({
 
   // Get members of a group
   getGroupMembers: protectedProcedure
-    .input(z.object({ groupId: z.number() }))
+    .input(z.object({
+      groupId: z.number(),
+      query: z.string().max(50).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      offset: z.number().int().min(0).max(5000).optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
@@ -913,7 +924,24 @@ export const chatRouter = router({
         .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
         .limit(1);
       if (!me) return [];
-      return db
+      const q = input.query?.trim() ?? "";
+      const limit = input.limit ?? (q ? 50 : 200);
+      const offset = input.offset ?? 0;
+      const where = [eq(groupMembers.groupId, input.groupId)];
+      if (q) {
+        const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+        const likeQ = `%${escaped}%`;
+        const idNum = /^\d+$/.test(q) ? Number(q) : NaN;
+        const nameMatch = or(
+          like(users.name, likeQ),
+          like(users.username, likeQ),
+          like(groupMembers.alias, likeQ),
+          ...(Number.isFinite(idNum) ? [eq(users.id, idNum)] : []),
+        );
+        if (nameMatch) where.push(nameMatch);
+      }
+      const now = new Date();
+      const rows = await db
         .select({
           id: users.id,
           username: users.username,
@@ -923,12 +951,21 @@ export const chatRouter = router({
           role: groupMembers.role,
           joinedAt: groupMembers.joinedAt,
           isBot: users.isBot, // 供前端把机器人/静默填充号从 @提及 候选里排除
+          muteId: groupMutes.id,
+          mutedUntil: groupMutes.expiresAt,
         })
         .from(groupMembers)
         .innerJoin(users, eq(groupMembers.userId, users.id))
-        .where(eq(groupMembers.groupId, input.groupId))
+        .leftJoin(groupMutes, and(
+          eq(groupMutes.groupId, groupMembers.groupId),
+          eq(groupMutes.userId, groupMembers.userId),
+          or(isNull(groupMutes.expiresAt), gt(groupMutes.expiresAt, now)),
+        ))
+        .where(and(...where))
         .orderBy(groupMembers.role, groupMembers.joinedAt)
-        .limit(200);
+        .limit(limit)
+        .offset(offset);
+      return rows.map(({ muteId, ...r }) => ({ ...r, isMuted: muteId != null }));
     }),
 
   // 设置/清除自己在某群的群昵称(仅本人,空字符串=清除回全局名)
@@ -949,7 +986,7 @@ export const chatRouter = router({
   // Get group info (name, description, memberCount, avatar)
   getGroupInfo: publicProcedure
     .input(z.object({ groupId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return null;
       // 只投影预览所需的安全字段:原来 select() 全字段(public 接口、无 gate),把私有群的
@@ -967,7 +1004,17 @@ export const chatRouter = router({
         .from(chatGroups)
         .where(eq(chatGroups.id, input.groupId))
         .limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      if (!row) return null;
+      // 登录成员带回自己的角色：管理员进群立刻能置顶/@所有人，不必先打开成员列表
+      let myRole: string | null = null;
+      if (ctx.user?.id) {
+        const [m] = await db.select({ role: groupMembers.role }).from(groupMembers)
+          .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
+          .limit(1);
+        myRole = m?.role ?? null;
+      }
+      return { ...row, myRole };
     }),
 
   // 我在某群的禁言态:客户端进群据此禁用输入框 + 顶部横幅提示,而非打字发出去才被后端拒
@@ -1570,7 +1617,12 @@ export const chatRouter = router({
     }),
 
   muteMember: protectedProcedure
-    .input(z.object({ groupId: z.number(), targetUserId: z.number(), durationHours: z.number().default(24) }))
+    .input(z.object({
+      groupId: z.number(),
+      targetUserId: z.number(),
+      durationHours: z.number().min(0).max(24 * 365).optional(),
+      durationMinutes: z.number().int().min(0).max(365 * 24 * 60).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
@@ -1583,7 +1635,10 @@ export const chatRouter = router({
       if (!mt[0]) throw new Error("User not in group");
       if (mt[0].role === "owner") throw new Error("不能禁言群主");
       if (actor[0].role === "admin" && mt[0].role === "admin") throw new Error("管理员不能禁言其他管理员");
-      const expiresAt = new Date(Date.now() + input.durationHours * 3600_000);
+      const minutes = input.durationMinutes !== undefined
+        ? input.durationMinutes
+        : Math.round((input.durationHours ?? 24) * 60);
+      const expiresAt = minutes <= 0 ? null : new Date(Date.now() + minutes * 60_000);
       // Upsert mute
       const existing = await db.select({ id: groupMutes.id }).from(groupMutes)
         .where(and(eq(groupMutes.groupId, input.groupId), eq(groupMutes.userId, input.targetUserId))).limit(1);
@@ -2062,6 +2117,14 @@ export const chatRouter = router({
       const groupName = groupInfo?.name ?? `Group #${input.groupId}`;
       const safeContent = sanitizeInput(input.content);
       const preview = safeContent.length > 60 ? safeContent.slice(0, 60) + "..." : safeContent;
+      try {
+        getSocketIO()?.to(`group:${input.groupId}`).emit("group_announcement", {
+          groupId: input.groupId,
+          content: safeContent,
+          deleted: false,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch { /* 房间广播失败不影响落库 */ }
       for (const member of members) {
         if (member.userId === ctx.user.id) continue;
         emitToUser(member.userId, "group_announcement", {
@@ -2086,6 +2149,14 @@ export const chatRouter = router({
       if (!actor[0] || (actor[0].role !== "owner" && actor[0].role !== "admin")) throw new Error("Not authorized");
       await db.delete(groupAnnouncements)
         .where(and(eq(groupAnnouncements.groupId, input.groupId), eq(groupAnnouncements.isPinned, true)));
+      try {
+        getSocketIO()?.to(`group:${input.groupId}`).emit("group_announcement", {
+          groupId: input.groupId,
+          content: "",
+          deleted: true,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch { /* 房间广播失败不影响删除 */ }
       return { ok: true };
     }),
 

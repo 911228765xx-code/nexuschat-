@@ -36,6 +36,18 @@ export async function hasBlocked(db: Db, blocker: number, blocked: number): Prom
   return !!r;
 }
 
+/** 是否可看对方完整主页（简介/动态/粉丝数）。关了「公开主页」时仅本人与好友可见。 */
+export async function canViewFullProfile(db: Db, viewerId: number | null | undefined, targetId: number): Promise<boolean> {
+  if (viewerId === targetId) return true;
+  try {
+    const [st] = await db.select({ v: userSettings.profileVisible }).from(userSettings)
+      .where(eq(userSettings.userId, targetId)).limit(1);
+    if (!st || st.v) return true;
+  } catch { return true; }
+  if (viewerId && await areFriends(db, viewerId, targetId)) return true;
+  return false;
+}
+
 /** 私信权限闸:任一方拉黑不可发;默认对所有人开放,仅当【接收方】开了「仅好友可私信我」才要求好友关系。
  *  产品拍板(2026-07-12):默认开放兼顾拉新(陌生人打招呼场景),想清净的用户自己开开关。 */
 export async function assertCanDM(db: Db, from: number, to: number): Promise<void> {

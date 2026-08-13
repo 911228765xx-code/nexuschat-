@@ -11,14 +11,13 @@ import { rateLimitWrite } from "../rateLimit";
 import { getDb } from "../db";
 import { calls, users, curationStakes } from "../../drizzle/schema";
 import { eq, and, desc, sql, count, gte } from "drizzle-orm";
-import { fetchTokenData } from "./research";
-import { sanitizeInput } from "../utils/sanitize";
 import { isReferralBound } from "../referralRewards";
 import { STAKE_ODDS, stakePayout } from "../callResolver";
+import { fetchCallSpotPrice } from "../callSpot";
+import { CALL_HORIZONS_MIN, CALL_LOCK_MINUTES, nextFullWindow } from "../callWindow";
 
-/** 允许的时间窗（分钟）：15分钟 / 1小时 / 4小时 / 1天
- *  存进 horizonHours 列（历史字段名）；新建注按分钟计，旧单的 resolveAt 已算好不受影响。 */
-const HORIZONS = [15, 60, 240, 1440] as const;
+/** 允许的时间窗（分钟）：5 / 15 / 30 / 60。存进 horizonHours 列（历史字段名）。 */
+const HORIZONS = CALL_HORIZONS_MIN;
 const BET_SYMBOLS = ["BTC", "ETH"] as const;
 const DAILY_CALL_LIMIT = 5;
 /** IT 下注单笔上下限 */
@@ -33,6 +32,7 @@ export const callsRouter = router({
     odds: STAKE_ODDS,
     symbols: [...BET_SYMBOLS],
     horizons: [...HORIZONS],
+    lockMinutes: CALL_LOCK_MINUTES,
     minStake: MIN_STAKE,
     maxStake: MAX_STAKE,
     dailyLimit: DAILY_CALL_LIMIT,
@@ -57,14 +57,14 @@ export const callsRouter = router({
 
       const ymd = ymdUtc();
       const symbol = input.tokenSymbol;
-      const token = await fetchTokenData(symbol);
-      const price = token?.price;
+      const price = await fetchCallSpotPrice(symbol);
       if (!price || price <= 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `暂时无法获取 ${symbol} 价格，请稍后重试` });
       }
 
-      // horizonHours 字段现表示分钟（15/60/240/1440）
-      const resolveAt = new Date(Date.now() + input.horizonHours * 60 * 1000);
+      // 押下一整根 K 线：开盘价对收盘价。现价只作展示参考。
+      const window = nextFullWindow(input.horizonHours);
+      const resolveAt = new Date(window.closeMs);
       const potentialWin = stakePayout(input.amount, "win");
 
       const callId = await db.transaction(async (tx) => {
@@ -112,6 +112,7 @@ export const callsRouter = router({
       return {
         callId,
         entryPrice: price,
+        windowOpenAt: new Date(window.openMs).toISOString(),
         resolveAt: resolveAt.toISOString(),
         amount: input.amount,
         odds: STAKE_ODDS,
