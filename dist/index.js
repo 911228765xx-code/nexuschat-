@@ -13751,42 +13751,103 @@ import { eq as eq34, and as and30, lte, sql as sql20 } from "drizzle-orm";
 
 // server/callSpot.ts
 var CG_ID = { BTC: "bitcoin", ETH: "ethereum" };
+var lastPx = /* @__PURE__ */ new Map();
+var BN_SYMS = "%5B%22BTCUSDT%22,%22ETHUSDT%22%5D";
+function toSym(pair) {
+  if (pair === "BTCUSDT") return "BTC";
+  if (pair === "ETHUSDT") return "ETH";
+  return null;
+}
 async function fetchCallLiveQuotes() {
-  const bn = await cachedFetch(
-    "call-quotes-bn",
-    "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22%5D",
-    8e3,
+  const live = await cachedFetch(
+    "call-quotes-px",
+    `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
+    1200,
     (res) => res.json()
   );
-  if (Array.isArray(bn)) {
-    const out2 = [];
-    for (const row of bn) {
-      const symbol = row.symbol === "BTCUSDT" ? "BTC" : row.symbol === "ETHUSDT" ? "ETH" : null;
-      const price = Number(row.lastPrice);
-      if (!symbol || !(price > 0)) continue;
-      const ch = Number(row.priceChangePercent);
-      out2.push({ symbol, price, change24h: Number.isFinite(ch) ? ch : null });
+  const chg = await cachedFetch(
+    "call-quotes-24h",
+    `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
+    2e4,
+    (res) => res.json()
+  );
+  const chgMap = /* @__PURE__ */ new Map();
+  if (Array.isArray(chg)) {
+    for (const row of chg) {
+      const s = toSym(row.symbol);
+      const p = Number(row.priceChangePercent);
+      if (s && Number.isFinite(p)) chgMap.set(s, p);
     }
-    if (out2.length >= 1) return out2;
   }
+  const fromBn = [];
+  if (Array.isArray(live)) {
+    for (const row of live) {
+      const symbol = toSym(row.symbol);
+      const price = Number(row.price);
+      if (!symbol || !(price > 0)) continue;
+      const prev = lastPx.get(symbol);
+      lastPx.set(symbol, price);
+      const delta = prev != null ? price - prev : 0;
+      fromBn.push({
+        symbol,
+        price,
+        change24h: chgMap.get(symbol) ?? null,
+        tick: delta > 1e-8 ? "up" : delta < -1e-8 ? "down" : "flat",
+        delta
+      });
+    }
+  }
+  if (fromBn.length >= 1) return fromBn;
   const cg = await cachedFetch(
     "call-quotes-cg",
     "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true",
-    TTL.prices,
+    8e3,
     (res) => res.json()
   );
   const out = [];
-  const btc = cg?.bitcoin?.usd;
-  const eth = cg?.ethereum?.usd;
-  if (typeof btc === "number" && btc > 0) {
-    const ch = cg?.bitcoin?.usd_24h_change;
-    out.push({ symbol: "BTC", price: btc, change24h: typeof ch === "number" ? ch : null });
-  }
-  if (typeof eth === "number" && eth > 0) {
-    const ch = cg?.ethereum?.usd_24h_change;
-    out.push({ symbol: "ETH", price: eth, change24h: typeof ch === "number" ? ch : null });
+  for (const [symbol, id] of [["BTC", "bitcoin"], ["ETH", "ethereum"]]) {
+    const price = cg?.[id]?.usd;
+    if (!(typeof price === "number" && price > 0)) continue;
+    const prev = lastPx.get(symbol);
+    lastPx.set(symbol, price);
+    const delta = prev != null ? price - prev : 0;
+    const ch = cg?.[id]?.usd_24h_change;
+    out.push({
+      symbol,
+      price,
+      change24h: typeof ch === "number" ? ch : null,
+      tick: delta > 1e-8 ? "up" : delta < -1e-8 ? "down" : "flat",
+      delta
+    });
   }
   return out;
+}
+function parseKlines(rows) {
+  if (!Array.isArray(rows)) return [];
+  const out = [];
+  for (const k of rows) {
+    if (!Array.isArray(k) || k.length < 5) continue;
+    const t3 = Number(k[0]), o = Number(k[1]), h = Number(k[2]), l = Number(k[3]), c = Number(k[4]);
+    if (t3 > 0 && o > 0 && h > 0 && l > 0 && c > 0) out.push({ t: t3, o, h, l, c });
+  }
+  return out;
+}
+async function fetchCallSparklines() {
+  const [btc, eth] = await Promise.all([
+    cachedFetch(
+      "call-spark-BTC",
+      "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=40",
+      4e3,
+      (res) => res.json()
+    ),
+    cachedFetch(
+      "call-spark-ETH",
+      "https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=40",
+      4e3,
+      (res) => res.json()
+    )
+  ]);
+  return { BTC: parseKlines(btc), ETH: parseKlines(eth) };
 }
 async function fetchCallSpotPrice(symbol) {
   const sym = symbol.toUpperCase();
@@ -14012,10 +14073,18 @@ var callsRouter = router({
     maxStake: MAX_STAKE,
     dailyLimit: DAILY_CALL_LIMIT
   })),
-  /** BTC/ETH 现价 + 24h 涨跌，给下注页和未结算单做数据对比。 */
+  /** BTC/ETH 现价 + 近 40 分钟 1m K 线。前端 1.5s 轮询，页面不刷新也跟着跳。 */
   quotes: publicProcedure.query(async () => {
-    const quotes = await fetchCallLiveQuotes();
-    return { quotes, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const [quotes, charts] = await Promise.all([fetchCallLiveQuotes(), fetchCallSparklines()]);
+    for (const q of quotes) {
+      const bars = charts[q.symbol];
+      if (!bars?.length) continue;
+      const last = bars[bars.length - 1];
+      last.c = q.price;
+      last.h = Math.max(last.h, q.price);
+      last.l = Math.min(last.l, q.price);
+    }
+    return { quotes, charts, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
   }),
   // ─── 用 IT 猜涨跌（主入口）────────────────────────────────────────────────
   placeBet: protectedProcedure.input(z24.object({

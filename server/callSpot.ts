@@ -6,46 +6,120 @@ import { cachedFetch, TTL } from "./utils/coinGeckoCache";
 
 const CG_ID: Record<string, string> = { BTC: "bitcoin", ETH: "ethereum" };
 
-export type CallQuote = { symbol: "BTC" | "ETH"; price: number; change24h: number | null };
+export type CallQuote = {
+  symbol: "BTC" | "ETH";
+  price: number;
+  change24h: number | null;
+  tick?: "up" | "down" | "flat";
+  delta?: number;
+};
+export type CallCandle = { t: number; o: number; h: number; l: number; c: number };
 
-/** 猜涨跌页实时对比用：优先 Binance 24h ticker（约 8s 缓存），失败再走 CoinGecko。 */
+const lastPx = new Map<string, number>();
+const BN_SYMS = "%5B%22BTCUSDT%22,%22ETHUSDT%22%5D";
+
+function toSym(pair?: string): "BTC" | "ETH" | null {
+  if (pair === "BTCUSDT") return "BTC";
+  if (pair === "ETHUSDT") return "ETH";
+  return null;
+}
+
+/** 现价走 Binance ticker/price（约 1.2s 缓存），24h 涨跌单独缓 20s。页面不刷新也能跳。 */
 export async function fetchCallLiveQuotes(): Promise<CallQuote[]> {
-  const bn = await cachedFetch<Array<{ symbol?: string; lastPrice?: string; priceChangePercent?: string }>>(
-    "call-quotes-bn",
-    "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22%5D",
-    8_000,
+  const live = await cachedFetch<Array<{ symbol?: string; price?: string }>>(
+    "call-quotes-px",
+    `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
+    1_200,
     (res) => res.json(),
   );
-  if (Array.isArray(bn)) {
-    const out: CallQuote[] = [];
-    for (const row of bn) {
-      const symbol = row.symbol === "BTCUSDT" ? "BTC" : row.symbol === "ETHUSDT" ? "ETH" : null;
-      const price = Number(row.lastPrice);
-      if (!symbol || !(price > 0)) continue;
-      const ch = Number(row.priceChangePercent);
-      out.push({ symbol, price, change24h: Number.isFinite(ch) ? ch : null });
+  const chg = await cachedFetch<Array<{ symbol?: string; priceChangePercent?: string }>>(
+    "call-quotes-24h",
+    `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
+    20_000,
+    (res) => res.json(),
+  );
+  const chgMap = new Map<string, number>();
+  if (Array.isArray(chg)) {
+    for (const row of chg) {
+      const s = toSym(row.symbol);
+      const p = Number(row.priceChangePercent);
+      if (s && Number.isFinite(p)) chgMap.set(s, p);
     }
-    if (out.length >= 1) return out;
   }
+
+  const fromBn: CallQuote[] = [];
+  if (Array.isArray(live)) {
+    for (const row of live) {
+      const symbol = toSym(row.symbol);
+      const price = Number(row.price);
+      if (!symbol || !(price > 0)) continue;
+      const prev = lastPx.get(symbol);
+      lastPx.set(symbol, price);
+      const delta = prev != null ? price - prev : 0;
+      fromBn.push({
+        symbol,
+        price,
+        change24h: chgMap.get(symbol) ?? null,
+        tick: delta > 1e-8 ? "up" : delta < -1e-8 ? "down" : "flat",
+        delta,
+      });
+    }
+  }
+  if (fromBn.length >= 1) return fromBn;
 
   const cg = await cachedFetch<Record<string, { usd?: number; usd_24h_change?: number }>>(
     "call-quotes-cg",
     "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true",
-    TTL.prices,
+    8_000,
     (res) => res.json(),
   );
   const out: CallQuote[] = [];
-  const btc = cg?.bitcoin?.usd;
-  const eth = cg?.ethereum?.usd;
-  if (typeof btc === "number" && btc > 0) {
-    const ch = cg?.bitcoin?.usd_24h_change;
-    out.push({ symbol: "BTC", price: btc, change24h: typeof ch === "number" ? ch : null });
-  }
-  if (typeof eth === "number" && eth > 0) {
-    const ch = cg?.ethereum?.usd_24h_change;
-    out.push({ symbol: "ETH", price: eth, change24h: typeof ch === "number" ? ch : null });
+  for (const [symbol, id] of [["BTC", "bitcoin"], ["ETH", "ethereum"]] as const) {
+    const price = cg?.[id]?.usd;
+    if (!(typeof price === "number" && price > 0)) continue;
+    const prev = lastPx.get(symbol);
+    lastPx.set(symbol, price);
+    const delta = prev != null ? price - prev : 0;
+    const ch = cg?.[id]?.usd_24h_change;
+    out.push({
+      symbol,
+      price,
+      change24h: typeof ch === "number" ? ch : null,
+      tick: delta > 1e-8 ? "up" : delta < -1e-8 ? "down" : "flat",
+      delta,
+    });
   }
   return out;
+}
+
+function parseKlines(rows: unknown): CallCandle[] {
+  if (!Array.isArray(rows)) return [];
+  const out: CallCandle[] = [];
+  for (const k of rows) {
+    if (!Array.isArray(k) || k.length < 5) continue;
+    const t = Number(k[0]), o = Number(k[1]), h = Number(k[2]), l = Number(k[3]), c = Number(k[4]);
+    if (t > 0 && o > 0 && h > 0 && l > 0 && c > 0) out.push({ t, o, h, l, c });
+  }
+  return out;
+}
+
+/** 近 40 根 1 分钟 K 线，给下注页画走势。 */
+export async function fetchCallSparklines(): Promise<Record<"BTC" | "ETH", CallCandle[]>> {
+  const [btc, eth] = await Promise.all([
+    cachedFetch<unknown>(
+      "call-spark-BTC",
+      "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=40",
+      4_000,
+      (res) => res.json(),
+    ),
+    cachedFetch<unknown>(
+      "call-spark-ETH",
+      "https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=40",
+      4_000,
+      (res) => res.json(),
+    ),
+  ]);
+  return { BTC: parseKlines(btc), ETH: parseKlines(eth) };
 }
 
 export async function fetchCallSpotPrice(symbol: string): Promise<number | null> {
