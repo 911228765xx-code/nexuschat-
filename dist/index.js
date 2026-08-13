@@ -4252,17 +4252,23 @@ async function _completeTask(userId, taskType, db) {
         }
       }
     }
+    let newStreak = null;
     if (taskType === "daily_login") {
       const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq11(users.id, userId)).limit(1);
       const yesterday = ymdUtc3(new Date(Date.now() - 864e5));
-      const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
+      newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
-    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    if (granted > 0) {
+      if (taskType === "daily_login" && newStreak != null) {
+        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
+      }
+      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    }
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
+  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 async function awardTaskEvent(db, userId, taskType) {
@@ -4346,7 +4352,7 @@ var walletRouter = router({
     const [taken] = await db.select({ id: users.id }).from(users).where(sql7`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
     if (taken) throw new Error("\u8BE5\u94B1\u5305\u5730\u5740\u5DF2\u88AB\u5176\u4ED6\u8D26\u53F7\u7ED1\u5B9A");
     await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq12(users.id, ctx.user.id));
-    void awardTaskEvent(db, ctx.user.id, "connect_wallet");
+    await awardTaskEvent(db, ctx.user.id, "connect_wallet");
     return { success: true };
   }),
   // 解绑钱包（清空地址；TGE/空投领取需有效绑定，届时再校验所有权）
@@ -5976,7 +5982,7 @@ var chatRouter = router({
     }).where(eq17(chatGroups.id, input.groupId));
     await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
-    void awardTaskEvent(db, ctx.user.id, "join_group_daily");
+    await awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { success: true, alreadyMember: false };
   }),
   /** 从好友列表拉人进群（微信式多选）。须为群成员；只能拉自己的好友。 */
@@ -6288,9 +6294,9 @@ var chatRouter = router({
     }
     if (input.messageType === "text") {
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
-      void awardTaskEvent(db, ctx.user.id, "first_message");
+      await awardTaskEvent(db, ctx.user.id, "first_message");
     }
-    void awardTaskEvent(db, ctx.user.id, "chat_daily");
+    await awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── DM: Send a direct message ─────────────────────────────────────────────
@@ -6343,8 +6349,8 @@ var chatRouter = router({
       hasTextContent ? sanitizeInput(input.content, 5e3) : "[\u5A92\u4F53\u6D88\u606F]"
     );
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-    if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
-    void awardTaskEvent(db, ctx.user.id, "chat_daily");
+    if (input.messageType === "text") await awardTaskEvent(db, ctx.user.id, "first_message");
+    await awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
@@ -7088,7 +7094,7 @@ var chatRouter = router({
         logger_default.warn({ err }, "welcome bot failed");
       }
     })();
-    void awardTaskEvent(db, ctx.user.id, "join_group_daily");
+    await awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { groupId: l.groupId, alreadyMember: false };
   }),
   getGroupInviteLinks: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
@@ -7402,7 +7408,7 @@ var chatRouter = router({
           memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
         }).where(eq17(chatGroups.id, req.groupId));
         await initReadCursor(db, req.groupId, req.userId);
-        void awardTaskEvent(db, req.userId, "join_group_daily");
+        await awardTaskEvent(db, req.userId, "join_group_daily");
       }
     }
     return { ok: true };
@@ -8321,8 +8327,8 @@ var researchRouter = router({
       riskLevel,
       nxcCost: input.mode === "quick" ? 5 : 10
     });
-    void awardTaskEvent(db, ctx.user.id, "first_research");
-    void awardTaskEvent(db, ctx.user.id, "research_daily");
+    await awardTaskEvent(db, ctx.user.id, "first_research");
+    await awardTaskEvent(db, ctx.user.id, "research_daily");
     return {
       reportId: result.insertId,
       reportContent,
@@ -8630,7 +8636,7 @@ var postsRouter = router({
       mediaThumbs: input.mediaThumbs ? JSON.stringify(input.mediaThumbs) : void 0,
       tags: input.tags ? JSON.stringify(input.tags.map((t3) => sanitizeInput(t3, 30))) : void 0
     });
-    void awardTaskEvent(db, ctx.user.id, "first_post");
+    await awardTaskEvent(db, ctx.user.id, "first_post");
     {
       const todayStart = /* @__PURE__ */ new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
@@ -8640,7 +8646,7 @@ var postsRouter = router({
         gt4(posts.createdAt, todayStart),
         sql11`${posts.id} != ${result.insertId}`
       )).limit(1);
-      if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
+      if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
     }
     return { postId: result.insertId };
   }),
@@ -8665,6 +8671,7 @@ var postsRouter = router({
     {
       const post = { authorId: result.authorId };
       if (post && post.authorId !== ctx.user.id) {
+        await awardTaskEvent(db, ctx.user.id, "like_given");
         const [seen] = await db.select({ id: notifications.id }).from(notifications).where(and16(
           eq19(notifications.userId, post.authorId),
           eq19(notifications.fromUserId, ctx.user.id),
@@ -8672,8 +8679,7 @@ var postsRouter = router({
           eq19(notifications.type, "like")
         )).limit(1);
         if (!seen) {
-          void awardTaskEvent(db, ctx.user.id, "like_given");
-          void awardTaskEvent(db, post.authorId, "like_received");
+          await awardTaskEvent(db, post.authorId, "like_received");
           const [liker] = await db.select({ name: users.name, avatar: users.avatar }).from(users).where(eq19(users.id, ctx.user.id)).limit(1);
           await createNotification({
             db,
@@ -8755,7 +8761,7 @@ var postsRouter = router({
       content: sanitizeInput(input.content, 1e3)
     });
     if (input.content.trim().length >= 5) {
-      void awardTaskEvent(db, ctx.user.id, "comment_made");
+      await awardTaskEvent(db, ctx.user.id, "comment_made");
     }
     await db.update(posts).set({ commentCount: sql11`commentCount + 1` }).where(eq19(posts.id, input.postId));
     const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
@@ -9472,7 +9478,7 @@ var followRouter = router({
       { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar ?? null },
       input.targetUserId
     );
-    void awardTaskEvent(db, ctx.user.id, "follow_daily");
+    await awardTaskEvent(db, ctx.user.id, "follow_daily");
     return { success: true, following: true };
   }),
   // Unfollow a user
@@ -9986,7 +9992,7 @@ var watchlistRouter = router({
       tokenSymbol: input.tokenSymbol,
       tokenName: input.tokenName
     });
-    void awardTaskEvent(db, ctx.user.id, "watchlist_daily");
+    await awardTaskEvent(db, ctx.user.id, "watchlist_daily");
     return { success: true, alreadyExists: false };
   }),
   // ─── Remove token from watchlist ─────────────────────────────────────────────
@@ -14304,7 +14310,7 @@ var callsRouter = router({
       });
       return insertId;
     });
-    void awardTaskEvent(db, ctx.user.id, "predict_daily");
+    await awardTaskEvent(db, ctx.user.id, "predict_daily");
     return {
       callId,
       entryPrice: price,

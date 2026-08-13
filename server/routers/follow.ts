@@ -64,7 +64,7 @@ export const followRouter = router({
         { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar ?? null },
         input.targetUserId
       );
-      void awardTaskEvent(db, ctx.user.id, "follow_daily");
+      await awardTaskEvent(db, ctx.user.id, "follow_daily");
 
       return { success: true, following: true };
     }),

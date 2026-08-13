@@ -53,7 +53,7 @@ export const watchlistRouter = router({
         tokenSymbol: input.tokenSymbol,
         tokenName: input.tokenName,
       });
-      void awardTaskEvent(db, ctx.user.id, "watchlist_daily");
+      await awardTaskEvent(db, ctx.user.id, "watchlist_daily");
       return { success: true, alreadyExists: false };
     }),
 
