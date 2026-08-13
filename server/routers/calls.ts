@@ -13,7 +13,7 @@ import { calls, users, curationStakes } from "../../drizzle/schema";
 import { eq, and, desc, sql, count, gte } from "drizzle-orm";
 import { isReferralBound } from "../referralRewards";
 import { STAKE_ODDS, stakePayout } from "../callResolver";
-import { fetchCallSpotPrice, fetchCallLiveQuotes } from "../callSpot";
+import { fetchCallSpotPrice, fetchCallLiveQuotes, fetchCallSparklines } from "../callSpot";
 import { CALL_HORIZONS_MIN, CALL_LOCK_MINUTES, nextFullWindow } from "../callWindow";
 
 /** 允许的时间窗（分钟）：5 / 15 / 30 / 60。存进 horizonHours 列（历史字段名）。 */
@@ -38,10 +38,18 @@ export const callsRouter = router({
     dailyLimit: DAILY_CALL_LIMIT,
   })),
 
-  /** BTC/ETH 现价 + 24h 涨跌，给下注页和未结算单做数据对比。 */
+  /** BTC/ETH 现价 + 近 40 分钟 1m K 线。前端 1.5s 轮询，页面不刷新也跟着跳。 */
   quotes: publicProcedure.query(async () => {
-    const quotes = await fetchCallLiveQuotes();
-    return { quotes, updatedAt: new Date().toISOString() };
+    const [quotes, charts] = await Promise.all([fetchCallLiveQuotes(), fetchCallSparklines()]);
+    for (const q of quotes) {
+      const bars = charts[q.symbol];
+      if (!bars?.length) continue;
+      const last = bars[bars.length - 1];
+      last.c = q.price;
+      last.h = Math.max(last.h, q.price);
+      last.l = Math.min(last.l, q.price);
+    }
+    return { quotes, charts, updatedAt: new Date().toISOString() };
   }),
 
   // ─── 用 IT 猜涨跌（主入口）────────────────────────────────────────────────
