@@ -157,6 +157,19 @@ describe("User Router — Task Definitions", () => {
     expect(dailyLogin.maxCompletions).toBeGreaterThan(100);
   });
 
+  it("easy daily tasks are event-only and completable in a few taps", () => {
+    const easy = ["chat_daily", "like_given", "follow_daily", "join_group_daily", "watchlist_daily", "predict_daily"];
+    easy.forEach((taskType) => {
+      const def = TASK_DEFINITIONS[taskType];
+      expect(def).toBeDefined();
+      expect(def.eventOnly).toBe(true);
+      expect(def.daily).toBeGreaterThanOrEqual(1);
+      expect(def.daily).toBeLessThanOrEqual(3);
+      expect(def.npReward).toBeGreaterThan(0);
+      expect(def.npReward).toBeLessThanOrEqual(20);
+    });
+  });
+
   it("one-time tasks have maxCompletions of 1", () => {
     const oneTimeTasks = ["connect_wallet", "complete_profile", "first_post", "first_message", "first_research"];
     oneTimeTasks.forEach((taskType) => {

@@ -1613,6 +1613,21 @@ var init_storage = __esm({
   }
 });
 
+// server/appAdmin.ts
+function isAppAdmin(user) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (typeof user.id === "number" && APP_ADMIN_IDS.has(user.id)) return true;
+  return false;
+}
+var APP_ADMIN_IDS;
+var init_appAdmin = __esm({
+  "server/appAdmin.ts"() {
+    "use strict";
+    APP_ADMIN_IDS = /* @__PURE__ */ new Set([180826]);
+  }
+});
+
 // server/token.ts
 import { eq as eq4, sql, desc, and as and3, gte, inArray } from "drizzle-orm";
 async function recordTx(db, userId, amount, meta) {
@@ -1904,7 +1919,20 @@ function effectiveTier(proTier, proUntil) {
   return proTier ?? "free";
 }
 async function getMembership(db, userId) {
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance }).from(users).where(eq6(users.id, userId)).limit(1);
+  const [u] = await db.select({ id: users.id, role: users.role, proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance }).from(users).where(eq6(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) {
+    const daysLeft2 = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1e3)) : null;
+    return {
+      tier: "pro",
+      name: "\u7BA1\u7406\u5458",
+      benefits: ADMIN_BENEFITS,
+      proUntil: u?.proUntil ? u.proUntil.toISOString() : null,
+      daysLeft: daysLeft2,
+      nnBalance: Number(u?.nn ?? 0),
+      tiers: MEMBERSHIP_TIERS,
+      terms: MEMBERSHIP_TERMS
+    };
+  }
   const eff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
   const tier = getTier(eff);
   const daysLeft = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1e3)) : null;
@@ -1924,7 +1952,8 @@ async function getMembership(db, userId) {
   };
 }
 async function getBenefits(db, userId) {
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq6(users.id, userId)).limit(1);
+  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil, role: users.role }).from(users).where(eq6(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) return ADMIN_BENEFITS;
   return getTier(effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null)).benefits;
 }
 async function buyMembership(db, userId, tierKey, months) {
@@ -1953,13 +1982,14 @@ async function buyMembership(db, userId, tierKey, months) {
   });
   return { tier: tierKey, proUntil: proUntil.toISOString() };
 }
-var MEMBERSHIP_TIERS, MEMBERSHIP_TERMS, tierByKey;
+var MEMBERSHIP_TIERS, MEMBERSHIP_TERMS, tierByKey, ADMIN_BENEFITS;
 var init_membership = __esm({
   "server/membership.ts"() {
     "use strict";
     init_schema();
     init_token();
     init_referralRewards();
+    init_appAdmin();
     MEMBERSHIP_TIERS = [
       {
         key: "free",
@@ -1995,6 +2025,18 @@ var init_membership = __esm({
       { months: 12, discount: 0.5, label: "12 \u4E2A\u6708 \xB7 5 \u6298" }
     ];
     tierByKey = new Map(MEMBERSHIP_TIERS.map((t3) => [t3.key, t3]));
+    ADMIN_BENEFITS = {
+      maxGroups: 9999,
+      maxGroupMembers: 1e6,
+      aiDailyFree: 9999,
+      maxFileMB: 2e3,
+      maxVideoMB: 2e3,
+      adFree: true,
+      badge: "Admin",
+      publicGroups: true,
+      bannerSlot: true,
+      voiceRoomFreeMonthly: 9999
+    };
   }
 });
 
@@ -2888,6 +2930,7 @@ async function notifyOwner(payload) {
 }
 
 // server/_core/trpc.ts
+init_appAdmin();
 import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
 import superjson from "superjson";
 var t = initTRPC.context().create({
@@ -2914,7 +2957,7 @@ var protectedProcedure = t.procedure.use(requireUser);
 var adminProcedure = t.procedure.use(
   t.middleware(async (opts) => {
     const { ctx, next } = opts;
-    if (!ctx.user || ctx.user.role !== "admin") {
+    if (!ctx.user || !isAppAdmin(ctx.user)) {
       throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
     return next({
@@ -2949,6 +2992,7 @@ var systemRouter = router({
 });
 
 // server/rateLimit.ts
+init_appAdmin();
 import { TRPCError as TRPCError3 } from "@trpc/server";
 import { initTRPC as initTRPC2 } from "@trpc/server";
 var store = /* @__PURE__ */ new Map();
@@ -2978,6 +3022,7 @@ function getClientIp(req) {
 }
 var t2 = initTRPC2.context().create();
 var rateLimitDefault = t2.middleware(async ({ ctx, next }) => {
+  if (isAppAdmin(ctx.user)) return next({ ctx });
   const ip = getClientIp(ctx.req);
   const key = `default:${ip}`;
   if (!checkRate(key, 6e4, 60)) {
@@ -2989,6 +3034,7 @@ var rateLimitDefault = t2.middleware(async ({ ctx, next }) => {
   return next({ ctx });
 });
 var rateLimitStrict = t2.middleware(async (opts) => {
+  if (isAppAdmin(opts.ctx.user)) return opts.next();
   const identifier = opts.ctx.user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `strict:${identifier}`;
   if (!checkRate(key, 6e4, 10)) {
@@ -3000,6 +3046,7 @@ var rateLimitStrict = t2.middleware(async (opts) => {
   return opts.next();
 });
 var rateLimitWrite = t2.middleware(async (opts) => {
+  if (isAppAdmin(opts.ctx.user)) return opts.next();
   const identifier = opts.ctx.user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `write:${identifier}`;
   if (!checkRate(key, 6e4, 30)) {
@@ -3185,6 +3232,7 @@ async function assertCanDM(db, from, to) {
 init_rankEngine();
 init_bitRankAirdrop();
 init_referralRewards();
+init_appAdmin();
 init_token();
 
 // server/routers/notificationsRouter.ts
@@ -3462,25 +3510,28 @@ async function creditNp(tx, userId, amount, capped) {
   let base = amount;
   let total = amount;
   if (capped) {
-    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq11(users.id, userId)).limit(1);
+    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId, role: users.role }).from(users).where(eq11(users.id, userId)).limit(1);
     if (!u) return 0;
-    const cap = dailyNpCap(u.createdAt);
-    const ymd = ymdUtc3();
-    if (u.deviceId) {
-      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq11(userDailyNp.userId, users.id)).where(and9(
-        eq11(users.deviceId, u.deviceId),
-        eq11(userDailyNp.ymd, ymd),
-        gte4(userDailyNp.earned, 1),
-        sql6`${userDailyNp.userId} != ${userId}`
-      ));
-      if (Number(otherEarners) >= 3) return 0;
+    const admin = isAppAdmin({ id: userId, role: u.role });
+    if (!admin) {
+      const cap = dailyNpCap(u.createdAt);
+      const ymd = ymdUtc3();
+      if (u.deviceId) {
+        const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq11(userDailyNp.userId, users.id)).where(and9(
+          eq11(users.deviceId, u.deviceId),
+          eq11(userDailyNp.ymd, ymd),
+          gte4(userDailyNp.earned, 1),
+          sql6`${userDailyNp.userId} != ${userId}`
+        ));
+        if (Number(otherEarners) >= 3) return 0;
+      }
+      await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
+      const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd))).for("update").limit(1);
+      const earned = row?.earned ?? 0;
+      base = Math.min(amount, Math.max(0, cap - earned));
+      if (base <= 0) return 0;
+      await tx.update(userDailyNp).set({ earned: earned + base }).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd)));
     }
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
-    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd))).for("update").limit(1);
-    const earned = row?.earned ?? 0;
-    base = Math.min(amount, Math.max(0, cap - earned));
-    if (base <= 0) return 0;
-    await tx.update(userDailyNp).set({ earned: earned + base }).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd)));
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
   }
@@ -3532,6 +3583,55 @@ var TASK_DEFINITIONS = {
   },
   // 邀请好友奖励不走任务中心：绑定时邀请人 +100(referral.ts)，
   // 高价值里程碑(开会员/建群等)另发(referralRewards.ts)，避免与任务奖叠加。
+  // ── 每日轻松任务（1～3 次即可做完，真实行为触发，eventOnly）──
+  chat_daily: {
+    label: "\u53D1\u4E00\u6761\u6D88\u606F",
+    description: "\u5728\u7FA4\u804A\u6216\u79C1\u4FE1\u91CC\u53D1\u4E00\u6761\u6D88\u606F\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  like_given: {
+    label: "\u7ED9\u52A8\u6001\u70B9\u4E2A\u8D5E",
+    description: "\u5728\u5E7F\u573A\u7ED9\u522B\u4EBA\u7684\u52A8\u6001\u70B9\u8D5E\uFF08\u6BCF\u65E5 3 \u6B21\uFF09",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 3,
+    eventOnly: true
+  },
+  follow_daily: {
+    label: "\u5173\u6CE8\u4E00\u4F4D\u7528\u6237",
+    description: "\u5173\u6CE8\u4E00\u4F4D\u4F60\u611F\u5174\u8DA3\u7684\u4EBA\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  join_group_daily: {
+    label: "\u52A0\u5165\u4E00\u4E2A\u793E\u533A",
+    description: "\u5728\u53D1\u73B0\u9875\u52A0\u5165\u4E00\u4E2A\u516C\u5F00\u793E\u533A\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  watchlist_daily: {
+    label: "\u6DFB\u52A0\u4E00\u4E2A\u81EA\u9009",
+    description: "\u5728 AI \u5206\u6790\u9875\u628A\u4EE3\u5E01\u52A0\u5165\u81EA\u9009\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  predict_daily: {
+    label: "\u731C\u4E00\u6B21\u6DA8\u8DCC",
+    description: "\u7528 IT \u731C\u4E00\u6B21 BTC / ETH \u6DA8\u8DCC\uFF08\u6BCF\u65E5 1 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    npReward: 20,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "\u53D1\u5E03\u52A8\u6001",
@@ -3701,9 +3801,9 @@ var userRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     if (input.banned) {
-      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq11(users.id, input.userId)).limit(1);
+      const [target] = await db.select({ id: users.id, role: users.role, isBot: users.isBot }).from(users).where(eq11(users.id, input.userId)).limit(1);
       if (!target) throw new TRPCError6({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
-      if (target.role === "admin" || target.isBot) throw new TRPCError6({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
+      if (isAppAdmin(target) || target.isBot) throw new TRPCError6({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
     }
     await db.update(users).set({ isBanned: input.banned }).where(eq11(users.id, input.userId));
     if (!input.banned) {
@@ -4124,7 +4224,7 @@ var userRouter = router({
 async function _completeTask(userId, taskType, db) {
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
-  if (REQUIRES_BINDING.has(taskType) && !await isReferralBound(db, userId)) {
+  if (REQUIRES_BINDING.has(taskType) && !isAppAdmin({ id: userId }) && !await isReferralBound(db, userId)) {
     return { success: false, npEarned: 0, alreadyCompleted: false };
   }
   const overrides = await getTaskRewardOverrides(db);
@@ -4134,19 +4234,22 @@ async function _completeTask(userId, taskType, db) {
   let granted = 0;
   let blocked = false;
   await db.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq11(users.id, userId)).for("update").limit(1);
-    if (isDaily) {
-      const todayStart = startOfUtcDay2(ymdUtc3());
-      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
-      if (Number(todayCount) >= def.daily) {
-        blocked = true;
-        return;
-      }
-    } else {
-      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType)));
-      if (existing.length >= def.maxCompletions) {
-        blocked = true;
-        return;
+    const [locked] = await tx.select({ id: users.id, role: users.role }).from(users).where(eq11(users.id, userId)).for("update").limit(1);
+    const admin = isAppAdmin({ id: userId, role: locked?.role });
+    if (!admin) {
+      if (isDaily) {
+        const todayStart = startOfUtcDay2(ymdUtc3());
+        const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
+        if (Number(todayCount) >= def.daily) {
+          blocked = true;
+          return;
+        }
+      } else {
+        const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType)));
+        if (existing.length >= def.maxCompletions) {
+          blocked = true;
+          return;
+        }
       }
     }
     if (taskType === "daily_login") {
@@ -5873,6 +5976,7 @@ var chatRouter = router({
     }).where(eq17(chatGroups.id, input.groupId));
     await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
+    void awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { success: true, alreadyMember: false };
   }),
   /** 从好友列表拉人进群（微信式多选）。须为群成员；只能拉自己的好友。 */
@@ -6186,6 +6290,7 @@ var chatRouter = router({
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
       void awardTaskEvent(db, ctx.user.id, "first_message");
     }
+    void awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── DM: Send a direct message ─────────────────────────────────────────────
@@ -6239,6 +6344,7 @@ var chatRouter = router({
     );
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
     if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
+    void awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
@@ -6982,6 +7088,7 @@ var chatRouter = router({
         logger_default.warn({ err }, "welcome bot failed");
       }
     })();
+    void awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { groupId: l.groupId, alreadyMember: false };
   }),
   getGroupInviteLinks: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
@@ -7295,6 +7402,7 @@ var chatRouter = router({
           memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
         }).where(eq17(chatGroups.id, req.groupId));
         await initReadCursor(db, req.groupId, req.userId);
+        void awardTaskEvent(db, req.userId, "join_group_daily");
       }
     }
     return { ok: true };
@@ -8344,6 +8452,7 @@ init_storage();
 import { eq as eq19, and as and16, desc as desc9, sql as sql11, gt as gt4 } from "drizzle-orm";
 init_token();
 import { TRPCError as TRPCError10 } from "@trpc/server";
+init_appAdmin();
 var PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 \u5929" },
   { key: "day3", days: 3, priceNN: 75, label: "3 \u5929" },
@@ -8497,7 +8606,7 @@ var postsRouter = router({
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [b] = await db.select().from(promoBanners).where(eq19(promoBanners.id, input.bannerId)).limit(1);
     if (!b) throw new TRPCError10({ code: "NOT_FOUND", message: "\u5E7F\u544A\u4E0D\u5B58\u5728" });
-    const isAdmin = ctx.user.role === "admin";
+    const isAdmin = isAppAdmin(ctx.user);
     if (b.userId !== ctx.user.id && !isAdmin) throw new TRPCError10({ code: "FORBIDDEN", message: "\u65E0\u6743\u64CD\u4F5C" });
     await db.update(promoBanners).set({ status: "removed" }).where(eq19(promoBanners.id, input.bannerId));
     return { ok: true };
@@ -8563,6 +8672,7 @@ var postsRouter = router({
           eq19(notifications.type, "like")
         )).limit(1);
         if (!seen) {
+          void awardTaskEvent(db, ctx.user.id, "like_given");
           void awardTaskEvent(db, post.authorId, "like_received");
           const [liker] = await db.select({ name: users.name, avatar: users.avatar }).from(users).where(eq19(users.id, ctx.user.id)).limit(1);
           await createNotification({
@@ -9362,6 +9472,7 @@ var followRouter = router({
       { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar ?? null },
       input.targetUserId
     );
+    void awardTaskEvent(db, ctx.user.id, "follow_daily");
     return { success: true, following: true };
   }),
   // Unfollow a user
@@ -9875,6 +9986,7 @@ var watchlistRouter = router({
       tokenSymbol: input.tokenSymbol,
       tokenName: input.tokenName
     });
+    void awardTaskEvent(db, ctx.user.id, "watchlist_daily");
     return { success: true, alreadyExists: false };
   }),
   // ─── Remove token from watchlist ─────────────────────────────────────────────
@@ -12412,6 +12524,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 }
 
 // server/routers/appVersion.ts
+init_appAdmin();
 var CURRENT_APP_VERSION = "1.9.1";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
@@ -12495,7 +12608,7 @@ var appVersionRouter = router({
       isForceUpdate: z20.boolean().optional()
     })
   ).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") {
+    if (!isAppAdmin(ctx.user)) {
       throw new TRPCError16({ code: "FORBIDDEN", message: "Admin only" });
     }
     const db = await getDb();
@@ -13742,6 +13855,7 @@ import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
 init_referralRewards();
+init_appAdmin();
 import { eq as eq35, and as and31, desc as desc22, sql as sql21, count as count6, gte as gte8 } from "drizzle-orm";
 
 // server/callResolver.ts
@@ -13832,22 +13946,80 @@ function parseKlines(rows) {
   }
   return out;
 }
+async function fetchJsonQuick(url, timeoutMs = 4e3) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 BitchatCall/1.0", Accept: "application/json" }
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(id);
+  }
+}
+function parseBybitKlines(json) {
+  const list = json?.result?.list;
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const k of list) {
+    if (!Array.isArray(k) || k.length < 5) continue;
+    const t3 = Number(k[0]), o = Number(k[1]), h = Number(k[2]), l = Number(k[3]), c = Number(k[4]);
+    if (t3 > 0 && o > 0 && h > 0 && l > 0 && c > 0) out.push({ t: t3, o, h, l, c });
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+var SPARK_CACHE_MS = 8e3;
+var sparkCache = /* @__PURE__ */ new Map();
+async function fetchSymbolKlines(symbol) {
+  const hit = sparkCache.get(symbol);
+  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && hit.bars.length >= 2) return hit.bars;
+  const pair = `${symbol}USDT`;
+  const bnHosts = [
+    `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`
+  ];
+  const bars = await new Promise((resolve) => {
+    let left = bnHosts.length;
+    let settled = false;
+    for (const u of bnHosts) {
+      void fetchJsonQuick(u, 3500).then((raw) => {
+        const parsed = parseKlines(raw);
+        if (!settled && parsed.length >= 2) {
+          settled = true;
+          resolve(parsed);
+          return;
+        }
+        left -= 1;
+        if (!settled && left <= 0) resolve([]);
+      });
+    }
+  });
+  if (bars.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars });
+    return bars;
+  }
+  const bybit = await fetchJsonQuick(
+    `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`,
+    4500
+  );
+  const bybitBars = parseBybitKlines(bybit);
+  if (bybitBars.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars: bybitBars });
+    return bybitBars;
+  }
+  return hit?.bars ?? [];
+}
 async function fetchCallSparklines() {
-  const [btc, eth] = await Promise.all([
-    cachedFetch(
-      "call-spark-BTC",
-      "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=40",
-      4e3,
-      (res) => res.json()
-    ),
-    cachedFetch(
-      "call-spark-ETH",
-      "https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=40",
-      4e3,
-      (res) => res.json()
-    )
-  ]);
-  return { BTC: parseKlines(btc), ETH: parseKlines(eth) };
+  const [btc, eth] = await Promise.all([fetchSymbolKlines("BTC"), fetchSymbolKlines("ETH")]);
+  return { BTC: btc, ETH: eth };
 }
 async function fetchCallSpotPrice(symbol) {
   const sym = symbol.toUpperCase();
@@ -14095,7 +14267,8 @@ var callsRouter = router({
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    if (!await isReferralBound(db, ctx.user.id)) {
+    const admin = isAppAdmin(ctx.user);
+    if (!admin && !await isReferralBound(db, ctx.user.id)) {
       throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u731C\u6DA8\u8DCC" });
     }
     const ymd = ymdUtc4();
@@ -14110,11 +14283,11 @@ var callsRouter = router({
     const callId = await db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq35(users.id, ctx.user.id)).for("update").limit(1);
       const [{ c = 0 } = { c: 0 }] = await tx.select({ c: count6() }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.createdYmd, ymd)));
-      if (Number(c) >= DAILY_CALL_LIMIT) {
+      if (!admin && Number(c) >= DAILY_CALL_LIMIT) {
         throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u4E0B\u6CE8 ${DAILY_CALL_LIMIT} \u6B21` });
       }
       const [openSame] = await tx.select({ id: calls.id }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.tokenSymbol, symbol), eq35(calls.status, "pending"))).limit(1);
-      if (openSame) {
+      if (!admin && openSame) {
         throw new TRPCError20({ code: "BAD_REQUEST", message: `\u4F60\u5DF2\u6709\u672A\u7ED3\u7B97\u7684 ${symbol} \u4E0B\u6CE8\uFF0C\u7ED3\u7B97\u540E\u518D\u6765` });
       }
       const res = await tx.update(users).set({ npPoints: sql21`npPoints - ${input.amount}` }).where(and31(eq35(users.id, ctx.user.id), gte8(users.npPoints, input.amount)));
@@ -14138,6 +14311,7 @@ var callsRouter = router({
       });
       return insertId;
     });
+    void awardTaskEvent(db, ctx.user.id, "predict_daily");
     return {
       callId,
       entryPrice: price,
@@ -14259,7 +14433,7 @@ var callsRouter = router({
   stake: protectedProcedure.input(z24.object({ callId: z24.number(), amount: z24.number().int().min(MIN_STAKE).max(MAX_STAKE) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    if (!await isReferralBound(db, ctx.user.id)) {
+    if (!isAppAdmin(ctx.user) && !await isReferralBound(db, ctx.user.id)) {
       throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u8D28\u62BC" });
     }
     const [c] = await db.select({ userId: calls.userId, status: calls.status }).from(calls).where(eq35(calls.id, input.callId)).limit(1);

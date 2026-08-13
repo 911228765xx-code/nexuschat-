@@ -12,9 +12,11 @@ import { getDb } from "../db";
 import { calls, users, curationStakes } from "../../drizzle/schema";
 import { eq, and, desc, sql, count, gte } from "drizzle-orm";
 import { isReferralBound } from "../referralRewards";
+import { isAppAdmin } from "../appAdmin";
 import { STAKE_ODDS, stakePayout } from "../callResolver";
 import { fetchCallSpotPrice, fetchCallLiveQuotes, fetchCallSparklines } from "../callSpot";
 import { CALL_HORIZONS_MIN, CALL_LOCK_MINUTES, nextFullWindow } from "../callWindow";
+import { awardTaskEvent } from "./user";
 
 /** 允许的时间窗（分钟）：5 / 15 / 30 / 60。存进 horizonHours 列（历史字段名）。 */
 const HORIZONS = CALL_HORIZONS_MIN;
@@ -65,7 +67,8 @@ export const callsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      if (!(await isReferralBound(db, ctx.user.id))) {
+      const admin = isAppAdmin(ctx.user);
+      if (!admin && !(await isReferralBound(db, ctx.user.id))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与猜涨跌" });
       }
 
@@ -87,12 +90,12 @@ export const callsRouter = router({
         const [{ c = 0 } = { c: 0 }] = await tx
           .select({ c: count() }).from(calls)
           .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
-        if (Number(c) >= DAILY_CALL_LIMIT) {
+        if (!admin && Number(c) >= DAILY_CALL_LIMIT) {
           throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多下注 ${DAILY_CALL_LIMIT} 次` });
         }
         const [openSame] = await tx.select({ id: calls.id }).from(calls)
           .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
-        if (openSame) {
+        if (!admin && openSame) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `你已有未结算的 ${symbol} 下注，结算后再来` });
         }
 
@@ -122,6 +125,8 @@ export const callsRouter = router({
         });
         return insertId;
       });
+
+      void awardTaskEvent(db, ctx.user.id, "predict_daily");
 
       return {
         callId,
@@ -277,7 +282,7 @@ export const callsRouter = router({
       if (!db) throw new Error("Database not available");
 
       // C 折中：策展质押需先绑定邀请人
-      if (!(await isReferralBound(db, ctx.user.id))) {
+      if (!isAppAdmin(ctx.user) && !(await isReferralBound(db, ctx.user.id))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与质押" });
       }
 

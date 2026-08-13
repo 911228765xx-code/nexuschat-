@@ -287,6 +287,7 @@ export const chatRouter = router({
       // 欢迎机器人（启用则自动发欢迎语；不阻塞入群）
       void runWelcomeBot(db, input.groupId, (ctx.user as any).name || (ctx.user as any).username || "新朋友")
         .catch((err) => logger.warn({ err }, "welcome bot failed"));
+      void awardTaskEvent(db, ctx.user.id, "join_group_daily");
       return { success: true, alreadyMember: false };
     }),
 
@@ -665,6 +666,7 @@ export const chatRouter = router({
         // AC 产出：首次发消息里程碑
         void awardTaskEvent(db, ctx.user.id, "first_message");
       }
+      void awardTaskEvent(db, ctx.user.id, "chat_daily");
       return { messageId };
     }),
 
@@ -732,6 +734,7 @@ export const chatRouter = router({
       if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
       // AC 产出：首次发消息里程碑(文本语义,保持原样)
       if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
+      void awardTaskEvent(db, ctx.user.id, "chat_daily");
       return { messageId };
     }),
 
@@ -1622,6 +1625,7 @@ export const chatRouter = router({
           logger.warn({ err }, "welcome bot failed");
         }
       })();
+      void awardTaskEvent(db, ctx.user.id, "join_group_daily");
       return { groupId: l.groupId, alreadyMember: false };
     }),
 
@@ -2050,6 +2054,7 @@ export const chatRouter = router({
             memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`,
           }).where(eq(chatGroups.id, req.groupId));
           await initReadCursor(db, req.groupId, req.userId); // 历史消息不算新成员未读
+          void awardTaskEvent(db, req.userId, "join_group_daily");
         }
       }
       return { ok: true };

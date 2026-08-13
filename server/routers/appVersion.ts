@@ -6,6 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
 import { assertAndroidApkSource, getAndroidApkDirectUrl } from "../utils/androidApkSource";
+import { isAppAdmin } from "../appAdmin";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
 export const CURRENT_APP_VERSION = "1.9.1";
@@ -127,7 +128,7 @@ export const appVersionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") {
+      if (!isAppAdmin(ctx.user)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
       }
 

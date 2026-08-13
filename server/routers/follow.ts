@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { userFollows, users, notifications, posts } from "../../drizzle/schema";
 import { eq, and, count, sql, desc } from "drizzle-orm";
 import { canViewFullProfile } from "../utils/relations";
+import { awardTaskEvent } from "./user";
 
 // Helper: create a follow notification
 async function createFollowNotification(
@@ -63,6 +64,7 @@ export const followRouter = router({
         { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar ?? null },
         input.targetUserId
       );
+      void awardTaskEvent(db, ctx.user.id, "follow_daily");
 
       return { success: true, following: true };
     }),

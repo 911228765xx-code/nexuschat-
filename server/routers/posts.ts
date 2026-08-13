@@ -13,6 +13,7 @@ import { spendNN } from "../token";
 import { TRPCError } from "@trpc/server";
 import { enforceContent } from "../moderation";
 import { canViewFullProfile } from "../utils/relations";
+import { isAppAdmin } from "../appAdmin";
 
 // 广场推广档位（AI 计价，按天）
 export const PROMOTE_PLANS = [
@@ -209,7 +210,7 @@ export const postsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
       const [b] = await db.select().from(promoBanners).where(eq(promoBanners.id, input.bannerId)).limit(1);
       if (!b) throw new TRPCError({ code: "NOT_FOUND", message: "广告不存在" });
-      const isAdmin = (ctx.user as any).role === "admin";
+      const isAdmin = isAppAdmin(ctx.user);
       if (b.userId !== ctx.user.id && !isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
       await db.update(promoBanners).set({ status: "removed" }).where(eq(promoBanners.id, input.bannerId));
       return { ok: true };
@@ -306,6 +307,7 @@ export const postsRouter = router({
             ))
             .limit(1);
           if (!seen) {
+            void awardTaskEvent(db, ctx.user.id, "like_given");
             // AC 产出：内容获赞奖励给作者（仅首次）
             void awardTaskEvent(db, post.authorId, "like_received");
             const [liker] = await db

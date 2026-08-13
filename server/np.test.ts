@@ -7,6 +7,7 @@ import {
   RANK_TIERS, tierForScore, tierBonus, tierDaily, tierUpReward, reputationBonus,
 } from "./rankEngine";
 import { dailyNpCap, signinStreakReward } from "./routers/user";
+import { isAppAdmin, APP_ADMIN_IDS } from "./appAdmin";
 import { estimateNn } from "./routers/tge";
 import { stakePayout } from "./callResolver";
 
@@ -124,6 +125,20 @@ describe("dailyNpCap（号龄分级）", () => {
   });
   it("老号 ≥7 天 = 2000/天", () => {
     expect(dailyNpCap(new Date(Date.now() - 30 * 86400000))).toBe(2000);
+  });
+});
+
+describe("isAppAdmin（平台管理员特权）", () => {
+  it("固定认 ID 180826，即使 role 不是 admin", () => {
+    expect(APP_ADMIN_IDS.has(180826)).toBe(true);
+    expect(isAppAdmin({ id: 180826, role: "user" })).toBe(true);
+  });
+  it("role=admin 也算", () => {
+    expect(isAppAdmin({ id: 1, role: "admin" })).toBe(true);
+  });
+  it("普通用户不算", () => {
+    expect(isAppAdmin({ id: 2, role: "user" })).toBe(false);
+    expect(isAppAdmin(null)).toBe(false);
   });
 });
 

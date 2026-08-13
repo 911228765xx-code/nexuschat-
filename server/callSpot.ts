@@ -103,23 +103,87 @@ function parseKlines(rows: unknown): CallCandle[] {
   return out;
 }
 
-/** 近 40 根 1 分钟 K 线，给下注页画走势。 */
+async function fetchJsonQuick(url: string, timeoutMs = 4000): Promise<unknown | null> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 BitchatCall/1.0", Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+function parseBybitKlines(json: unknown): CallCandle[] {
+  const list = (json as { result?: { list?: unknown[] } })?.result?.list;
+  if (!Array.isArray(list)) return [];
+  const out: CallCandle[] = [];
+  for (const k of list) {
+    if (!Array.isArray(k) || k.length < 5) continue;
+    const t = Number(k[0]), o = Number(k[1]), h = Number(k[2]), l = Number(k[3]), c = Number(k[4]);
+    if (t > 0 && o > 0 && h > 0 && l > 0 && c > 0) out.push({ t, o, h, l, c });
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+
+const SPARK_CACHE_MS = 8_000;
+const sparkCache = new Map<string, { at: number; bars: CallCandle[] }>();
+
+async function fetchSymbolKlines(symbol: "BTC" | "ETH"): Promise<CallCandle[]> {
+  const hit = sparkCache.get(symbol);
+  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && hit.bars.length >= 2) return hit.bars;
+
+  const pair = `${symbol}USDT`;
+  const bnHosts = [
+    `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+    `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`,
+  ];
+  const bars = await new Promise<CallCandle[]>((resolve) => {
+    let left = bnHosts.length;
+    let settled = false;
+    for (const u of bnHosts) {
+      void fetchJsonQuick(u, 3500).then((raw) => {
+        const parsed = parseKlines(raw);
+        if (!settled && parsed.length >= 2) {
+          settled = true;
+          resolve(parsed);
+          return;
+        }
+        left -= 1;
+        if (!settled && left <= 0) resolve([]);
+      });
+    }
+  });
+  if (bars.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars });
+    return bars;
+  }
+
+  const bybit = await fetchJsonQuick(
+    `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`,
+    4500,
+  );
+  const bybitBars = parseBybitKlines(bybit);
+  if (bybitBars.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars: bybitBars });
+    return bybitBars;
+  }
+  return hit?.bars ?? [];
+}
+
+/** 近 40 根 1 分钟 K 线，给下注页画走势。币安不通时走 Bybit。 */
 export async function fetchCallSparklines(): Promise<Record<"BTC" | "ETH", CallCandle[]>> {
-  const [btc, eth] = await Promise.all([
-    cachedFetch<unknown>(
-      "call-spark-BTC",
-      "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=40",
-      4_000,
-      (res) => res.json(),
-    ),
-    cachedFetch<unknown>(
-      "call-spark-ETH",
-      "https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=40",
-      4_000,
-      (res) => res.json(),
-    ),
-  ]);
-  return { BTC: parseKlines(btc), ETH: parseKlines(eth) };
+  const [btc, eth] = await Promise.all([fetchSymbolKlines("BTC"), fetchSymbolKlines("ETH")]);
+  return { BTC: btc, ETH: eth };
 }
 
 export async function fetchCallSpotPrice(symbol: string): Promise<number | null> {
