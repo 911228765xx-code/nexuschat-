@@ -331,8 +331,8 @@ export const researchRouter = router({
       });
 
       // AC 产出：首次分析里程碑 + 每日分析（每日上限内）
-      void awardTaskEvent(db, ctx.user.id, "first_research");
-      void awardTaskEvent(db, ctx.user.id, "research_daily");
+      await awardTaskEvent(db, ctx.user.id, "first_research");
+      await awardTaskEvent(db, ctx.user.id, "research_daily");
 
       return {
         reportId: (result as any).insertId,

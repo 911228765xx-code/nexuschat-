@@ -244,7 +244,7 @@ export const postsRouter = router({
       // AC 产出：首次发帖里程碑 + 每日发帖（每日上限内，任务定义 daily:3 约束）。
       // 门槛（用户拍板 2026-07-12 取消字数限制）：只防"当天发相同内容重复刷分"，
       // 不再要求字数——发布动态即计分。每日 3 次上限本身已挡住无限刷。
-      void awardTaskEvent(db, ctx.user.id, "first_post");
+      await awardTaskEvent(db, ctx.user.id, "first_post");
       {
         const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
         const [dup] = await db
@@ -257,7 +257,7 @@ export const postsRouter = router({
             sql`${posts.id} != ${(result as any).insertId}`,
           ))
           .limit(1);
-        if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
+        if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
       }
 
       return { postId: (result as any).insertId as number };
@@ -293,9 +293,10 @@ export const postsRouter = router({
       if (!result.liked) return { liked: false };
       {
         const post = { authorId: result.authorId };
-        // Notify post author(事务外,自带去重,失败不影响点赞)
         if (post && post.authorId !== ctx.user.id) {
-          // 防刷：同一人对同一帖只发一次奖/通知（取消再点赞不重复）。用历史 like 通知做去重。
+          // 点赞人每日任务：每次新点赞都发（当日次数由 _completeTask 卡住）。
+          // 不能绑在「是否发过 like 通知」上——赞过的帖再赞会被挡，轻松任务积分就到不了。
+          await awardTaskEvent(db, ctx.user.id, "like_given");
           const [seen] = await db
             .select({ id: notifications.id })
             .from(notifications)
@@ -307,9 +308,7 @@ export const postsRouter = router({
             ))
             .limit(1);
           if (!seen) {
-            void awardTaskEvent(db, ctx.user.id, "like_given");
-            // AC 产出：内容获赞奖励给作者（仅首次）
-            void awardTaskEvent(db, post.authorId, "like_received");
+            await awardTaskEvent(db, post.authorId, "like_received");
             const [liker] = await db
               .select({ name: users.name, avatar: users.avatar })
               .from(users)
@@ -429,7 +428,7 @@ export const postsRouter = router({
 
       // AC 产出：有效评论（每日上限内）。质量门槛：≥5 字才计分（"好""赞"类水评不计）。
       if (input.content.trim().length >= 5) {
-        void awardTaskEvent(db, ctx.user.id, "comment_made");
+        await awardTaskEvent(db, ctx.user.id, "comment_made");
       }
 
       // Increment comment count

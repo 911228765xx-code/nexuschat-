@@ -1076,26 +1076,33 @@ async function _completeTask(
       if (existing.length >= def.maxCompletions) { blocked = true; return; }
     }
     }
-    // 连续签到:拿锁后读改一致,奖励递增封顶
+    let newStreak: number | null = null;
     if (taskType === "daily_login") {
       const [u] = await tx
         .select({ streak: users.signinStreak, last: users.lastSigninYmd })
         .from(users).where(eq(users.id, userId)).limit(1);
       const yesterday = ymdUtc(new Date(Date.now() - 86_400_000));
-      const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
+      newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
-    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    // 上限/设备封顶导致 0 元时不记完成，避免勾上了却没到账、还把当日次数烧掉
+    if (granted > 0) {
+      if (taskType === "daily_login" && newStreak != null) {
+        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
+      }
+      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    }
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
+  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 
 /**
- * 服务端事件触发任务发放（供 posts / ai 等 router 调用）。
- * fire-and-forget 用：失败不影响主流程。eventOnly 任务的唯一合法入口。
+ * 服务端事件触发任务发放（供 posts / chat 等 router 调用）。
+ * 调用方应 await：发奖完成后再返回，避免用户立刻回任务中心看到旧余额。
+ * 失败不抛、不阻断主流程。eventOnly 任务的唯一合法入口。
  */
 export async function awardTaskEvent(db: Db, userId: number, taskType: string): Promise<void> {
   try {

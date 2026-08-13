@@ -126,7 +126,7 @@ export const callsRouter = router({
         return insertId;
       });
 
-      void awardTaskEvent(db, ctx.user.id, "predict_daily");
+      await awardTaskEvent(db, ctx.user.id, "predict_daily");
 
       return {
         callId,
