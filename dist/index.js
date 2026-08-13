@@ -14622,73 +14622,6 @@ import { TRPCError as TRPCError24 } from "@trpc/server";
 import { and as and36, count as count7, eq as eq40, gt as gt7, inArray as inArray11 } from "drizzle-orm";
 init_db();
 init_schema();
-
-// server/utils/dashboardLive.ts
-var SH_MS = 8 * 3600 * 1e3;
-var EPOCH = Date.UTC(2026, 7, 1);
-function extraKind(label) {
-  return /今日|当天|24h|消息|动态|活跃|在线|发言/i.test(label) ? "daily" : "stock";
-}
-function shanghaiParts(nowMs) {
-  const shifted = nowMs + SH_MS;
-  const dayIndex = Math.floor(shifted / 864e5);
-  const sec = Math.floor(shifted % 864e5 / 1e3);
-  return { sec, dayIndex };
-}
-function activityFactor(sec) {
-  const h = sec / 3600;
-  const p1 = Math.exp(-((h - 11.5) ** 2) / 10);
-  const p2 = Math.exp(-((h - 21) ** 2) / 7);
-  return Math.min(1, 0.16 + 0.52 * p1 + 0.84 * p2);
-}
-function mix01(key, salt) {
-  let h = (salt ^ 2166136261) >>> 0;
-  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
-  return h % 1e4 / 1e4;
-}
-function liveDelta(kind, base, key, nowMs) {
-  const { sec, dayIndex } = shanghaiParts(nowMs);
-  const act = activityFactor(sec);
-  const jitter = mix01(key, dayIndex);
-  const floor = Math.max(0, Math.floor(base));
-  if (kind === "users") {
-    const perHour2 = Math.max(0.35, floor * 7e-5);
-    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
-  }
-  if (kind === "subs") {
-    const perHour2 = Math.max(0.08, floor * 4e-5);
-    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
-  }
-  if (kind === "active") {
-    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
-    const wave2 = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
-    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
-    return Math.floor(span * act * (0.7 + 0.24 * wave2 + 0.06 * micro));
-  }
-  if (kind === "daily") {
-    const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));
-    const progress = sec / 86400 * (0.38 + 0.62 * act);
-    const wave2 = Math.sin(sec / 43 + jitter * 5) * 0.5 + 0.5;
-    return Math.floor(daily * progress + wave2 * Math.max(2, daily * 0.02));
-  }
-  const perHour = Math.max(0.12, floor * 5e-5);
-  const wave = Math.sin(sec / 67 + jitter * 3) * 0.5 + 0.5;
-  return Math.floor((nowMs - EPOCH) / 36e5 * perHour + wave * Math.max(1, floor * 2e-3));
-}
-function applyDashboardLive(base, nowMs) {
-  return {
-    ...base,
-    usersTotal: base.usersTotal + liveDelta("users", base.usersTotal, "users", nowMs),
-    activeToday: base.activeToday + liveDelta("active", base.activeToday, "active", nowMs),
-    subscribers: base.subscribers + liveDelta("subs", base.subscribers, "subs", nowMs),
-    extras: base.extras.map((e) => ({
-      ...e,
-      value: e.value + liveDelta(extraKind(e.label), e.value, e.id || e.label, nowMs)
-    }))
-  };
-}
-
-// server/routers/stats.ts
 var DEFAULT_BOOSTS = { usersTotal: 0, activeToday: 0, subscribers: 0 };
 var extraSchema = z27.object({
   id: z27.string().min(1).max(40),
@@ -14727,7 +14660,7 @@ function parseConfig(raw) {
   }
 }
 var cache2 = null;
-var CACHE_MS = 3e4;
+var CACHE_MS = 6e4;
 async function loadConfigRow() {
   const db = await getDb();
   if (!db) return { db: null, config: parseConfig(null) };
@@ -14739,82 +14672,57 @@ async function computeDashboard() {
   let realUsers = 0;
   let realActive = 0;
   let realSubs = 0;
-  let realOnline2 = 0;
-  let realGroups = 0;
-  let realPostsToday = 0;
   if (db) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1e3);
-    const onlineSince = new Date(Date.now() - 15 * 60 * 1e3);
     const now = /* @__PURE__ */ new Date();
-    const [[usersRow], [activeRow], [subsRow], [onlineRow], [groupRow], [postRow]] = await Promise.all([
+    const [[usersRow], [activeRow], [subsRow]] = await Promise.all([
       db.select({ n: count7() }).from(users).where(eq40(users.isBot, false)),
       db.select({ n: count7() }).from(users).where(and36(eq40(users.isBot, false), gt7(users.lastSignedIn, since))),
       db.select({ n: count7() }).from(users).where(and36(
         eq40(users.isBot, false),
         inArray11(users.proTier, ["plus", "pro"]),
         gt7(users.proUntil, now)
-      )),
-      db.select({ n: count7() }).from(users).where(and36(eq40(users.isBot, false), gt7(users.lastSignedIn, onlineSince))),
-      db.select({ n: count7() }).from(chatGroups).where(eq40(chatGroups.isPublic, true)),
-      db.select({ n: count7() }).from(posts).where(gt7(posts.createdAt, since))
+      ))
     ]);
     realUsers = Number(usersRow?.n ?? 0);
     realActive = Number(activeRow?.n ?? 0);
     realSubs = Number(subsRow?.n ?? 0);
-    realOnline2 = Number(onlineRow?.n ?? 0);
-    realGroups = Number(groupRow?.n ?? 0);
-    realPostsToday = Number(postRow?.n ?? 0);
   }
-  const extras = config.extras.length > 0 ? config.extras : [
-    { id: "online", label: "\u5F53\u524D\u5728\u7EBF", value: realOnline2 },
-    { id: "groups", label: "\u516C\u5F00\u793E\u7FA4", value: realGroups },
-    { id: "posts", label: "\u4ECA\u65E5\u52A8\u6001", value: realPostsToday }
-  ];
   return {
     usersTotal: realUsers + config.boosts.usersTotal,
     activeToday: realActive + config.boosts.activeToday,
     subscribers: realSubs + config.boosts.subscribers,
-    extras,
+    extras: config.extras,
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    _real: {
-      usersTotal: realUsers,
-      activeToday: realActive,
-      subscribers: realSubs,
-      online: realOnline2,
-      groups: realGroups,
-      postsToday: realPostsToday
-    }
+    // 管理端预览用：真实数（用户侧接口不返回这些字段也可，但一并返回无妨；App 用户侧忽略）
+    _real: { usersTotal: realUsers, activeToday: realActive, subscribers: realSubs }
   };
 }
 var statsRouter = router({
-  /** 发现页：所有登录用户可见的展示数字（已含加成 + 时段波动） */
+  /** 发现页：所有登录用户可见的展示数字（已含加成） */
   getCommunityDashboard: protectedProcedure.query(async () => {
     const now = Date.now();
-    if (!cache2 || now - cache2.at >= CACHE_MS) {
-      cache2 = { at: now, payload: await computeDashboard() };
+    if (cache2 && now - cache2.at < CACHE_MS) {
+      const { _real: _2, ...publicPayload2 } = cache2.payload;
+      return publicPayload2;
     }
-    const { _real: _, ...publicPayload } = cache2.payload;
-    const live = applyDashboardLive(publicPayload, now);
-    return { ...live, updatedAt: new Date(now).toISOString() };
+    const payload = await computeDashboard();
+    cache2 = { at: now, payload };
+    const { _real: _, ...publicPayload } = payload;
+    return publicPayload;
   }),
   /** 管理端：原始配置 + 真实数预览 */
   adminGetDashboardConfig: adminProcedure.query(async () => {
     const payload = await computeDashboard();
     const { config } = await loadConfigRow();
-    const live = applyDashboardLive({
-      usersTotal: payload.usersTotal,
-      activeToday: payload.activeToday,
-      subscribers: payload.subscribers,
-      extras: payload.extras
-    }, Date.now());
     return {
       boosts: config.boosts,
       extras: config.extras,
       real: payload._real,
       display: {
-        usersTotal: live.usersTotal,
-        activeToday: live.activeToday,
-        subscribers: live.subscribers
+        usersTotal: payload.usersTotal,
+        activeToday: payload.activeToday,
+        subscribers: payload.subscribers
       }
     };
   }),
