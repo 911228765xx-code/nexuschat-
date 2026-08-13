@@ -13751,6 +13751,43 @@ import { eq as eq34, and as and30, lte, sql as sql20 } from "drizzle-orm";
 
 // server/callSpot.ts
 var CG_ID = { BTC: "bitcoin", ETH: "ethereum" };
+async function fetchCallLiveQuotes() {
+  const bn = await cachedFetch(
+    "call-quotes-bn",
+    "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22%5D",
+    8e3,
+    (res) => res.json()
+  );
+  if (Array.isArray(bn)) {
+    const out2 = [];
+    for (const row of bn) {
+      const symbol = row.symbol === "BTCUSDT" ? "BTC" : row.symbol === "ETHUSDT" ? "ETH" : null;
+      const price = Number(row.lastPrice);
+      if (!symbol || !(price > 0)) continue;
+      const ch = Number(row.priceChangePercent);
+      out2.push({ symbol, price, change24h: Number.isFinite(ch) ? ch : null });
+    }
+    if (out2.length >= 1) return out2;
+  }
+  const cg = await cachedFetch(
+    "call-quotes-cg",
+    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true",
+    TTL.prices,
+    (res) => res.json()
+  );
+  const out = [];
+  const btc = cg?.bitcoin?.usd;
+  const eth = cg?.ethereum?.usd;
+  if (typeof btc === "number" && btc > 0) {
+    const ch = cg?.bitcoin?.usd_24h_change;
+    out.push({ symbol: "BTC", price: btc, change24h: typeof ch === "number" ? ch : null });
+  }
+  if (typeof eth === "number" && eth > 0) {
+    const ch = cg?.ethereum?.usd_24h_change;
+    out.push({ symbol: "ETH", price: eth, change24h: typeof ch === "number" ? ch : null });
+  }
+  return out;
+}
 async function fetchCallSpotPrice(symbol) {
   const sym = symbol.toUpperCase();
   const id = CG_ID[sym];
@@ -13975,6 +14012,11 @@ var callsRouter = router({
     maxStake: MAX_STAKE,
     dailyLimit: DAILY_CALL_LIMIT
   })),
+  /** BTC/ETH 现价 + 24h 涨跌，给下注页和未结算单做数据对比。 */
+  quotes: publicProcedure.query(async () => {
+    const quotes = await fetchCallLiveQuotes();
+    return { quotes, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  }),
   // ─── 用 IT 猜涨跌（主入口）────────────────────────────────────────────────
   placeBet: protectedProcedure.input(z24.object({
     tokenSymbol: z24.enum(BET_SYMBOLS),
