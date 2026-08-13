@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests, userSettings } from "../../drizzle/schema";
+import { chatGroups, groupMembers, messages, users, groupUnreadCounts, messageReactions, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, redPacketClaims, redPackets, groupAnnouncements, conversationPrefs, groupJoinRequests, userSettings, friendRequests } from "../../drizzle/schema";
 import { eq, and, desc, lt, sql, or, ne, gt, gte, asc, like, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { emitToUser, evictUserFromGroupRoom, getSocketIO, notifyDmOffline } from "../socket";
@@ -10,7 +10,7 @@ import { sanitizeInput } from "../utils/sanitize";
 import { rateLimitWrite } from "../rateLimit";
 import logger from "../utils/logger";
 import { groupBots } from "../../drizzle/schema";
-import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward } from "../groupBots";
+import { BOT_PACKAGES, getBotMeta, listGroupBots, runWelcomeBot, runManageBot, runGrowthReward, isBotActive } from "../groupBots";
 import { getTokenInfo, getTokenomics, spendNN, grantNN, getMyNNTransactions, getNNRevenue, createVesting, getMyVesting, claimVesting, NN_TOTAL_SUPPLY, NN_NODE_TIERS, getNodeTier, USDT_DEPOSIT_ADDRESS, USDT_CHAIN } from "../token";
 import { nnNodeOrders } from "../../drizzle/schema";
 import { getMembership, getBenefits, buyMembership } from "../membership";
@@ -48,6 +48,25 @@ async function initReadCursor(db: Db, groupId: number, userId: number): Promise<
       await db.insert(groupUnreadCounts).values({ groupId, userId, lastReadMessageId: maxId });
     }
   } catch { /* 游标初始化失败仅影响首屏未读数,不阻断入群 */ }
+}
+
+/** 真人成员数（静默填充号/机器人不占满员名额，否则扫码会在远不到上限时显示「群已满」） */
+async function countHumanMembers(db: Db, groupId: number): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`COUNT(*)` })
+    .from(groupMembers)
+    .innerJoin(users, eq(users.id, groupMembers.userId))
+    .where(and(eq(groupMembers.groupId, groupId), eq(users.isBot, false)));
+  return Number(row?.n ?? 0);
+}
+
+async function assertGroupHasCapacity(db: Db, groupId: number, extra = 1): Promise<void> {
+  const [grp] = await db.select({ maxMembers: chatGroups.maxMembers }).from(chatGroups)
+    .where(eq(chatGroups.id, groupId)).limit(1);
+  if (!grp || grp.maxMembers <= 0) return;
+  const humans = await countHumanMembers(db, groupId);
+  if (humans + extra > grp.maxMembers) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
+  }
 }
 
 /**
@@ -235,15 +254,13 @@ export const chatRouter = router({
         .limit(1);
       if (existing.length > 0) return { success: true, alreadyMember: true };
       // 群容量上限校验（满员不可加入）
-      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, isPublic: chatGroups.isPublic }).from(chatGroups)
+      const [grp] = await db.select({ joinApproval: chatGroups.joinApproval, isPublic: chatGroups.isPublic }).from(chatGroups)
         .where(eq(chatGroups.id, input.groupId)).limit(1);
       // 私密群不可凭 groupId 直接加入，只能通过邀请链接/群二维码（useInviteLink）
       if (grp && !grp.isPublic) {
         throw new TRPCError({ code: "FORBIDDEN", message: "该群为私密群，需通过群成员邀请或二维码加入" });
       }
-      if (grp && grp.maxMembers > 0 && grp.memberCount >= grp.maxMembers) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
-      }
+      await assertGroupHasCapacity(db, input.groupId);
       // 审批群：不直接加入，转为提交加入申请
       if (grp?.joinApproval) {
         const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
@@ -271,6 +288,145 @@ export const chatRouter = router({
       void runWelcomeBot(db, input.groupId, (ctx.user as any).name || (ctx.user as any).username || "新朋友")
         .catch((err) => logger.warn({ err }, "welcome bot failed"));
       return { success: true, alreadyMember: false };
+    }),
+
+  /** 从好友列表拉人进群（微信式多选）。须为群成员；只能拉自己的好友。 */
+  addMembers: protectedProcedure
+    .input(z.object({
+      groupId: z.number().int().positive(),
+      userIds: z.array(z.number().int().positive()).min(1).max(50),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+
+      const wanted = Array.from(new Set(input.userIds)).filter((id) => id !== ctx.user.id);
+      if (wanted.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择要邀请的好友" });
+
+      const [me] = await db.select({ role: groupMembers.role, alias: groupMembers.alias })
+        .from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!me) throw new TRPCError({ code: "FORBIDDEN", message: "你不在该群中" });
+
+      const [grp] = await db.select({
+        name: chatGroups.name,
+        joinApproval: chatGroups.joinApproval,
+        memberCount: chatGroups.memberCount,
+        maxMembers: chatGroups.maxMembers,
+      }).from(chatGroups).where(eq(chatGroups.id, input.groupId)).limit(1);
+      if (!grp) throw new TRPCError({ code: "NOT_FOUND", message: "群不存在" });
+
+      const alreadyRows = await db.select({ userId: groupMembers.userId }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), inArray(groupMembers.userId, wanted)));
+      const already = new Set(alreadyRows.map((r) => r.userId));
+
+      const friendRows = await db.select({
+        senderId: friendRequests.senderId,
+        receiverId: friendRequests.receiverId,
+      }).from(friendRequests).where(and(
+        eq(friendRequests.status, "accepted"),
+        or(
+          and(eq(friendRequests.senderId, ctx.user.id), inArray(friendRequests.receiverId, wanted)),
+          and(eq(friendRequests.receiverId, ctx.user.id), inArray(friendRequests.senderId, wanted)),
+        ),
+      ));
+      const friends = new Set<number>();
+      for (const r of friendRows) {
+        friends.add(r.senderId === ctx.user.id ? r.receiverId : r.senderId);
+      }
+
+      const candidates = wanted.filter((id) => !already.has(id) && friends.has(id));
+      if (candidates.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: already.size ? "所选好友已在群里" : "只能邀请已添加的好友" });
+      }
+
+      const isManager = me.role === "owner" || me.role === "admin";
+      const needApproval = !!grp.joinApproval && !isManager;
+
+      if (needApproval) {
+        let pending = 0;
+        for (const uid of candidates) {
+          const [exist] = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
+            .where(and(
+              eq(groupJoinRequests.groupId, input.groupId),
+              eq(groupJoinRequests.userId, uid),
+              eq(groupJoinRequests.status, "pending"),
+            )).limit(1);
+          if (exist) { pending += 1; continue; }
+          await db.insert(groupJoinRequests).values({ groupId: input.groupId, userId: uid });
+          pending += 1;
+        }
+        return { added: 0, pending, skipped: wanted.length - candidates.length };
+      }
+
+      const slots = grp.maxMembers > 0
+        ? Math.max(0, grp.maxMembers - await countHumanMembers(db, input.groupId))
+        : candidates.length;
+      if (slots <= 0) throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
+      const toAdd = candidates.slice(0, slots);
+
+      const profiles = await db.select({
+        id: users.id, name: users.name, username: users.username, isBot: users.isBot,
+      }).from(users).where(inArray(users.id, toAdd));
+      const addable = profiles.filter((u) => !u.isBot);
+      if (addable.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "没有可邀请的好友" });
+
+      await db.insert(groupMembers).values(addable.map((u) => ({
+        groupId: input.groupId, userId: u.id, role: "member" as const,
+      })));
+      await db.update(chatGroups).set({
+        memberCount: sql`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${input.groupId})`,
+      }).where(eq(chatGroups.id, input.groupId));
+
+      await Promise.all(addable.map((u) => initReadCursor(db, input.groupId, u.id)));
+
+      const myName = me.alias || (ctx.user as any).name || (ctx.user as any).username || "成员";
+      const names = addable.map((u) => u.name || u.username || `用户#${u.id}`);
+      const content = names.length === 1
+        ? `${myName} 邀请 ${names[0]} 加入了群聊`
+        : `${myName} 邀请 ${names.join("、")} 加入了群聊`;
+      const [msgIns] = await db.insert(messages).values({
+        groupId: input.groupId,
+        senderId: ctx.user.id,
+        content,
+        messageType: "system",
+      });
+      const messageId = Number((msgIns as any)?.insertId ?? 0);
+      try {
+        getSocketIO()?.to(`group:${input.groupId}`).emit("new_message", {
+          id: messageId,
+          groupId: input.groupId,
+          senderId: ctx.user.id,
+          senderName: myName,
+          senderAvatar: (ctx.user as any).avatar ?? null,
+          content,
+          messageType: "system",
+          createdAt: new Date().toISOString(),
+        });
+      } catch { /* 广播失败不影响入群 */ }
+
+      const fromName = (ctx.user as any).name || (ctx.user as any).username || "好友";
+      const fromAvatar = (ctx.user as any).avatar ?? "";
+      for (const u of addable) {
+        void createNotification({
+          db,
+          targetUserId: u.id,
+          fromUserId: ctx.user.id,
+          fromUserName: fromName,
+          fromUserAvatar: fromAvatar,
+          type: "system",
+          content: `${fromName} 邀请你加入了群聊「${grp.name}」`,
+        }).catch(() => {});
+      }
+
+      return {
+        added: addable.length,
+        pending: 0,
+        skipped: wanted.length - addable.length,
+        truncated: candidates.length > slots,
+      };
     }),
 
   // Get messages for a group
@@ -1430,11 +1586,9 @@ export const chatRouter = router({
         .where(and(eq(groupMembers.groupId, l.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
       if (existing[0]) return { groupId: l.groupId, alreadyMember: true };
       // 群容量上限 + 进群审批校验
-      const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers, joinApproval: chatGroups.joinApproval }).from(chatGroups)
+      const [cap] = await db.select({ joinApproval: chatGroups.joinApproval }).from(chatGroups)
         .where(eq(chatGroups.id, l.groupId)).limit(1);
-      if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满" });
-      }
+      await assertGroupHasCapacity(db, l.groupId);
       // 开了进群审批的群:邀请链接也必须走审批(不凭链接直接进),提交申请待群主通过
       if (cap?.joinApproval) {
         const pending = await db.select({ id: groupJoinRequests.id }).from(groupJoinRequests)
@@ -1458,9 +1612,16 @@ export const chatRouter = router({
       }).where(eq(chatGroups.id, l.groupId));
       await initReadCursor(db, l.groupId, ctx.user.id); // 历史消息不算新成员未读
       const newMemberName = (ctx.user as any).name || (ctx.user as any).username || "新朋友";
-      // 添粉机器人：奖励邀请人 + 群内致谢；欢迎机器人：欢迎语（均不阻塞）
       void runGrowthReward(db, l.groupId, l.creatorId, newMemberName).catch((err) => logger.warn({ err }, "growth bot failed"));
-      void runWelcomeBot(db, l.groupId, newMemberName).catch((err) => logger.warn({ err }, "welcome bot failed"));
+      // 添粉机器人已经会发「欢迎加入」时，欢迎机器人不再重复发一条
+      void (async () => {
+        try {
+          if (await isBotActive(db, l.groupId, "growth")) return;
+          await runWelcomeBot(db, l.groupId, newMemberName);
+        } catch (err) {
+          logger.warn({ err }, "welcome bot failed");
+        }
+      })();
       return { groupId: l.groupId, alreadyMember: false };
     }),
 
@@ -1872,11 +2033,7 @@ export const chatRouter = router({
       }
       // 审批通过也要过容量闸:joinGroup/useInviteLink 都拦了"群成员已满",这条路径原来没拦,可越过上限
       if (input.approve) {
-        const [cap] = await db.select({ memberCount: chatGroups.memberCount, maxMembers: chatGroups.maxMembers })
-          .from(chatGroups).where(eq(chatGroups.id, req.groupId)).limit(1);
-        if (cap && cap.maxMembers > 0 && cap.memberCount >= cap.maxMembers) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "群成员已满,无法通过申请" });
-        }
+        await assertGroupHasCapacity(db, req.groupId);
       }
       // 条件更新做幂等:双击/两管理员并发审批时只有一方能把 pending 翻走,另一方直接返回,防重复入群
       const flip = await db.update(groupJoinRequests)
