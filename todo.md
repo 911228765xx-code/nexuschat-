@@ -549,3 +549,4 @@
 - [x] 构建 APK v1.5.3 并上传 CDN
 - [x] 更新网站下载页面 APK 链接和版本号
 - [x] v1.5.4 彻底修复键盘消失问题（禁用Stack动画 + keyboardDidHide重聚焦）
+- [x] 将网页端品牌名称从 NexusChat 统一改为 BitChat，完成构建验证并保存 checkpoint

@@ -1,6 +1,6 @@
 {
-  "name": "NexusChat — AI-Powered Web3 Social Trading",
-  "short_name": "NexusChat",
+  "name": "BitChat — AI-Powered Web3 Social Trading",
+  "short_name": "BitChat",
   "description": "Chat, research, and trade crypto with AI-powered insights. Web3 native social platform.",
   "start_url": "/app/chat",
   "display": "standalone",
