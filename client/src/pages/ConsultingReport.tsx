@@ -82,7 +82,7 @@ export default function ConsultingReport() {
   };
 
   const handleShare = async () => {
-    const text = `我刚刚使用 NexusChat AI 咨询中心获取了一份专业的加密分析报告！\n\n问题：${report?.queryText?.slice(0, 100)}...\n\n#NexusChat #AI分析 #Web3`;
+    const text = `我刚刚使用 BitChat AI 咨询中心获取了一份专业的加密分析报告！\n\n问题：${report?.queryText?.slice(0, 100)}...\n\n#BitChat #AI分析 #Web3`;
     if (navigator.share) {
       await navigator.share({ text });
     } else {
@@ -243,7 +243,7 @@ export default function ConsultingReport() {
               <Sparkles size={14} className="text-[#00d4ff]" />
               <span className="text-sm font-semibold text-[#00d4ff]">AI 深度分析报告</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">由 NexusChat AI 生成 · 仅供参考，不构成投资建议</p>
+            <p className="text-xs text-gray-500 mt-1">由 BitChat AI 生成 · 仅供参考，不构成投资建议</p>
           </div>
 
           {/* Markdown Content */}

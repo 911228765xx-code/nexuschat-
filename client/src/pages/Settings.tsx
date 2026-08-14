@@ -435,7 +435,7 @@ export default function Settings() {
 
         {/* Footer */}
         <div className="text-center mt-8 pb-4">
-          <p className="text-sm text-muted-foreground">© 2026 Crestline Technologies · 比特AI（Bitchat）</p>
+          <p className="text-sm text-muted-foreground">© 2026 Crestline Technologies · 比特AI（BitChat）</p>
           <p className="text-sm text-muted-foreground mt-2">{t("settings.builtWith")}</p>
         </div>
       </div>
