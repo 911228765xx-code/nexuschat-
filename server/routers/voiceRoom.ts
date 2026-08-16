@@ -299,7 +299,7 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       const ok = await spendAC(db, ctx.user.id, gift.ac);
-      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AC 不足，送出${gift.name}需 ${gift.ac} AC` });
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `IT 不足，送出${gift.name}需 ${gift.ac} IT` });
       const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
       return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
     }),

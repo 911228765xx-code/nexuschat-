@@ -372,7 +372,7 @@ export const aiRouter = router({
 
       // 扣 AI
       const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
 
       // 建记录（生成中）
       const [ins] = await db.insert(consultingReports).values({
