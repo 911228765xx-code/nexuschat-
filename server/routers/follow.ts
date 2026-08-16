@@ -18,9 +18,9 @@ async function createFollowNotification(
     userId: toUserId,
     type: "follow",
     fromUserId: fromUser.id,
-    fromUserName: fromUser.name ?? "Anonymous",
+    fromUserName: fromUser.name ?? "有人",
     fromUserAvatar: fromUser.avatar ?? null,
-    content: `${fromUser.name ?? "Someone"} started following you`,
+    content: "关注了你",
     isRead: false,
   });
 }

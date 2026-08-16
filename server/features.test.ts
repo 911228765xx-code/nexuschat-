@@ -761,9 +761,8 @@ describe("Phase 8: Follow Router", () => {
   });
 
   it("follow notification content is correct", () => {
-    const fromName = "alice.eth";
-    const content = `${fromName} started following you`;
-    expect(content).toBe("alice.eth started following you");
+    const content = "关注了你";
+    expect(content).toBe("关注了你");
   });
 });
 
@@ -902,8 +901,8 @@ describe("Repost & Quote Post", () => {
   it("generates correct repost content format", () => {
     const originalAuthorName = "alice.eth";
     const originalContent = "Check out this amazing DeFi protocol!";
-    const repostContent = `🔁 Reposted from @${originalAuthorName}:\n\n${originalContent.slice(0, 500)}`;
-    expect(repostContent).toContain("🔁 Reposted from @alice.eth");
+    const repostContent = `🔁 转发自 @${originalAuthorName}:\n\n${originalContent.slice(0, 500)}`;
+    expect(repostContent).toContain("🔁 转发自 @alice.eth");
     expect(repostContent).toContain(originalContent);
   });
 
@@ -918,9 +917,9 @@ describe("Repost & Quote Post", () => {
     const comment = "This is my take on this";
     const originalAuthorName = "bob.eth";
     const originalContent = "BTC to 100k!";
-    const quoteContent = `${comment}\n\n💬 Quoting @${originalAuthorName}:\n> ${originalContent.slice(0, 300)}`;
+    const quoteContent = `${comment}\n\n💬 引用 @${originalAuthorName}:\n> ${originalContent.slice(0, 300)}`;
     expect(quoteContent).toContain(comment);
-    expect(quoteContent).toContain("💬 Quoting @bob.eth");
+    expect(quoteContent).toContain("💬 引用 @bob.eth");
     expect(quoteContent).toContain("> BTC to 100k!");
   });
 

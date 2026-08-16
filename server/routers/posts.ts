@@ -351,7 +351,7 @@ export const postsRouter = router({
               fromUserName: liker?.name ?? ctx.user.name ?? "Someone",
               fromUserAvatar: liker?.avatar ?? "👍",
               type: "like",
-              content: "liked your post",
+              content: "赞了你的动态",
               postId: input.postId,
             });
           }
@@ -486,7 +486,7 @@ export const postsRouter = router({
           fromUserName: commenter?.name ?? ctx.user.name ?? "Someone",
           fromUserAvatar: commenter?.avatar ?? "💬",
           type: "comment",
-          content: `commented: "${sanitizeInput(input.content, 50)}${input.content.length > 50 ? '...' : ''}"`,
+          content: `评论了：「${sanitizeInput(input.content, 50)}${input.content.length > 50 ? "…" : ""}」`,
           postId: input.postId,
         });
       }
@@ -599,7 +599,7 @@ export const postsRouter = router({
 
       // Create a new post that references the original
       const [original] = await db
-        .select({ content: posts.content, authorId: posts.authorId })
+        .select({ content: posts.content, authorId: posts.authorId, mediaUrls: posts.mediaUrls, mediaThumbs: posts.mediaThumbs })
         .from(posts)
         .where(eq(posts.id, input.postId))
         .limit(1);
@@ -613,11 +613,13 @@ export const postsRouter = router({
         .where(eq(users.id, original.authorId))
         .limit(1);
 
-      const repostContent = `\uD83D\uDD01 Reposted from @${originalAuthor?.name ?? "user"}:\n\n${original.content.slice(0, 500)}`;
+      const repostContent = `\uD83D\uDD01 转发自 @${originalAuthor?.name ?? "用户"}:\n\n${original.content.slice(0, 500)}`;
 
       const [result] = await db.insert(posts).values({
         authorId: ctx.user.id,
         content: repostContent,
+        mediaUrls: original.mediaUrls ?? undefined,
+        mediaThumbs: original.mediaThumbs ?? undefined,
         tags: JSON.stringify(["#repost"]),
       });
 
@@ -631,7 +633,7 @@ export const postsRouter = router({
             fromUserName: ctx.user.name ?? "Someone",
             fromUserAvatar: ctx.user.avatar ?? "",
             type: "system",
-            content: `reposted your post`,
+            content: `转发了你的动态`,
             postId: input.postId,
           });
         } catch (_) { /* notification failure is non-critical */ }
@@ -659,7 +661,7 @@ export const postsRouter = router({
 
       // Get original post
       const [original] = await db
-        .select({ content: posts.content, authorId: posts.authorId })
+        .select({ content: posts.content, authorId: posts.authorId, mediaUrls: posts.mediaUrls, mediaThumbs: posts.mediaThumbs })
         .from(posts)
         .where(eq(posts.id, input.postId))
         .limit(1);
@@ -672,11 +674,13 @@ export const postsRouter = router({
         .where(eq(users.id, original.authorId))
         .limit(1);
 
-      const quoteContent = `${sanitizeInput(input.comment, 280)}\n\n\uD83D\uDCAC Quoting @${originalAuthor?.name ?? "user"}:\n> ${original.content.slice(0, 300)}`;
+      const quoteContent = `${sanitizeInput(input.comment, 280)}\n\n\uD83D\uDCAC 引用 @${originalAuthor?.name ?? "用户"}:\n> ${original.content.slice(0, 300)}`;
 
       const [result] = await db.insert(posts).values({
         authorId: ctx.user.id,
         content: quoteContent,
+        mediaUrls: original.mediaUrls ?? undefined,
+        mediaThumbs: original.mediaThumbs ?? undefined,
         tags: JSON.stringify(["#quote"]),
       });
 
@@ -690,7 +694,7 @@ export const postsRouter = router({
             fromUserName: ctx.user.name ?? "Someone",
             fromUserAvatar: ctx.user.avatar ?? "",
             type: "system",
-            content: `quoted your post`,
+            content: `引用了你的动态`,
             postId: input.postId,
           });
         } catch (_) { /* notification failure is non-critical */ }
