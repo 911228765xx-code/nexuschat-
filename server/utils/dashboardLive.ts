@@ -40,18 +40,27 @@ export function liveDelta(kind: DashKind, base: number, key: string, nowMs: numb
   const floor = Math.max(0, Math.floor(base));
 
   if (kind === "users") {
-    const perHour = Math.max(0.35, floor * 0.00007);
-    return Math.floor(((nowMs - EPOCH) / 3_600_000) * perHour);
+    // 每天确定性增加 300–600，跨日累加，日内随活跃度慢慢长
+    const epochDay = shanghaiParts(EPOCH).dayIndex;
+    const daysElapsed = Math.max(0, dayIndex - epochDay);
+    let sum = 0;
+    for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
+    const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
+    const progress = Math.min(1, (sec / 86400) * (0.45 + 0.55 * act));
+    return sum + Math.floor(today * progress);
   }
   if (kind === "subs") {
     const perHour = Math.max(0.08, floor * 0.00004);
     return Math.floor(((nowMs - EPOCH) / 3_600_000) * perHour);
   }
   if (kind === "active") {
-    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
-    const wave = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
-    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
-    return Math.floor(span * act * (0.70 + 0.24 * wave + 0.06 * micro));
+    // 大半天振幅 + 十几秒大浪 + 数秒微跳，盯着看也能感到在跳
+    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
+    const wave = Math.sin(sec / 15 + jitter * 6) * 0.5 + 0.5;
+    const micro = Math.sin(sec / 3.6 + jitter * 4) * 0.5 + 0.5;
+    const tick = Math.sin(sec * 1.8 + jitter * 9) * 0.5 + 0.5;
+    const breath = Math.max(0.34, act);
+    return Math.floor(span * breath * (0.16 + 0.50 * wave + 0.24 * micro + 0.10 * tick));
   }
   if (kind === "daily") {
     const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));

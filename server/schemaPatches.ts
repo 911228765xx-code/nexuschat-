@@ -42,6 +42,22 @@ const PATCHES: string[] = [
   )`,
   // 发现页生态仪表盘配置（加成 + 额外指标行）
   "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `category` VARCHAR(30) DEFAULT 'community'",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `recalledAt` TIMESTAMP NULL",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `expiresAt` TIMESTAMP NULL",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isRead` BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isPinned` BOOLEAN NOT NULL DEFAULT FALSE",
+  `CREATE TABLE IF NOT EXISTS \`conversation_prefs\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`convKey\` varchar(40) NOT NULL,
+    \`isMuted\` BOOLEAN NOT NULL DEFAULT FALSE,
+    \`isPinned\` BOOLEAN NOT NULL DEFAULT FALSE,
+    \`clearedBeforeId\` BIGINT NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    KEY \`idx_convpref_user\` (\`userId\`, \`convKey\`)
+  )`,
 ];
 
 export async function applySchemaPatches(): Promise<void> {

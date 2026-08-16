@@ -34,7 +34,7 @@ export const npStoreRouter = router({
           .set({ npPoints: sql`npPoints - ${TRIAL_NP_COST}` })
           .where(and(eq(users.id, ctx.user.id), gte(users.npPoints, TRIAL_NP_COST)));
         const affected = (res as any)?.[0]?.affectedRows ?? (res as any)?.affectedRows ?? 0;
-        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 不足（需 ${TRIAL_NP_COST}）` });
+        if (affected < 1) throw new TRPCError({ code: "BAD_REQUEST", message: `IT 不足（需 ${TRIAL_NP_COST}）` });
         await tx.update(users).set({ proTier: "plus", proUntil }).where(eq(users.id, ctx.user.id));
       });
       return { ok: true, tier: "plus", proUntil: proUntil.toISOString(), cost: TRIAL_NP_COST };

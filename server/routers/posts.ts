@@ -15,6 +15,57 @@ import { enforceContent } from "../moderation";
 import { canViewFullProfile } from "../utils/relations";
 import { isAppAdmin } from "../appAdmin";
 
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+/** App 纯图动态的占位文案；不能拿它当天去重，否则第二张图起不发每日积分。 */
+const GENERIC_IMAGE_CAPTION = "分享了一张图片";
+
+function parseMediaUrls(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === "string");
+  if (typeof raw !== "string") return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 发帖入账：首帖里程碑 + 每日发帖。带图按同一张图去重，纯文按正文去重。 */
+async function awardPostPublish(
+  db: Db,
+  userId: number,
+  opts: { content: string; mediaUrls?: string[]; insertId: number },
+): Promise<number> {
+  let earned = await awardTaskEvent(db, userId, "first_post");
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const content = sanitizeInput(opts.content, 2000);
+  const firstMedia = opts.mediaUrls?.[0];
+  const isGenericCaption = !content.trim() || content.trim() === GENERIC_IMAGE_CAPTION;
+  const insertId = Number(opts.insertId) || 0;
+
+  const others = await db
+    .select({ id: posts.id, content: posts.content, mediaUrls: posts.mediaUrls })
+    .from(posts)
+    .where(and(
+      eq(posts.authorId, userId),
+      gt(posts.createdAt, todayStart),
+    ));
+
+  const isDup = others.some((p) => {
+    if (insertId > 0 && p.id === insertId) return false;
+    const urls = parseMediaUrls(p.mediaUrls);
+    if (firstMedia) return urls[0] === firstMedia;
+    if (isGenericCaption) return false;
+    return p.content === content;
+  });
+
+  if (!isDup) earned += await awardTaskEvent(db, userId, "post_daily");
+  return earned;
+}
+
 // 广场推广档位（AI 计价，按天）
 export const PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 天" },
@@ -122,7 +173,7 @@ export const postsRouter = router({
       const plan = PROMOTE_PLANS.find((p) => p.key === input.planKey);
       if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "未知推广档位" });
       const ok = await spendNN(db, ctx.user.id, plan.priceNN, { type: "promote", refType: "post", refId: input.postId, memo: plan.key });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
       const base = post.promotedUntil && post.promotedUntil.getTime() > Date.now() ? post.promotedUntil.getTime() : Date.now();
       const until = new Date(base + plan.days * 24 * 3600 * 1000);
       await db.update(posts).set({ promotedUntil: until }).where(eq(posts.id, input.postId));
@@ -241,26 +292,16 @@ export const postsRouter = router({
         tags: input.tags ? JSON.stringify(input.tags.map(t => sanitizeInput(t, 30))) : undefined,
       });
 
-      // AC 产出：首次发帖里程碑 + 每日发帖（每日上限内，任务定义 daily:3 约束）。
-      // 门槛（用户拍板 2026-07-12 取消字数限制）：只防"当天发相同内容重复刷分"，
-      // 不再要求字数——发布动态即计分。每日 3 次上限本身已挡住无限刷。
-      await awardTaskEvent(db, ctx.user.id, "first_post");
-      {
-        const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
-        const [dup] = await db
-          .select({ id: posts.id })
-          .from(posts)
-          .where(and(
-            eq(posts.authorId, ctx.user.id),
-            eq(posts.content, sanitizeInput(input.content, 2000)),
-            gt(posts.createdAt, todayStart),
-            sql`${posts.id} != ${(result as any).insertId}`,
-          ))
-          .limit(1);
-        if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
-      }
+      // 首次发帖里程碑 + 每日发帖（daily:3）。只防当天重复刷分：
+      // 带图按同一张图去重，不再把「分享了一张图片」当成相同正文。
+      const insertId = Number((result as any).insertId) || 0;
+      const npEarned = await awardPostPublish(db, ctx.user.id, {
+        content: input.content,
+        mediaUrls: input.mediaUrls,
+        insertId,
+      });
 
-      return { postId: (result as any).insertId as number };
+      return { postId: insertId, npEarned };
     }),
 
   // ─── Toggle like ───────────────────────────────────────────────────────────
@@ -426,8 +467,8 @@ export const postsRouter = router({
         content: sanitizeInput(input.content, 1000),
       });
 
-      // AC 产出：有效评论（每日上限内）。质量门槛：≥5 字才计分（"好""赞"类水评不计）。
-      if (input.content.trim().length >= 5) {
+      // 有效评论：≥2 字即可（中文两字已够意思；单字「赞」仍不计）
+      if (input.content.trim().length >= 2) {
         await awardTaskEvent(db, ctx.user.id, "comment_made");
       }
 
@@ -607,7 +648,12 @@ export const postsRouter = router({
         } catch (_) { /* notification failure is non-critical */ }
       }
 
-      return { success: true, newPostId: (result as any).insertId as number };
+      const insertId = Number((result as any).insertId) || 0;
+      const npEarned = await awardPostPublish(db, ctx.user.id, {
+        content: repostContent,
+        insertId,
+      });
+      return { success: true, newPostId: insertId, npEarned };
     }),
 
   // ─── Quote Post (create new post with quote reference) ─────────────────────
@@ -666,7 +712,12 @@ export const postsRouter = router({
         } catch (_) { /* notification failure is non-critical */ }
       }
 
-      return { success: true, newPostId: (result as any).insertId as number };
+      const insertId = Number((result as any).insertId) || 0;
+      const npEarned = await awardPostPublish(db, ctx.user.id, {
+        content: quoteContent,
+        insertId,
+      });
+      return { success: true, newPostId: insertId, npEarned };
     }),
 
   // ─── Search posts ───────────────────────────────────────────────────────

@@ -413,7 +413,7 @@ export async function runGrowthReward(db: Db, groupId: number, inviterId: number
     const invName = inv?.name ?? inv?.username ?? "群友";
     await sendGroupBotMessage(
       db, groupId,
-      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} AC` : ""}`,
+      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} IT` : ""}`,
     );
   }
 }

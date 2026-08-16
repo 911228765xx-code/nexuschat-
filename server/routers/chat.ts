@@ -975,12 +975,16 @@ export const chatRouter = router({
     const unreadMap = new Map(unreadRows.map(r => [r.senderId, Number(r.cnt)]));
 
     // 已"删除"的会话过滤：clearedBeforeId >= 最新消息 id 的 dm 会话不显示（有新消息会重新出现）
-    const prefRows = await db
-      .select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId })
-      .from(conversationPrefs).where(eq(conversationPrefs.userId, myId));
     const clearedMap = new Map<number, number>();
-    for (const p of prefRows) {
-      if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+    try {
+      const prefRows = await db
+        .select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId })
+        .from(conversationPrefs).where(eq(conversationPrefs.userId, myId));
+      for (const p of prefRows) {
+        if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+      }
+    } catch (err) {
+      logger.warn({ err }, "listDMConversations: 会话偏好读取失败，仍返回私信列表");
     }
 
     return partnerUsers
@@ -1024,33 +1028,37 @@ export const chatRouter = router({
     const groupIds = groups.map((g) => g.id);
     const latestByGroup = new Map<number, { content: string; messageType: string; createdAt: Date; recalledAt: Date | null; senderName: string | null; senderUsername: string | null }>();
     if (groupIds.length > 0) {
-      const latest = db
-        .select({
-          groupId: messages.groupId,
-          maxId: sql<number>`MAX(${messages.id})`.as("max_id"),
-        })
-        .from(messages)
-        .where(and(
-          inArray(messages.groupId, groupIds), eq(messages.isDeleted, false),
-          sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`, // 阅后即焚过期消息别当列表预览露原文
-        ))
-        .groupBy(messages.groupId)
-        .as("latest");
-      const latestRows = await db
-        .select({
-          groupId: messages.groupId,
-          content: messages.content,
-          messageType: messages.messageType,
-          createdAt: messages.createdAt,
-          recalledAt: messages.recalledAt,
-          senderName: users.name,
-          senderUsername: users.username,
-        })
-        .from(messages)
-        .innerJoin(latest, eq(messages.id, latest.maxId))
-        .leftJoin(users, eq(messages.senderId, users.id));
-      for (const r of latestRows) {
-        if (r.groupId != null) latestByGroup.set(r.groupId, r);
+      try {
+        const latest = db
+          .select({
+            groupId: messages.groupId,
+            maxId: sql<number>`MAX(${messages.id})`.as("max_id"),
+          })
+          .from(messages)
+          .where(and(
+            inArray(messages.groupId, groupIds), eq(messages.isDeleted, false),
+            sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
+          ))
+          .groupBy(messages.groupId)
+          .as("latest");
+        const latestRows = await db
+          .select({
+            groupId: messages.groupId,
+            content: messages.content,
+            messageType: messages.messageType,
+            createdAt: messages.createdAt,
+            recalledAt: messages.recalledAt,
+            senderName: users.name,
+            senderUsername: users.username,
+          })
+          .from(messages)
+          .innerJoin(latest, eq(messages.id, latest.maxId))
+          .leftJoin(users, eq(messages.senderId, users.id));
+        for (const r of latestRows) {
+          if (r.groupId != null) latestByGroup.set(r.groupId, r);
+        }
+      } catch (err) {
+        logger.warn({ err }, "myGroups: 最新消息预览失败，仍返回群列表");
       }
     }
     const result = groups.map((g) => {
@@ -1353,22 +1361,26 @@ export const chatRouter = router({
       .limit(4);
     let joined = 0;
     for (const group of sampleGroups) {
-      const existing = await db
-        .select({ id: groupMembers.id })
-        .from(groupMembers)
-        .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.userId, ctx.user.id)))
-        .limit(1);
-      if (existing.length > 0) continue;
-      await db.insert(groupMembers).values({
-        groupId: group.id,
-        userId: ctx.user.id,
-        role: "member",
-      });
-      await db
-        .update(chatGroups)
-        .set({ memberCount: sql`memberCount + 1` })
-        .where(eq(chatGroups.id, group.id));
-      joined++;
+      try {
+        const existing = await db
+          .select({ id: groupMembers.id })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.userId, ctx.user.id)))
+          .limit(1);
+        if (existing.length > 0) continue;
+        await db.insert(groupMembers).values({
+          groupId: group.id,
+          userId: ctx.user.id,
+          role: "member",
+        });
+        await db
+          .update(chatGroups)
+          .set({ memberCount: sql`memberCount + 1` })
+          .where(eq(chatGroups.id, group.id));
+        joined++;
+      } catch {
+        // 单个群失败不打断其余登陆群
+      }
     }
     return { joined };
   }),
@@ -2084,7 +2096,7 @@ export const chatRouter = router({
       const totalShares = isDM ? 1 : input.totalShares;
       const isRandom = isDM ? false : input.isRandom;
       if (totalShares > input.totalAmount) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 AC）" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 IT）" });
       }
       const blessing = sanitizeInput(input.blessing?.trim() || "恭喜发财，大吉大利", 100); // 净化,与其它 DM 内容路径一致(原来直接 slice 未过滤)
       let messageId = 0;
@@ -2452,11 +2464,11 @@ export const chatRouter = router({
         if (meta.currency === "AC") {
           // 基础机器人按 AC 计价（任务积分的消耗出口）
           const ok = await spendNP(db, ctx.user.id, cost);
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `IT 余额不足（需 ${cost.toLocaleString()} IT），完成任务可获取 IT` });
         } else {
           // 原子扣 AI 治理代币（余额足够才扣，AI 回流金库）
           const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通" });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足，无法开通" });
         }
         const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
           ? existing.expiresAt.getTime() : Date.now();
@@ -2514,10 +2526,10 @@ export const chatRouter = router({
       const cost = pkg.monthlyNN * input.months;
       if (pkg.currency === "AC") {
         const ok = await spendNP(db, ctx.user.id, cost);
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `IT 余额不足（需 ${cost.toLocaleString()} IT），完成任务可获取 IT` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通套餐" });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足，无法开通套餐" });
       }
 
       const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
@@ -2587,7 +2599,7 @@ export const chatRouter = router({
         const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
         return { ok: true, ...r };
       } catch (e: any) {
-        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
         throw new TRPCError({ code: "BAD_REQUEST", message: "开通失败" });
       }
     }),

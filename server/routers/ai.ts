@@ -372,7 +372,7 @@ export const aiRouter = router({
 
       // 扣 AI
       const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
 
       // 建记录（生成中）
       const [ins] = await db.insert(consultingReports).values({
@@ -403,7 +403,7 @@ export const aiRouter = router({
         // 生成失败：标记失败 + 退还 AI
         await db.update(consultingReports).set({ status: "failed" }).where(eq(consultingReports.id, reportId));
         await grantNN(db, ctx.user.id, type.priceNN, { type: "report_refund", refType: "report", refId: reportId, memo: "生成失败退款" });
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "报告生成失败，已退还 AI" });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "报告生成失败，已退还 BIT" });
       }
     }),
 });

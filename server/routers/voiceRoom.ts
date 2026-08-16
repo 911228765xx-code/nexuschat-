@@ -167,7 +167,7 @@ export const voiceRoomRouter = router({
       let charged = false;
       if (used >= benefits.voiceRoomFreeMonthly) {
         const ok = await spendNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id });
-        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AI 不足：本月免费开房已用完，单次开房需 ${VOICE_ROOM_COST} AI，或升级会员获更多免费次数` });
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `BIT 不足：本月免费开房已用完，单次开房需 ${VOICE_ROOM_COST} BIT，或升级会员获更多免费次数` });
         charged = true;
       }
       // 扣费后若建房失败(allocRoomId 撞唯一键 / DB 瞬断),退还已扣 AI,避免钱扣了房没建成
@@ -299,7 +299,7 @@ export const voiceRoomRouter = router({
         .where(and(eq(voiceRooms.id, rid), eq(voiceRooms.status, "live"))).limit(1);
       if (!room) throw new TRPCError({ code: "NOT_FOUND", message: "该语音房已结束" });
       const ok = await spendAC(db, ctx.user.id, gift.ac);
-      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `AC 不足，送出${gift.name}需 ${gift.ac} AC` });
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: `IT 不足，送出${gift.name}需 ${gift.ac} IT` });
       const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
       return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
     }),
