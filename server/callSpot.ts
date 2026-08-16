@@ -26,18 +26,20 @@ function toSym(pair?: string): "BTC" | "ETH" | null {
 
 /** 现价走 Binance ticker/price（约 1.2s 缓存），24h 涨跌单独缓 20s。页面不刷新也能跳。 */
 export async function fetchCallLiveQuotes(): Promise<CallQuote[]> {
-  const live = await cachedFetch<Array<{ symbol?: string; price?: string }>>(
-    "call-quotes-px",
-    `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
-    1_200,
-    (res) => res.json(),
-  );
-  const chg = await cachedFetch<Array<{ symbol?: string; priceChangePercent?: string }>>(
-    "call-quotes-24h",
-    `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
-    20_000,
-    (res) => res.json(),
-  );
+  const [live, chg] = await Promise.all([
+    cachedFetch<Array<{ symbol?: string; price?: string }>>(
+      "call-quotes-px",
+      `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
+      1_200,
+      (res) => res.json(),
+    ),
+    cachedFetch<Array<{ symbol?: string; priceChangePercent?: string }>>(
+      "call-quotes-24h",
+      `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
+      20_000,
+      (res) => res.json(),
+    ),
+  ]);
   const chgMap = new Map<string, number>();
   if (Array.isArray(chg)) {
     for (const row of chg) {
@@ -156,16 +158,29 @@ async function fetchSymbolKlines(symbol: "BTC" | "ETH"): Promise<CallCandle[]> {
     { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
     { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`, parse: parseBybitKlines },
   ];
-  const results = await Promise.all(sources.map(async (s) => s.parse(await fetchJsonQuick(s.url, 3500))));
-  let best: CallCandle[] = [];
-  let bestQ = -1;
-  for (const bars of results) {
-    const q = klineQuality(bars);
-    if (q > bestQ) {
-      bestQ = q;
-      best = bars;
+  let best: CallCandle[] = hit?.bars ?? [];
+  let bestQ = klineQuality(best);
+  await new Promise<void>((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2200).then((raw) => {
+        const bars = s.parse(raw);
+        const q = klineQuality(bars);
+        if (q > bestQ) {
+          bestQ = q;
+          best = bars;
+        }
+        if (q > 40) finish();
+        if (--left === 0) finish();
+      });
     }
-  }
+  });
   if (best.length >= 2) {
     sparkCache.set(symbol, { at: Date.now(), bars: best });
     return best;
@@ -181,26 +196,46 @@ export async function fetchCallSparklines(): Promise<Record<"BTC" | "ETH", CallC
 
 export async function fetchCallSpotPrice(symbol: string): Promise<number | null> {
   const sym = symbol.toUpperCase();
+  const pair = BINANCE_PAIR[sym];
+
+  // 和下注页同一路：币安现价。CoinGecko 常限流，CryptoCompare 现已要 Key。
+  if (pair) {
+    const bn = await cachedFetch<{ price?: string }>(
+      `call-spot-bn:${pair}`,
+      `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`,
+      1_200,
+      (res) => res.json(),
+    );
+    const bnPx = Number(bn?.price);
+    if (bnPx > 0) {
+      lastPx.set(sym, bnPx);
+      return bnPx;
+    }
+    const vis = await fetchJsonQuick(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${pair}`, 2200);
+    const visPx = Number((vis as { price?: string } | null)?.price);
+    if (visPx > 0) {
+      lastPx.set(sym, visPx);
+      return visPx;
+    }
+  }
+
   const id = CG_ID[sym];
-  if (!id) return null;
+  if (id) {
+    const cg = await cachedFetch<Record<string, { usd?: number }>>(
+      `call-spot-cg:${id}`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
+      TTL.prices,
+      (res) => res.json(),
+    );
+    const cgPx = cg?.[id]?.usd;
+    if (typeof cgPx === "number" && cgPx > 0) {
+      lastPx.set(sym, cgPx);
+      return cgPx;
+    }
+  }
 
-  const cg = await cachedFetch<Record<string, { usd?: number }>>(
-    `call-spot-cg:${id}`,
-    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
-    TTL.prices,
-    (res) => res.json(),
-  );
-  const cgPx = cg?.[id]?.usd;
-  if (typeof cgPx === "number" && cgPx > 0) return cgPx;
-
-  const cc = await cachedFetch<Record<string, number>>(
-    `call-spot-cc:${sym}`,
-    `https://min-api.cryptocompare.com/data/price?fsym=${sym}&tsyms=USD`,
-    TTL.prices,
-    (res) => res.json(),
-  );
-  const ccPx = cc?.USD;
-  return typeof ccPx === "number" && ccPx > 0 ? ccPx : null;
+  const mem = lastPx.get(sym);
+  return mem && mem > 0 ? mem : null;
 }
 
 const BINANCE_PAIR: Record<string, string> = { BTC: "BTCUSDT", ETH: "ETHUSDT" };
@@ -211,7 +246,71 @@ function binanceInterval(horizonMin: number): string | null {
   return null;
 }
 
-/** 取该时间窗 K 线的开盘价 / 收盘价（Binance，失败再试 CryptoCompare 分钟线）。 */
+function bybitInterval(horizonMin: number): string | null {
+  if (horizonMin === 60) return "60";
+  if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return String(horizonMin);
+  return null;
+}
+
+export function pickWindowOHLC(bars: CallCandle[], openMs: number): { open: number; close: number } | null {
+  if (!bars.length) return null;
+  let best = bars[0];
+  let bestD = Math.abs(best.t - openMs);
+  for (const b of bars) {
+    const d = Math.abs(b.t - openMs);
+    if (d < bestD) {
+      best = b;
+      bestD = d;
+    }
+  }
+  if (bestD > 60_000 || !(best.o > 0) || !(best.c > 0)) return null;
+  return { open: best.o, close: best.c };
+}
+
+function ohlcFrom1m(bars: CallCandle[], openMs: number, horizonMin: number): { open: number; close: number } | null {
+  const closeMs = openMs + horizonMin * 60_000;
+  const inWin = bars.filter((b) => b.t >= openMs - 1000 && b.t < closeMs + 1000).sort((a, b) => a.t - b.t);
+  if (inWin.length < 2) return null;
+  const open = inWin[0].o;
+  const close = inWin[inWin.length - 1].c;
+  if (!(open > 0) || !(close > 0)) return null;
+  return { open, close };
+}
+
+async function raceParsedKlines(
+  sources: Array<{ url: string; parse: (raw: unknown) => CallCandle[] }>,
+  minBars = 1,
+): Promise<CallCandle[]> {
+  let best: CallCandle[] = [];
+  let bestN = 0;
+  await new Promise<void>((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    if (!sources.length) {
+      finish();
+      return;
+    }
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2500).then((raw) => {
+        const bars = s.parse(raw);
+        if (bars.length > bestN) {
+          bestN = bars.length;
+          best = bars;
+        }
+        if (bars.length >= minBars) finish();
+        if (--left === 0) finish();
+      });
+    }
+  });
+  return best;
+}
+
+/** 取该时间窗 K 线的开盘价 / 收盘价。币安主站不通时走 vision / Bybit / 1 分钟线拼。 */
 export async function fetchCallWindowOHLC(
   symbol: string,
   openMs: number,
@@ -220,19 +319,36 @@ export async function fetchCallWindowOHLC(
   const sym = symbol.toUpperCase();
   const pair = BINANCE_PAIR[sym];
   const interval = binanceInterval(horizonMin);
+  const start = Math.max(0, openMs - 5000);
+
+  const sources: Array<{ url: string; parse: (raw: unknown) => CallCandle[] }> = [];
   if (pair && interval) {
-    const rows = await cachedFetch<Array<[number, string, string, string, string]>>(
-      `call-kline:${pair}:${interval}:${openMs}`,
-      `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${openMs}&limit=1`,
-      15_000,
-      (res) => res.json(),
+    sources.push(
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
     );
-    const k = Array.isArray(rows) ? rows[0] : null;
-    if (k && Number(k[0]) === openMs) {
-      const open = Number(k[1]);
-      const close = Number(k[4]);
-      if (open > 0 && close > 0) return { open, close };
-    }
+  }
+  const bv = bybitInterval(horizonMin);
+  if (pair && bv) {
+    sources.push({
+      url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=${bv}&start=${start}&limit=2`,
+      parse: parseBybitKlines,
+    });
+  }
+
+  const hit = pickWindowOHLC(await raceParsedKlines(sources), openMs);
+  if (hit) return hit;
+
+  if (pair) {
+    const need = Math.min(horizonMin, 60);
+    const oneMin = await raceParsedKlines([
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&start=${openMs}&limit=${need}`, parse: parseBybitKlines },
+    ], Math.max(2, Math.floor(need * 0.7)));
+    const from1m = ohlcFrom1m(oneMin, openMs, horizonMin);
+    if (from1m) return from1m;
   }
 
   const toTs = Math.floor((openMs + horizonMin * 60_000) / 1000);

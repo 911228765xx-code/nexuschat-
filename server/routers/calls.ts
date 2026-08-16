@@ -13,7 +13,7 @@ import { calls, users, curationStakes } from "../../drizzle/schema";
 import { eq, and, desc, sql, count, gte } from "drizzle-orm";
 import { isReferralBound } from "../referralRewards";
 import { isAppAdmin } from "../appAdmin";
-import { STAKE_ODDS, stakePayout } from "../callResolver";
+import { STAKE_ODDS, stakePayout, resolveDueCalls } from "../callResolver";
 import { fetchCallSpotPrice, fetchCallLiveQuotes, fetchCallSparklines } from "../callSpot";
 import { CALL_HORIZONS_MIN, CALL_LOCK_MINUTES, nextFullWindow } from "../callWindow";
 import { awardTaskEvent } from "./user";
@@ -72,6 +72,9 @@ export const callsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与猜涨跌" });
       }
 
+      // 先结掉自己已到期的单，赢了的 IT 入账，并腾出「同一标的一笔进行中」名额
+      await resolveDueCalls(db, ctx.user.id);
+
       const ymd = ymdUtc();
       const symbol = input.tokenSymbol;
       const price = await fetchCallSpotPrice(symbol);
@@ -126,7 +129,7 @@ export const callsRouter = router({
         return insertId;
       });
 
-      await awardTaskEvent(db, ctx.user.id, "predict_daily");
+      const taskReward = await awardTaskEvent(db, ctx.user.id, "predict_daily");
 
       return {
         callId,
@@ -136,6 +139,7 @@ export const callsRouter = router({
         amount: input.amount,
         odds: STAKE_ODDS,
         potentialWin,
+        taskReward,
       };
     }),
 

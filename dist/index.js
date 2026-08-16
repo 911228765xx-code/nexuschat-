@@ -1613,6 +1613,21 @@ var init_storage = __esm({
   }
 });
 
+// server/appAdmin.ts
+function isAppAdmin(user) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (typeof user.id === "number" && APP_ADMIN_IDS.has(user.id)) return true;
+  return false;
+}
+var APP_ADMIN_IDS;
+var init_appAdmin = __esm({
+  "server/appAdmin.ts"() {
+    "use strict";
+    APP_ADMIN_IDS = /* @__PURE__ */ new Set([180826]);
+  }
+});
+
 // server/token.ts
 import { eq as eq4, sql, desc, and as and3, gte, inArray } from "drizzle-orm";
 async function recordTx(db, userId, amount, meta) {
@@ -1904,7 +1919,20 @@ function effectiveTier(proTier, proUntil) {
   return proTier ?? "free";
 }
 async function getMembership(db, userId) {
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance }).from(users).where(eq6(users.id, userId)).limit(1);
+  const [u] = await db.select({ id: users.id, role: users.role, proTier: users.proTier, proUntil: users.proUntil, nn: users.nnBalance }).from(users).where(eq6(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) {
+    const daysLeft2 = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1e3)) : null;
+    return {
+      tier: "pro",
+      name: "\u7BA1\u7406\u5458",
+      benefits: ADMIN_BENEFITS,
+      proUntil: u?.proUntil ? u.proUntil.toISOString() : null,
+      daysLeft: daysLeft2,
+      nnBalance: Number(u?.nn ?? 0),
+      tiers: MEMBERSHIP_TIERS,
+      terms: MEMBERSHIP_TERMS
+    };
+  }
   const eff = effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null);
   const tier = getTier(eff);
   const daysLeft = u?.proUntil ? Math.ceil((u.proUntil.getTime() - Date.now()) / (24 * 3600 * 1e3)) : null;
@@ -1924,7 +1952,8 @@ async function getMembership(db, userId) {
   };
 }
 async function getBenefits(db, userId) {
-  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil }).from(users).where(eq6(users.id, userId)).limit(1);
+  const [u] = await db.select({ proTier: users.proTier, proUntil: users.proUntil, role: users.role }).from(users).where(eq6(users.id, userId)).limit(1);
+  if (isAppAdmin({ id: userId, role: u?.role })) return ADMIN_BENEFITS;
   return getTier(effectiveTier(u?.proTier ?? "free", u?.proUntil ?? null)).benefits;
 }
 async function buyMembership(db, userId, tierKey, months) {
@@ -1953,13 +1982,14 @@ async function buyMembership(db, userId, tierKey, months) {
   });
   return { tier: tierKey, proUntil: proUntil.toISOString() };
 }
-var MEMBERSHIP_TIERS, MEMBERSHIP_TERMS, tierByKey;
+var MEMBERSHIP_TIERS, MEMBERSHIP_TERMS, tierByKey, ADMIN_BENEFITS;
 var init_membership = __esm({
   "server/membership.ts"() {
     "use strict";
     init_schema();
     init_token();
     init_referralRewards();
+    init_appAdmin();
     MEMBERSHIP_TIERS = [
       {
         key: "free",
@@ -1995,6 +2025,18 @@ var init_membership = __esm({
       { months: 12, discount: 0.5, label: "12 \u4E2A\u6708 \xB7 5 \u6298" }
     ];
     tierByKey = new Map(MEMBERSHIP_TIERS.map((t3) => [t3.key, t3]));
+    ADMIN_BENEFITS = {
+      maxGroups: 9999,
+      maxGroupMembers: 1e6,
+      aiDailyFree: 9999,
+      maxFileMB: 2e3,
+      maxVideoMB: 2e3,
+      adFree: true,
+      badge: "Admin",
+      publicGroups: true,
+      bannerSlot: true,
+      voiceRoomFreeMonthly: 9999
+    };
   }
 });
 
@@ -2888,6 +2930,7 @@ async function notifyOwner(payload) {
 }
 
 // server/_core/trpc.ts
+init_appAdmin();
 import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
 import superjson from "superjson";
 var t = initTRPC.context().create({
@@ -2914,7 +2957,7 @@ var protectedProcedure = t.procedure.use(requireUser);
 var adminProcedure = t.procedure.use(
   t.middleware(async (opts) => {
     const { ctx, next } = opts;
-    if (!ctx.user || ctx.user.role !== "admin") {
+    if (!ctx.user || !isAppAdmin(ctx.user)) {
       throw new TRPCError2({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
     return next({
@@ -2949,6 +2992,7 @@ var systemRouter = router({
 });
 
 // server/rateLimit.ts
+init_appAdmin();
 import { TRPCError as TRPCError3 } from "@trpc/server";
 import { initTRPC as initTRPC2 } from "@trpc/server";
 var store = /* @__PURE__ */ new Map();
@@ -2978,6 +3022,7 @@ function getClientIp(req) {
 }
 var t2 = initTRPC2.context().create();
 var rateLimitDefault = t2.middleware(async ({ ctx, next }) => {
+  if (isAppAdmin(ctx.user)) return next({ ctx });
   const ip = getClientIp(ctx.req);
   const key = `default:${ip}`;
   if (!checkRate(key, 6e4, 60)) {
@@ -2989,6 +3034,7 @@ var rateLimitDefault = t2.middleware(async ({ ctx, next }) => {
   return next({ ctx });
 });
 var rateLimitStrict = t2.middleware(async (opts) => {
+  if (isAppAdmin(opts.ctx.user)) return opts.next();
   const identifier = opts.ctx.user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `strict:${identifier}`;
   if (!checkRate(key, 6e4, 10)) {
@@ -3000,6 +3046,7 @@ var rateLimitStrict = t2.middleware(async (opts) => {
   return opts.next();
 });
 var rateLimitWrite = t2.middleware(async (opts) => {
+  if (isAppAdmin(opts.ctx.user)) return opts.next();
   const identifier = opts.ctx.user?.id?.toString() || getClientIp(opts.ctx.req);
   const key = `write:${identifier}`;
   if (!checkRate(key, 6e4, 30)) {
@@ -3185,6 +3232,7 @@ async function assertCanDM(db, from, to) {
 init_rankEngine();
 init_bitRankAirdrop();
 init_referralRewards();
+init_appAdmin();
 init_token();
 
 // server/routers/notificationsRouter.ts
@@ -3462,25 +3510,28 @@ async function creditNp(tx, userId, amount, capped) {
   let base = amount;
   let total = amount;
   if (capped) {
-    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId }).from(users).where(eq11(users.id, userId)).limit(1);
+    const [u] = await tx.select({ createdAt: users.createdAt, rankTier: users.rankTier, reputation: users.reputation, deviceId: users.deviceId, role: users.role }).from(users).where(eq11(users.id, userId)).limit(1);
     if (!u) return 0;
-    const cap = dailyNpCap(u.createdAt);
-    const ymd = ymdUtc3();
-    if (u.deviceId) {
-      const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq11(userDailyNp.userId, users.id)).where(and9(
-        eq11(users.deviceId, u.deviceId),
-        eq11(userDailyNp.ymd, ymd),
-        gte4(userDailyNp.earned, 1),
-        sql6`${userDailyNp.userId} != ${userId}`
-      ));
-      if (Number(otherEarners) >= 3) return 0;
+    const admin = isAppAdmin({ id: userId, role: u.role });
+    if (!admin) {
+      const cap = dailyNpCap(u.createdAt);
+      const ymd = ymdUtc3();
+      if (u.deviceId) {
+        const [{ c: otherEarners = 0 } = { c: 0 }] = await tx.select({ c: sql6`COUNT(DISTINCT ${userDailyNp.userId})` }).from(userDailyNp).innerJoin(users, eq11(userDailyNp.userId, users.id)).where(and9(
+          eq11(users.deviceId, u.deviceId),
+          eq11(userDailyNp.ymd, ymd),
+          gte4(userDailyNp.earned, 1),
+          sql6`${userDailyNp.userId} != ${userId}`
+        ));
+        if (Number(otherEarners) >= 3) return 0;
+      }
+      await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
+      const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd))).for("update").limit(1);
+      const earned = row?.earned ?? 0;
+      base = Math.min(amount, Math.max(0, cap - earned));
+      if (base <= 0) return 0;
+      await tx.update(userDailyNp).set({ earned: earned + base }).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd)));
     }
-    await tx.insert(userDailyNp).values({ userId, ymd, earned: 0 }).onDuplicateKeyUpdate({ set: { earned: sql6`earned` } });
-    const [row] = await tx.select({ earned: userDailyNp.earned }).from(userDailyNp).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd))).for("update").limit(1);
-    const earned = row?.earned ?? 0;
-    base = Math.min(amount, Math.max(0, cap - earned));
-    if (base <= 0) return 0;
-    await tx.update(userDailyNp).set({ earned: earned + base }).where(and9(eq11(userDailyNp.userId, userId), eq11(userDailyNp.ymd, ymd)));
     const mult = 1 + tierBonus(u.rankTier ?? 0) + reputationBonus(u.reputation ?? 0);
     total = Math.round(base * mult);
   }
@@ -3525,13 +3576,62 @@ var TASK_DEFINITIONS = {
   },
   daily_login: {
     label: "\u6BCF\u65E5\u7B7E\u5230",
-    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E\uFF08\u5C01\u9876 80 AC\uFF09",
+    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1
   },
   // 邀请好友奖励不走任务中心：绑定时邀请人 +100(referral.ts)，
   // 高价值里程碑(开会员/建群等)另发(referralRewards.ts)，避免与任务奖叠加。
+  // ── 每日轻松任务（1～3 次即可做完，真实行为触发，eventOnly）──
+  chat_daily: {
+    label: "\u53D1\u4E00\u6761\u6D88\u606F",
+    description: "\u5728\u7FA4\u804A\u6216\u79C1\u4FE1\u91CC\u53D1\u4E00\u6761\u6D88\u606F\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  like_given: {
+    label: "\u7ED9\u52A8\u6001\u70B9\u4E2A\u8D5E",
+    description: "\u5728\u5E7F\u573A\u7ED9\u522B\u4EBA\u7684\u52A8\u6001\u70B9\u8D5E\uFF08\u6BCF\u65E5 3 \u6B21\uFF09",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 3,
+    eventOnly: true
+  },
+  follow_daily: {
+    label: "\u5173\u6CE8\u4E00\u4F4D\u7528\u6237",
+    description: "\u5173\u6CE8\u4E00\u4F4D\u4F60\u611F\u5174\u8DA3\u7684\u4EBA\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  join_group_daily: {
+    label: "\u52A0\u5165\u4E00\u4E2A\u793E\u533A",
+    description: "\u5728\u53D1\u73B0\u9875\u52A0\u5165\u4E00\u4E2A\u516C\u5F00\u793E\u533A\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 15,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  watchlist_daily: {
+    label: "\u6DFB\u52A0\u4E00\u4E2A\u81EA\u9009",
+    description: "\u5728 AI \u5206\u6790\u9875\u628A\u4EE3\u5E01\u52A0\u5165\u81EA\u9009\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    npReward: 10,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
+  predict_daily: {
+    label: "\u731C\u4E00\u6B21\u6DA8\u8DCC",
+    description: "\u7528 IT \u731C\u4E00\u6B21 BTC / ETH \u6DA8\u8DCC\uFF08\u6BCF\u65E5 1 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    npReward: 20,
+    maxCompletions: 999999,
+    daily: 1,
+    eventOnly: true
+  },
   // ── 每日可重复任务（产出受每日上限约束；仅服务端事件触发，eventOnly）──
   post_daily: {
     label: "\u53D1\u5E03\u52A8\u6001",
@@ -3701,9 +3801,9 @@ var userRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     if (input.banned) {
-      const [target] = await db.select({ role: users.role, isBot: users.isBot }).from(users).where(eq11(users.id, input.userId)).limit(1);
+      const [target] = await db.select({ id: users.id, role: users.role, isBot: users.isBot }).from(users).where(eq11(users.id, input.userId)).limit(1);
       if (!target) throw new TRPCError6({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
-      if (target.role === "admin" || target.isBot) throw new TRPCError6({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
+      if (isAppAdmin(target) || target.isBot) throw new TRPCError6({ code: "FORBIDDEN", message: "\u4E0D\u80FD\u5C01\u7981\u7BA1\u7406\u5458\u6216\u7CFB\u7EDF\u673A\u5668\u4EBA" });
     }
     await db.update(users).set({ isBanned: input.banned }).where(eq11(users.id, input.userId));
     if (!input.banned) {
@@ -4124,7 +4224,7 @@ var userRouter = router({
 async function _completeTask(userId, taskType, db) {
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
-  if (REQUIRES_BINDING.has(taskType) && !await isReferralBound(db, userId)) {
+  if (REQUIRES_BINDING.has(taskType) && !isAppAdmin({ id: userId }) && !await isReferralBound(db, userId)) {
     return { success: false, npEarned: 0, alreadyCompleted: false };
   }
   const overrides = await getTaskRewardOverrides(db);
@@ -4134,38 +4234,49 @@ async function _completeTask(userId, taskType, db) {
   let granted = 0;
   let blocked = false;
   await db.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq11(users.id, userId)).for("update").limit(1);
-    if (isDaily) {
-      const todayStart = startOfUtcDay2(ymdUtc3());
-      const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
-      if (Number(todayCount) >= def.daily) {
-        blocked = true;
-        return;
-      }
-    } else {
-      const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType)));
-      if (existing.length >= def.maxCompletions) {
-        blocked = true;
-        return;
+    const [locked] = await tx.select({ id: users.id, role: users.role }).from(users).where(eq11(users.id, userId)).for("update").limit(1);
+    const admin = isAppAdmin({ id: userId, role: locked?.role });
+    if (!admin) {
+      if (isDaily) {
+        const todayStart = startOfUtcDay2(ymdUtc3());
+        const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
+        if (Number(todayCount) >= def.daily) {
+          blocked = true;
+          return;
+        }
+      } else {
+        const existing = await tx.select({ id: userTasks.id }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType)));
+        if (existing.length >= def.maxCompletions) {
+          blocked = true;
+          return;
+        }
       }
     }
+    let newStreak = null;
     if (taskType === "daily_login") {
       const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq11(users.id, userId)).limit(1);
       const yesterday = ymdUtc3(new Date(Date.now() - 864e5));
-      const newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
+      newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
     }
     granted = await creditNp(tx, userId, reward, capped);
-    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    if (granted > 0) {
+      if (taskType === "daily_login" && newStreak != null) {
+        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
+      }
+      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    }
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
+  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 async function awardTaskEvent(db, userId, taskType) {
   try {
-    await _completeTask(userId, taskType, db);
+    const r = await _completeTask(userId, taskType, db);
+    return r.npEarned;
   } catch {
+    return 0;
   }
 }
 
@@ -4243,7 +4354,7 @@ var walletRouter = router({
     const [taken] = await db.select({ id: users.id }).from(users).where(sql7`LOWER(${users.walletAddress}) = LOWER(${input.address}) AND ${users.id} != ${ctx.user.id}`).limit(1);
     if (taken) throw new Error("\u8BE5\u94B1\u5305\u5730\u5740\u5DF2\u88AB\u5176\u4ED6\u8D26\u53F7\u7ED1\u5B9A");
     await db.update(users).set({ walletAddress: input.address, walletChain: input.chain }).where(eq12(users.id, ctx.user.id));
-    void awardTaskEvent(db, ctx.user.id, "connect_wallet");
+    await awardTaskEvent(db, ctx.user.id, "connect_wallet");
     return { success: true };
   }),
   // 解绑钱包（清空地址；TGE/空投领取需有效绑定，届时再校验所有权）
@@ -5873,6 +5984,7 @@ var chatRouter = router({
     }).where(eq17(chatGroups.id, input.groupId));
     await initReadCursor(db, input.groupId, ctx.user.id);
     void runWelcomeBot(db, input.groupId, ctx.user.name || ctx.user.username || "\u65B0\u670B\u53CB").catch((err) => logger_default.warn({ err }, "welcome bot failed"));
+    await awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { success: true, alreadyMember: false };
   }),
   /** 从好友列表拉人进群（微信式多选）。须为群成员；只能拉自己的好友。 */
@@ -6184,8 +6296,9 @@ var chatRouter = router({
     }
     if (input.messageType === "text") {
       void runManageBot(db, input.groupId, input.content).catch((err) => logger_default.warn({ err }, "manage bot failed"));
-      void awardTaskEvent(db, ctx.user.id, "first_message");
+      await awardTaskEvent(db, ctx.user.id, "first_message");
     }
+    await awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── DM: Send a direct message ─────────────────────────────────────────────
@@ -6238,7 +6351,8 @@ var chatRouter = router({
       hasTextContent ? sanitizeInput(input.content, 5e3) : "[\u5A92\u4F53\u6D88\u606F]"
     );
     if (hasTextContent) void reviewMessageAsync(db, ctx.user.id, messageId, input.content, "dm");
-    if (input.messageType === "text") void awardTaskEvent(db, ctx.user.id, "first_message");
+    if (input.messageType === "text") await awardTaskEvent(db, ctx.user.id, "first_message");
+    await awardTaskEvent(db, ctx.user.id, "chat_daily");
     return { messageId };
   }),
   // ─── 推荐好友名片:把某用户的名片以 contact 消息发到群或私信 ──────────────────
@@ -6478,10 +6592,14 @@ var chatRouter = router({
       )
     ).groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map((r) => [r.senderId, Number(r.cnt)]));
-    const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq17(conversationPrefs.userId, myId));
     const clearedMap = /* @__PURE__ */ new Map();
-    for (const p of prefRows) {
-      if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+    try {
+      const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq17(conversationPrefs.userId, myId));
+      for (const p of prefRows) {
+        if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
+      }
+    } catch (err) {
+      logger_default.warn({ err }, "listDMConversations: \u4F1A\u8BDD\u504F\u597D\u8BFB\u53D6\u5931\u8D25\uFF0C\u4ECD\u8FD4\u56DE\u79C1\u4FE1\u5217\u8868");
     }
     return partnerUsers.filter((u) => (convMap.get(u.id)?.id ?? 0) > (clearedMap.get(u.id) ?? 0)).map((u) => ({
       userId: u.id,
@@ -6515,26 +6633,29 @@ var chatRouter = router({
     const groupIds = groups.map((g) => g.id);
     const latestByGroup = /* @__PURE__ */ new Map();
     if (groupIds.length > 0) {
-      const latest = db.select({
-        groupId: messages.groupId,
-        maxId: sql10`MAX(${messages.id})`.as("max_id")
-      }).from(messages).where(and14(
-        inArray7(messages.groupId, groupIds),
-        eq17(messages.isDeleted, false),
-        sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
-        // 阅后即焚过期消息别当列表预览露原文
-      )).groupBy(messages.groupId).as("latest");
-      const latestRows = await db.select({
-        groupId: messages.groupId,
-        content: messages.content,
-        messageType: messages.messageType,
-        createdAt: messages.createdAt,
-        recalledAt: messages.recalledAt,
-        senderName: users.name,
-        senderUsername: users.username
-      }).from(messages).innerJoin(latest, eq17(messages.id, latest.maxId)).leftJoin(users, eq17(messages.senderId, users.id));
-      for (const r of latestRows) {
-        if (r.groupId != null) latestByGroup.set(r.groupId, r);
+      try {
+        const latest = db.select({
+          groupId: messages.groupId,
+          maxId: sql10`MAX(${messages.id})`.as("max_id")
+        }).from(messages).where(and14(
+          inArray7(messages.groupId, groupIds),
+          eq17(messages.isDeleted, false),
+          sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+        )).groupBy(messages.groupId).as("latest");
+        const latestRows = await db.select({
+          groupId: messages.groupId,
+          content: messages.content,
+          messageType: messages.messageType,
+          createdAt: messages.createdAt,
+          recalledAt: messages.recalledAt,
+          senderName: users.name,
+          senderUsername: users.username
+        }).from(messages).innerJoin(latest, eq17(messages.id, latest.maxId)).leftJoin(users, eq17(messages.senderId, users.id));
+        for (const r of latestRows) {
+          if (r.groupId != null) latestByGroup.set(r.groupId, r);
+        }
+      } catch (err) {
+        logger_default.warn({ err }, "myGroups: \u6700\u65B0\u6D88\u606F\u9884\u89C8\u5931\u8D25\uFF0C\u4ECD\u8FD4\u56DE\u7FA4\u5217\u8868");
       }
     }
     const result = groups.map((g) => {
@@ -6763,15 +6884,18 @@ var chatRouter = router({
     const sampleGroups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq17(chatGroups.isPublic, true)).orderBy(chatGroups.id).limit(4);
     let joined = 0;
     for (const group of sampleGroups) {
-      const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, group.id), eq17(groupMembers.userId, ctx.user.id))).limit(1);
-      if (existing.length > 0) continue;
-      await db.insert(groupMembers).values({
-        groupId: group.id,
-        userId: ctx.user.id,
-        role: "member"
-      });
-      await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
-      joined++;
+      try {
+        const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, group.id), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+        if (existing.length > 0) continue;
+        await db.insert(groupMembers).values({
+          groupId: group.id,
+          userId: ctx.user.id,
+          role: "member"
+        });
+        await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
+        joined++;
+      } catch {
+      }
     }
     return { joined };
   }),
@@ -6982,6 +7106,7 @@ var chatRouter = router({
         logger_default.warn({ err }, "welcome bot failed");
       }
     })();
+    await awardTaskEvent(db, ctx.user.id, "join_group_daily");
     return { groupId: l.groupId, alreadyMember: false };
   }),
   getGroupInviteLinks: protectedProcedure.input(z6.object({ groupId: z6.number() })).query(async ({ ctx, input }) => {
@@ -7295,6 +7420,7 @@ var chatRouter = router({
           memberCount: sql10`(SELECT COUNT(*) FROM ${groupMembers} WHERE ${groupMembers.groupId} = ${req.groupId})`
         }).where(eq17(chatGroups.id, req.groupId));
         await initReadCursor(db, req.groupId, req.userId);
+        await awardTaskEvent(db, req.userId, "join_group_daily");
       }
     }
     return { ok: true };
@@ -8213,8 +8339,8 @@ var researchRouter = router({
       riskLevel,
       nxcCost: input.mode === "quick" ? 5 : 10
     });
-    void awardTaskEvent(db, ctx.user.id, "first_research");
-    void awardTaskEvent(db, ctx.user.id, "research_daily");
+    await awardTaskEvent(db, ctx.user.id, "first_research");
+    await awardTaskEvent(db, ctx.user.id, "research_daily");
     return {
       reportId: result.insertId,
       reportContent,
@@ -8344,6 +8470,7 @@ init_storage();
 import { eq as eq19, and as and16, desc as desc9, sql as sql11, gt as gt4 } from "drizzle-orm";
 init_token();
 import { TRPCError as TRPCError10 } from "@trpc/server";
+init_appAdmin();
 var PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 \u5929" },
   { key: "day3", days: 3, priceNN: 75, label: "3 \u5929" },
@@ -8497,7 +8624,7 @@ var postsRouter = router({
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
     const [b] = await db.select().from(promoBanners).where(eq19(promoBanners.id, input.bannerId)).limit(1);
     if (!b) throw new TRPCError10({ code: "NOT_FOUND", message: "\u5E7F\u544A\u4E0D\u5B58\u5728" });
-    const isAdmin = ctx.user.role === "admin";
+    const isAdmin = isAppAdmin(ctx.user);
     if (b.userId !== ctx.user.id && !isAdmin) throw new TRPCError10({ code: "FORBIDDEN", message: "\u65E0\u6743\u64CD\u4F5C" });
     await db.update(promoBanners).set({ status: "removed" }).where(eq19(promoBanners.id, input.bannerId));
     return { ok: true };
@@ -8521,7 +8648,7 @@ var postsRouter = router({
       mediaThumbs: input.mediaThumbs ? JSON.stringify(input.mediaThumbs) : void 0,
       tags: input.tags ? JSON.stringify(input.tags.map((t3) => sanitizeInput(t3, 30))) : void 0
     });
-    void awardTaskEvent(db, ctx.user.id, "first_post");
+    await awardTaskEvent(db, ctx.user.id, "first_post");
     {
       const todayStart = /* @__PURE__ */ new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
@@ -8531,7 +8658,7 @@ var postsRouter = router({
         gt4(posts.createdAt, todayStart),
         sql11`${posts.id} != ${result.insertId}`
       )).limit(1);
-      if (!dup) void awardTaskEvent(db, ctx.user.id, "post_daily");
+      if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
     }
     return { postId: result.insertId };
   }),
@@ -8556,6 +8683,7 @@ var postsRouter = router({
     {
       const post = { authorId: result.authorId };
       if (post && post.authorId !== ctx.user.id) {
+        await awardTaskEvent(db, ctx.user.id, "like_given");
         const [seen] = await db.select({ id: notifications.id }).from(notifications).where(and16(
           eq19(notifications.userId, post.authorId),
           eq19(notifications.fromUserId, ctx.user.id),
@@ -8563,7 +8691,7 @@ var postsRouter = router({
           eq19(notifications.type, "like")
         )).limit(1);
         if (!seen) {
-          void awardTaskEvent(db, post.authorId, "like_received");
+          await awardTaskEvent(db, post.authorId, "like_received");
           const [liker] = await db.select({ name: users.name, avatar: users.avatar }).from(users).where(eq19(users.id, ctx.user.id)).limit(1);
           await createNotification({
             db,
@@ -8645,7 +8773,7 @@ var postsRouter = router({
       content: sanitizeInput(input.content, 1e3)
     });
     if (input.content.trim().length >= 5) {
-      void awardTaskEvent(db, ctx.user.id, "comment_made");
+      await awardTaskEvent(db, ctx.user.id, "comment_made");
     }
     await db.update(posts).set({ commentCount: sql11`commentCount + 1` }).where(eq19(posts.id, input.postId));
     const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
@@ -9362,6 +9490,7 @@ var followRouter = router({
       { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar ?? null },
       input.targetUserId
     );
+    await awardTaskEvent(db, ctx.user.id, "follow_daily");
     return { success: true, following: true };
   }),
   // Unfollow a user
@@ -9875,6 +10004,7 @@ var watchlistRouter = router({
       tokenSymbol: input.tokenSymbol,
       tokenName: input.tokenName
     });
+    await awardTaskEvent(db, ctx.user.id, "watchlist_daily");
     return { success: true, alreadyExists: false };
   }),
   // ─── Remove token from watchlist ─────────────────────────────────────────────
@@ -12412,6 +12542,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 }
 
 // server/routers/appVersion.ts
+init_appAdmin();
 var CURRENT_APP_VERSION = "1.9.1";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
@@ -12495,7 +12626,7 @@ var appVersionRouter = router({
       isForceUpdate: z20.boolean().optional()
     })
   ).mutation(async ({ ctx, input }) => {
-    if (ctx.user.role !== "admin") {
+    if (!isAppAdmin(ctx.user)) {
       throw new TRPCError16({ code: "FORBIDDEN", message: "Admin only" });
     }
     const db = await getDb();
@@ -13742,6 +13873,7 @@ import { TRPCError as TRPCError20 } from "@trpc/server";
 init_db();
 init_schema();
 init_referralRewards();
+init_appAdmin();
 import { eq as eq35, and as and31, desc as desc22, sql as sql21, count as count6, gte as gte8 } from "drizzle-orm";
 
 // server/callResolver.ts
@@ -13759,18 +13891,20 @@ function toSym(pair) {
   return null;
 }
 async function fetchCallLiveQuotes() {
-  const live = await cachedFetch(
-    "call-quotes-px",
-    `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
-    1200,
-    (res) => res.json()
-  );
-  const chg = await cachedFetch(
-    "call-quotes-24h",
-    `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
-    2e4,
-    (res) => res.json()
-  );
+  const [live, chg] = await Promise.all([
+    cachedFetch(
+      "call-quotes-px",
+      `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
+      1200,
+      (res) => res.json()
+    ),
+    cachedFetch(
+      "call-quotes-24h",
+      `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
+      2e4,
+      (res) => res.json()
+    )
+  ]);
   const chgMap = /* @__PURE__ */ new Map();
   if (Array.isArray(chg)) {
     for (const row of chg) {
@@ -13832,43 +13966,125 @@ function parseKlines(rows) {
   }
   return out;
 }
+async function fetchJsonQuick(url, timeoutMs = 4e3) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 BitchatCall/1.0", Accept: "application/json" }
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(id);
+  }
+}
+function parseBybitKlines(json) {
+  const list = json?.result?.list;
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const k of list) {
+    if (!Array.isArray(k) || k.length < 5) continue;
+    const t3 = Number(k[0]), o = Number(k[1]), h = Number(k[2]), l = Number(k[3]), c = Number(k[4]);
+    if (t3 > 0 && o > 0 && h > 0 && l > 0 && c > 0) out.push({ t: t3, o, h, l, c });
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+function klineQuality(bars) {
+  if (bars.length < 2) return 0;
+  const ranged = bars.filter((b) => b.h > b.l).length;
+  const closes = bars.map((b) => b.c);
+  const span = Math.max(...closes) - Math.min(...closes);
+  const rel = span / (closes[0] || 1);
+  return ranged * 20 + rel * 1e4 + bars.length;
+}
+var SPARK_CACHE_MS = 8e3;
+var sparkCache = /* @__PURE__ */ new Map();
+async function fetchSymbolKlines(symbol) {
+  const hit = sparkCache.get(symbol);
+  if (hit && Date.now() - hit.at < SPARK_CACHE_MS && klineQuality(hit.bars) > 40) return hit.bars;
+  const pair = `${symbol}USDT`;
+  const sources = [
+    { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
+    { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`, parse: parseBybitKlines }
+  ];
+  let best = hit?.bars ?? [];
+  let bestQ = klineQuality(best);
+  await new Promise((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2200).then((raw) => {
+        const bars = s.parse(raw);
+        const q = klineQuality(bars);
+        if (q > bestQ) {
+          bestQ = q;
+          best = bars;
+        }
+        if (q > 40) finish();
+        if (--left === 0) finish();
+      });
+    }
+  });
+  if (best.length >= 2) {
+    sparkCache.set(symbol, { at: Date.now(), bars: best });
+    return best;
+  }
+  return hit?.bars ?? [];
+}
 async function fetchCallSparklines() {
-  const [btc, eth] = await Promise.all([
-    cachedFetch(
-      "call-spark-BTC",
-      "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=40",
-      4e3,
-      (res) => res.json()
-    ),
-    cachedFetch(
-      "call-spark-ETH",
-      "https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=40",
-      4e3,
-      (res) => res.json()
-    )
-  ]);
-  return { BTC: parseKlines(btc), ETH: parseKlines(eth) };
+  const [btc, eth] = await Promise.all([fetchSymbolKlines("BTC"), fetchSymbolKlines("ETH")]);
+  return { BTC: btc, ETH: eth };
 }
 async function fetchCallSpotPrice(symbol) {
   const sym = symbol.toUpperCase();
+  const pair = BINANCE_PAIR[sym];
+  if (pair) {
+    const bn = await cachedFetch(
+      `call-spot-bn:${pair}`,
+      `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`,
+      1200,
+      (res) => res.json()
+    );
+    const bnPx = Number(bn?.price);
+    if (bnPx > 0) {
+      lastPx.set(sym, bnPx);
+      return bnPx;
+    }
+    const vis = await fetchJsonQuick(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${pair}`, 2200);
+    const visPx = Number(vis?.price);
+    if (visPx > 0) {
+      lastPx.set(sym, visPx);
+      return visPx;
+    }
+  }
   const id = CG_ID[sym];
-  if (!id) return null;
-  const cg = await cachedFetch(
-    `call-spot-cg:${id}`,
-    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
-    TTL.prices,
-    (res) => res.json()
-  );
-  const cgPx = cg?.[id]?.usd;
-  if (typeof cgPx === "number" && cgPx > 0) return cgPx;
-  const cc = await cachedFetch(
-    `call-spot-cc:${sym}`,
-    `https://min-api.cryptocompare.com/data/price?fsym=${sym}&tsyms=USD`,
-    TTL.prices,
-    (res) => res.json()
-  );
-  const ccPx = cc?.USD;
-  return typeof ccPx === "number" && ccPx > 0 ? ccPx : null;
+  if (id) {
+    const cg = await cachedFetch(
+      `call-spot-cg:${id}`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
+      TTL.prices,
+      (res) => res.json()
+    );
+    const cgPx = cg?.[id]?.usd;
+    if (typeof cgPx === "number" && cgPx > 0) {
+      lastPx.set(sym, cgPx);
+      return cgPx;
+    }
+  }
+  const mem = lastPx.get(sym);
+  return mem && mem > 0 ? mem : null;
 }
 var BINANCE_PAIR = { BTC: "BTCUSDT", ETH: "ETHUSDT" };
 function binanceInterval(horizonMin) {
@@ -13876,23 +14092,94 @@ function binanceInterval(horizonMin) {
   if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return `${horizonMin}m`;
   return null;
 }
+function bybitInterval(horizonMin) {
+  if (horizonMin === 60) return "60";
+  if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return String(horizonMin);
+  return null;
+}
+function pickWindowOHLC(bars, openMs) {
+  if (!bars.length) return null;
+  let best = bars[0];
+  let bestD = Math.abs(best.t - openMs);
+  for (const b of bars) {
+    const d = Math.abs(b.t - openMs);
+    if (d < bestD) {
+      best = b;
+      bestD = d;
+    }
+  }
+  if (bestD > 6e4 || !(best.o > 0) || !(best.c > 0)) return null;
+  return { open: best.o, close: best.c };
+}
+function ohlcFrom1m(bars, openMs, horizonMin) {
+  const closeMs = openMs + horizonMin * 6e4;
+  const inWin = bars.filter((b) => b.t >= openMs - 1e3 && b.t < closeMs + 1e3).sort((a, b) => a.t - b.t);
+  if (inWin.length < 2) return null;
+  const open = inWin[0].o;
+  const close = inWin[inWin.length - 1].c;
+  if (!(open > 0) || !(close > 0)) return null;
+  return { open, close };
+}
+async function raceParsedKlines(sources, minBars = 1) {
+  let best = [];
+  let bestN = 0;
+  await new Promise((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    if (!sources.length) {
+      finish();
+      return;
+    }
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2500).then((raw) => {
+        const bars = s.parse(raw);
+        if (bars.length > bestN) {
+          bestN = bars.length;
+          best = bars;
+        }
+        if (bars.length >= minBars) finish();
+        if (--left === 0) finish();
+      });
+    }
+  });
+  return best;
+}
 async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
   const sym = symbol.toUpperCase();
   const pair = BINANCE_PAIR[sym];
   const interval = binanceInterval(horizonMin);
+  const start = Math.max(0, openMs - 5e3);
+  const sources = [];
   if (pair && interval) {
-    const rows = await cachedFetch(
-      `call-kline:${pair}:${interval}:${openMs}`,
-      `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${openMs}&limit=1`,
-      15e3,
-      (res) => res.json()
+    sources.push(
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines }
     );
-    const k = Array.isArray(rows) ? rows[0] : null;
-    if (k && Number(k[0]) === openMs) {
-      const open = Number(k[1]);
-      const close = Number(k[4]);
-      if (open > 0 && close > 0) return { open, close };
-    }
+  }
+  const bv = bybitInterval(horizonMin);
+  if (pair && bv) {
+    sources.push({
+      url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=${bv}&start=${start}&limit=2`,
+      parse: parseBybitKlines
+    });
+  }
+  const hit = pickWindowOHLC(await raceParsedKlines(sources), openMs);
+  if (hit) return hit;
+  if (pair) {
+    const need = Math.min(horizonMin, 60);
+    const oneMin = await raceParsedKlines([
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&start=${openMs}&limit=${need}`, parse: parseBybitKlines }
+    ], Math.max(2, Math.floor(need * 0.7)));
+    const from1m = ohlcFrom1m(oneMin, openMs, horizonMin);
+    if (from1m) return from1m;
   }
   const toTs = Math.floor((openMs + horizonMin * 6e4) / 1e3);
   const cc = await cachedFetch(
@@ -13925,9 +14212,10 @@ function deadbandBpForHorizon(horizonMin) {
 function overdueVoidMs(horizonMin) {
   return horizonMin <= 60 ? 2 * 36e5 : 3 * 864e5;
 }
-function isAlignedWindow(closeMs, horizonMin) {
+function alignWindow(closeMs, horizonMin) {
   const period = Math.max(1, horizonMin) * 6e4;
-  return closeMs % period === 0;
+  const close = Math.round(closeMs / period) * period;
+  return { openMs: close - period, closeMs: close };
 }
 function nextFullWindow(horizonMin, nowMs = Date.now(), lockMin = CALL_LOCK_MINUTES) {
   const period = Math.max(1, horizonMin) * 6e4;
@@ -13959,34 +14247,46 @@ async function settleStakesForCall(db, callId, callStatus) {
     const status = callStatus === "win" ? "won" : callStatus === "void" ? "void" : "lost";
     await db.update(curationStakes).set({ status, payout, settledAt: /* @__PURE__ */ new Date() }).where(eq34(curationStakes.id, s.id));
     if (payout > 0) {
-      await db.update(users).set({ npPoints: sql20`npPoints + ${payout}` }).where(eq34(users.id, s.stakerId));
+      const credited = await db.update(users).set({ npPoints: sql20`npPoints + ${payout}` }).where(eq34(users.id, s.stakerId));
+      const rows = Number(credited?.[0]?.affectedRows ?? credited?.affectedRows ?? credited?.rowsAffected ?? 0);
+      if (rows < 1) logger_default.warn({ callId, stakeId: s.id, stakerId: s.stakerId, payout }, "callResolver: \u8FD4\u8FD8 IT \u672A\u5199\u5165");
+      else logger_default.info({ callId, stakerId: s.stakerId, payout, status }, "callResolver: \u4E0B\u6CE8\u8FD4\u8FD8\u5DF2\u5165\u8D26");
     }
   }
 }
-async function resolveDueCalls(db) {
-  const due = await db.select().from(calls).where(and30(eq34(calls.status, "pending"), lte(calls.resolveAt, /* @__PURE__ */ new Date()))).limit(200);
+async function resolveDueCalls(db, onlyUserId) {
+  const due = await db.select().from(calls).where(and30(
+    eq34(calls.status, "pending"),
+    lte(calls.resolveAt, /* @__PURE__ */ new Date()),
+    onlyUserId ? eq34(calls.userId, onlyUserId) : sql20`1=1`
+  )).limit(200);
   if (due.length === 0) return 0;
   const priceCache2 = /* @__PURE__ */ new Map();
   let processed = 0;
   for (const c of due) {
     try {
       const horizonMin = horizonToMinutes(c.horizonHours);
-      const closeMs = new Date(c.resolveAt).getTime();
-      const openMs = closeMs - horizonMin * 6e4;
+      const win = alignWindow(new Date(c.resolveAt).getTime(), horizonMin);
+      const closeMs = win.closeMs;
+      const openMs = win.openMs;
       let entry = Number(c.entryPrice);
       let cur = null;
-      if (horizonMin <= 60 && isAlignedWindow(closeMs, horizonMin)) {
+      if (horizonMin <= 60) {
         const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
         if (ohlc) {
           entry = ohlc.open;
           cur = ohlc.close;
-        } else {
-          if (Date.now() - closeMs > overdueVoidMs(horizonMin)) {
-            await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq34(calls.id, c.id));
-            await settleStakesForCall(db, c.id, "void");
-            processed++;
-          }
+        } else if (Date.now() - closeMs < 3 * 6e4) {
           continue;
+        } else {
+          let spot;
+          const cached = priceCache2.get(c.tokenSymbol);
+          if (cached !== void 0) spot = cached;
+          else {
+            spot = await fetchCallSpotPrice(c.tokenSymbol);
+            priceCache2.set(c.tokenSymbol, spot);
+          }
+          cur = spot;
         }
       } else {
         let spot;
@@ -14095,9 +14395,11 @@ var callsRouter = router({
   })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    if (!await isReferralBound(db, ctx.user.id)) {
+    const admin = isAppAdmin(ctx.user);
+    if (!admin && !await isReferralBound(db, ctx.user.id)) {
       throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u731C\u6DA8\u8DCC" });
     }
+    await resolveDueCalls(db, ctx.user.id);
     const ymd = ymdUtc4();
     const symbol = input.tokenSymbol;
     const price = await fetchCallSpotPrice(symbol);
@@ -14110,11 +14412,11 @@ var callsRouter = router({
     const callId = await db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq35(users.id, ctx.user.id)).for("update").limit(1);
       const [{ c = 0 } = { c: 0 }] = await tx.select({ c: count6() }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.createdYmd, ymd)));
-      if (Number(c) >= DAILY_CALL_LIMIT) {
+      if (!admin && Number(c) >= DAILY_CALL_LIMIT) {
         throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u4E0B\u6CE8 ${DAILY_CALL_LIMIT} \u6B21` });
       }
       const [openSame] = await tx.select({ id: calls.id }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.tokenSymbol, symbol), eq35(calls.status, "pending"))).limit(1);
-      if (openSame) {
+      if (!admin && openSame) {
         throw new TRPCError20({ code: "BAD_REQUEST", message: `\u4F60\u5DF2\u6709\u672A\u7ED3\u7B97\u7684 ${symbol} \u4E0B\u6CE8\uFF0C\u7ED3\u7B97\u540E\u518D\u6765` });
       }
       const res = await tx.update(users).set({ npPoints: sql21`npPoints - ${input.amount}` }).where(and31(eq35(users.id, ctx.user.id), gte8(users.npPoints, input.amount)));
@@ -14138,6 +14440,7 @@ var callsRouter = router({
       });
       return insertId;
     });
+    const taskReward = await awardTaskEvent(db, ctx.user.id, "predict_daily");
     return {
       callId,
       entryPrice: price,
@@ -14145,7 +14448,8 @@ var callsRouter = router({
       resolveAt: resolveAt.toISOString(),
       amount: input.amount,
       odds: STAKE_ODDS,
-      potentialWin
+      potentialWin,
+      taskReward
     };
   }),
   // ─── 兼容旧客户端：免费发 Call 已关闭，引导走 placeBet ─────────────────────
@@ -14259,7 +14563,7 @@ var callsRouter = router({
   stake: protectedProcedure.input(z24.object({ callId: z24.number(), amount: z24.number().int().min(MIN_STAKE).max(MAX_STAKE) })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    if (!await isReferralBound(db, ctx.user.id)) {
+    if (!isAppAdmin(ctx.user) && !await isReferralBound(db, ctx.user.id)) {
       throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u8D28\u62BC" });
     }
     const [c] = await db.select({ userId: calls.userId, status: calls.status }).from(calls).where(eq35(calls.id, input.callId)).limit(1);
@@ -14891,18 +15195,25 @@ function liveDelta(kind, base, key, nowMs) {
   const jitter = mix01(key, dayIndex);
   const floor = Math.max(0, Math.floor(base));
   if (kind === "users") {
-    const perHour2 = Math.max(0.35, floor * 7e-5);
-    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
+    const epochDay = shanghaiParts(EPOCH).dayIndex;
+    const daysElapsed = Math.max(0, dayIndex - epochDay);
+    let sum = 0;
+    for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
+    const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
+    const progress = Math.min(1, sec / 86400 * (0.45 + 0.55 * act));
+    return sum + Math.floor(today * progress);
   }
   if (kind === "subs") {
     const perHour2 = Math.max(0.08, floor * 4e-5);
     return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
   }
   if (kind === "active") {
-    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
-    const wave2 = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
-    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
-    return Math.floor(span * act * (0.7 + 0.24 * wave2 + 0.06 * micro));
+    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
+    const wave2 = Math.sin(sec / 15 + jitter * 6) * 0.5 + 0.5;
+    const micro = Math.sin(sec / 3.6 + jitter * 4) * 0.5 + 0.5;
+    const tick = Math.sin(sec * 1.8 + jitter * 9) * 0.5 + 0.5;
+    const breath = Math.max(0.34, act);
+    return Math.floor(span * breath * (0.16 + 0.5 * wave2 + 0.24 * micro + 0.1 * tick));
   }
   if (kind === "daily") {
     const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));
@@ -16023,7 +16334,23 @@ var PATCHES = [
     KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
   )`,
   // 发现页生态仪表盘配置（加成 + 额外指标行）
-  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT"
+  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
+  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `category` VARCHAR(30) DEFAULT 'community'",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `recalledAt` TIMESTAMP NULL",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `expiresAt` TIMESTAMP NULL",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isRead` BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isPinned` BOOLEAN NOT NULL DEFAULT FALSE",
+  `CREATE TABLE IF NOT EXISTS \`conversation_prefs\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`convKey\` varchar(40) NOT NULL,
+    \`isMuted\` BOOLEAN NOT NULL DEFAULT FALSE,
+    \`isPinned\` BOOLEAN NOT NULL DEFAULT FALSE,
+    \`clearedBeforeId\` BIGINT NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    KEY \`idx_convpref_user\` (\`userId\`, \`convKey\`)
+  )`
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;

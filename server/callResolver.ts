@@ -8,7 +8,7 @@ import { eq, and, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { calls, users, curationStakes } from "../drizzle/schema";
 import { fetchCallSpotPrice, fetchCallWindowOHLC } from "./callSpot";
-import { deadbandBpForHorizon, horizonToMinutes, isAlignedWindow, overdueVoidMs } from "./callWindow";
+import { alignWindow, deadbandBpForHorizon, horizonToMinutes, overdueVoidMs } from "./callWindow";
 import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -43,17 +43,26 @@ async function settleStakesForCall(db: Db, callId: number, callStatus: "win" | "
       .set({ status, payout, settledAt: new Date() })
       .where(eq(curationStakes.id, s.id));
     if (payout > 0) {
-      await db.update(users).set({ npPoints: sql`npPoints + ${payout}` }).where(eq(users.id, s.stakerId));
+      const credited = await db.update(users)
+        .set({ npPoints: sql`npPoints + ${payout}` })
+        .where(eq(users.id, s.stakerId));
+      const rows = Number((credited as any)?.[0]?.affectedRows ?? (credited as any)?.affectedRows ?? (credited as any)?.rowsAffected ?? 0);
+      if (rows < 1) logger.warn({ callId, stakeId: s.id, stakerId: s.stakerId, payout }, "callResolver: 返还 IT 未写入");
+      else logger.info({ callId, stakerId: s.stakerId, payout, status }, "callResolver: 下注返还已入账");
     }
   }
 }
 
-/** 结算所有到期未判定的 Call。返回处理条数。 */
-export async function resolveDueCalls(db: Db): Promise<number> {
+/** 结算到期未判定的 Call。下注前可只结当前用户，避免「有未结算」卡死、赢了不到账。 */
+export async function resolveDueCalls(db: Db, onlyUserId?: number): Promise<number> {
   const due = await db
     .select()
     .from(calls)
-    .where(and(eq(calls.status, "pending"), lte(calls.resolveAt, new Date())))
+    .where(and(
+      eq(calls.status, "pending"),
+      lte(calls.resolveAt, new Date()),
+      onlyUserId ? eq(calls.userId, onlyUserId) : sql`1=1`,
+    ))
     .limit(200);
   if (due.length === 0) return 0;
 
@@ -64,24 +73,30 @@ export async function resolveDueCalls(db: Db): Promise<number> {
   for (const c of due) {
     try {
       const horizonMin = horizonToMinutes(c.horizonHours);
-      const closeMs = new Date(c.resolveAt).getTime();
-      const openMs = closeMs - horizonMin * 60_000;
+      const win = alignWindow(new Date(c.resolveAt).getTime(), horizonMin);
+      const closeMs = win.closeMs;
+      const openMs = win.openMs;
       let entry = Number(c.entryPrice);
       let cur: number | null = null;
 
-      if (horizonMin <= 60 && isAlignedWindow(closeMs, horizonMin)) {
+      if (horizonMin <= 60) {
         const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
         if (ohlc) {
           entry = ohlc.open;
           cur = ohlc.close;
-        } else {
-          // K 线未出齐：等下一分钟，不要拿现价把整段 5 分钟比成「当下 vs 收盘」
-          if (Date.now() - closeMs > overdueVoidMs(horizonMin)) {
-            await db.update(calls).set({ status: "void", resolvedAt: new Date() }).where(eq(calls.id, c.id));
-            await settleStakesForCall(db, c.id, "void");
-            processed++;
-          }
+        } else if (Date.now() - closeMs < 3 * 60_000) {
+          // K 线刚收盘可能还没落库，等下一轮，不要用现价把整根比成「当下」
           continue;
+        } else {
+          // 多源都拿不到这根 K：用现价当收盘，至少能分出胜负，避免一直 pending / 到期 void
+          let spot: number | null;
+          const cached = priceCache.get(c.tokenSymbol);
+          if (cached !== undefined) spot = cached;
+          else {
+            spot = await fetchCallSpotPrice(c.tokenSymbol);
+            priceCache.set(c.tokenSymbol, spot);
+          }
+          cur = spot;
         }
       } else {
         let spot: number | null;

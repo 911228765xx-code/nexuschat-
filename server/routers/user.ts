@@ -164,7 +164,7 @@ export const TASK_DEFINITIONS: Record<
   },
   daily_login: {
     label: "每日签到",
-    description: "每天签到，连续签到奖励递增（封顶 80 AC）",
+    description: "每天签到，连续签到奖励递增",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1,
@@ -1104,10 +1104,12 @@ async function _completeTask(
  * 调用方应 await：发奖完成后再返回，避免用户立刻回任务中心看到旧余额。
  * 失败不抛、不阻断主流程。eventOnly 任务的唯一合法入口。
  */
-export async function awardTaskEvent(db: Db, userId: number, taskType: string): Promise<void> {
+export async function awardTaskEvent(db: Db, userId: number, taskType: string): Promise<number> {
   try {
-    await _completeTask(userId, taskType, db);
+    const r = await _completeTask(userId, taskType, db);
+    return r.npEarned;
   } catch {
     // 任务发放失败不阻断主流程
+    return 0;
   }
 }
