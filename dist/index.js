@@ -3548,14 +3548,14 @@ var TASK_DEFINITIONS = {
   },
   complete_profile: {
     label: "\u5B8C\u5584\u8D44\u6599",
-    description: "\u586B\u5199\u5934\u50CF\u548C\u6635\u79F0",
+    description: "\u586B\u5199\u5934\u50CF\u3001\u6635\u79F0\u548C Bio",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true
   },
   first_post: {
     label: "\u53D1\u5E03\u7B2C\u4E00\u6761\u52A8\u6001",
-    description: "\u5728\u5E7F\u573A\u53D1\u5E03\u4F60\u7684\u7B2C\u4E00\u6761\u52A8\u6001",
+    description: "\u5728 Discover \u53D1\u5E03\u4F60\u7684\u7B2C\u4E00\u6761\u52A8\u6001",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true
@@ -3568,8 +3568,8 @@ var TASK_DEFINITIONS = {
     eventOnly: true
   },
   first_research: {
-    label: "\u751F\u6210\u5206\u6790\u62A5\u544A",
-    description: "\u751F\u6210\u4E00\u4EFD\u4EE3\u5E01\u5206\u6790\u62A5\u544A\uFF08\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    label: "\u751F\u6210 AI \u5206\u6790\u62A5\u544A",
+    description: "\u4F7F\u7528 AI \u751F\u6210\u4E00\u4EFD\u4EE3\u5E01\u5206\u6790\u62A5\u544A\uFF08\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
     npReward: 200,
     maxCompletions: 1,
     eventOnly: true
@@ -3618,7 +3618,7 @@ var TASK_DEFINITIONS = {
   },
   watchlist_daily: {
     label: "\u6DFB\u52A0\u4E00\u4E2A\u81EA\u9009",
-    description: "\u5728\u5206\u6790\u9875\u628A\u4EE3\u5E01\u52A0\u5165\u81EA\u9009\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
+    description: "\u5728 AI \u5206\u6790\u9875\u628A\u4EE3\u5E01\u52A0\u5165\u81EA\u9009\uFF08\u6BCF\u65E5 1 \u6B21\uFF09",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1,
@@ -3658,8 +3658,8 @@ var TASK_DEFINITIONS = {
     eventOnly: true
   },
   research_daily: {
-    label: "\u5206\u6790\u62A5\u544A",
-    description: "\u751F\u6210\u5206\u6790\u62A5\u544A\uFF08\u6BCF\u65E5 3 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    label: "AI \u5206\u6790\u62A5\u544A",
+    description: "\u751F\u6210 AI \u5206\u6790\u62A5\u544A\uFF08\u6BCF\u65E5 3 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
     npReward: 50,
     maxCompletions: 999999,
     daily: 3,
@@ -3711,7 +3711,7 @@ var userRouter = router({
     await db.update(users).set(updateData).where(eq11(users.id, ctx.user.id));
     const updated = await db.select().from(users).where(eq11(users.id, ctx.user.id)).limit(1);
     const u = updated[0];
-    if (u && (u.name || u.username) && u.avatar) {
+    if (u && u.name && u.bio && u.avatar) {
       await _completeTask(ctx.user.id, "complete_profile", db);
     }
     return { success: true };
@@ -3738,10 +3738,6 @@ var userRouter = router({
     const db = await getDb();
     if (db) {
       await db.update(users).set({ avatar: url }).where(eq11(users.id, ctx.user.id));
-      const [u] = await db.select({ name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq11(users.id, ctx.user.id)).limit(1);
-      if (u && (u.name || u.username) && u.avatar) {
-        await _completeTask(ctx.user.id, "complete_profile", db);
-      }
     }
     return { url };
   }),
@@ -4264,12 +4260,15 @@ async function _completeTask(userId, taskType, db) {
       reward = signinStreakReward(newStreak);
     }
     granted = await creditNp(tx, userId, reward, capped);
-    if (taskType === "daily_login" && newStreak != null) {
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
+    if (granted > 0) {
+      if (taskType === "daily_login" && newStreak != null) {
+        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
+      }
+      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
     }
-    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
+  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 async function awardTaskEvent(db, userId, taskType) {
@@ -5466,7 +5465,7 @@ async function runGrowthReward(db, groupId, inviterId, newMemberName) {
     await sendGroupBotMessage(
       db,
       groupId,
-      `\u{1F389} \u6B22\u8FCE ${newMemberName || "\u65B0\u670B\u53CB"} \u52A0\u5165\uFF01\u611F\u8C22 ${invName} \u7684\u9080\u8BF7${reward > 0 ? `\uFF0C\u5DF2\u5956\u52B1 ${reward} IT` : ""}`
+      `\u{1F389} \u6B22\u8FCE ${newMemberName || "\u65B0\u670B\u53CB"} \u52A0\u5165\uFF01\u611F\u8C22 ${invName} \u7684\u9080\u8BF7${reward > 0 ? `\uFF0C\u5DF2\u5956\u52B1 ${reward} AC` : ""}`
     );
   }
 }
@@ -6593,14 +6592,10 @@ var chatRouter = router({
       )
     ).groupBy(messages.senderId);
     const unreadMap = new Map(unreadRows.map((r) => [r.senderId, Number(r.cnt)]));
+    const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq17(conversationPrefs.userId, myId));
     const clearedMap = /* @__PURE__ */ new Map();
-    try {
-      const prefRows = await db.select({ convKey: conversationPrefs.convKey, cleared: conversationPrefs.clearedBeforeId }).from(conversationPrefs).where(eq17(conversationPrefs.userId, myId));
-      for (const p of prefRows) {
-        if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
-      }
-    } catch (err) {
-      logger_default.warn({ err }, "listDMConversations: \u4F1A\u8BDD\u504F\u597D\u8BFB\u53D6\u5931\u8D25\uFF0C\u4ECD\u8FD4\u56DE\u79C1\u4FE1\u5217\u8868");
+    for (const p of prefRows) {
+      if (p.convKey.startsWith("dm:")) clearedMap.set(parseInt(p.convKey.slice(3), 10), p.cleared ?? 0);
     }
     return partnerUsers.filter((u) => (convMap.get(u.id)?.id ?? 0) > (clearedMap.get(u.id) ?? 0)).map((u) => ({
       userId: u.id,
@@ -6634,29 +6629,26 @@ var chatRouter = router({
     const groupIds = groups.map((g) => g.id);
     const latestByGroup = /* @__PURE__ */ new Map();
     if (groupIds.length > 0) {
-      try {
-        const latest = db.select({
-          groupId: messages.groupId,
-          maxId: sql10`MAX(${messages.id})`.as("max_id")
-        }).from(messages).where(and14(
-          inArray7(messages.groupId, groupIds),
-          eq17(messages.isDeleted, false),
-          sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
-        )).groupBy(messages.groupId).as("latest");
-        const latestRows = await db.select({
-          groupId: messages.groupId,
-          content: messages.content,
-          messageType: messages.messageType,
-          createdAt: messages.createdAt,
-          recalledAt: messages.recalledAt,
-          senderName: users.name,
-          senderUsername: users.username
-        }).from(messages).innerJoin(latest, eq17(messages.id, latest.maxId)).leftJoin(users, eq17(messages.senderId, users.id));
-        for (const r of latestRows) {
-          if (r.groupId != null) latestByGroup.set(r.groupId, r);
-        }
-      } catch (err) {
-        logger_default.warn({ err }, "myGroups: \u6700\u65B0\u6D88\u606F\u9884\u89C8\u5931\u8D25\uFF0C\u4ECD\u8FD4\u56DE\u7FA4\u5217\u8868");
+      const latest = db.select({
+        groupId: messages.groupId,
+        maxId: sql10`MAX(${messages.id})`.as("max_id")
+      }).from(messages).where(and14(
+        inArray7(messages.groupId, groupIds),
+        eq17(messages.isDeleted, false),
+        sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`
+        // 阅后即焚过期消息别当列表预览露原文
+      )).groupBy(messages.groupId).as("latest");
+      const latestRows = await db.select({
+        groupId: messages.groupId,
+        content: messages.content,
+        messageType: messages.messageType,
+        createdAt: messages.createdAt,
+        recalledAt: messages.recalledAt,
+        senderName: users.name,
+        senderUsername: users.username
+      }).from(messages).innerJoin(latest, eq17(messages.id, latest.maxId)).leftJoin(users, eq17(messages.senderId, users.id));
+      for (const r of latestRows) {
+        if (r.groupId != null) latestByGroup.set(r.groupId, r);
       }
     }
     const result = groups.map((g) => {
@@ -6885,18 +6877,15 @@ var chatRouter = router({
     const sampleGroups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq17(chatGroups.isPublic, true)).orderBy(chatGroups.id).limit(4);
     let joined = 0;
     for (const group of sampleGroups) {
-      try {
-        const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, group.id), eq17(groupMembers.userId, ctx.user.id))).limit(1);
-        if (existing.length > 0) continue;
-        await db.insert(groupMembers).values({
-          groupId: group.id,
-          userId: ctx.user.id,
-          role: "member"
-        });
-        await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
-        joined++;
-      } catch {
-      }
+      const existing = await db.select({ id: groupMembers.id }).from(groupMembers).where(and14(eq17(groupMembers.groupId, group.id), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+      if (existing.length > 0) continue;
+      await db.insert(groupMembers).values({
+        groupId: group.id,
+        userId: ctx.user.id,
+        role: "member"
+      });
+      await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
+      joined++;
     }
     return { joined };
   }),
@@ -7447,7 +7436,7 @@ var chatRouter = router({
     const totalShares = isDM ? 1 : input.totalShares;
     const isRandom = isDM ? false : input.isRandom;
     if (totalShares > input.totalAmount) {
-      throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E2A\u6570\u4E0D\u80FD\u8D85\u8FC7\u603B\u79EF\u5206\uFF08\u6BCF\u4EFD\u81F3\u5C11 1 IT\uFF09" });
+      throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E2A\u6570\u4E0D\u80FD\u8D85\u8FC7\u603B\u79EF\u5206\uFF08\u6BCF\u4EFD\u81F3\u5C11 1 AC\uFF09" });
     }
     const blessing = sanitizeInput(input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229", 100);
     let messageId = 0;
@@ -7739,10 +7728,10 @@ var chatRouter = router({
       const cost = meta.monthlyNN * months;
       if (meta.currency === "AC") {
         const ok = await spendNP(db, ctx.user.id, cost);
-        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `IT \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} IT\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 IT` });
+        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A" });
+        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A" });
       }
       const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now() ? existing.expiresAt.getTime() : Date.now();
       expiresAt = new Date(base + months * 30 * 24 * 3600 * 1e3);
@@ -7788,10 +7777,10 @@ var chatRouter = router({
     const cost = pkg.monthlyNN * input.months;
     if (pkg.currency === "AC") {
       const ok = await spendNP(db, ctx.user.id, cost);
-      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `IT \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} IT\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 IT` });
+      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
     } else {
       const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A\u5957\u9910" });
+      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A\u5957\u9910" });
     }
     const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1e3);
     for (const bt of pkg.bots) {
@@ -7847,7 +7836,7 @@ var chatRouter = router({
       const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
       return { ok: true, ...r };
     } catch (e) {
-      if (e?.message === "insufficient_nn") throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+      if (e?.message === "insufficient_nn") throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5F00\u901A\u5931\u8D25" });
     }
   }),
@@ -8472,40 +8461,6 @@ import { eq as eq19, and as and16, desc as desc9, sql as sql11, gt as gt4 } from
 init_token();
 import { TRPCError as TRPCError10 } from "@trpc/server";
 init_appAdmin();
-var GENERIC_IMAGE_CAPTION = "\u5206\u4EAB\u4E86\u4E00\u5F20\u56FE\u7247";
-function parseMediaUrls(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.filter((x) => typeof x === "string");
-  if (typeof raw !== "string") return [];
-  try {
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-async function awardPostPublish(db, userId, opts) {
-  let earned = await awardTaskEvent(db, userId, "first_post");
-  const todayStart = /* @__PURE__ */ new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const content = sanitizeInput(opts.content, 2e3);
-  const firstMedia = opts.mediaUrls?.[0];
-  const isGenericCaption = !content.trim() || content.trim() === GENERIC_IMAGE_CAPTION;
-  const insertId = Number(opts.insertId) || 0;
-  const others = await db.select({ id: posts.id, content: posts.content, mediaUrls: posts.mediaUrls }).from(posts).where(and16(
-    eq19(posts.authorId, userId),
-    gt4(posts.createdAt, todayStart)
-  ));
-  const isDup = others.some((p) => {
-    if (insertId > 0 && p.id === insertId) return false;
-    const urls = parseMediaUrls(p.mediaUrls);
-    if (firstMedia) return urls[0] === firstMedia;
-    if (isGenericCaption) return false;
-    return p.content === content;
-  });
-  if (!isDup) earned += await awardTaskEvent(db, userId, "post_daily");
-  return earned;
-}
 var PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 \u5929" },
   { key: "day3", days: 3, priceNN: 75, label: "3 \u5929" },
@@ -8586,7 +8541,7 @@ var postsRouter = router({
     const plan = PROMOTE_PLANS.find((p) => p.key === input.planKey);
     if (!plan) throw new TRPCError10({ code: "BAD_REQUEST", message: "\u672A\u77E5\u63A8\u5E7F\u6863\u4F4D" });
     const ok = await spendNN(db, ctx.user.id, plan.priceNN, { type: "promote", refType: "post", refId: input.postId, memo: plan.key });
-    if (!ok) throw new TRPCError10({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+    if (!ok) throw new TRPCError10({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
     const base = post.promotedUntil && post.promotedUntil.getTime() > Date.now() ? post.promotedUntil.getTime() : Date.now();
     const until = new Date(base + plan.days * 24 * 3600 * 1e3);
     await db.update(posts).set({ promotedUntil: until }).where(eq19(posts.id, input.postId));
@@ -8683,13 +8638,19 @@ var postsRouter = router({
       mediaThumbs: input.mediaThumbs ? JSON.stringify(input.mediaThumbs) : void 0,
       tags: input.tags ? JSON.stringify(input.tags.map((t3) => sanitizeInput(t3, 30))) : void 0
     });
-    const insertId = Number(result.insertId) || 0;
-    const npEarned = await awardPostPublish(db, ctx.user.id, {
-      content: input.content,
-      mediaUrls: input.mediaUrls,
-      insertId
-    });
-    return { postId: insertId, npEarned };
+    await awardTaskEvent(db, ctx.user.id, "first_post");
+    {
+      const todayStart = /* @__PURE__ */ new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const [dup] = await db.select({ id: posts.id }).from(posts).where(and16(
+        eq19(posts.authorId, ctx.user.id),
+        eq19(posts.content, sanitizeInput(input.content, 2e3)),
+        gt4(posts.createdAt, todayStart),
+        sql11`${posts.id} != ${result.insertId}`
+      )).limit(1);
+      if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
+    }
+    return { postId: result.insertId };
   }),
   // ─── Toggle like ───────────────────────────────────────────────────────────
   toggleLike: protectedProcedure.input(z8.object({ postId: z8.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -8801,7 +8762,7 @@ var postsRouter = router({
       authorId: ctx.user.id,
       content: sanitizeInput(input.content, 1e3)
     });
-    if (input.content.trim().length >= 2) {
+    if (input.content.trim().length >= 5) {
       await awardTaskEvent(db, ctx.user.id, "comment_made");
     }
     await db.update(posts).set({ commentCount: sql11`commentCount + 1` }).where(eq19(posts.id, input.postId));
@@ -8917,12 +8878,7 @@ ${original.content.slice(0, 500)}`;
       } catch (_) {
       }
     }
-    const insertId = Number(result.insertId) || 0;
-    const npEarned = await awardPostPublish(db, ctx.user.id, {
-      content: repostContent,
-      insertId
-    });
-    return { success: true, newPostId: insertId, npEarned };
+    return { success: true, newPostId: result.insertId };
   }),
   // ─── Quote Post (create new post with quote reference) ─────────────────────
   quotePost: protectedProcedure.input(z8.object({
@@ -8959,12 +8915,7 @@ ${original.content.slice(0, 500)}`;
       } catch (_) {
       }
     }
-    const insertId = Number(result.insertId) || 0;
-    const npEarned = await awardPostPublish(db, ctx.user.id, {
-      content: quoteContent,
-      insertId
-    });
-    return { success: true, newPostId: insertId, npEarned };
+    return { success: true, newPostId: result.insertId };
   }),
   // ─── Search posts ───────────────────────────────────────────────────────
   search: publicProcedure.input(
@@ -10489,7 +10440,7 @@ var referralRouter = router({
       return "ok";
     });
     if (outcome === "dup") return { success: false, message: "Already referred" };
-    return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} IT` };
+    return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
   })
 });
 
@@ -11762,7 +11713,7 @@ var voiceRoomRouter = router({
     let charged = false;
     if (used >= benefits.voiceRoomFreeMonthly) {
       const ok = await spendNN(db, ctx.user.id, VOICE_ROOM_COST, { type: "voice_room", refType: "user", refId: ctx.user.id });
-      if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `BIT \u4E0D\u8DB3\uFF1A\u672C\u6708\u514D\u8D39\u5F00\u623F\u5DF2\u7528\u5B8C\uFF0C\u5355\u6B21\u5F00\u623F\u9700 ${VOICE_ROOM_COST} BIT\uFF0C\u6216\u5347\u7EA7\u4F1A\u5458\u83B7\u66F4\u591A\u514D\u8D39\u6B21\u6570` });
+      if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `AI \u4E0D\u8DB3\uFF1A\u672C\u6708\u514D\u8D39\u5F00\u623F\u5DF2\u7528\u5B8C\uFF0C\u5355\u6B21\u5F00\u623F\u9700 ${VOICE_ROOM_COST} AI\uFF0C\u6216\u5347\u7EA7\u4F1A\u5458\u83B7\u66F4\u591A\u514D\u8D39\u6B21\u6570` });
       charged = true;
     }
     let roomId;
@@ -11881,7 +11832,7 @@ var voiceRoomRouter = router({
     const [room] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(and25(eq28(voiceRooms.id, rid), eq28(voiceRooms.status, "live"))).limit(1);
     if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
     const ok = await spendAC(db, ctx.user.id, gift.ac);
-    if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `IT \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} IT` });
+    if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `AC \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} AC` });
     const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq28(users.id, ctx.user.id)).limit(1);
     return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
   }),
@@ -13284,7 +13235,7 @@ var swapRouter = router({
           nnBalance: sql18`${users.nnBalance} - ${aiIn}`,
           usdtBalance: sql18`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
         }).where(and28(eq32(users.id, ctx.user.id), gte7(users.nnBalance, aiIn)));
-        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
         out = q.usdtOut;
         execPrice = q.usdtOut / aiIn;
       }
@@ -13873,7 +13824,7 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} BIT**\uFF0C\u5F53\u524D\u4F59\u98
     const type = getReportType(input.queryType);
     if (!type) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u77E5\u62A5\u544A\u7C7B\u578B" });
     const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-    if (!ok) throw new TRPCError19({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+    if (!ok) throw new TRPCError19({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
     const [ins] = await db.insert(consultingReports).values({
       userId: ctx.user.id,
       queryType: input.queryType,
@@ -13901,7 +13852,7 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} BIT**\uFF0C\u5F53\u524D\u4F59\u98
     } catch (err) {
       await db.update(consultingReports).set({ status: "failed" }).where(eq33(consultingReports.id, reportId));
       await grantNN(db, ctx.user.id, type.priceNN, { type: "report_refund", refType: "report", refId: reportId, memo: "\u751F\u6210\u5931\u8D25\u9000\u6B3E" });
-      throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u62A5\u544A\u751F\u6210\u5931\u8D25\uFF0C\u5DF2\u9000\u8FD8 BIT" });
+      throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "\u62A5\u544A\u751F\u6210\u5931\u8D25\uFF0C\u5DF2\u9000\u8FD8 AI" });
     }
   })
 });
@@ -14659,7 +14610,7 @@ var npStoreRouter = router({
     await db.transaction(async (tx) => {
       const res = await tx.update(users).set({ npPoints: sql22`npPoints - ${TRIAL_NP_COST}` }).where(and32(eq36(users.id, ctx.user.id), gte9(users.npPoints, TRIAL_NP_COST)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `IT \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
+      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `AC \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
       await tx.update(users).set({ proTier: "plus", proUntil }).where(eq36(users.id, ctx.user.id));
     });
     return { ok: true, tier: "plus", proUntil: proUntil.toISOString(), cost: TRIAL_NP_COST };
@@ -14711,7 +14662,7 @@ var tgeRouter = router({
     const cfg = await loadConfig2(db);
     if (!cfg?.enabled) throw new TRPCError22({ code: "FORBIDDEN", message: "TGE \u5C1A\u672A\u5F00\u542F" });
     const [claim] = await db.select().from(tgeClaims).where(eq37(tgeClaims.userId, ctx.user.id)).limit(1);
-    if (!claim) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u4F60\u6CA1\u6709 TGE \u5FEB\u7167\uFF08\u5FEB\u7167\u540E\u624D\u6709 IT \u53EF\u5151\u6362\uFF09" });
+    if (!claim) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u4F60\u6CA1\u6709 TGE \u5FEB\u7167\uFF08\u5FEB\u7167\u540E\u624D\u6709 AC \u53EF\u5151\u6362\uFF09" });
     if (claim.claimed) throw new TRPCError22({ code: "BAD_REQUEST", message: "\u5DF2\u9886\u53D6\u8FC7" });
     const nn = estimateNn(cfg.nnPool, claim.npSnapshot, cfg.totalNpSnapshot);
     await db.transaction(async (tx) => {
@@ -15234,25 +15185,18 @@ function liveDelta(kind, base, key, nowMs) {
   const jitter = mix01(key, dayIndex);
   const floor = Math.max(0, Math.floor(base));
   if (kind === "users") {
-    const epochDay = shanghaiParts(EPOCH).dayIndex;
-    const daysElapsed = Math.max(0, dayIndex - epochDay);
-    let sum = 0;
-    for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
-    const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
-    const progress = Math.min(1, sec / 86400 * (0.45 + 0.55 * act));
-    return sum + Math.floor(today * progress);
+    const perHour2 = Math.max(0.35, floor * 7e-5);
+    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
   }
   if (kind === "subs") {
     const perHour2 = Math.max(0.08, floor * 4e-5);
     return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
   }
   if (kind === "active") {
-    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
-    const wave2 = Math.sin(sec / 15 + jitter * 6) * 0.5 + 0.5;
-    const micro = Math.sin(sec / 3.6 + jitter * 4) * 0.5 + 0.5;
-    const tick = Math.sin(sec * 1.8 + jitter * 9) * 0.5 + 0.5;
-    const breath = Math.max(0.34, act);
-    return Math.floor(span * breath * (0.16 + 0.5 * wave2 + 0.24 * micro + 0.1 * tick));
+    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
+    const wave2 = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
+    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
+    return Math.floor(span * act * (0.7 + 0.24 * wave2 + 0.06 * micro));
   }
   if (kind === "daily") {
     const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));
@@ -16373,23 +16317,7 @@ var PATCHES = [
     KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
   )`,
   // 发现页生态仪表盘配置（加成 + 额外指标行）
-  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
-  "ALTER TABLE `chat_groups` ADD COLUMN IF NOT EXISTS `category` VARCHAR(30) DEFAULT 'community'",
-  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `recalledAt` TIMESTAMP NULL",
-  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `expiresAt` TIMESTAMP NULL",
-  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isRead` BOOLEAN NOT NULL DEFAULT FALSE",
-  "ALTER TABLE `messages` ADD COLUMN IF NOT EXISTS `isPinned` BOOLEAN NOT NULL DEFAULT FALSE",
-  `CREATE TABLE IF NOT EXISTS \`conversation_prefs\` (
-    \`id\` int AUTO_INCREMENT NOT NULL,
-    \`userId\` int NOT NULL,
-    \`convKey\` varchar(40) NOT NULL,
-    \`isMuted\` BOOLEAN NOT NULL DEFAULT FALSE,
-    \`isPinned\` BOOLEAN NOT NULL DEFAULT FALSE,
-    \`clearedBeforeId\` BIGINT NOT NULL DEFAULT 0,
-    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (\`id\`),
-    KEY \`idx_convpref_user\` (\`userId\`, \`convKey\`)
-  )`
+  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT"
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;

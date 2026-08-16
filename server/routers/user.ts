@@ -136,14 +136,14 @@ export const TASK_DEFINITIONS: Record<
   },
   complete_profile: {
     label: "完善资料",
-    description: "填写头像和昵称",
+    description: "填写头像、昵称和 Bio",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true,
   },
   first_post: {
     label: "发布第一条动态",
-    description: "在广场发布你的第一条动态",
+    description: "在 Discover 发布你的第一条动态",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true,
@@ -156,8 +156,8 @@ export const TASK_DEFINITIONS: Record<
     eventOnly: true,
   },
   first_research: {
-    label: "生成分析报告",
-    description: "生成一份代币分析报告（需先绑定邀请人）",
+    label: "生成 AI 分析报告",
+    description: "使用 AI 生成一份代币分析报告（需先绑定邀请人）",
     npReward: 200,
     maxCompletions: 1,
     eventOnly: true,
@@ -206,7 +206,7 @@ export const TASK_DEFINITIONS: Record<
   },
   watchlist_daily: {
     label: "添加一个自选",
-    description: "在分析页把代币加入自选（每日 1 次）",
+    description: "在 AI 分析页把代币加入自选（每日 1 次）",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1,
@@ -246,8 +246,8 @@ export const TASK_DEFINITIONS: Record<
     eventOnly: true,
   },
   research_daily: {
-    label: "分析报告",
-    description: "生成分析报告（每日 3 次，需先绑定邀请人）",
+    label: "AI 分析报告",
+    description: "生成 AI 分析报告（每日 3 次，需先绑定邀请人）",
     npReward: 50,
     maxCompletions: 999999,
     daily: 3,
@@ -313,7 +313,8 @@ export const userRouter = router({
       // Auto-complete profile task if all fields filled
       const updated = await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1);
       const u = updated[0];
-      if (u && (u.name || u.username) && u.avatar) {
+      if (u && u.name && u.bio && u.avatar) {
+        // Try to complete the task (will no-op if already done)
         await _completeTask(ctx.user.id, "complete_profile", db);
       }
 
@@ -347,11 +348,6 @@ export const userRouter = router({
       const db = await getDb();
       if (db) {
         await db.update(users).set({ avatar: url }).where(eq(users.id, ctx.user.id));
-        const [u] = await db.select({ name: users.name, username: users.username, avatar: users.avatar })
-          .from(users).where(eq(users.id, ctx.user.id)).limit(1);
-        if (u && (u.name || u.username) && u.avatar) {
-          await _completeTask(ctx.user.id, "complete_profile", db);
-        }
       }
 
       return { url };
@@ -1090,13 +1086,16 @@ async function _completeTask(
       reward = signinStreakReward(newStreak);
     }
     granted = await creditNp(tx, userId, reward, capped);
-    // 每日上限/设备封顶可能发 0 分，仍要记完成，否则前端进度永远不动（做了也像没做）
-    if (taskType === "daily_login" && newStreak != null) {
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
+    // 上限/设备封顶导致 0 元时不记完成，避免勾上了却没到账、还把当日次数烧掉
+    if (granted > 0) {
+      if (taskType === "daily_login" && newStreak != null) {
+        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
+      }
+      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
     }
-    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
+  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 

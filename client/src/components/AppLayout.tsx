@@ -124,8 +124,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-[0_0_32px_rgba(0,212,255,0.3)]">
             <MessageCircle size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">比特AI社交</h1>
-          <p className="text-sm text-gray-400 text-center">让AI社交成为生活习惯 · 让习惯价值改变你的生活</p>
+          <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">比特AI</h1>
+          <p className="text-sm text-gray-400 text-center">全球首款 AI 智能体 · Web3 社交平台</p>
         </div>
         {/* Login button */}
         <a

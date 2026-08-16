@@ -50,7 +50,7 @@ export const tgeRouter = router({
     const cfg = await loadConfig(db);
     if (!cfg?.enabled) throw new TRPCError({ code: "FORBIDDEN", message: "TGE 尚未开启" });
     const [claim] = await db.select().from(tgeClaims).where(eq(tgeClaims.userId, ctx.user.id)).limit(1);
-    if (!claim) throw new TRPCError({ code: "BAD_REQUEST", message: "你没有 TGE 快照（快照后才有 IT 可兑换）" });
+    if (!claim) throw new TRPCError({ code: "BAD_REQUEST", message: "你没有 TGE 快照（快照后才有 AC 可兑换）" });
     if (claim.claimed) throw new TRPCError({ code: "BAD_REQUEST", message: "已领取过" });
 
     const nn = estimateNn(cfg.nnPool, claim.npSnapshot, cfg.totalNpSnapshot);

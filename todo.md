@@ -549,3 +549,7 @@
 - [x] 构建 APK v1.5.3 并上传 CDN
 - [x] 更新网站下载页面 APK 链接和版本号
 - [x] v1.5.4 彻底修复键盘消失问题（禁用Stack动画 + keyboardDidHide重聚焦）
+- [x] 将网页端品牌名称从 NexusChat 统一改为 BitChat，完成构建验证并保存 checkpoint
+- [x] 诊断 Manus 重新 Publish 导致后端挂起/500 的原因并恢复服务
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布

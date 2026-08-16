@@ -222,6 +222,6 @@ export const referralRouter = router({
       });
 
       if (outcome === "dup") return { success: false, message: "Already referred" };
-      return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} IT` };
+      return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
     }),
 });
