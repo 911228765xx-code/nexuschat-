@@ -26,6 +26,13 @@ export function isAlignedWindow(closeMs: number, horizonMin: number): boolean {
   return closeMs % period === 0;
 }
 
+/** 把库里读出的收盘时刻掰回整根 K 线边界（去毫秒/时区抖动）。 */
+export function alignWindow(closeMs: number, horizonMin: number): { openMs: number; closeMs: number } {
+  const period = Math.max(1, horizonMin) * 60_000;
+  const close = Math.round(closeMs / period) * period;
+  return { openMs: close - period, closeMs: close };
+}
+
 /**
  * 下一整局：已开盘的 K 线不中途入场。
  * 距下一根开盘 ≤ lockMin 分钟则再跳一局（封窗）。

@@ -476,7 +476,7 @@ export default function ChatRoom() {
         )}
       </div>
       <div className="bg-gradient-to-br from-red-600/20 to-orange-600/20 border border-red-500/20 px-3 py-1.5 flex items-center justify-between">
-        <span className="text-sm text-red-400/80">🧧 BitChat Red Packet</span>
+        <span className="text-sm text-red-400/80">🧧 NexusChat Red Packet</span>
         <button
           onClick={() => toast.success("Red packet opened! 🎉")}
           className="text-sm text-red-400 font-medium hover:text-red-300 transition-colors"

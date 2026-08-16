@@ -1,5 +1,5 @@
 /**
- * BitChat Service Worker v8 - Push Notifications Support
+ * NexusChat Service Worker v8 - Push Notifications Support
  *
  * 策略：不缓存任何资源（依赖 HTTP 缓存头），仅处理 Web Push 通知。
  * 这样既解决了旧版本 SW 缓存导致的黑屏问题，又支持推送通知。
@@ -33,7 +33,7 @@ self.addEventListener("fetch", (event) => {
 
 // ---- Web Push: receive push notification ----
 self.addEventListener("push", (event) => {
-  let data = { title: "BitChat", body: "你有一条新消息", url: "/app/chat", icon: "/icons/icon-192x192.png", badge: "/icons/icon-72x72.png" };
+  let data = { title: "NexusChat", body: "你有一条新消息", url: "/app/chat", icon: "/icons/icon-192x192.png", badge: "/icons/icon-72x72.png" };
 
   if (event.data) {
     try {
@@ -49,7 +49,7 @@ self.addEventListener("push", (event) => {
     badge: data.badge,
     data: { url: data.url },
     vibrate: [200, 100, 200],
-    tag: "bitchat-notification",
+    tag: "nexuschat-notification",
     renotify: true,
   };
 

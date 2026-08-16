@@ -226,10 +226,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       { id: "4", type: "social" as const, title: "vitalik.eth", message: "liked your post about Ethereum upgrade", avatar: "V", time: "1h", read: false },
       { id: "5", type: "social" as const, title: "punk6529.eth", message: "commented on your NFT collection post", avatar: "P", time: "2h", read: true },
       { id: "6", type: "signal" as const, title: "Trading Signal", message: "Strong buy signal — AI Score 9.1/10", avatar: "📊", time: "3h", read: true, data: { token: "SOL", change: "+12.8%", score: "9.1/10" } },
-      { id: "7", type: "system" as const, title: "BitChat", message: "v2.0 update available! New features: AI Research sharing, notification center", avatar: "N", time: "5h", read: true },
+      { id: "7", type: "system" as const, title: "NexusChat", message: "v2.0 update available! New features: AI Research sharing, notification center", avatar: "N", time: "5h", read: true },
       { id: "8", type: "friend_request" as const, title: "defi_alpha.eth", message: "wants to add you as a contact", avatar: "🔑", time: "8h", read: true, actionable: true },
       { id: "9", type: "mention" as const, title: "DeFi Alpha Club 🔒", message: "@you: New yield farming opportunity on Arbitrum", avatar: "🔑", time: "12h", read: true },
-      { id: "10", type: "system" as const, title: "BitChat", message: "Security reminder: Enable 2FA for enhanced protection", avatar: "🔒", time: "1d", read: true },
+      { id: "10", type: "system" as const, title: "NexusChat", message: "Security reminder: Enable 2FA for enhanced protection", avatar: "🔒", time: "1d", read: true },
     ])
   );
 

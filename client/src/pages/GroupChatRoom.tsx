@@ -287,7 +287,7 @@ function renderMessageContent(msg: GroupMessage, onClaim?: (id: string) => void,
         </div>
         {/* Action button */}
         <div className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border border-red-500/20 border-t-0 px-3 py-2 flex items-center justify-between">
-          <span className="text-xs text-red-400/60">🧧 BitChat 红包</span>
+          <span className="text-xs text-red-400/60">🧧 NexusChat 红包</span>
           {msg.isMine ? (
             <span className="text-xs text-orange-400 font-medium">已发出 ✓</span>
           ) : isExpired ? (

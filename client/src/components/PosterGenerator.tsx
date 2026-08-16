@@ -199,7 +199,7 @@ export default function PosterGenerator({
       });
 
       const link = document.createElement("a");
-      link.download = `bitchat-invite-${template.id}-${Date.now()}.png`;
+      link.download = `nexuschat-invite-${template.id}-${Date.now()}.png`;
       link.href = canvas.toDataURL("image/png", 1.0);
       link.click();
       toast.success(t("poster.savedSuccess"));
@@ -222,7 +222,7 @@ export default function PosterGenerator({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "BitChat",
+          title: "NexusChat",
           text: t("poster.shareText") + " " + inviteCode,
           url: inviteLink,
         });
@@ -342,7 +342,7 @@ export default function PosterGenerator({
                           className="text-sm font-bold tracking-wide"
                           style={{ color: template.textColor, fontFamily: "'Space Grotesk', sans-serif" }}
                         >
-                          BitChat
+                          NexusChat
                         </span>
                       </div>
                       <div

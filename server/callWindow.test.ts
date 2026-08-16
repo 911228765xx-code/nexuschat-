@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CALL_HORIZONS_MIN, CALL_LOCK_MINUTES, horizonToMinutes,
-  deadbandBpForHorizon, nextFullWindow, overdueVoidMs, isAlignedWindow,
+  deadbandBpForHorizon, nextFullWindow, overdueVoidMs, isAlignedWindow, alignWindow,
 } from "./callWindow";
 
 describe("callWindow 整根 K 线", () => {
@@ -63,6 +63,14 @@ describe("callWindow 整根 K 线", () => {
   it("收盘时刻对齐才按 K 线开收盘结算", () => {
     expect(isAlignedWindow(Date.UTC(2026, 7, 13, 10, 10, 0), 5)).toBe(true);
     expect(isAlignedWindow(Date.UTC(2026, 7, 13, 10, 3, 17), 5)).toBe(false);
+  });
+
+  it("库里收盘时刻有抖动也掰回整根", () => {
+    const close = Date.UTC(2026, 7, 13, 10, 10, 0);
+    expect(alignWindow(close + 800, 5)).toEqual({
+      openMs: Date.UTC(2026, 7, 13, 10, 5, 0),
+      closeMs: close,
+    });
   });
 
   it("短窗拿不到价 2 小时后 void", () => {

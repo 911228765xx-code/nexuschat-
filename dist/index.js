@@ -3576,7 +3576,7 @@ var TASK_DEFINITIONS = {
   },
   daily_login: {
     label: "\u6BCF\u65E5\u7B7E\u5230",
-    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E\uFF08\u5C01\u9876 80 AC\uFF09",
+    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1
@@ -4273,8 +4273,10 @@ async function _completeTask(userId, taskType, db) {
 }
 async function awardTaskEvent(db, userId, taskType) {
   try {
-    await _completeTask(userId, taskType, db);
+    const r = await _completeTask(userId, taskType, db);
+    return r.npEarned;
   } catch {
+    return 0;
   }
 }
 
@@ -13879,18 +13881,20 @@ function toSym(pair) {
   return null;
 }
 async function fetchCallLiveQuotes() {
-  const live = await cachedFetch(
-    "call-quotes-px",
-    `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
-    1200,
-    (res) => res.json()
-  );
-  const chg = await cachedFetch(
-    "call-quotes-24h",
-    `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
-    2e4,
-    (res) => res.json()
-  );
+  const [live, chg] = await Promise.all([
+    cachedFetch(
+      "call-quotes-px",
+      `https://api.binance.com/api/v3/ticker/price?symbols=${BN_SYMS}`,
+      1200,
+      (res) => res.json()
+    ),
+    cachedFetch(
+      "call-quotes-24h",
+      `https://api.binance.com/api/v3/ticker/24hr?symbols=${BN_SYMS}`,
+      2e4,
+      (res) => res.json()
+    )
+  ]);
   const chgMap = /* @__PURE__ */ new Map();
   if (Array.isArray(chg)) {
     for (const row of chg) {
@@ -14000,16 +14004,29 @@ async function fetchSymbolKlines(symbol) {
     { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=40`, parse: parseKlines },
     { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&limit=40`, parse: parseBybitKlines }
   ];
-  const results = await Promise.all(sources.map(async (s) => s.parse(await fetchJsonQuick(s.url, 3500))));
-  let best = [];
-  let bestQ = -1;
-  for (const bars of results) {
-    const q = klineQuality(bars);
-    if (q > bestQ) {
-      bestQ = q;
-      best = bars;
+  let best = hit?.bars ?? [];
+  let bestQ = klineQuality(best);
+  await new Promise((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2200).then((raw) => {
+        const bars = s.parse(raw);
+        const q = klineQuality(bars);
+        if (q > bestQ) {
+          bestQ = q;
+          best = bars;
+        }
+        if (q > 40) finish();
+        if (--left === 0) finish();
+      });
     }
-  }
+  });
   if (best.length >= 2) {
     sparkCache.set(symbol, { at: Date.now(), bars: best });
     return best;
@@ -14022,24 +14039,42 @@ async function fetchCallSparklines() {
 }
 async function fetchCallSpotPrice(symbol) {
   const sym = symbol.toUpperCase();
+  const pair = BINANCE_PAIR[sym];
+  if (pair) {
+    const bn = await cachedFetch(
+      `call-spot-bn:${pair}`,
+      `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`,
+      1200,
+      (res) => res.json()
+    );
+    const bnPx = Number(bn?.price);
+    if (bnPx > 0) {
+      lastPx.set(sym, bnPx);
+      return bnPx;
+    }
+    const vis = await fetchJsonQuick(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${pair}`, 2200);
+    const visPx = Number(vis?.price);
+    if (visPx > 0) {
+      lastPx.set(sym, visPx);
+      return visPx;
+    }
+  }
   const id = CG_ID[sym];
-  if (!id) return null;
-  const cg = await cachedFetch(
-    `call-spot-cg:${id}`,
-    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
-    TTL.prices,
-    (res) => res.json()
-  );
-  const cgPx = cg?.[id]?.usd;
-  if (typeof cgPx === "number" && cgPx > 0) return cgPx;
-  const cc = await cachedFetch(
-    `call-spot-cc:${sym}`,
-    `https://min-api.cryptocompare.com/data/price?fsym=${sym}&tsyms=USD`,
-    TTL.prices,
-    (res) => res.json()
-  );
-  const ccPx = cc?.USD;
-  return typeof ccPx === "number" && ccPx > 0 ? ccPx : null;
+  if (id) {
+    const cg = await cachedFetch(
+      `call-spot-cg:${id}`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
+      TTL.prices,
+      (res) => res.json()
+    );
+    const cgPx = cg?.[id]?.usd;
+    if (typeof cgPx === "number" && cgPx > 0) {
+      lastPx.set(sym, cgPx);
+      return cgPx;
+    }
+  }
+  const mem = lastPx.get(sym);
+  return mem && mem > 0 ? mem : null;
 }
 var BINANCE_PAIR = { BTC: "BTCUSDT", ETH: "ETHUSDT" };
 function binanceInterval(horizonMin) {
@@ -14047,23 +14082,94 @@ function binanceInterval(horizonMin) {
   if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return `${horizonMin}m`;
   return null;
 }
+function bybitInterval(horizonMin) {
+  if (horizonMin === 60) return "60";
+  if (horizonMin === 5 || horizonMin === 15 || horizonMin === 30) return String(horizonMin);
+  return null;
+}
+function pickWindowOHLC(bars, openMs) {
+  if (!bars.length) return null;
+  let best = bars[0];
+  let bestD = Math.abs(best.t - openMs);
+  for (const b of bars) {
+    const d = Math.abs(b.t - openMs);
+    if (d < bestD) {
+      best = b;
+      bestD = d;
+    }
+  }
+  if (bestD > 6e4 || !(best.o > 0) || !(best.c > 0)) return null;
+  return { open: best.o, close: best.c };
+}
+function ohlcFrom1m(bars, openMs, horizonMin) {
+  const closeMs = openMs + horizonMin * 6e4;
+  const inWin = bars.filter((b) => b.t >= openMs - 1e3 && b.t < closeMs + 1e3).sort((a, b) => a.t - b.t);
+  if (inWin.length < 2) return null;
+  const open = inWin[0].o;
+  const close = inWin[inWin.length - 1].c;
+  if (!(open > 0) || !(close > 0)) return null;
+  return { open, close };
+}
+async function raceParsedKlines(sources, minBars = 1) {
+  let best = [];
+  let bestN = 0;
+  await new Promise((resolve) => {
+    let left = sources.length;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    if (!sources.length) {
+      finish();
+      return;
+    }
+    for (const s of sources) {
+      void fetchJsonQuick(s.url, 2500).then((raw) => {
+        const bars = s.parse(raw);
+        if (bars.length > bestN) {
+          bestN = bars.length;
+          best = bars;
+        }
+        if (bars.length >= minBars) finish();
+        if (--left === 0) finish();
+      });
+    }
+  });
+  return best;
+}
 async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
   const sym = symbol.toUpperCase();
   const pair = BINANCE_PAIR[sym];
   const interval = binanceInterval(horizonMin);
+  const start = Math.max(0, openMs - 5e3);
+  const sources = [];
   if (pair && interval) {
-    const rows = await cachedFetch(
-      `call-kline:${pair}:${interval}:${openMs}`,
-      `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${openMs}&limit=1`,
-      15e3,
-      (res) => res.json()
+    sources.push(
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines }
     );
-    const k = Array.isArray(rows) ? rows[0] : null;
-    if (k && Number(k[0]) === openMs) {
-      const open = Number(k[1]);
-      const close = Number(k[4]);
-      if (open > 0 && close > 0) return { open, close };
-    }
+  }
+  const bv = bybitInterval(horizonMin);
+  if (pair && bv) {
+    sources.push({
+      url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=${bv}&start=${start}&limit=2`,
+      parse: parseBybitKlines
+    });
+  }
+  const hit = pickWindowOHLC(await raceParsedKlines(sources), openMs);
+  if (hit) return hit;
+  if (pair) {
+    const need = Math.min(horizonMin, 60);
+    const oneMin = await raceParsedKlines([
+      { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&start=${openMs}&limit=${need}`, parse: parseBybitKlines }
+    ], Math.max(2, Math.floor(need * 0.7)));
+    const from1m = ohlcFrom1m(oneMin, openMs, horizonMin);
+    if (from1m) return from1m;
   }
   const toTs = Math.floor((openMs + horizonMin * 6e4) / 1e3);
   const cc = await cachedFetch(
@@ -14096,9 +14202,10 @@ function deadbandBpForHorizon(horizonMin) {
 function overdueVoidMs(horizonMin) {
   return horizonMin <= 60 ? 2 * 36e5 : 3 * 864e5;
 }
-function isAlignedWindow(closeMs, horizonMin) {
+function alignWindow(closeMs, horizonMin) {
   const period = Math.max(1, horizonMin) * 6e4;
-  return closeMs % period === 0;
+  const close = Math.round(closeMs / period) * period;
+  return { openMs: close - period, closeMs: close };
 }
 function nextFullWindow(horizonMin, nowMs = Date.now(), lockMin = CALL_LOCK_MINUTES) {
   const period = Math.max(1, horizonMin) * 6e4;
@@ -14130,34 +14237,46 @@ async function settleStakesForCall(db, callId, callStatus) {
     const status = callStatus === "win" ? "won" : callStatus === "void" ? "void" : "lost";
     await db.update(curationStakes).set({ status, payout, settledAt: /* @__PURE__ */ new Date() }).where(eq34(curationStakes.id, s.id));
     if (payout > 0) {
-      await db.update(users).set({ npPoints: sql20`npPoints + ${payout}` }).where(eq34(users.id, s.stakerId));
+      const credited = await db.update(users).set({ npPoints: sql20`npPoints + ${payout}` }).where(eq34(users.id, s.stakerId));
+      const rows = Number(credited?.[0]?.affectedRows ?? credited?.affectedRows ?? credited?.rowsAffected ?? 0);
+      if (rows < 1) logger_default.warn({ callId, stakeId: s.id, stakerId: s.stakerId, payout }, "callResolver: \u8FD4\u8FD8 IT \u672A\u5199\u5165");
+      else logger_default.info({ callId, stakerId: s.stakerId, payout, status }, "callResolver: \u4E0B\u6CE8\u8FD4\u8FD8\u5DF2\u5165\u8D26");
     }
   }
 }
-async function resolveDueCalls(db) {
-  const due = await db.select().from(calls).where(and30(eq34(calls.status, "pending"), lte(calls.resolveAt, /* @__PURE__ */ new Date()))).limit(200);
+async function resolveDueCalls(db, onlyUserId) {
+  const due = await db.select().from(calls).where(and30(
+    eq34(calls.status, "pending"),
+    lte(calls.resolveAt, /* @__PURE__ */ new Date()),
+    onlyUserId ? eq34(calls.userId, onlyUserId) : sql20`1=1`
+  )).limit(200);
   if (due.length === 0) return 0;
   const priceCache2 = /* @__PURE__ */ new Map();
   let processed = 0;
   for (const c of due) {
     try {
       const horizonMin = horizonToMinutes(c.horizonHours);
-      const closeMs = new Date(c.resolveAt).getTime();
-      const openMs = closeMs - horizonMin * 6e4;
+      const win = alignWindow(new Date(c.resolveAt).getTime(), horizonMin);
+      const closeMs = win.closeMs;
+      const openMs = win.openMs;
       let entry = Number(c.entryPrice);
       let cur = null;
-      if (horizonMin <= 60 && isAlignedWindow(closeMs, horizonMin)) {
+      if (horizonMin <= 60) {
         const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
         if (ohlc) {
           entry = ohlc.open;
           cur = ohlc.close;
-        } else {
-          if (Date.now() - closeMs > overdueVoidMs(horizonMin)) {
-            await db.update(calls).set({ status: "void", resolvedAt: /* @__PURE__ */ new Date() }).where(eq34(calls.id, c.id));
-            await settleStakesForCall(db, c.id, "void");
-            processed++;
-          }
+        } else if (Date.now() - closeMs < 3 * 6e4) {
           continue;
+        } else {
+          let spot;
+          const cached = priceCache2.get(c.tokenSymbol);
+          if (cached !== void 0) spot = cached;
+          else {
+            spot = await fetchCallSpotPrice(c.tokenSymbol);
+            priceCache2.set(c.tokenSymbol, spot);
+          }
+          cur = spot;
         }
       } else {
         let spot;
@@ -14270,6 +14389,7 @@ var callsRouter = router({
     if (!admin && !await isReferralBound(db, ctx.user.id)) {
       throw new TRPCError20({ code: "FORBIDDEN", message: "\u8BF7\u5148\u5728\u4EFB\u52A1\u4E2D\u5FC3\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u53C2\u4E0E\u731C\u6DA8\u8DCC" });
     }
+    await resolveDueCalls(db, ctx.user.id);
     const ymd = ymdUtc4();
     const symbol = input.tokenSymbol;
     const price = await fetchCallSpotPrice(symbol);
@@ -14310,7 +14430,7 @@ var callsRouter = router({
       });
       return insertId;
     });
-    await awardTaskEvent(db, ctx.user.id, "predict_daily");
+    const taskReward = await awardTaskEvent(db, ctx.user.id, "predict_daily");
     return {
       callId,
       entryPrice: price,
@@ -14318,7 +14438,8 @@ var callsRouter = router({
       resolveAt: resolveAt.toISOString(),
       amount: input.amount,
       odds: STAKE_ODDS,
-      potentialWin
+      potentialWin,
+      taskReward
     };
   }),
   // ─── 兼容旧客户端：免费发 Call 已关闭，引导走 placeBet ─────────────────────

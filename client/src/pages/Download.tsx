@@ -231,7 +231,7 @@ export default function DownloadPage() {
     if (inAppBrowser) { setGuideOpen(true); return; } // 微信/QQ 拦 APK:引导去系统浏览器
     if (dlProgress !== null) return; // 正在下
 
-    const filename = `BitChat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
+    const filename = `Bitchat${ver ? `-v${ver.latestVersion}` : ""}.apk`;
     try {
       setDlProgress(0);
       await saveApkBlob(await fetchApkChunked(), filename);
@@ -256,13 +256,13 @@ export default function DownloadPage() {
         "点击下方「下载 Android 版」按钮，下载 APK 安装包",
         "点击 APK 文件，按提示完成安装",
         "安装完成后返回这个下载页面",
-        "点击「打开 BitChat 继续」完成加群或查看名片",
+        "点击「打开 Bitchat 继续」完成加群或查看名片",
       ]
     : [
         "点击下方「下载 Android 版」按钮，下载 APK 安装包",
         "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
         "点击 APK 文件，按提示完成安装",
-        "安装完成后在桌面找到 BitChat 图标，点击启动",
+        "安装完成后在桌面找到 Bitchat 图标，点击启动",
       ];
   const iosSteps = [
     "使用 Safari 浏览器打开 nexuschat.best",
@@ -324,7 +324,7 @@ export default function DownloadPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
               <Download size={14} className="text-white" />
             </div>
-            <span className="font-bold text-sm">BitChat 下载</span>
+            <span className="font-bold text-sm">Bitchat 下载</span>
           </div>
           <Button
             onClick={() => setLocation("/app/chat")}
@@ -347,7 +347,7 @@ export default function DownloadPage() {
             </div>
           )}
           <h1 className={`${isInviteFlow ? "text-2xl" : "text-3xl sm:text-4xl"} font-bold mb-3`}>
-            下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">BitChat</span>
+            下载 <span className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent">Bitchat</span>
           </h1>
           {!isInviteFlow && (
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
@@ -374,7 +374,7 @@ export default function DownloadPage() {
                 <p className="text-xs text-muted-foreground mb-0.5">
                   {inviteTarget ? (inviteTarget.type === "group" ? "邀请你加入群聊" : "邀请你加为好友") : "好友邀请你加入"}
                 </p>
-                <p className="text-lg font-bold truncate">{inviteTarget?.name || "BitChat"}</p>
+                <p className="text-lg font-bold truncate">{inviteTarget?.name || "Bitchat"}</p>
                 {inviteTarget?.type === "group" && inviteTarget.memberCount != null && (
                   <p className="text-xs text-muted-foreground">{inviteTarget.memberCount} 名成员</p>
                 )}
@@ -389,7 +389,7 @@ export default function DownloadPage() {
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#00d4ff]/15 border border-[#00d4ff]/35 px-4 py-2 text-sm font-semibold text-[#00d4ff] hover:bg-[#00d4ff]/25 transition-colors"
               >
                 <ExternalLink size={15} />
-                打开 BitChat {inviteTarget?.type === "user" ? "查看名片" : "继续加群"}
+                打开 Bitchat {inviteTarget?.type === "user" ? "查看名片" : "继续加群"}
               </a>
             </div>
           </motion.div>
