@@ -3548,14 +3548,14 @@ var TASK_DEFINITIONS = {
   },
   complete_profile: {
     label: "\u5B8C\u5584\u8D44\u6599",
-    description: "\u586B\u5199\u5934\u50CF\u3001\u6635\u79F0\u548C Bio",
+    description: "\u586B\u5199\u5934\u50CF\u548C\u6635\u79F0",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true
   },
   first_post: {
     label: "\u53D1\u5E03\u7B2C\u4E00\u6761\u52A8\u6001",
-    description: "\u5728 Discover \u53D1\u5E03\u4F60\u7684\u7B2C\u4E00\u6761\u52A8\u6001",
+    description: "\u5728\u5E7F\u573A\u53D1\u5E03\u4F60\u7684\u7B2C\u4E00\u6761\u52A8\u6001",
     npReward: 100,
     maxCompletions: 1,
     eventOnly: true
@@ -3568,8 +3568,8 @@ var TASK_DEFINITIONS = {
     eventOnly: true
   },
   first_research: {
-    label: "\u751F\u6210 AI \u5206\u6790\u62A5\u544A",
-    description: "\u4F7F\u7528 AI \u751F\u6210\u4E00\u4EFD\u4EE3\u5E01\u5206\u6790\u62A5\u544A\uFF08\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    label: "\u751F\u6210\u5206\u6790\u62A5\u544A",
+    description: "\u751F\u6210\u4E00\u4EFD\u4EE3\u5E01\u5206\u6790\u62A5\u544A\uFF08\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
     npReward: 200,
     maxCompletions: 1,
     eventOnly: true
@@ -3658,8 +3658,8 @@ var TASK_DEFINITIONS = {
     eventOnly: true
   },
   research_daily: {
-    label: "AI \u5206\u6790\u62A5\u544A",
-    description: "\u751F\u6210 AI \u5206\u6790\u62A5\u544A\uFF08\u6BCF\u65E5 3 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
+    label: "\u5206\u6790\u62A5\u544A",
+    description: "\u751F\u6210\u5206\u6790\u62A5\u544A\uFF08\u6BCF\u65E5 3 \u6B21\uFF0C\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
     npReward: 50,
     maxCompletions: 999999,
     daily: 3,
@@ -3711,7 +3711,7 @@ var userRouter = router({
     await db.update(users).set(updateData).where(eq11(users.id, ctx.user.id));
     const updated = await db.select().from(users).where(eq11(users.id, ctx.user.id)).limit(1);
     const u = updated[0];
-    if (u && u.name && u.bio && u.avatar) {
+    if (u && (u.name || u.username) && u.avatar) {
       await _completeTask(ctx.user.id, "complete_profile", db);
     }
     return { success: true };
@@ -3738,6 +3738,10 @@ var userRouter = router({
     const db = await getDb();
     if (db) {
       await db.update(users).set({ avatar: url }).where(eq11(users.id, ctx.user.id));
+      const [u] = await db.select({ name: users.name, username: users.username, avatar: users.avatar }).from(users).where(eq11(users.id, ctx.user.id)).limit(1);
+      if (u && (u.name || u.username) && u.avatar) {
+        await _completeTask(ctx.user.id, "complete_profile", db);
+      }
     }
     return { url };
   }),
@@ -4260,15 +4264,12 @@ async function _completeTask(userId, taskType, db) {
       reward = signinStreakReward(newStreak);
     }
     granted = await creditNp(tx, userId, reward, capped);
-    if (granted > 0) {
-      if (taskType === "daily_login" && newStreak != null) {
-        await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
-      }
-      await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
+    if (taskType === "daily_login" && newStreak != null) {
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
     }
+    await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
   if (blocked) return { success: false, npEarned: 0, alreadyCompleted: true };
-  if (granted <= 0) return { success: false, npEarned: 0, alreadyCompleted: false };
   return { success: true, npEarned: granted, alreadyCompleted: false };
 }
 async function awardTaskEvent(db, userId, taskType) {
@@ -7731,7 +7732,7 @@ var chatRouter = router({
         if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A" });
+        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A" });
       }
       const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now() ? existing.expiresAt.getTime() : Date.now();
       expiresAt = new Date(base + months * 30 * 24 * 3600 * 1e3);
@@ -7780,7 +7781,7 @@ var chatRouter = router({
       if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
     } else {
       const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A\u5957\u9910" });
+      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A\u5957\u9910" });
     }
     const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1e3);
     for (const bt of pkg.bots) {
@@ -7836,7 +7837,7 @@ var chatRouter = router({
       const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
       return { ok: true, ...r };
     } catch (e) {
-      if (e?.message === "insufficient_nn") throw new TRPCError8({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+      if (e?.message === "insufficient_nn") throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
       throw new TRPCError8({ code: "BAD_REQUEST", message: "\u5F00\u901A\u5931\u8D25" });
     }
   }),
@@ -8461,6 +8462,37 @@ import { eq as eq19, and as and16, desc as desc9, sql as sql11, gt as gt4 } from
 init_token();
 import { TRPCError as TRPCError10 } from "@trpc/server";
 init_appAdmin();
+var GENERIC_IMAGE_CAPTION = "\u5206\u4EAB\u4E86\u4E00\u5F20\u56FE\u7247";
+function parseMediaUrls(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((x) => typeof x === "string");
+  if (typeof raw !== "string") return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+async function awardPostPublish(db, userId, opts) {
+  let earned = await awardTaskEvent(db, userId, "first_post");
+  const todayStart = /* @__PURE__ */ new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const content = sanitizeInput(opts.content, 2e3);
+  const firstMedia = opts.mediaUrls?.[0];
+  const isGenericCaption = !content.trim() || content.trim() === GENERIC_IMAGE_CAPTION;
+  const insertId = Number(opts.insertId) || 0;
+  const others = await db.select({ id: posts.id, content: posts.content, mediaUrls: posts.mediaUrls }).from(posts).where(and16(eq19(posts.authorId, userId), gt4(posts.createdAt, todayStart)));
+  const isDup = others.some((p) => {
+    if (insertId > 0 && p.id === insertId) return false;
+    const urls = parseMediaUrls(p.mediaUrls);
+    if (firstMedia) return urls[0] === firstMedia;
+    if (isGenericCaption) return false;
+    return p.content === content;
+  });
+  if (!isDup) earned += await awardTaskEvent(db, userId, "post_daily");
+  return earned;
+}
 var PROMOTE_PLANS = [
   { key: "day1", days: 1, priceNN: 30, label: "1 \u5929" },
   { key: "day3", days: 3, priceNN: 75, label: "3 \u5929" },
@@ -8541,7 +8573,7 @@ var postsRouter = router({
     const plan = PROMOTE_PLANS.find((p) => p.key === input.planKey);
     if (!plan) throw new TRPCError10({ code: "BAD_REQUEST", message: "\u672A\u77E5\u63A8\u5E7F\u6863\u4F4D" });
     const ok = await spendNN(db, ctx.user.id, plan.priceNN, { type: "promote", refType: "post", refId: input.postId, memo: plan.key });
-    if (!ok) throw new TRPCError10({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+    if (!ok) throw new TRPCError10({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
     const base = post.promotedUntil && post.promotedUntil.getTime() > Date.now() ? post.promotedUntil.getTime() : Date.now();
     const until = new Date(base + plan.days * 24 * 3600 * 1e3);
     await db.update(posts).set({ promotedUntil: until }).where(eq19(posts.id, input.postId));
@@ -8638,19 +8670,13 @@ var postsRouter = router({
       mediaThumbs: input.mediaThumbs ? JSON.stringify(input.mediaThumbs) : void 0,
       tags: input.tags ? JSON.stringify(input.tags.map((t3) => sanitizeInput(t3, 30))) : void 0
     });
-    await awardTaskEvent(db, ctx.user.id, "first_post");
-    {
-      const todayStart = /* @__PURE__ */ new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-      const [dup] = await db.select({ id: posts.id }).from(posts).where(and16(
-        eq19(posts.authorId, ctx.user.id),
-        eq19(posts.content, sanitizeInput(input.content, 2e3)),
-        gt4(posts.createdAt, todayStart),
-        sql11`${posts.id} != ${result.insertId}`
-      )).limit(1);
-      if (!dup) await awardTaskEvent(db, ctx.user.id, "post_daily");
-    }
-    return { postId: result.insertId };
+    const insertId = Number(result.insertId) || 0;
+    const npEarned = await awardPostPublish(db, ctx.user.id, {
+      content: input.content,
+      mediaUrls: input.mediaUrls,
+      insertId
+    });
+    return { postId: insertId, npEarned };
   }),
   // ─── Toggle like ───────────────────────────────────────────────────────────
   toggleLike: protectedProcedure.input(z8.object({ postId: z8.number() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -8762,7 +8788,7 @@ var postsRouter = router({
       authorId: ctx.user.id,
       content: sanitizeInput(input.content, 1e3)
     });
-    if (input.content.trim().length >= 5) {
+    if (input.content.trim().length >= 2) {
       await awardTaskEvent(db, ctx.user.id, "comment_made");
     }
     await db.update(posts).set({ commentCount: sql11`commentCount + 1` }).where(eq19(posts.id, input.postId));
@@ -10362,7 +10388,7 @@ init_env();
 var REFERRER_REWARD = 100;
 var INVITEE_REWARD = 200;
 var REWARD_TIERS = [
-  { count: 5, reward: "500 AC Bonus", icon: "\u{1F381}" },
+  { count: 5, reward: "\u7D2F\u8BA1\u7EA6 500 IT", icon: "\u{1F381}" },
   { count: 10, reward: "Exclusive Badge", icon: "\u{1F3C5}" },
   { count: 25, reward: "1% Fee Rebate", icon: "\u{1F4B0}" },
   { count: 50, reward: "VIP Status", icon: "\u{1F451}" },
@@ -10483,7 +10509,7 @@ var referralRouter = router({
       return "ok";
     });
     if (outcome === "dup") return { success: false, message: "Already referred" };
-    return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
+    return { success: true, message: `\u9080\u8BF7\u5DF2\u7ED1\u5B9A\uFF0C\u4F60\u83B7\u5F97 ${INVITEE_REWARD} IT` };
   })
 });
 
@@ -11875,7 +11901,7 @@ var voiceRoomRouter = router({
     const [room] = await db.select({ id: voiceRooms.id }).from(voiceRooms).where(and25(eq28(voiceRooms.id, rid), eq28(voiceRooms.status, "live"))).limit(1);
     if (!room) throw new TRPCError14({ code: "NOT_FOUND", message: "\u8BE5\u8BED\u97F3\u623F\u5DF2\u7ED3\u675F" });
     const ok = await spendAC(db, ctx.user.id, gift.ac);
-    if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `AC \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} AC` });
+    if (!ok) throw new TRPCError14({ code: "FORBIDDEN", message: `IT \u4E0D\u8DB3\uFF0C\u9001\u51FA${gift.name}\u9700 ${gift.ac} IT` });
     const [u] = await db.select({ npPoints: users.npPoints }).from(users).where(eq28(users.id, ctx.user.id)).limit(1);
     return { ok: true, gift, acRemaining: u?.npPoints ?? 0 };
   }),
@@ -13278,7 +13304,7 @@ var swapRouter = router({
           nnBalance: sql18`${users.nnBalance} - ${aiIn}`,
           usdtBalance: sql18`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`
         }).where(and28(eq32(users.id, ctx.user.id), gte7(users.nnBalance, aiIn)));
-        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+        if (affected(r) < 1) throw new TRPCError18({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
         out = q.usdtOut;
         execPrice = q.usdtOut / aiIn;
       }
@@ -13867,7 +13893,7 @@ ${quotaLine}\u6BCF\u6B21\u6D88\u8017 **${cost} BIT**\uFF0C\u5F53\u524D\u4F59\u98
     const type = getReportType(input.queryType);
     if (!type) throw new TRPCError19({ code: "BAD_REQUEST", message: "\u672A\u77E5\u62A5\u544A\u7C7B\u578B" });
     const ok = await spendNN(db, ctx.user.id, type.priceNN, { type: "report", refType: "report", memo: input.queryType });
-    if (!ok) throw new TRPCError19({ code: "BAD_REQUEST", message: "AI \u4F59\u989D\u4E0D\u8DB3" });
+    if (!ok) throw new TRPCError19({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
     const [ins] = await db.insert(consultingReports).values({
       userId: ctx.user.id,
       queryType: input.queryType,
@@ -14653,7 +14679,7 @@ var npStoreRouter = router({
     await db.transaction(async (tx) => {
       const res = await tx.update(users).set({ npPoints: sql22`npPoints - ${TRIAL_NP_COST}` }).where(and32(eq36(users.id, ctx.user.id), gte9(users.npPoints, TRIAL_NP_COST)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
-      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `AC \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
+      if (affected2 < 1) throw new TRPCError21({ code: "BAD_REQUEST", message: `IT \u4E0D\u8DB3\uFF08\u9700 ${TRIAL_NP_COST}\uFF09` });
       await tx.update(users).set({ proTier: "plus", proUntil }).where(eq36(users.id, ctx.user.id));
     });
     return { ok: true, tier: "plus", proUntil: proUntil.toISOString(), cost: TRIAL_NP_COST };

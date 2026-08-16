@@ -169,7 +169,7 @@ export const swapRouter = router({
             nnBalance: sql`${users.nnBalance} - ${aiIn}`,
             usdtBalance: sql`${users.usdtBalance} + ${q.usdtOut.toFixed(8)}`,
           }).where(and(eq(users.id, ctx.user.id), gte(users.nnBalance, aiIn)));
-          if (affected(r) < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+          if (affected(r) < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
           out = q.usdtOut; execPrice = q.usdtOut / aiIn;
         }
 

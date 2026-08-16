@@ -15,7 +15,7 @@ const INVITEE_REWARD = 200;  // AC for invitee
 
 // ─── Milestone tiers ─────────────────────────────────────────────────────────
 const REWARD_TIERS = [
-  { count: 5, reward: "500 AC Bonus", icon: "🎁" },
+  { count: 5, reward: "累计约 500 IT", icon: "🎁" },
   { count: 10, reward: "Exclusive Badge", icon: "🏅" },
   { count: 25, reward: "1% Fee Rebate", icon: "💰" },
   { count: 50, reward: "VIP Status", icon: "👑" },
@@ -222,6 +222,6 @@ export const referralRouter = router({
       });
 
       if (outcome === "dup") return { success: false, message: "Already referred" };
-      return { success: true, message: `Referral recorded! You earned ${INVITEE_REWARD} AC` };
+      return { success: true, message: `邀请已绑定，你获得 ${INVITEE_REWARD} IT` };
     }),
 });

@@ -2456,7 +2456,7 @@ export const chatRouter = router({
         } else {
           // 原子扣 AI 治理代币（余额足够才扣，AI 回流金库）
           const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通" });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足，无法开通" });
         }
         const base = existing?.expiresAt && existing.expiresAt.getTime() > Date.now()
           ? existing.expiresAt.getTime() : Date.now();
@@ -2517,7 +2517,7 @@ export const chatRouter = router({
         if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足，无法开通套餐" });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足，无法开通套餐" });
       }
 
       const paidExpiry = new Date(Date.now() + input.months * 30 * 24 * 3600 * 1000);
@@ -2587,7 +2587,7 @@ export const chatRouter = router({
         const r = await buyMembership(db, ctx.user.id, input.tier, input.months);
         return { ok: true, ...r };
       } catch (e: any) {
-        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "AI 余额不足" });
+        if (e?.message === "insufficient_nn") throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
         throw new TRPCError({ code: "BAD_REQUEST", message: "开通失败" });
       }
     }),
