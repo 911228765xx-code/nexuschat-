@@ -9565,7 +9565,6 @@ import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
 import { and as and19, eq as eq22, or as or6, desc as desc12 } from "drizzle-orm";
-import { alias as alias2 } from "drizzle-orm/mysql-core";
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -9666,19 +9665,25 @@ var contactsRouter = router({
     }).from(userBlocklist).innerJoin(users, eq22(users.id, userBlocklist.blockedId)).where(eq22(userBlocklist.blockerId, ctx.user.id)).orderBy(desc12(userBlocklist.createdAt));
   }),
   // ─── Send friend request ────────────────────────────────────────────────────
-  sendRequest: protectedProcedure.input(z11.object({ receiverId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+  sendRequest: protectedProcedure.input(z11.object({
+    receiverId: z11.number().int().positive(),
+    // 只在从某个群的资料/成员列表加时传入。按 ID / 扫码加不传，不受「禁止互加」影响。
+    fromGroupId: z11.number().int().positive().optional()
+  })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     if (input.receiverId === ctx.user.id) throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u6DFB\u52A0\u81EA\u5DF1\u4E3A\u597D\u53CB" });
     if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError11({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u6DFB\u52A0\u597D\u53CB(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
-    const meM = alias2(groupMembers, "forbid_me");
-    const themM = alias2(groupMembers, "forbid_them");
-    const [forbidHit] = await db.select({ id: chatGroups.id }).from(chatGroups).innerJoin(meM, and19(eq22(meM.groupId, chatGroups.id), eq22(meM.userId, ctx.user.id))).innerJoin(themM, and19(eq22(themM.groupId, chatGroups.id), eq22(themM.userId, input.receiverId))).where(and19(
-      eq22(chatGroups.forbidAddFriend, true),
-      eq22(meM.role, "member"),
-      eq22(themM.role, "member")
-    )).limit(1);
-    if (forbidHit) throw new TRPCError11({ code: "FORBIDDEN", message: "\u8BE5\u7FA4\u5DF2\u7981\u6B62\u6210\u5458\u4E92\u52A0\u597D\u53CB" });
+    if (input.fromGroupId) {
+      const [g] = await db.select({ forbid: chatGroups.forbidAddFriend }).from(chatGroups).where(eq22(chatGroups.id, input.fromGroupId)).limit(1);
+      if (g?.forbid) {
+        const [meM] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and19(eq22(groupMembers.groupId, input.fromGroupId), eq22(groupMembers.userId, ctx.user.id))).limit(1);
+        const [themM] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and19(eq22(groupMembers.groupId, input.fromGroupId), eq22(groupMembers.userId, input.receiverId))).limit(1);
+        if (meM?.role === "member" && themM?.role === "member") {
+          throw new TRPCError11({ code: "FORBIDDEN", message: "\u8BE5\u7FA4\u5DF2\u7981\u6B62\u6210\u5458\u4E92\u52A0\u597D\u53CB" });
+        }
+      }
+    }
     const existing = await db.select({ id: friendRequests.id, status: friendRequests.status }).from(friendRequests).where(
       or6(
         and19(eq22(friendRequests.senderId, ctx.user.id), eq22(friendRequests.receiverId, input.receiverId)),

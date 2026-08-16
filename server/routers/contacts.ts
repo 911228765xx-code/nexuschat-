@@ -5,7 +5,6 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { friendRequests, users, contactMetadata, userBlocklist, chatGroups, groupMembers, userSettings } from "../../drizzle/schema";
 import { and, eq, or, desc } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
 import { createNotification } from "./notificationsRouter";
 import { hasBlocked, isBlockedEither, assertCanDM } from "../utils/relations";
 
@@ -108,7 +107,11 @@ export const contactsRouter = router({
 
   // ─── Send friend request ────────────────────────────────────────────────────
   sendRequest: protectedProcedure
-    .input(z.object({ receiverId: z.number().int().positive() }))
+    .input(z.object({
+      receiverId: z.number().int().positive(),
+      // 只在从某个群的资料/成员列表加时传入。按 ID / 扫码加不传，不受「禁止互加」影响。
+      fromGroupId: z.number().int().positive().optional(),
+    }))
     .use(rateLimitWrite)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -116,20 +119,20 @@ export const contactsRouter = router({
       if (input.receiverId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能添加自己为好友" });
       if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError({ code: "FORBIDDEN", message: "无法添加好友(存在拉黑关系)" });
 
-      // 共同群开了「禁止互加好友」，且双方都是普通成员 → 拒绝（群主/管理仍可加）
-      const meM = alias(groupMembers, "forbid_me");
-      const themM = alias(groupMembers, "forbid_them");
-      const [forbidHit] = await db.select({ id: chatGroups.id })
-        .from(chatGroups)
-        .innerJoin(meM, and(eq(meM.groupId, chatGroups.id), eq(meM.userId, ctx.user.id)))
-        .innerJoin(themM, and(eq(themM.groupId, chatGroups.id), eq(themM.userId, input.receiverId)))
-        .where(and(
-          eq(chatGroups.forbidAddFriend, true),
-          eq(meM.role, "member"),
-          eq(themM.role, "member"),
-        ))
-        .limit(1);
-      if (forbidHit) throw new TRPCError({ code: "FORBIDDEN", message: "该群已禁止成员互加好友" });
+      // 微信同款：禁止互加只拦「从该群加」，不拦通讯录按 ID / 扫码。
+      if (input.fromGroupId) {
+        const [g] = await db.select({ forbid: chatGroups.forbidAddFriend }).from(chatGroups)
+          .where(eq(chatGroups.id, input.fromGroupId)).limit(1);
+        if (g?.forbid) {
+          const [meM] = await db.select({ role: groupMembers.role }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, input.fromGroupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+          const [themM] = await db.select({ role: groupMembers.role }).from(groupMembers)
+            .where(and(eq(groupMembers.groupId, input.fromGroupId), eq(groupMembers.userId, input.receiverId))).limit(1);
+          if (meM?.role === "member" && themM?.role === "member") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "该群已禁止成员互加好友" });
+          }
+        }
+      }
 
       // Check if request already exists
       const existing = await db
