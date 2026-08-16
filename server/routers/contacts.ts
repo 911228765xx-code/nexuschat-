@@ -8,6 +8,16 @@ import { and, eq, or, desc } from "drizzle-orm";
 import { createNotification } from "./notificationsRouter";
 import { hasBlocked, isBlockedEither, assertCanDM } from "../utils/relations";
 
+type FriendRel = { id: number; senderId: number; receiverId: number; status: string };
+
+/** 同一对用户可能因历史脏数据有多行：accepted > pending > rejected。 */
+function pickFriendRel(rows: FriendRel[]): FriendRel | null {
+  return rows.find((r) => r.status === "accepted")
+    ?? rows.find((r) => r.status === "pending")
+    ?? rows.find((r) => r.status === "rejected")
+    ?? null;
+}
+
 export const contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -26,17 +36,26 @@ export const contactsRouter = router({
       if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
       const isSelf = input.userId === ctx.user.id;
       let isFriend = false, requestPending = false, blockedByMe = false;
+      let incomingRequestId: number | null = null;
       if (!isSelf) {
-        const [rel] = await db
-          .select({ status: friendRequests.status })
+        const rels = await db
+          .select({
+            id: friendRequests.id,
+            senderId: friendRequests.senderId,
+            receiverId: friendRequests.receiverId,
+            status: friendRequests.status,
+          })
           .from(friendRequests)
           .where(or(
             and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.userId)),
             and(eq(friendRequests.senderId, input.userId), eq(friendRequests.receiverId, ctx.user.id)),
-          ))
-          .limit(1);
+          ));
+        const rel = pickFriendRel(rels);
         if (rel?.status === "accepted") isFriend = true;
-        else if (rel?.status === "pending") requestPending = true;
+        else if (rel?.status === "pending") {
+          if (rel.senderId === ctx.user.id) requestPending = true;
+          else incomingRequestId = rel.id;
+        }
         blockedByMe = await hasBlocked(db, ctx.user.id, input.userId);
       }
       let canDM = false;
@@ -54,11 +73,11 @@ export const contactsRouter = router({
         return {
           id: u.id, name: u.name, username: u.username, avatar: u.avatar,
           bio: null, isBot: u.isBot, createdAt: null,
-          isSelf, isFriend, requestPending, blockedByMe,
+          isSelf, isFriend, requestPending, incomingRequestId, blockedByMe,
           profileHidden: true, canDM,
         };
       }
-      return { ...u, isSelf, isFriend, requestPending, blockedByMe, profileHidden: false, canDM };
+      return { ...u, isSelf, isFriend, requestPending, incomingRequestId, blockedByMe, profileHidden: false, canDM };
     }),
 
   // ─── 拉黑 / 解除拉黑 / 黑名单列表 ─────────────────────────────────────────────
@@ -117,9 +136,12 @@ export const contactsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       if (input.receiverId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "不能添加自己为好友" });
+      const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, input.receiverId)).limit(1);
+      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
       if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError({ code: "FORBIDDEN", message: "无法添加好友(存在拉黑关系)" });
 
-      // 微信同款：禁止互加只拦「从该群加」，不拦通讯录按 ID / 扫码。
+      // 产品约定（不要改回「只要同群就全局禁加」——会把通讯录按 ID / 扫码一起打死）：
+      // 禁止互加只拦「从该群资料/成员列表加」。按 ID、扫码、广场资料不传 fromGroupId。
       if (input.fromGroupId) {
         const [g] = await db.select({ forbid: chatGroups.forbidAddFriend }).from(chatGroups)
           .where(eq(chatGroups.id, input.fromGroupId)).limit(1);
@@ -134,29 +156,48 @@ export const contactsRouter = router({
         }
       }
 
-      // Check if request already exists
-      const existing = await db
-        .select({ id: friendRequests.id, status: friendRequests.status })
+      const pair = or(
+        and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.receiverId)),
+        and(eq(friendRequests.senderId, input.receiverId), eq(friendRequests.receiverId, ctx.user.id)),
+      );
+      const rels = await db
+        .select({
+          id: friendRequests.id,
+          senderId: friendRequests.senderId,
+          receiverId: friendRequests.receiverId,
+          status: friendRequests.status,
+        })
         .from(friendRequests)
-        .where(
-          or(
-            and(eq(friendRequests.senderId, ctx.user.id), eq(friendRequests.receiverId, input.receiverId)),
-            and(eq(friendRequests.senderId, input.receiverId), eq(friendRequests.receiverId, ctx.user.id))
-          )
-        )
-        .limit(1);
+        .where(pair);
+      const rel = pickFriendRel(rels);
 
-      if (existing.length > 0) {
-        if (existing[0].status === "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "已发送过好友申请，等待对方处理" });
-        if (existing[0].status === "accepted") throw new TRPCError({ code: "BAD_REQUEST", message: "你们已经是好友了" });
+      if (rel?.status === "accepted") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "你们已经是好友了" });
+      }
+      if (rel?.status === "pending") {
+        if (rel.receiverId === ctx.user.id) {
+          await db.update(friendRequests).set({ status: "accepted" }).where(eq(friendRequests.id, rel.id));
+          return { success: true, accepted: true };
+        }
+        throw new TRPCError({ code: "BAD_REQUEST", message: "已发送过好友申请，等待对方处理" });
+      }
+      if (rel?.status === "rejected") {
+        await db.update(friendRequests).set({
+          senderId: ctx.user.id,
+          receiverId: input.receiverId,
+          status: "pending",
+        }).where(eq(friendRequests.id, rel.id));
+        for (const extra of rels) {
+          if (extra.id !== rel.id) await db.delete(friendRequests).where(eq(friendRequests.id, extra.id));
+        }
+      } else {
+        await db.insert(friendRequests).values({
+          senderId: ctx.user.id,
+          receiverId: input.receiverId,
+          status: "pending",
+        });
       }
 
-      await db.insert(friendRequests).values({
-        senderId: ctx.user.id,
-        receiverId: input.receiverId,
-        status: "pending",
-      });
-      // 通知对方：有人请求加你为好友（进通知中心 + 未读计数提醒）
       try {
         await createNotification({
           db,
@@ -168,7 +209,7 @@ export const contactsRouter = router({
           content: "请求添加你为好友",
         });
       } catch { /* 通知失败不影响请求 */ }
-      return { success: true };
+      return { success: true, accepted: false };
     }),
 
   // ─── 删除好友（删除两人间已接受的好友关系，任一方向）──────────────────────────

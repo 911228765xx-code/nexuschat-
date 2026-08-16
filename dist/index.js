@@ -9565,6 +9565,9 @@ import { TRPCError as TRPCError11 } from "@trpc/server";
 init_db();
 init_schema();
 import { and as and19, eq as eq22, or as or6, desc as desc12 } from "drizzle-orm";
+function pickFriendRel(rows) {
+  return rows.find((r) => r.status === "accepted") ?? rows.find((r) => r.status === "pending") ?? rows.find((r) => r.status === "rejected") ?? null;
+}
 var contactsRouter = router({
   // ─── 看某用户的公开资料(头像/昵称/简介)+ 是否好友 ───────────────────────────
   //   群聊点头像进资料页用。bio 本就在 user.searchUsers 公开,故对所有登录用户可见。
@@ -9584,13 +9587,23 @@ var contactsRouter = router({
     if (!u) throw new TRPCError11({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
     const isSelf = input.userId === ctx.user.id;
     let isFriend = false, requestPending = false, blockedByMe = false;
+    let incomingRequestId = null;
     if (!isSelf) {
-      const [rel] = await db.select({ status: friendRequests.status }).from(friendRequests).where(or6(
+      const rels = await db.select({
+        id: friendRequests.id,
+        senderId: friendRequests.senderId,
+        receiverId: friendRequests.receiverId,
+        status: friendRequests.status
+      }).from(friendRequests).where(or6(
         and19(eq22(friendRequests.senderId, ctx.user.id), eq22(friendRequests.receiverId, input.userId)),
         and19(eq22(friendRequests.senderId, input.userId), eq22(friendRequests.receiverId, ctx.user.id))
-      )).limit(1);
+      ));
+      const rel = pickFriendRel(rels);
       if (rel?.status === "accepted") isFriend = true;
-      else if (rel?.status === "pending") requestPending = true;
+      else if (rel?.status === "pending") {
+        if (rel.senderId === ctx.user.id) requestPending = true;
+        else incomingRequestId = rel.id;
+      }
       blockedByMe = await hasBlocked(db, ctx.user.id, input.userId);
     }
     let canDM = false;
@@ -9621,12 +9634,13 @@ var contactsRouter = router({
         isSelf,
         isFriend,
         requestPending,
+        incomingRequestId,
         blockedByMe,
         profileHidden: true,
         canDM
       };
     }
-    return { ...u, isSelf, isFriend, requestPending, blockedByMe, profileHidden: false, canDM };
+    return { ...u, isSelf, isFriend, requestPending, incomingRequestId, blockedByMe, profileHidden: false, canDM };
   }),
   // ─── 拉黑 / 解除拉黑 / 黑名单列表 ─────────────────────────────────────────────
   blockUser: protectedProcedure.input(z11.object({ targetId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
@@ -9673,6 +9687,8 @@ var contactsRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     if (input.receiverId === ctx.user.id) throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4E0D\u80FD\u6DFB\u52A0\u81EA\u5DF1\u4E3A\u597D\u53CB" });
+    const [target] = await db.select({ id: users.id }).from(users).where(eq22(users.id, input.receiverId)).limit(1);
+    if (!target) throw new TRPCError11({ code: "NOT_FOUND", message: "\u7528\u6237\u4E0D\u5B58\u5728" });
     if (await isBlockedEither(db, ctx.user.id, input.receiverId)) throw new TRPCError11({ code: "FORBIDDEN", message: "\u65E0\u6CD5\u6DFB\u52A0\u597D\u53CB(\u5B58\u5728\u62C9\u9ED1\u5173\u7CFB)" });
     if (input.fromGroupId) {
       const [g] = await db.select({ forbid: chatGroups.forbidAddFriend }).from(chatGroups).where(eq22(chatGroups.id, input.fromGroupId)).limit(1);
@@ -9684,21 +9700,43 @@ var contactsRouter = router({
         }
       }
     }
-    const existing = await db.select({ id: friendRequests.id, status: friendRequests.status }).from(friendRequests).where(
-      or6(
-        and19(eq22(friendRequests.senderId, ctx.user.id), eq22(friendRequests.receiverId, input.receiverId)),
-        and19(eq22(friendRequests.senderId, input.receiverId), eq22(friendRequests.receiverId, ctx.user.id))
-      )
-    ).limit(1);
-    if (existing.length > 0) {
-      if (existing[0].status === "pending") throw new TRPCError11({ code: "BAD_REQUEST", message: "\u5DF2\u53D1\u9001\u8FC7\u597D\u53CB\u7533\u8BF7\uFF0C\u7B49\u5F85\u5BF9\u65B9\u5904\u7406" });
-      if (existing[0].status === "accepted") throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4F60\u4EEC\u5DF2\u7ECF\u662F\u597D\u53CB\u4E86" });
+    const pair = or6(
+      and19(eq22(friendRequests.senderId, ctx.user.id), eq22(friendRequests.receiverId, input.receiverId)),
+      and19(eq22(friendRequests.senderId, input.receiverId), eq22(friendRequests.receiverId, ctx.user.id))
+    );
+    const rels = await db.select({
+      id: friendRequests.id,
+      senderId: friendRequests.senderId,
+      receiverId: friendRequests.receiverId,
+      status: friendRequests.status
+    }).from(friendRequests).where(pair);
+    const rel = pickFriendRel(rels);
+    if (rel?.status === "accepted") {
+      throw new TRPCError11({ code: "BAD_REQUEST", message: "\u4F60\u4EEC\u5DF2\u7ECF\u662F\u597D\u53CB\u4E86" });
     }
-    await db.insert(friendRequests).values({
-      senderId: ctx.user.id,
-      receiverId: input.receiverId,
-      status: "pending"
-    });
+    if (rel?.status === "pending") {
+      if (rel.receiverId === ctx.user.id) {
+        await db.update(friendRequests).set({ status: "accepted" }).where(eq22(friendRequests.id, rel.id));
+        return { success: true, accepted: true };
+      }
+      throw new TRPCError11({ code: "BAD_REQUEST", message: "\u5DF2\u53D1\u9001\u8FC7\u597D\u53CB\u7533\u8BF7\uFF0C\u7B49\u5F85\u5BF9\u65B9\u5904\u7406" });
+    }
+    if (rel?.status === "rejected") {
+      await db.update(friendRequests).set({
+        senderId: ctx.user.id,
+        receiverId: input.receiverId,
+        status: "pending"
+      }).where(eq22(friendRequests.id, rel.id));
+      for (const extra of rels) {
+        if (extra.id !== rel.id) await db.delete(friendRequests).where(eq22(friendRequests.id, extra.id));
+      }
+    } else {
+      await db.insert(friendRequests).values({
+        senderId: ctx.user.id,
+        receiverId: input.receiverId,
+        status: "pending"
+      });
+    }
     try {
       await createNotification({
         db,
@@ -9711,7 +9749,7 @@ var contactsRouter = router({
       });
     } catch {
     }
-    return { success: true };
+    return { success: true, accepted: false };
   }),
   // ─── 删除好友（删除两人间已接受的好友关系，任一方向）──────────────────────────
   removeFriend: protectedProcedure.input(z11.object({ friendId: z11.number().int().positive() })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
