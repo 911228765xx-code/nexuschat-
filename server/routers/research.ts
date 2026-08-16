@@ -11,8 +11,6 @@ import { consumeUserAiBudget } from "../userAiBudget";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { sanitizeInput } from "../utils/sanitize";
 import { awardTaskEvent } from "./user";
-import { isReferralBound } from "../referralRewards";
-import { isAppAdmin } from "../appAdmin";
 
 // ─── CoinGecko Data Fetching ─────────────────────────────────────────────────
 
@@ -332,14 +330,9 @@ export const researchRouter = router({
         nxcCost: input.mode === "quick" ? 5 : 10,
       });
 
-      // 研究任务需先绑邀请；没绑也生成报告，但把原因回给前端，避免「生成了却没分」
-      const canAward = isAppAdmin(ctx.user) || (await isReferralBound(db, ctx.user.id));
-      let npEarned = 0;
-      const awardHint = canAward ? "ok" : "need_invite";
-      if (canAward) {
-        npEarned += await awardTaskEvent(db, ctx.user.id, "first_research");
-        npEarned += await awardTaskEvent(db, ctx.user.id, "research_daily");
-      }
+      // AC 产出：首次分析里程碑 + 每日分析（每日上限内）
+      await awardTaskEvent(db, ctx.user.id, "first_research");
+      await awardTaskEvent(db, ctx.user.id, "research_daily");
 
       return {
         reportId: (result as any).insertId,
@@ -348,8 +341,6 @@ export const researchRouter = router({
         sentiment,
         riskLevel,
         mode: input.mode,
-        npEarned,
-        awardHint,
       };
     }),
 

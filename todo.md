@@ -553,3 +553,8 @@
 - [x] 诊断 Manus 重新 Publish 导致后端挂起/500 的原因并恢复服务
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 诊断 Manus 发布版本 ac9160b7 无法 checkout 的失败并生成新 checkpoint 供发布
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布

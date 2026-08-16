@@ -762,38 +762,28 @@ export const userRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
 
       if (input.direction === "it_to_bit") {
+        // amount = 要花掉的 IT，必须是 100 的整数倍
         if (input.amount % IT_PER_BIT !== 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `IT 数量需为 ${IT_PER_BIT} 的整数倍` });
         }
         const bitOut = Math.floor(input.amount / IT_PER_BIT);
         if (bitOut <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "数量过小" });
-        try {
-          await db.transaction(async (tx) => {
-            const spent: any = await tx.update(users)
-              .set({ npPoints: sql`${users.npPoints} - ${input.amount}` })
-              .where(and(eq(users.id, ctx.user.id), sql`${users.npPoints} >= ${input.amount}`));
-            const affected = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
-            if (affected <= 0) throw new Error("INSUFFICIENT_IT");
-            const ok = await grantNN(tx as typeof db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
-            if (!ok) throw new Error("TREASURY");
-          });
-        } catch (e: any) {
-          if (e?.message === "INSUFFICIENT_IT") throw new TRPCError({ code: "BAD_REQUEST", message: "IT 余额不足" });
-          if (e?.message === "TREASURY") throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 金库不足，兑换失败已退回 IT" });
-          throw e;
+        const spent: any = await db.update(users)
+          .set({ npPoints: sql`${users.npPoints} - ${input.amount}` })
+          .where(and(eq(users.id, ctx.user.id), sql`${users.npPoints} >= ${input.amount}`));
+        const affected = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+        if (affected <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "IT 余额不足" });
+        const ok = await grantNN(db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
+        if (!ok) {
+          await db.update(users).set({ npPoints: sql`${users.npPoints} + ${input.amount}` }).where(eq(users.id, ctx.user.id));
+          throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 金库不足，兑换失败已退回 IT" });
         }
       } else {
+        // amount = 要花掉的 BIT
         const itOut = input.amount * IT_PER_BIT;
-        try {
-          await db.transaction(async (tx) => {
-            const ok = await spendNN(tx as typeof db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
-            if (!ok) throw new Error("INSUFFICIENT_BIT");
-            await tx.update(users).set({ npPoints: sql`${users.npPoints} + ${itOut}` }).where(eq(users.id, ctx.user.id));
-          });
-        } catch (e: any) {
-          if (e?.message === "INSUFFICIENT_BIT") throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
-          throw e;
-        }
+        const ok = await spendNN(db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足" });
+        await db.update(users).set({ npPoints: sql`${users.npPoints} + ${itOut}` }).where(eq(users.id, ctx.user.id));
       }
 
       const [u] = await db
