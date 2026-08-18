@@ -21,7 +21,6 @@ import { awardTaskEvent } from "./user";
 /** 允许的时间窗（分钟）：5 / 15 / 30 / 60。存进 horizonHours 列（历史字段名）。 */
 const HORIZONS = CALL_HORIZONS_MIN;
 const BET_SYMBOLS = ["BTC", "ETH"] as const;
-const DAILY_CALL_LIMIT = 5;
 /** IT 下注单笔上下限 */
 const MIN_STAKE = 10;
 const MAX_STAKE = 5000;
@@ -37,7 +36,7 @@ export const callsRouter = router({
     lockMinutes: CALL_LOCK_MINUTES,
     minStake: MIN_STAKE,
     maxStake: MAX_STAKE,
-    dailyLimit: DAILY_CALL_LIMIT,
+    dailyLimit: 0,
   })),
 
   /** BTC/ETH 现价 + 近 40 分钟 1m K 线。前端 1.5s 轮询，页面不刷新也跟着跳。 */
@@ -90,12 +89,6 @@ export const callsRouter = router({
       const callId = await db.transaction(async (tx) => {
         await tx.select({ id: users.id }).from(users).where(eq(users.id, ctx.user.id)).for("update").limit(1);
 
-        const [{ c = 0 } = { c: 0 }] = await tx
-          .select({ c: count() }).from(calls)
-          .where(and(eq(calls.userId, ctx.user.id), eq(calls.createdYmd, ymd)));
-        if (!admin && Number(c) >= DAILY_CALL_LIMIT) {
-          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `每日最多下注 ${DAILY_CALL_LIMIT} 次` });
-        }
         const [openSame] = await tx.select({ id: calls.id }).from(calls)
           .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
         if (!admin && openSame) {

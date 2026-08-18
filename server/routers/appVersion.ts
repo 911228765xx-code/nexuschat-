@@ -60,13 +60,16 @@ export const appVersionRouter = router({
           .limit(1);
 
         if (rows.length > 0) {
+          const notes = rows[0].releaseNotes ?? "";
           config = {
-            latestVersion: rows[0].latestVersion,
+            latestVersion: rows[0].latestVersion || CURRENT_APP_VERSION,
             minVersion: rows[0].minVersion,
             downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
             downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
             downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-            releaseNotes: rows[0].releaseNotes ?? "",
+            releaseNotes: /v1\.9\.0/.test(notes)
+              ? `🎉 v${CURRENT_APP_VERSION} 版本更新\n\n• 找回密码可在 App 内填写邮箱验证码\n• 邀请与官网口径：比特AI社交 · 澳洲 AFT\n• 猜涨跌不限每日次数\n• 积分 IT / 代币 BIT 名称统一`
+              : notes,
             isForceUpdate: rows[0].isForceUpdate,
           };
         }

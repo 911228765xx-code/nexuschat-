@@ -41,8 +41,8 @@ async function recordTx(db: Db, userId: number, amount: number, meta: NNTxMeta):
 
 /** AI 总发行量：2100 万枚（恒定） */
 export const NN_TOTAL_SUPPLY = 21_000_000;
-export const NN_SYMBOL = "AI";
-export const NN_NAME = "AIChat 治理代币";
+export const NN_SYMBOL = "BIT";
+export const NN_NAME = "BIT 治理代币";
 
 /**
  * 代币分配模型（DAO 私募认购）。比例可调，需合计 100%。

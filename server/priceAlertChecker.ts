@@ -87,7 +87,7 @@ async function checkAlerts() {
         userId: alert.userId,
         type: "system",
         fromUserId: null,
-        fromUserName: "NexusChat",
+        fromUserName: "比特AI社交",
         fromUserAvatar: "🔔",
         content,
         isRead: false,
