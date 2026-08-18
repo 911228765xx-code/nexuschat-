@@ -34,7 +34,7 @@ export const BOT_PERSONAS: Record<string, { style: string; openId: string }> = {
   },
   NexusBot: {
     openId: "bot_nexus_bot",
-    style: "你是NexusBot，NexusChat官方助手，友好专业，负责解答问题和活跃社区氛围，语气温和积极",
+    style: "你是比特AI社交官方助手，友好专业，负责解答问题和活跃社区氛围，语气温和积极",
   },
   // ── 扩充阵容(需跑 scripts/seed-bots.mjs 建账号+入群)──
   MemeKing: {

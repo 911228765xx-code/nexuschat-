@@ -56,7 +56,7 @@ async function generateMorningReport(): Promise<{ groupId: number; botName: stri
         {
           role: "system",
           content:
-            "你是NexusBot，NexusChat官方助手。请生成一条简短的Web3早报消息（50-100字），语气专业友好，包含emoji，中英文混用。不要提供具体价格预测。",
+            "你是比特AI社交官方助手。请生成一条简短的Web3早报消息（50-100字），语气专业友好，包含emoji，中英文混用。不要提供具体价格预测。",
         },
         {
           role: "user",

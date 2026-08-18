@@ -163,7 +163,7 @@ ${marketContext}
 列出 2-3 个最需要警惕的风险因素，每个用一句话说明
 
 ---
-*NexusChat AI 研究助手 | 数据来源: CoinGecko | 本分析基于公开数据的 AI 推理，仅供参考，不构成投资建议*`;
+*比特AI社交 研究助手 | 数据来源: CoinGecko | 本分析基于公开数据的 AI 推理，仅供参考，不构成投资建议*`;
 }
 
 function buildDeepPrompt(symbol: string, marketContext: string): string {
@@ -219,7 +219,7 @@ ${marketContext}
 用 2-3 句话总结你的核心观点和最重要的行动建议。
 
 ---
-*NexusChat AI 研究助手 | 数据来源: CoinGecko | 本报告基于公开数据的 AI 深度分析，仅供研究参考，不构成投资建议。加密货币市场波动剧烈，请根据自身风险承受能力做出决策。*`;
+*比特AI社交 研究助手 | 数据来源: CoinGecko | 本报告基于公开数据的 AI 深度分析，仅供研究参考，不构成投资建议。加密货币市场波动剧烈，请根据自身风险承受能力做出决策。*`;
 }
 
 // ─── Sentiment Extraction ────────────────────────────────────────────────────

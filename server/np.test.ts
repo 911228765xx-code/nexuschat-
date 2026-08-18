@@ -9,7 +9,7 @@ import {
 import { dailyNpCap, signinStreakReward } from "./routers/user";
 import { isAppAdmin, APP_ADMIN_IDS } from "./appAdmin";
 import { estimateNn } from "./routers/tge";
-import { stakePayout } from "./callResolver";
+import { stakePayout, judgeCallSide } from "./callResolver";
 
 // ─── 段位表 ────────────────────────────────────────────────────────────────────
 describe("段位表 RANK_TIERS", () => {
@@ -155,6 +155,14 @@ describe("团队价值分加权求和", () => {
 });
 
 // ─── 策展质押结算 ────────────────────────────────────────────────────────────────
+describe("judgeCallSide（再小也分胜负）", () => {
+  it("收盘高于开盘 = 涨", () => expect(judgeCallSide(100, 100.01)).toBe("up"));
+  it("收盘低于开盘 = 跌", () => expect(judgeCallSide(100, 99.99)).toBe("down"));
+  it("完全持平看上影更长 = 涨", () => expect(judgeCallSide(100, 100, { high: 100.4, low: 99.9 })).toBe("up"));
+  it("完全持平看下影更长 = 跌", () => expect(judgeCallSide(100, 100, { high: 100.1, low: 99.2 })).toBe("down"));
+  it("完全持平无影线按跌", () => expect(judgeCallSide(100, 100)).toBe("down"));
+});
+
 describe("stakePayout（固定赔率 1.8 / 押错销毁 / void退本）", () => {
   it("押对：100 → 180", () => expect(stakePayout(100, "win")).toBe(180));
   it("押错：100 → 0（销毁）", () => expect(stakePayout(100, "lose")).toBe(0));

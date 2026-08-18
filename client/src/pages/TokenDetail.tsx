@@ -612,7 +612,7 @@ export default function TokenDetail() {
             <button onClick={() => {
                 const url = window.location.href;
                 if (navigator.share) {
-                  navigator.share({ title: `${token} Analysis`, text: `Check out ${token} on NexusChat`, url });
+                  navigator.share({ title: `${token} Analysis`, text: `Check out ${token} on 比特AI社交`, url });
                 } else {
                   navigator.clipboard.writeText(url);
                   toast.success(t("research.linkCopied") || "Link copied to clipboard");

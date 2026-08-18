@@ -217,6 +217,12 @@ export async function fetchCallSpotPrice(symbol: string): Promise<number | null>
       lastPx.set(sym, visPx);
       return visPx;
     }
+    const by = await fetchJsonQuick(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${pair}`, 2200);
+    const byPx = Number((by as { result?: { list?: Array<{ lastPrice?: string }> } } | null)?.result?.list?.[0]?.lastPrice);
+    if (byPx > 0) {
+      lastPx.set(sym, byPx);
+      return byPx;
+    }
   }
 
   const id = CG_ID[sym];
@@ -252,7 +258,9 @@ function bybitInterval(horizonMin: number): string | null {
   return null;
 }
 
-export function pickWindowOHLC(bars: CallCandle[], openMs: number): { open: number; close: number } | null {
+export type CallWindowOHLC = { open: number; close: number; high: number; low: number };
+
+export function pickWindowOHLC(bars: CallCandle[], openMs: number): CallWindowOHLC | null {
   if (!bars.length) return null;
   let best = bars[0];
   let bestD = Math.abs(best.t - openMs);
@@ -264,17 +272,19 @@ export function pickWindowOHLC(bars: CallCandle[], openMs: number): { open: numb
     }
   }
   if (bestD > 60_000 || !(best.o > 0) || !(best.c > 0)) return null;
-  return { open: best.o, close: best.c };
+  return { open: best.o, close: best.c, high: best.h, low: best.l };
 }
 
-function ohlcFrom1m(bars: CallCandle[], openMs: number, horizonMin: number): { open: number; close: number } | null {
+function ohlcFrom1m(bars: CallCandle[], openMs: number, horizonMin: number): CallWindowOHLC | null {
   const closeMs = openMs + horizonMin * 60_000;
   const inWin = bars.filter((b) => b.t >= openMs - 1000 && b.t < closeMs + 1000).sort((a, b) => a.t - b.t);
   if (inWin.length < 2) return null;
   const open = inWin[0].o;
   const close = inWin[inWin.length - 1].c;
   if (!(open > 0) || !(close > 0)) return null;
-  return { open, close };
+  const high = Math.max(...inWin.map((b) => b.h));
+  const low = Math.min(...inWin.map((b) => b.l));
+  return { open, close, high, low };
 }
 
 async function raceParsedKlines(
@@ -315,7 +325,7 @@ export async function fetchCallWindowOHLC(
   symbol: string,
   openMs: number,
   horizonMin: number,
-): Promise<{ open: number; close: number } | null> {
+): Promise<CallWindowOHLC | null> {
   const sym = symbol.toUpperCase();
   const pair = BINANCE_PAIR[sym];
   const interval = binanceInterval(horizonMin);
@@ -362,7 +372,16 @@ export async function fetchCallWindowOHLC(
   if (pts.length >= 2) {
     const first = pts[0];
     const last = pts[pts.length - 1];
-    if (first?.open > 0 && last?.close > 0) return { open: first.open, close: last.close };
+    if (first?.open > 0 && last?.close > 0) {
+      const highs = pts.map((p) => Number((p as { high?: number }).high ?? Math.max(p.open, p.close)));
+      const lows = pts.map((p) => Number((p as { low?: number }).low ?? Math.min(p.open, p.close)));
+      return {
+        open: first.open,
+        close: last.close,
+        high: Math.max(...highs.filter((n) => n > 0), first.open, last.close),
+        low: Math.min(...lows.filter((n) => n > 0), first.open, last.close),
+      };
+    }
   }
   return null;
 }

@@ -342,7 +342,7 @@ export default function PosterGenerator({
                           className="text-sm font-bold tracking-wide"
                           style={{ color: template.textColor, fontFamily: "'Space Grotesk', sans-serif" }}
                         >
-                          NexusChat
+                          比特AI社交
                         </span>
                       </div>
                       <div
@@ -414,7 +414,7 @@ export default function PosterGenerator({
                             {totalRewards.toLocaleString()}
                           </p>
                           <p className="text-sm" style={{ color: template.subtitleColor }}>
-                            AC {t("poster.earned")}
+                            IT {t("poster.earned")}
                           </p>
                         </div>
                         <div className="w-px" style={{ background: template.cardBorder }} />
@@ -426,7 +426,7 @@ export default function PosterGenerator({
                             +500
                           </p>
                           <p className="text-sm" style={{ color: template.subtitleColor }}>
-                            AC {t("poster.bonus")}
+                            IT {t("poster.bonus")}
                           </p>
                         </div>
                       </div>

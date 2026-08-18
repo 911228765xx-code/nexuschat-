@@ -15,9 +15,9 @@ describe("callWindow 整根 K 线", () => {
     expect(horizonToMinutes(5)).toBe(5);
   });
 
-  it("短窗死区只滤噪声", () => {
-    expect(deadbandBpForHorizon(5)).toBe(1);
-    expect(deadbandBpForHorizon(240)).toBe(100);
+  it("已取消死区：任何波动都判胜负", () => {
+    expect(deadbandBpForHorizon(5)).toBe(0);
+    expect(deadbandBpForHorizon(240)).toBe(0);
   });
 
   it("盘中不入场：10:03 押 10:05→10:10 整 5 分钟", () => {

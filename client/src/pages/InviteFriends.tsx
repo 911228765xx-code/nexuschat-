@@ -170,7 +170,7 @@ export default function InviteFriends() {
                 <p className="text-sm font-medium">{t("invite.inviterReward")}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{t("invite.inviterRewardDesc")}</p>
               </div>
-              <span className="text-sm font-bold font-mono text-neon-green shrink-0">+500 AC</span>
+              <span className="text-sm font-bold font-mono text-neon-green shrink-0">+500 IT</span>
             </div>
             <div className="flex items-start gap-3 p-2.5 rounded-xl bg-neon-cyan/5 border border-neon-cyan/10">
               <div className="w-8 h-8 rounded-lg bg-neon-cyan/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -180,7 +180,7 @@ export default function InviteFriends() {
                 <p className="text-sm font-medium">{t("invite.inviteeReward")}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{t("invite.inviteeRewardDesc")}</p>
               </div>
-              <span className="text-sm font-bold font-mono text-neon-cyan shrink-0">+200 AC</span>
+              <span className="text-sm font-bold font-mono text-neon-cyan shrink-0">+200 IT</span>
             </div>
             <div className="flex items-start gap-3 p-2.5 rounded-xl bg-neon-purple/5 border border-neon-purple/10">
               <div className="w-8 h-8 rounded-lg bg-neon-purple/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -321,7 +321,7 @@ export default function InviteFriends() {
                       </div>
                     </div>
                     {friend.reward > 0 && (
-                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} AC</span>
+                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} IT</span>
                     )}
                   </motion.div>
                 ))
@@ -339,7 +339,7 @@ export default function InviteFriends() {
               <div className="p-4 rounded-2xl bg-gradient-to-r from-neon-green/10 to-neon-cyan/10 border border-neon-green/20">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm text-muted-foreground">{t("invite.totalEarned")}</span>
-                  <span className="text-xl font-bold font-mono text-neon-green">{totalRewards.toLocaleString()} AC</span>
+                  <span className="text-xl font-bold font-mono text-neon-green">{totalRewards.toLocaleString()} IT</span>
                 </div>
                 <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
                   <motion.div
@@ -378,7 +378,7 @@ export default function InviteFriends() {
                         <p className="text-sm font-medium">{t("invite.referralReward")}: {friend.name}</p>
                         <p className="text-sm text-muted-foreground">{formatDate(friend.joinedAt)}</p>
                       </div>
-                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} AC</span>
+                      <span className="text-sm font-bold font-mono text-neon-green">+{friend.reward} IT</span>
                     </div>
                   ))
                 )}

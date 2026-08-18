@@ -52,7 +52,7 @@ export default function TaskCenter() {
       if (result.alreadyCompleted) {
         toast.info("任务已完成，不可重复领取");
       } else if (result.success) {
-        toast.success(`任务完成！+${result.npEarned} AC`);
+        toast.success(`任务完成！+${result.npEarned} IT`);
         utils.user.getTaskStatus.invalidate();
         utils.user.myRank.invalidate();
         // Handle daily_login specially
@@ -127,7 +127,7 @@ export default function TaskCenter() {
     completeTask.mutate({ taskType: "daily_login" });
     // Optimistic UI update
     const reward = CHECKIN_REWARDS[checkinDay] || 10;
-    toast.success(`${t("tasks.checkinSuccess")} +${reward} AC`);
+    toast.success(`${t("tasks.checkinSuccess")} +${reward} IT`);
   };
 
   const handleClaim = (taskId: string) => {
@@ -138,7 +138,7 @@ export default function TaskCenter() {
     if (backendTaskType) {
       completeTask.mutate({ taskType: backendTaskType });
     } else {
-      toast.success(`${t("tasks.claimed")} +${task.reward} AC`);
+      toast.success(`${t("tasks.claimed")} +${task.reward} IT`);
     }
   };
 
@@ -157,7 +157,7 @@ export default function TaskCenter() {
           <h1 className="flex-1 text-base font-semibold font-display">{t("tasks.title")}</h1>
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
             <Sparkles size={12} className="text-neon-purple" />
-            <span className="text-sm font-bold font-mono text-neon-purple">{(myRank?.npPoints ?? 0).toLocaleString()} AC</span>
+            <span className="text-sm font-bold font-mono text-neon-purple">{(myRank?.npPoints ?? 0).toLocaleString()} IT</span>
           </div>
         </div>
       </header>
@@ -177,7 +177,7 @@ export default function TaskCenter() {
                 {checkinDay}{t("tasks.dayStreak")}
               </span>
             </div>
-            <span className="text-sm text-muted-foreground">{t("tasks.todayEarned")}: +{totalNPToday} AC</span>
+            <span className="text-sm text-muted-foreground">{t("tasks.todayEarned")}: +{totalNPToday} IT</span>
           </div>
 
           {/* 7-day checkin grid */}
@@ -200,13 +200,13 @@ export default function TaskCenter() {
                   {isChecked ? (
                     <>
                       <span className="text-[13px] font-bold font-mono my-0.5 text-neon-green">+{reward}</span>
-                      <span className="text-[13px] font-mono text-neon-green/60">AC</span>
+                      <span className="text-[13px] font-mono text-neon-green/60">IT</span>
                       <CheckCircle2 size={9} className="text-neon-green/70 mt-0.5" />
                     </>
                   ) : (
                     <>
                       <span className={`text-[13px] font-bold font-mono my-0.5 ${isToday ? "text-neon-cyan" : "text-muted-foreground"}`}>+{reward}</span>
-                      <span className={`text-[13px] font-mono ${isToday ? "text-neon-cyan/60" : "text-muted-foreground/50"}`}>{i === 6 ? "×2" : "AC"}</span>
+                      <span className={`text-[13px] font-mono ${isToday ? "text-neon-cyan/60" : "text-muted-foreground/50"}`}>{i === 6 ? "×2" : "IT"}</span>
                     </>
                   )}
                 </div>
@@ -231,7 +231,7 @@ export default function TaskCenter() {
             ) : (
               <span className="flex items-center justify-center gap-2.5">
                 <Calendar size={15} />
-                {t("tasks.checkinNow")} (+{CHECKIN_REWARDS[checkinDay] || 10} AC)
+                {t("tasks.checkinNow")} (+{CHECKIN_REWARDS[checkinDay] || 10} IT)
               </span>
             )}
           </button>
@@ -309,7 +309,7 @@ export default function TaskCenter() {
                       <p className="text-sm font-medium">{item.action}</p>
                       <p className="text-sm text-muted-foreground">{item.time}</p>
                     </div>
-                    <span className={`text-sm font-bold font-mono ${item.color}`}>{item.amount} AC</span>
+                    <span className={`text-sm font-bold font-mono ${item.color}`}>{item.amount} IT</span>
                   </div>
                 ))}
               </div>
@@ -367,7 +367,7 @@ function TaskCard({ task, index, onClaim, t }: {
       </div>
 
       <div className="shrink-0 flex flex-col items-end gap-2">
-        <span className="text-sm font-bold font-mono text-neon-purple">+{task.reward} AC</span>
+        <span className="text-sm font-bold font-mono text-neon-purple">+{task.reward} IT</span>
         {task.claimed ? (
           <span className="text-sm text-muted-foreground flex items-center gap-0.5">
             <CheckCircle2 size={10} />

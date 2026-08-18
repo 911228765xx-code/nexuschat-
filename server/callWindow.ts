@@ -12,9 +12,9 @@ export function horizonToMinutes(horizonHoursField: number): number {
   return horizonHoursField;
 }
 
-/** 短窗只滤掉计价噪声（0.01%）；旧长窗仍 ±1%。 */
-export function deadbandBpForHorizon(horizonMin: number): number {
-  return horizonMin <= 60 ? 1 : 100;
+/** 已取消死区：再小的波动也判胜负。保留函数以免旧测试/调用崩掉。 */
+export function deadbandBpForHorizon(_horizonMin: number): number {
+  return 0;
 }
 
 export function overdueVoidMs(horizonMin: number): number {

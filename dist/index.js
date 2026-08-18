@@ -1799,8 +1799,8 @@ var init_token = __esm({
     "use strict";
     init_schema();
     NN_TOTAL_SUPPLY = 21e6;
-    NN_SYMBOL = "AI";
-    NN_NAME = "AIChat \u6CBB\u7406\u4EE3\u5E01";
+    NN_SYMBOL = "BIT";
+    NN_NAME = "BIT \u6CBB\u7406\u4EE3\u5E01";
     ALLOCATION_PCT = [
       { key: "ico", name: "ICO \u66F2\u7EBF\u8BA4\u8D2D", pct: 15, desc: "\u66F2\u7EBF\u5B9A\u4EF7\u8BA4\u8D2D(0.8U \u8D77/2U \u5C01\u9876)\uFF0C\u8BA4\u8D2D\u5373\u5168\u989D\u9501\u4ED3\u8FDB\u4E8C\u6C60\u8D28\u62BC", vesting: "\u9996\u6708\u60AC\u5D16 + 12 \u6708\u66F2\u7EBF\u91CA\u653E" },
       { key: "staking", name: "\u8D28\u62BC\u6316\u77FF", pct: 70, desc: "\u8D28\u62BC\u6316\u77FF\u5956\u52B1\u6C60\uFF1A\u6BCF\u7B14\u8D44\u91D1\u5404\u81EA\u8BA1\u9F84\uFF0C\u8D77\u6B65\u5E74\u5316\u6CBF\u66F2\u7EBF\u9012\u51CF", vesting: "\u968F\u6316\u77FF\u9010\u6B65\u4EA7\u51FA\xB7\u5956\u52B1\u6C60\u5C01\u9876" },
@@ -3495,8 +3495,11 @@ var REQUIRES_BINDING = /* @__PURE__ */ new Set(["first_research", "research_dail
 function ymdUtc3(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
 }
-function startOfUtcDay2(ymd) {
-  return /* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`);
+function ymdShanghai(d = /* @__PURE__ */ new Date()) {
+  return new Date(d.getTime() + 8 * 3600 * 1e3).toISOString().slice(0, 10);
+}
+function startOfShanghaiDay(ymd) {
+  return /* @__PURE__ */ new Date(`${ymd}T00:00:00+08:00`);
 }
 function dailyNpCap(createdAt) {
   const ageDays = (Date.now() - new Date(createdAt).getTime()) / 864e5;
@@ -3873,7 +3876,7 @@ var userRouter = router({
     }).from(userTasks).where(eq11(userTasks.userId, ctx.user.id)).orderBy(desc3(userTasks.completedAt));
     const completionCount = {};
     const todayCount = {};
-    const todayStart = startOfUtcDay2(ymdUtc3());
+    const todayStart = startOfShanghaiDay(ymdShanghai());
     completedTasks.forEach((t3) => {
       completionCount[t3.taskType] = (completionCount[t3.taskType] ?? 0) + 1;
       if (t3.completedAt && new Date(t3.completedAt) >= todayStart) {
@@ -3982,7 +3985,7 @@ var userRouter = router({
     }
     let teamActiveToday = 0;
     if (team.length > 0) {
-      const todayStart = startOfUtcDay2(ymdUtc3());
+      const todayStart = startOfShanghaiDay(ymdShanghai());
       const batch = team.slice(0, 1e4);
       const [{ c: activeC = 0 } = { c: 0 }] = await db.select({ c: sql6`COUNT(DISTINCT ${userTasks.userId})` }).from(userTasks).where(and9(inArray5(userTasks.userId, batch), gte4(userTasks.completedAt, todayStart)));
       teamActiveToday = Number(activeC);
@@ -4246,7 +4249,7 @@ async function _completeTask(userId, taskType, db) {
   const overrides = await getTaskRewardOverrides(db);
   let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
   const isDaily = typeof def.daily === "number";
-  const capped = isDaily;
+  const capped = false;
   let granted = 0;
   let blocked = false;
   await db.transaction(async (tx) => {
@@ -4254,7 +4257,7 @@ async function _completeTask(userId, taskType, db) {
     const admin = isAppAdmin({ id: userId, role: locked?.role });
     if (!admin) {
       if (isDaily) {
-        const todayStart = startOfUtcDay2(ymdUtc3());
+        const todayStart = startOfShanghaiDay(ymdShanghai());
         const [{ c: todayCount } = { c: 0 }] = await tx.select({ c: count() }).from(userTasks).where(and9(eq11(userTasks.userId, userId), eq11(userTasks.taskType, taskType), gte4(userTasks.completedAt, todayStart)));
         if (Number(todayCount) >= def.daily) {
           blocked = true;
@@ -4271,13 +4274,13 @@ async function _completeTask(userId, taskType, db) {
     let newStreak = null;
     if (taskType === "daily_login") {
       const [u] = await tx.select({ streak: users.signinStreak, last: users.lastSigninYmd }).from(users).where(eq11(users.id, userId)).limit(1);
-      const yesterday = ymdUtc3(new Date(Date.now() - 864e5));
+      const yesterday = ymdShanghai(new Date(Date.now() - 864e5));
       newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
     }
     granted = await creditNp(tx, userId, reward, capped);
     if (taskType === "daily_login" && newStreak != null) {
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc3() }).where(eq11(users.id, userId));
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdShanghai() }).where(eq11(users.id, userId));
     }
     await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });
@@ -5803,7 +5806,7 @@ var BOT_PERSONAS = {
   },
   NexusBot: {
     openId: "bot_nexus_bot",
-    style: "\u4F60\u662FNexusBot\uFF0CNexusChat\u5B98\u65B9\u52A9\u624B\uFF0C\u53CB\u597D\u4E13\u4E1A\uFF0C\u8D1F\u8D23\u89E3\u7B54\u95EE\u9898\u548C\u6D3B\u8DC3\u793E\u533A\u6C1B\u56F4\uFF0C\u8BED\u6C14\u6E29\u548C\u79EF\u6781"
+    style: "\u4F60\u662F\u6BD4\u7279AI\u793E\u4EA4\u5B98\u65B9\u52A9\u624B\uFF0C\u53CB\u597D\u4E13\u4E1A\uFF0C\u8D1F\u8D23\u89E3\u7B54\u95EE\u9898\u548C\u6D3B\u8DC3\u793E\u533A\u6C1B\u56F4\uFF0C\u8BED\u6C14\u6E29\u548C\u79EF\u6781"
   },
   // ── 扩充阵容(需跑 scripts/seed-bots.mjs 建账号+入群)──
   MemeKing: {
@@ -8191,7 +8194,7 @@ ${marketContext}
 \u5217\u51FA 2-3 \u4E2A\u6700\u9700\u8981\u8B66\u60D5\u7684\u98CE\u9669\u56E0\u7D20\uFF0C\u6BCF\u4E2A\u7528\u4E00\u53E5\u8BDD\u8BF4\u660E
 
 ---
-*NexusChat AI \u7814\u7A76\u52A9\u624B | \u6570\u636E\u6765\u6E90: CoinGecko | \u672C\u5206\u6790\u57FA\u4E8E\u516C\u5F00\u6570\u636E\u7684 AI \u63A8\u7406\uFF0C\u4EC5\u4F9B\u53C2\u8003\uFF0C\u4E0D\u6784\u6210\u6295\u8D44\u5EFA\u8BAE*`;
+*\u6BD4\u7279AI\u793E\u4EA4 \u7814\u7A76\u52A9\u624B | \u6570\u636E\u6765\u6E90: CoinGecko | \u672C\u5206\u6790\u57FA\u4E8E\u516C\u5F00\u6570\u636E\u7684 AI \u63A8\u7406\uFF0C\u4EC5\u4F9B\u53C2\u8003\uFF0C\u4E0D\u6784\u6210\u6295\u8D44\u5EFA\u8BAE*`;
 }
 function buildDeepPrompt(symbol, marketContext) {
   return `\u4F60\u662F\u4E00\u4F4D\u9876\u7EA7\u52A0\u5BC6\u8D27\u5E01\u7814\u7A76\u673A\u6784\u7684\u9996\u5E2D\u5206\u6790\u5E08\uFF0C\u4EE5\u6DF1\u5EA6\u3001\u72EC\u7ACB\u3001\u6709\u89C2\u70B9\u7684\u7814\u7A76\u62A5\u544A\u8457\u79F0\u3002\u4F60\u7684\u62A5\u544A\u98CE\u683C\u7C7B\u4F3C Messari\u3001Delphi Digital \u7684\u4E13\u4E1A\u7814\u62A5\u2014\u2014\u6570\u636E\u9A71\u52A8\u3001\u903B\u8F91\u4E25\u5BC6\u3001\u89C2\u70B9\u9C9C\u660E\u3002
@@ -8246,7 +8249,7 @@ ${marketContext}
 \u7528 2-3 \u53E5\u8BDD\u603B\u7ED3\u4F60\u7684\u6838\u5FC3\u89C2\u70B9\u548C\u6700\u91CD\u8981\u7684\u884C\u52A8\u5EFA\u8BAE\u3002
 
 ---
-*NexusChat AI \u7814\u7A76\u52A9\u624B | \u6570\u636E\u6765\u6E90: CoinGecko | \u672C\u62A5\u544A\u57FA\u4E8E\u516C\u5F00\u6570\u636E\u7684 AI \u6DF1\u5EA6\u5206\u6790\uFF0C\u4EC5\u4F9B\u7814\u7A76\u53C2\u8003\uFF0C\u4E0D\u6784\u6210\u6295\u8D44\u5EFA\u8BAE\u3002\u52A0\u5BC6\u8D27\u5E01\u5E02\u573A\u6CE2\u52A8\u5267\u70C8\uFF0C\u8BF7\u6839\u636E\u81EA\u8EAB\u98CE\u9669\u627F\u53D7\u80FD\u529B\u505A\u51FA\u51B3\u7B56\u3002*`;
+*\u6BD4\u7279AI\u793E\u4EA4 \u7814\u7A76\u52A9\u624B | \u6570\u636E\u6765\u6E90: CoinGecko | \u672C\u62A5\u544A\u57FA\u4E8E\u516C\u5F00\u6570\u636E\u7684 AI \u6DF1\u5EA6\u5206\u6790\uFF0C\u4EC5\u4F9B\u7814\u7A76\u53C2\u8003\uFF0C\u4E0D\u6784\u6210\u6295\u8D44\u5EFA\u8BAE\u3002\u52A0\u5BC6\u8D27\u5E01\u5E02\u573A\u6CE2\u52A8\u5267\u70C8\uFF0C\u8BF7\u6839\u636E\u81EA\u8EAB\u98CE\u9669\u627F\u53D7\u80FD\u529B\u505A\u51FA\u51B3\u7B56\u3002*`;
 }
 function extractSentiment(content) {
   const bullishSignals = [
@@ -8510,8 +8513,7 @@ function parseMediaUrls(raw) {
 }
 async function awardPostPublish(db, userId, opts) {
   let earned = await awardTaskEvent(db, userId, "first_post");
-  const todayStart = /* @__PURE__ */ new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayStart = /* @__PURE__ */ new Date(`${new Date(Date.now() + 8 * 3600 * 1e3).toISOString().slice(0, 10)}T00:00:00+08:00`);
   const content = sanitizeInput(opts.content, 2e3);
   const firstMedia = opts.mediaUrls?.[0];
   const isGenericCaption = !content.trim() || content.trim() === GENERIC_IMAGE_CAPTION;
@@ -12762,13 +12764,19 @@ var appVersionRouter = router({
     if (db) {
       const rows = await db.select().from(appConfig).where(eq30(appConfig.platform, "all")).limit(1);
       if (rows.length > 0) {
+        const notes = rows[0].releaseNotes ?? "";
         config = {
-          latestVersion: rows[0].latestVersion,
+          latestVersion: rows[0].latestVersion || CURRENT_APP_VERSION,
           minVersion: rows[0].minVersion,
           downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
           downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
           downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-          releaseNotes: rows[0].releaseNotes ?? "",
+          releaseNotes: /v1\.9\.0/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u7248\u672C\u66F4\u65B0
+
+\u2022 \u627E\u56DE\u5BC6\u7801\u53EF\u5728 App \u5185\u586B\u5199\u90AE\u7BB1\u9A8C\u8BC1\u7801
+\u2022 \u9080\u8BF7\u4E0E\u5B98\u7F51\u53E3\u5F84\uFF1A\u6BD4\u7279AI\u793E\u4EA4 \xB7 \u6FB3\u6D32 AFT
+\u2022 \u731C\u6DA8\u8DCC\u4E0D\u9650\u6BCF\u65E5\u6B21\u6570
+\u2022 \u79EF\u5206 IT / \u4EE3\u5E01 BIT \u540D\u79F0\u7EDF\u4E00` : notes,
           isForceUpdate: rows[0].isForceUpdate
         };
       }
@@ -13769,7 +13777,7 @@ async function getAiChatCost() {
   _costCache = { value, at: Date.now() };
   return value;
 }
-var SYSTEM_PROMPT = `\u4F60\u662F NexusChat \u7684 AI \u5206\u6790\u52A9\u624B\u300CNexus\u300D\uFF0C\u4E13\u6CE8\u52A0\u5BC6\u8D27\u5E01 / Web3\uFF1A\u884C\u60C5\u7814\u5224\u3001\u9879\u76EE\u5206\u6790\u3001\u94FE\u4E0A\u4E0E\u5B8F\u89C2\u3001\u98CE\u9669\u63D0\u793A\u3001\u64CD\u4F5C\u601D\u8DEF\u3002
+var SYSTEM_PROMPT = `\u4F60\u662F\u6BD4\u7279AI\u793E\u4EA4\u7684 AI \u5206\u6790\u52A9\u624B\uFF0C\u4E13\u6CE8\u52A0\u5BC6\u8D27\u5E01 / Web3\uFF1A\u884C\u60C5\u7814\u5224\u3001\u9879\u76EE\u5206\u6790\u3001\u94FE\u4E0A\u4E0E\u5B8F\u89C2\u3001\u98CE\u9669\u63D0\u793A\u3001\u64CD\u4F5C\u601D\u8DEF\u3002
 
 \u4F60\u5177\u5907\u5DE5\u5177\u80FD\u529B\uFF0C\u53EF\u4EE5\uFF1A\u67E5\u8BE2\u4EE3\u5E01\u5B9E\u65F6\u884C\u60C5(get_token_price)\u3001\u8BFB\u53D6\u7528\u6237\u81EA\u9009(get_watchlist)\u3001\u628A\u4EE3\u5E01\u52A0\u5165\u81EA\u9009(add_to_watchlist)\u3001\u8BBE\u7F6E\u5230\u4EF7\u63D0\u9192(set_price_alert)\u3001\u67E5\u770B\u5DF2\u8BBE\u63D0\u9192(get_my_alerts)\u3002
 - \u5F53\u7528\u6237\u95EE"\u73B0\u5728\u591A\u5C11\u94B1/\u6DA8\u8DCC\u5982\u4F55"\u7B49\uFF0C\u8C03\u7528 get_token_price \u62FF\u771F\u5B9E\u6570\u636E\u518D\u56DE\u7B54\uFF0C\u4E0D\u8981\u7F16\u9020\u4EF7\u683C\u3002
@@ -14252,6 +14260,12 @@ async function fetchCallSpotPrice(symbol) {
       lastPx.set(sym, visPx);
       return visPx;
     }
+    const by = await fetchJsonQuick(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${pair}`, 2200);
+    const byPx = Number(by?.result?.list?.[0]?.lastPrice);
+    if (byPx > 0) {
+      lastPx.set(sym, byPx);
+      return byPx;
+    }
   }
   const id = CG_ID[sym];
   if (id) {
@@ -14293,7 +14307,7 @@ function pickWindowOHLC(bars, openMs) {
     }
   }
   if (bestD > 6e4 || !(best.o > 0) || !(best.c > 0)) return null;
-  return { open: best.o, close: best.c };
+  return { open: best.o, close: best.c, high: best.h, low: best.l };
 }
 function ohlcFrom1m(bars, openMs, horizonMin) {
   const closeMs = openMs + horizonMin * 6e4;
@@ -14302,7 +14316,9 @@ function ohlcFrom1m(bars, openMs, horizonMin) {
   const open = inWin[0].o;
   const close = inWin[inWin.length - 1].c;
   if (!(open > 0) || !(close > 0)) return null;
-  return { open, close };
+  const high = Math.max(...inWin.map((b) => b.h));
+  const low = Math.min(...inWin.map((b) => b.l));
+  return { open, close, high, low };
 }
 async function raceParsedKlines(sources, minBars = 1) {
   let best = [];
@@ -14376,7 +14392,16 @@ async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
   if (pts.length >= 2) {
     const first = pts[0];
     const last = pts[pts.length - 1];
-    if (first?.open > 0 && last?.close > 0) return { open: first.open, close: last.close };
+    if (first?.open > 0 && last?.close > 0) {
+      const highs = pts.map((p) => Number(p.high ?? Math.max(p.open, p.close)));
+      const lows = pts.map((p) => Number(p.low ?? Math.min(p.open, p.close)));
+      return {
+        open: first.open,
+        close: last.close,
+        high: Math.max(...highs.filter((n2) => n2 > 0), first.open, last.close),
+        low: Math.min(...lows.filter((n2) => n2 > 0), first.open, last.close)
+      };
+    }
   }
   return null;
 }
@@ -14389,9 +14414,6 @@ function horizonToMinutes(horizonHoursField) {
     return horizonHoursField * 60;
   }
   return horizonHoursField;
-}
-function deadbandBpForHorizon(horizonMin) {
-  return horizonMin <= 60 ? 1 : 100;
 }
 function overdueVoidMs(horizonMin) {
   return horizonMin <= 60 ? 2 * 36e5 : 3 * 864e5;
@@ -14413,11 +14435,23 @@ function nextFullWindow(horizonMin, nowMs = Date.now(), lockMin = CALL_LOCK_MINU
 
 // server/callResolver.ts
 init_logger();
-var DEADBAND_BP = 100;
 var WIN_NP = 150;
 var WIN_REP = 100;
 var LOSE_REP = 40;
 var STAKE_ODDS = 1.8;
+function judgeCallSide(entry, close, extra) {
+  if (close > entry) return "up";
+  if (close < entry) return "down";
+  const high = extra?.high;
+  const low = extra?.low;
+  if (high != null && low != null && Number.isFinite(high) && Number.isFinite(low)) {
+    const upW = high - entry;
+    const dnW = entry - low;
+    if (upW > dnW) return "up";
+    if (dnW > upW) return "down";
+  }
+  return "down";
+}
 var STAKE_WIN_BONUS = STAKE_ODDS - 1;
 function stakePayout(amount, callStatus) {
   if (callStatus === "win") return Math.round(amount * STAKE_ODDS);
@@ -14455,11 +14489,13 @@ async function resolveDueCalls(db, onlyUserId) {
       const openMs = win.openMs;
       let entry = Number(c.entryPrice);
       let cur = null;
+      let ohlcExtra;
       if (horizonMin <= 60) {
         const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
         if (ohlc) {
           entry = ohlc.open;
           cur = ohlc.close;
+          ohlcExtra = { high: ohlc.high, low: ohlc.low };
         } else if (Date.now() - closeMs < 3 * 6e4) {
           continue;
         } else {
@@ -14493,13 +14529,8 @@ async function resolveDueCalls(db, onlyUserId) {
         continue;
       }
       const changeBp = Math.round((cur - entry) / entry * 1e4);
-      let status;
-      const deadband = deadbandBpForHorizon(horizonMin) || DEADBAND_BP;
-      if (Math.abs(changeBp) < deadband) status = "void";
-      else {
-        const up = changeBp > 0;
-        status = c.direction === "long" && up || c.direction === "short" && !up ? "win" : "lose";
-      }
+      const side = judgeCallSide(entry, cur, ohlcExtra);
+      const status = c.direction === "long" && side === "up" || c.direction === "short" && side === "down" ? "win" : "lose";
       const upd = await db.update(calls).set({ status, resolvedPrice: String(cur), entryPrice: String(entry), changeBp, resolvedAt: /* @__PURE__ */ new Date() }).where(and30(eq34(calls.id, c.id), eq34(calls.status, "pending")));
       const changed = Number(upd?.[0]?.affectedRows ?? upd?.rowsAffected ?? 0);
       if (changed < 1) continue;
@@ -14540,7 +14571,6 @@ function startCallResolver() {
 // server/routers/calls.ts
 var HORIZONS = CALL_HORIZONS_MIN;
 var BET_SYMBOLS = ["BTC", "ETH"];
-var DAILY_CALL_LIMIT = 5;
 var MIN_STAKE = 10;
 var MAX_STAKE = 5e3;
 function ymdUtc4(d = /* @__PURE__ */ new Date()) {
@@ -14555,7 +14585,7 @@ var callsRouter = router({
     lockMinutes: CALL_LOCK_MINUTES,
     minStake: MIN_STAKE,
     maxStake: MAX_STAKE,
-    dailyLimit: DAILY_CALL_LIMIT
+    dailyLimit: 0
   })),
   /** BTC/ETH 现价 + 近 40 分钟 1m K 线。前端 1.5s 轮询，页面不刷新也跟着跳。 */
   quotes: publicProcedure.query(async () => {
@@ -14595,14 +14625,6 @@ var callsRouter = router({
     const potentialWin = stakePayout(input.amount, "win");
     const callId = await db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq35(users.id, ctx.user.id)).for("update").limit(1);
-      const [{ c = 0 } = { c: 0 }] = await tx.select({ c: count6() }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.createdYmd, ymd)));
-      if (!admin && Number(c) >= DAILY_CALL_LIMIT) {
-        throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: `\u6BCF\u65E5\u6700\u591A\u4E0B\u6CE8 ${DAILY_CALL_LIMIT} \u6B21` });
-      }
-      const [openSame] = await tx.select({ id: calls.id }).from(calls).where(and31(eq35(calls.userId, ctx.user.id), eq35(calls.tokenSymbol, symbol), eq35(calls.status, "pending"))).limit(1);
-      if (!admin && openSame) {
-        throw new TRPCError20({ code: "BAD_REQUEST", message: `\u4F60\u5DF2\u6709\u672A\u7ED3\u7B97\u7684 ${symbol} \u4E0B\u6CE8\uFF0C\u7ED3\u7B97\u540E\u518D\u6765` });
-      }
       const res = await tx.update(users).set({ npPoints: sql21`npPoints - ${input.amount}` }).where(and31(eq35(users.id, ctx.user.id), gte8(users.npPoints, input.amount)));
       const affected2 = res?.[0]?.affectedRows ?? res?.affectedRows ?? 0;
       if (affected2 < 1) throw new TRPCError20({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
@@ -15362,45 +15384,40 @@ function shanghaiParts(nowMs) {
   const sec = Math.floor(shifted % 864e5 / 1e3);
   return { sec, dayIndex };
 }
-function activityFactor(sec) {
-  const h = sec / 3600;
-  const p1 = Math.exp(-((h - 11.5) ** 2) / 10);
-  const p2 = Math.exp(-((h - 21) ** 2) / 7);
-  return Math.min(1, 0.16 + 0.52 * p1 + 0.84 * p2);
-}
 function mix01(key, salt) {
   let h = (salt ^ 2166136261) >>> 0;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
   return h % 1e4 / 1e4;
 }
+function usersDelta(nowMs) {
+  const { sec, dayIndex } = shanghaiParts(nowMs);
+  const epochDay = shanghaiParts(EPOCH).dayIndex;
+  const daysElapsed = Math.max(0, dayIndex - epochDay);
+  let sum = 0;
+  for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
+  const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
+  return sum + Math.floor(today * (sec / 86400));
+}
 function liveDelta(kind, base, key, nowMs) {
   const { sec, dayIndex } = shanghaiParts(nowMs);
-  const act = activityFactor(sec);
-  const jitter = mix01(key, dayIndex);
   const floor = Math.max(0, Math.floor(base));
-  if (kind === "users") {
-    const perHour2 = Math.max(0.35, floor * 7e-5);
-    return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
-  }
+  if (kind === "users") return usersDelta(nowMs);
   if (kind === "subs") {
     const perHour2 = Math.max(0.08, floor * 4e-5);
     return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
   }
   if (kind === "active") {
-    const span = Math.max(18, Math.round(Math.max(floor, 80) * 0.16));
-    const wave2 = Math.sin(sec / 71 + jitter * 6) * 0.5 + 0.5;
-    const micro = Math.sin(sec / 13 + jitter * 4) * 0.5 + 0.5;
-    return Math.floor(span * act * (0.7 + 0.24 * wave2 + 0.06 * micro));
+    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
+    return Math.floor(span * (sec / 86400));
   }
   if (kind === "daily") {
     const daily = Math.max(28, Math.round(Math.max(floor, 40) * 0.09));
-    const progress = sec / 86400 * (0.38 + 0.62 * act);
-    const wave2 = Math.sin(sec / 43 + jitter * 5) * 0.5 + 0.5;
-    return Math.floor(daily * progress + wave2 * Math.max(2, daily * 0.02));
+    return Math.floor(daily * (sec / 86400));
   }
   const perHour = Math.max(0.12, floor * 5e-5);
-  const wave = Math.sin(sec / 67 + jitter * 3) * 0.5 + 0.5;
-  return Math.floor((nowMs - EPOCH) / 36e5 * perHour + wave * Math.max(1, floor * 2e-3));
+  const grown = Math.floor((nowMs - EPOCH) / 36e5 * perHour);
+  const dayJitter = Math.floor(mix01(key, dayIndex) * Math.max(1, floor * 2e-3));
+  return grown + dayJitter;
 }
 function applyDashboardLive(base, nowMs) {
   return {
@@ -16157,7 +16174,7 @@ async function checkAlerts() {
         userId: alert.userId,
         type: "system",
         fromUserId: null,
-        fromUserName: "NexusChat",
+        fromUserName: "\u6BD4\u7279AI\u793E\u4EA4",
         fromUserAvatar: "\u{1F514}",
         content,
         isRead: false
@@ -16223,7 +16240,7 @@ async function generateMorningReport() {
       messages: [
         {
           role: "system",
-          content: "\u4F60\u662FNexusBot\uFF0CNexusChat\u5B98\u65B9\u52A9\u624B\u3002\u8BF7\u751F\u6210\u4E00\u6761\u7B80\u77ED\u7684Web3\u65E9\u62A5\u6D88\u606F\uFF0850-100\u5B57\uFF09\uFF0C\u8BED\u6C14\u4E13\u4E1A\u53CB\u597D\uFF0C\u5305\u542Bemoji\uFF0C\u4E2D\u82F1\u6587\u6DF7\u7528\u3002\u4E0D\u8981\u63D0\u4F9B\u5177\u4F53\u4EF7\u683C\u9884\u6D4B\u3002"
+          content: "\u4F60\u662F\u6BD4\u7279AI\u793E\u4EA4\u5B98\u65B9\u52A9\u624B\u3002\u8BF7\u751F\u6210\u4E00\u6761\u7B80\u77ED\u7684Web3\u65E9\u62A5\u6D88\u606F\uFF0850-100\u5B57\uFF09\uFF0C\u8BED\u6C14\u4E13\u4E1A\u53CB\u597D\uFF0C\u5305\u542Bemoji\uFF0C\u4E2D\u82F1\u6587\u6DF7\u7528\u3002\u4E0D\u8981\u63D0\u4F9B\u5177\u4F53\u4EF7\u683C\u9884\u6D4B\u3002"
         },
         {
           role: "user",
@@ -16628,7 +16645,7 @@ async function handleTokenChatStream(req, res) {
       return;
     }
     const tokenContext = await fetchTokenContext(token);
-    const systemPrompt = `\u4F60\u662F NexusChat \u7684 AI \u5206\u6790\u52A9\u624B\uFF0C\u4E13\u6CE8\u4E8E\u52A0\u5BC6\u8D27\u5E01\u5206\u6790\u3002
+    const systemPrompt = `\u4F60\u662F\u6BD4\u7279AI\u793E\u4EA4\u7684 AI \u5206\u6790\u52A9\u624B\uFF0C\u4E13\u6CE8\u4E8E\u52A0\u5BC6\u8D27\u5E01\u5206\u6790\u3002
 \u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5B9E\u65F6\u5E02\u573A\u6570\u636E\u56DE\u7B54\u7528\u6237\u95EE\u9898\uFF1A
 
 ${tokenContext}
