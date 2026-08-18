@@ -1,7 +1,7 @@
 /**
  * Alpha 猜涨跌（固定赔率）：
  *  - 用 IT 猜 BTC / ETH 未来涨跌；到期按行情结算。
- *  - 押对按固定赔率 1.8 返还（含本金），押错销毁，死区内 void 退本。
+ *  - 押对按固定赔率 1.8 返还（含本金），押错销毁；再小的波动也分胜负。
  *  - 战绩榜 / 声誉仍保留。
  */
 import { z } from "zod";
@@ -71,7 +71,7 @@ export const callsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "请先在任务中心绑定邀请人，再参与猜涨跌" });
       }
 
-      // 先结掉自己已到期的单，赢了的 IT 入账，并腾出「同一标的一笔进行中」名额
+      // 先结掉自己已到期的单，赢了的 IT 入账
       await resolveDueCalls(db, ctx.user.id);
 
       const ymd = ymdUtc();
@@ -88,12 +88,6 @@ export const callsRouter = router({
 
       const callId = await db.transaction(async (tx) => {
         await tx.select({ id: users.id }).from(users).where(eq(users.id, ctx.user.id)).for("update").limit(1);
-
-        const [openSame] = await tx.select({ id: calls.id }).from(calls)
-          .where(and(eq(calls.userId, ctx.user.id), eq(calls.tokenSymbol, symbol), eq(calls.status, "pending"))).limit(1);
-        if (!admin && openSame) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `你已有未结算的 ${symbol} 下注，结算后再来` });
-        }
 
         // 原子扣 IT
         const res = await tx.update(users)

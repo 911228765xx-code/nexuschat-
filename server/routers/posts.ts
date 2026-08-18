@@ -37,8 +37,7 @@ async function awardPostPublish(
   opts: { content: string; mediaUrls?: string[]; insertId: number },
 ): Promise<number> {
   let earned = await awardTaskEvent(db, userId, "first_post");
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayStart = new Date(`${new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)}T00:00:00+08:00`);
   const content = sanitizeInput(opts.content, 2000);
   const firstMedia = opts.mediaUrls?.[0];
   const isGenericCaption = !content.trim() || content.trim() === GENERIC_IMAGE_CAPTION;

@@ -45,9 +45,13 @@ const REQUIRES_BINDING = new Set(["first_research", "research_daily"]);
 function ymdUtc(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
-/** 当天 UTC 00:00 的 Date */
-function startOfUtcDay(ymd: string): Date {
-  return new Date(`${ymd}T00:00:00.000Z`);
+/** 上海日期 YYYY-MM-DD（任务日切跟用户本地午夜对齐，避免晚上做一半被 UTC 切断） */
+function ymdShanghai(d: Date = new Date()): string {
+  return new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+/** 当天上海 00:00 的 Date */
+function startOfShanghaiDay(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00+08:00`);
 }
 /** 每日 AC 产出上限（号龄分级，防刷）：新号 <7 天 200/天，否则 2000/天 */
 export function dailyNpCap(createdAt: Date | string): number {
@@ -547,7 +551,7 @@ export const userRouter = router({
     // Count completions per task type (lifetime + today, UTC)
     const completionCount: Record<string, number> = {};
     const todayCount: Record<string, number> = {};
-    const todayStart = startOfUtcDay(ymdUtc());
+    const todayStart = startOfShanghaiDay(ymdShanghai());
     completedTasks.forEach((t) => {
       completionCount[t.taskType] = (completionCount[t.taskType] ?? 0) + 1;
       if (t.completedAt && new Date(t.completedAt) >= todayStart) {
@@ -691,7 +695,7 @@ export const userRouter = router({
     // 网体今日活跃数（今天有任务产出的成员）
     let teamActiveToday = 0;
     if (team.length > 0) {
-      const todayStart = startOfUtcDay(ymdUtc());
+      const todayStart = startOfShanghaiDay(ymdShanghai());
       const batch = team.slice(0, 10_000); // 安全上限
       const [{ c: activeC = 0 } = { c: 0 }] = await db
         .select({ c: sql<number>`COUNT(DISTINCT ${userTasks.userId})` })
@@ -1068,7 +1072,8 @@ async function _completeTask(
   let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
 
   const isDaily = typeof def.daily === "number";
-  const capped = isDaily; // 每日/签到受每日产出上限约束；一次性里程碑不受限
+  // 任务必须发列出的积分：不再被每日产出上限/设备封顶扣成 0
+  const capped = false;
   let granted = 0;
   let blocked = false;
   // 全程一个事务 + 锁用户行:并发同任务调用串行化,频次校验与写入原子,杜绝并发双领
@@ -1078,7 +1083,7 @@ async function _completeTask(
     // 频次校验(拿锁后,事务内)。管理员不受每日/一次性次数限制。
     if (!admin) {
     if (isDaily) {
-      const todayStart = startOfUtcDay(ymdUtc());
+      const todayStart = startOfShanghaiDay(ymdShanghai());
       const [{ c: todayCount } = { c: 0 }] = await tx
         .select({ c: count() }).from(userTasks)
         .where(and(eq(userTasks.userId, userId), eq(userTasks.taskType, taskType), gte(userTasks.completedAt, todayStart)));
@@ -1095,14 +1100,13 @@ async function _completeTask(
       const [u] = await tx
         .select({ streak: users.signinStreak, last: users.lastSigninYmd })
         .from(users).where(eq(users.id, userId)).limit(1);
-      const yesterday = ymdUtc(new Date(Date.now() - 86_400_000));
+      const yesterday = ymdShanghai(new Date(Date.now() - 86_400_000));
       newStreak = u?.last === yesterday ? (u.streak ?? 0) + 1 : 1;
       reward = signinStreakReward(newStreak);
     }
     granted = await creditNp(tx, userId, reward, capped);
-    // 每日上限/设备封顶可能发 0 分，仍要记完成，否则前端进度永远不动（做了也像没做）
     if (taskType === "daily_login" && newStreak != null) {
-      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdUtc() }).where(eq(users.id, userId));
+      await tx.update(users).set({ signinStreak: newStreak, lastSigninYmd: ymdShanghai() }).where(eq(users.id, userId));
     }
     await tx.insert(userTasks).values({ userId, taskType, npEarned: granted });
   });

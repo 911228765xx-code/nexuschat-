@@ -1,24 +1,42 @@
 /**
- * Alpha 战绩判定（AC 模型 Phase 3）：定时结算到期的 Call。
- *  - 短窗按整根 K 线开盘价对收盘价判涨跌；几乎持平才 void。
- *  - 方向判对 → +AC（直接入账，不farmable：受 5/天发 Call 限频且需真命中）+ 声誉。
- *  - 判错 → 扣声誉（不为负）。声誉抬高个人产出加成，形成正循环。
+ * Alpha 战绩判定：定时结算到期的 Call。
+ *  - 短窗按整根 K 线开盘价对收盘价判涨跌；再小的波动也分胜负，不再因死区退本。
+ *  - 方向判对 → 声誉 + 固定赔率返还；判错 → 扣声誉、本金销毁。
+ *  - 只有拿不到价格且逾期，才 void 退本。
  */
 import { eq, and, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { calls, users, curationStakes } from "../drizzle/schema";
 import { fetchCallSpotPrice, fetchCallWindowOHLC } from "./callSpot";
-import { alignWindow, deadbandBpForHorizon, horizonToMinutes, overdueVoidMs } from "./callWindow";
+import { alignWindow, horizonToMinutes, overdueVoidMs } from "./callWindow";
 import logger from "./utils/logger";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-const DEADBAND_BP = 100;        // 旧长窗 ±1% 死区（基点）；短窗见 deadbandBpForHorizon
 const WIN_NP = 150;             // 旧版「免费 Call」判对 IT 奖励（有自押下注时不再发）
 const WIN_REP = 100;            // 判对 声誉 +
 const LOSE_REP = 40;            // 判错 声誉 -
-/** 固定赔率 1.8：押对返还本金×1.8（含本金），押错销毁，void 退本 */
+/** 固定赔率 1.8：押对返还本金×1.8（含本金），押错销毁；仅拿不到价才 void 退本 */
 export const STAKE_ODDS = 1.8;
+
+/** 收盘相对开盘：涨 / 跌。完全持平时看上下影；再持平按跌（看涨输、看跌赢）。 */
+export function judgeCallSide(
+  entry: number,
+  close: number,
+  extra?: { high?: number; low?: number },
+): "up" | "down" {
+  if (close > entry) return "up";
+  if (close < entry) return "down";
+  const high = extra?.high;
+  const low = extra?.low;
+  if (high != null && low != null && Number.isFinite(high) && Number.isFinite(low)) {
+    const upW = high - entry;
+    const dnW = entry - low;
+    if (upW > dnW) return "up";
+    if (dnW > upW) return "down";
+  }
+  return "down";
+}
 const STAKE_WIN_BONUS = STAKE_ODDS - 1; // 0.8
 
 /** 质押/下注结算返还额：押对=本金×1.8，void=退本金，押错=0（销毁）。 */
@@ -78,12 +96,14 @@ export async function resolveDueCalls(db: Db, onlyUserId?: number): Promise<numb
       const openMs = win.openMs;
       let entry = Number(c.entryPrice);
       let cur: number | null = null;
+      let ohlcExtra: { high?: number; low?: number } | undefined;
 
       if (horizonMin <= 60) {
         const ohlc = await fetchCallWindowOHLC(c.tokenSymbol, openMs, horizonMin);
         if (ohlc) {
           entry = ohlc.open;
           cur = ohlc.close;
+          ohlcExtra = { high: ohlc.high, low: ohlc.low };
         } else if (Date.now() - closeMs < 3 * 60_000) {
           // K 线刚收盘可能还没落库，等下一轮，不要用现价把整根比成「当下」
           continue;
@@ -120,13 +140,11 @@ export async function resolveDueCalls(db: Db, onlyUserId?: number): Promise<numb
         continue;
       }
       const changeBp = Math.round(((cur - entry) / entry) * 10_000);
-      let status: "win" | "lose" | "void";
-      const deadband = deadbandBpForHorizon(horizonMin) || DEADBAND_BP;
-      if (Math.abs(changeBp) < deadband) status = "void";
-      else {
-        const up = changeBp > 0;
-        status = (c.direction === "long" && up) || (c.direction === "short" && !up) ? "win" : "lose";
-      }
+      const side = judgeCallSide(entry, cur, ohlcExtra);
+      const status: "win" | "lose" =
+        (c.direction === "long" && side === "up") || (c.direction === "short" && side === "down")
+          ? "win"
+          : "lose";
 
       const upd = await db.update(calls)
         .set({ status, resolvedPrice: String(cur), entryPrice: String(entry), changeBp, resolvedAt: new Date() })
