@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { randomBytes } from "crypto";
+import { randomBytes, randomInt } from "crypto";
 import { users, passwordResetTokens } from "../../drizzle/schema";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
@@ -19,6 +19,7 @@ import { notifyOwner } from "../_core/notification";
 import { sendPasswordResetEmail } from "../_core/email";
 import { isDisposableEmail } from "../utils/disposableEmailBlocklist";
 import { ensureInviteCode } from "../utils/inviteCode";
+import { rateLimitWrite } from "../rateLimit";
 
 /** Verify Cloudflare Turnstile token server-side */
 async function verifyTurnstile(token: string, remoteip?: string): Promise<boolean> {
@@ -44,6 +45,11 @@ async function verifyTurnstile(token: string, remoteip?: string): Promise<boolea
 
 const SALT_ROUNDS = 10;
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const OTP_TOKEN_PREFIX = "otp:";
+
+function otpToken(userId: number, code: string): string {
+  return `${OTP_TOKEN_PREFIX}${userId}:${code}`;
+}
 
 // Rate limiting: track registration attempts per IP (in-memory, resets on restart)
 const ipRegisterAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -54,6 +60,13 @@ const IP_REGISTER_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const LOGIN_ATTEMPT_LIMIT = 10; // max 10 failed attempts per key per window
 const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+const resetRequestAttempts = new Map<string, { count: number; resetAt: number }>();
+const RESET_REQUEST_LIMIT = 5;
+const RESET_REQUEST_WINDOW_MS = 15 * 60 * 1000;
+
+const resetCodeAttempts = new Map<string, { count: number; resetAt: number }>();
+const RESET_CODE_LIMIT = 8;
 
 /** Returns true if the key is currently locked out due to too many failed logins. */
 function isLoginLocked(key: string, now: number): boolean {
@@ -79,6 +92,26 @@ function registerLoginFailure(key: string, now: number): void {
 /** Clear failed-login counters for a key after a successful login. */
 function clearLoginFailures(...keys: string[]): void {
   for (const key of keys) loginAttempts.delete(key);
+}
+
+function bumpWindow(map: Map<string, { count: number; resetAt: number }>, key: string, now: number, windowMs: number): number {
+  const rec = map.get(key);
+  if (!rec || now >= rec.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return 1;
+  }
+  rec.count++;
+  return rec.count;
+}
+
+function isWindowLocked(map: Map<string, { count: number; resetAt: number }>, key: string, now: number, limit: number): boolean {
+  const rec = map.get(key);
+  if (!rec) return false;
+  if (now >= rec.resetAt) {
+    map.delete(key);
+    return false;
+  }
+  return rec.count >= limit;
 }
 
 /** Extract the trusted client IP (Express `trust proxy` must be configured). */
@@ -284,11 +317,18 @@ export const emailAuthRouter = router({
         origin: z.string().url().max(200),
       })
     )
+    .use(rateLimitWrite)
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂时不可用" });
 
       const normalizedEmail = input.email.toLowerCase().trim();
+      const now = Date.now();
+      if (isWindowLocked(resetRequestAttempts, normalizedEmail, now, RESET_REQUEST_LIMIT)) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "发送过于频繁，请稍后再试" });
+      }
+      bumpWindow(resetRequestAttempts, normalizedEmail, now, RESET_REQUEST_WINDOW_MS);
+
       const openId = emailOpenId(normalizedEmail);
 
       const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -296,14 +336,13 @@ export const emailAuthRouter = router({
 
       // Always return success to prevent email enumeration
       if (!user || !user.passwordHash) {
-        return { success: true, message: "如果该邮箱已注册，重置链接已发送" };
+        return { success: true, message: "如果该邮箱已注册，验证码已发送" };
       }
 
-      // Generate a cryptographically secure token
-      const token = randomBytes(48).toString("hex"); // 96 hex chars
+      const token = randomBytes(48).toString("hex"); // 96 hex chars — 网页链接兜底
+      const code = String(randomInt(100000, 1000000)); // 6 位，回 App 填写
       const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
 
-      // Invalidate any existing unused tokens for this user
       await db
         .update(passwordResetTokens)
         .set({ usedAt: new Date() })
@@ -314,40 +353,29 @@ export const emailAuthRouter = router({
           )
         );
 
-      // Insert new token
-      await db.insert(passwordResetTokens).values({
-        userId: user.id,
-        token,
-        expiresAt,
-      });
+      await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
+      await db.insert(passwordResetTokens).values({ userId: user.id, token: otpToken(user.id, code), expiresAt });
 
-      // 安全:重置链接 host 必须用服务端配置的 ENV.publicOrigin,绝不能用 client 传的 input.origin。
-      // 否则攻击者对受害者邮箱发起重置、传 origin=https://evil.com,受害者会收到一封指向 evil.com、
-      // 携带真实 token 的"官方"重置邮件,点击即把有效 token 泄漏给攻击者 → 账号接管。input.origin 已忽略。
       const resetUrl = `${ENV.publicOrigin}/reset-password?token=${token}`;
 
-      // Try to send email via Resend; fall back to returning the URL directly
       const emailResult = await sendPasswordResetEmail({
         to: normalizedEmail,
         resetUrl,
+        code,
         expiresInMinutes: 60,
       });
 
       const emailSent = emailResult.success;
 
-      // Notify owner (best-effort — non-blocking)
       notifyOwner({
-        title: "NexusChat 密码重置请求",
-        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : "失败，降级展示链接"}\n\n重置链接（1小时内有效）：\n${resetUrl}`,
+        title: "比特AI社交 密码重置请求",
+        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : "失败，降级展示链接"}`,
       }).catch(() => {});
 
-      // If email was sent, don't expose the URL in the response (security)
-      // If email failed (no Resend key), return the URL so UI can display it
       return {
         success: true,
-        message: emailSent ? "重置邮件已发送到您的邮筱" : "重置链接已生成",
+        message: emailSent ? "验证码已发送到您的邮箱" : "重置链接已生成",
         emailSent,
-        // Only expose resetUrl when email sending is not available
         resetUrl: emailSent ? undefined : resetUrl,
       };
     }),
@@ -413,10 +441,11 @@ export const emailAuthRouter = router({
 
       const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
 
-      // Update password and mark token as used (in parallel)
       await Promise.all([
         db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id)),
-        db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, resetToken.id)),
+        db.update(passwordResetTokens).set({ usedAt: new Date() }).where(
+          and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt))
+        ),
       ]);
 
       // Auto-login: create a new session
@@ -427,6 +456,73 @@ export const emailAuthRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      return { success: true, message: "密码已重置，正在登录..." };
+      return { success: true, message: "密码已重置，正在登录...", sessionToken };
+    }),
+
+  /** App / 网页：用邮箱验证码重置密码（不必点邮件链接） */
+  resetPasswordWithCode: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email("请输入有效的邮箱地址").max(320),
+        code: z.string().regex(/^\d{6}$/, "请输入 6 位验证码"),
+        newPassword: z.string().min(8, "密码至少 8 位").max(128),
+      })
+    )
+    .use(rateLimitWrite)
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂时不可用" });
+
+      const normalizedEmail = input.email.toLowerCase().trim();
+      const now = Date.now();
+      if (isWindowLocked(resetCodeAttempts, normalizedEmail, now, RESET_CODE_LIMIT)) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "尝试次数过多，请稍后再试或重新获取验证码" });
+      }
+
+      const invalidError = new TRPCError({ code: "BAD_REQUEST", message: "验证码错误或已过期，请重新获取" });
+      const openId = emailOpenId(normalizedEmail);
+      const userResult = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+      const user = userResult[0];
+      if (!user) {
+        bumpWindow(resetCodeAttempts, normalizedEmail, now, LOGIN_ATTEMPT_WINDOW_MS);
+        throw invalidError;
+      }
+
+      const tokenResult = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.token, otpToken(user.id, input.code)),
+            eq(passwordResetTokens.userId, user.id),
+            isNull(passwordResetTokens.usedAt),
+            gt(passwordResetTokens.expiresAt, new Date())
+          )
+        )
+        .limit(1);
+
+      const resetToken = tokenResult[0];
+      if (!resetToken) {
+        bumpWindow(resetCodeAttempts, normalizedEmail, now, LOGIN_ATTEMPT_WINDOW_MS);
+        throw invalidError;
+      }
+
+      resetCodeAttempts.delete(normalizedEmail);
+      const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+      await Promise.all([
+        db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id)),
+        db.update(passwordResetTokens).set({ usedAt: new Date() }).where(
+          and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt))
+        ),
+      ]);
+
+      const sessionToken = await sdk.signSession(
+        { openId: user.openId, appId: ENV.appId, name: user.name || "" },
+        { expiresInMs: ONE_YEAR_MS }
+      );
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+      return { success: true, message: "密码已重置", sessionToken };
     }),
 });

@@ -222,7 +222,7 @@ export default function PosterGenerator({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "NexusChat",
+          title: "比特AI社交（Bitchat）· 澳洲 AFT 集团",
           text: t("poster.shareText") + " " + inviteCode,
           url: inviteLink,
         });

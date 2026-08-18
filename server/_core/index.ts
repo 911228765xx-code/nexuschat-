@@ -104,7 +104,7 @@ async function startServer() {
     const code = String(req.params.code || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
     res.redirect(302, code ? `/download?ref=${encodeURIComponent(code)}` : "/download");
   });
-  // Crestline Technologies 企业 About / About 页（优先于 Vite/SPA 回退）
+  // 澳洲 AFT 集团企业 About 页（优先于 Vite/SPA 回退）
   app.get(["/about", "/about/"], (req, res, next) => {
     const candidates = [
       path.resolve(process.cwd(), "dist", "public", "about.html"),

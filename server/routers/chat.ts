@@ -1327,11 +1327,20 @@ export const chatRouter = router({
           eq(groupUnreadCounts.userId, ctx.user.id),
         ),
       )
+      .leftJoin(
+        conversationPrefs,
+        and(
+          eq(conversationPrefs.userId, ctx.user.id),
+          sql`${conversationPrefs.convKey} = CONCAT('group:', ${messages.groupId})`,
+        ),
+      )
       .where(and(
         inArray(messages.groupId, groupIds),
         eq(messages.isDeleted, false),
         sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`, // 焚毁消息不计未读(聊天页已看不到)
         gt(messages.id, sql`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`),
+        // 清除聊天记录后只计 clearedBeforeId 之后的消息，否则角标仍是旧未读
+        gt(messages.id, sql`COALESCE(${conversationPrefs.clearedBeforeId}, 0)`),
       ))
       .groupBy(messages.groupId);
     for (const r of rows) {
@@ -1368,6 +1377,8 @@ export const chatRouter = router({
         .update(chatGroups)
         .set({ memberCount: sql`memberCount + 1` })
         .where(eq(chatGroups.id, group.id));
+      // 与 joinGroup 一致：游标落到当前最新，避免新号一进官方群就顶出整段历史未读
+      await initReadCursor(db, group.id, ctx.user.id);
       joined++;
     }
     return { joined };
@@ -2001,6 +2012,10 @@ export const chatRouter = router({
         await db.update(conversationPrefs).set({ clearedBeforeId: maxId }).where(eq(conversationPrefs.id, existing.id));
       } else {
         await db.insert(conversationPrefs).values({ userId: ctx.user.id, convKey: input.convKey, clearedBeforeId: maxId });
+      }
+      if (input.convKey.startsWith("group:")) {
+        const gid = parseInt(input.convKey.slice(6), 10);
+        if (Number.isFinite(gid)) await initReadCursor(db, gid, ctx.user.id);
       }
       return { ok: true, clearedBeforeId: maxId };
     }),

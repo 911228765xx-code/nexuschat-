@@ -331,7 +331,7 @@ export default function Login() {
           <MessageCircle size={28} color="white" />
         </div>
         <h1 style={S.logoTitle}>比特AI</h1>
-        <p style={S.logoSub}>全球首款 AI 智能体 · Web3 社交平台</p>
+        <p style={S.logoSub}>让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
       </div>
 
       {/* Card — solid background, NO backdrop-blur */}

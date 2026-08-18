@@ -351,7 +351,7 @@ export default function DownloadPage() {
           </h1>
           {!isInviteFlow && (
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              AI 智能体 · 加密社交 · Web3 资产，一个 App 全搞定
+              澳洲 AFT 集团旗下 · 让AI社交成为生活习惯
             </p>
           )}
         </motion.div>

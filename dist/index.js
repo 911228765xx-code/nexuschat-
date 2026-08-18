@@ -4044,19 +4044,31 @@ var userRouter = router({
       }
       const bitOut = Math.floor(input.amount / IT_PER_BIT);
       if (bitOut <= 0) throw new TRPCError6({ code: "BAD_REQUEST", message: "\u6570\u91CF\u8FC7\u5C0F" });
-      const spent = await db.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and9(eq11(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
-      const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
-      if (affected2 <= 0) throw new TRPCError6({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
-      const ok = await grantNN(db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
-      if (!ok) {
-        await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq11(users.id, ctx.user.id));
-        throw new TRPCError6({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
+      try {
+        await db.transaction(async (tx) => {
+          const spent = await tx.update(users).set({ npPoints: sql6`${users.npPoints} - ${input.amount}` }).where(and9(eq11(users.id, ctx.user.id), sql6`${users.npPoints} >= ${input.amount}`));
+          const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
+          if (affected2 <= 0) throw new Error("INSUFFICIENT_IT");
+          const ok = await grantNN(tx, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
+          if (!ok) throw new Error("TREASURY");
+        });
+      } catch (e) {
+        if (e?.message === "INSUFFICIENT_IT") throw new TRPCError6({ code: "BAD_REQUEST", message: "IT \u4F59\u989D\u4E0D\u8DB3" });
+        if (e?.message === "TREASURY") throw new TRPCError6({ code: "BAD_REQUEST", message: "BIT \u91D1\u5E93\u4E0D\u8DB3\uFF0C\u5151\u6362\u5931\u8D25\u5DF2\u9000\u56DE IT" });
+        throw e;
       }
     } else {
       const itOut = input.amount * IT_PER_BIT;
-      const ok = await spendNN(db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
-      if (!ok) throw new TRPCError6({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
-      await db.update(users).set({ npPoints: sql6`${users.npPoints} + ${itOut}` }).where(eq11(users.id, ctx.user.id));
+      try {
+        await db.transaction(async (tx) => {
+          const ok = await spendNN(tx, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
+          if (!ok) throw new Error("INSUFFICIENT_BIT");
+          await tx.update(users).set({ npPoints: sql6`${users.npPoints} + ${itOut}` }).where(eq11(users.id, ctx.user.id));
+        });
+      } catch (e) {
+        if (e?.message === "INSUFFICIENT_BIT") throw new TRPCError6({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3" });
+        throw e;
+      }
     }
     const [u] = await db.select({ npPoints: users.npPoints, nnBalance: users.nnBalance }).from(users).where(eq11(users.id, ctx.user.id)).limit(1);
     return { ok: true, it: u?.npPoints ?? 0, bit: Number(u?.nnBalance ?? 0), rate: IT_PER_BIT };
@@ -6859,12 +6871,20 @@ var chatRouter = router({
         eq17(groupUnreadCounts.groupId, messages.groupId),
         eq17(groupUnreadCounts.userId, ctx.user.id)
       )
+    ).leftJoin(
+      conversationPrefs,
+      and14(
+        eq17(conversationPrefs.userId, ctx.user.id),
+        sql10`${conversationPrefs.convKey} = CONCAT('group:', ${messages.groupId})`
+      )
     ).where(and14(
       inArray7(messages.groupId, groupIds),
       eq17(messages.isDeleted, false),
       sql10`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} > NOW())`,
       // 焚毁消息不计未读(聊天页已看不到)
-      gt3(messages.id, sql10`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`)
+      gt3(messages.id, sql10`COALESCE(${groupUnreadCounts.lastReadMessageId}, 0)`),
+      // 清除聊天记录后只计 clearedBeforeId 之后的消息，否则角标仍是旧未读
+      gt3(messages.id, sql10`COALESCE(${conversationPrefs.clearedBeforeId}, 0)`)
     )).groupBy(messages.groupId);
     for (const r of rows) {
       if (r.groupId != null) result[r.groupId] = Number(r.count);
@@ -6886,6 +6906,7 @@ var chatRouter = router({
         role: "member"
       });
       await db.update(chatGroups).set({ memberCount: sql10`memberCount + 1` }).where(eq17(chatGroups.id, group.id));
+      await initReadCursor(db, group.id, ctx.user.id);
       joined++;
     }
     return { joined };
@@ -7370,6 +7391,10 @@ var chatRouter = router({
       await db.update(conversationPrefs).set({ clearedBeforeId: maxId }).where(eq17(conversationPrefs.id, existing.id));
     } else {
       await db.insert(conversationPrefs).values({ userId: ctx.user.id, convKey: input.convKey, clearedBeforeId: maxId });
+    }
+    if (input.convKey.startsWith("group:")) {
+      const gid = parseInt(input.convKey.slice(6), 10);
+      if (Number.isFinite(gid)) await initReadCursor(db, gid, ctx.user.id);
     }
     return { ok: true, clearedBeforeId: maxId };
   }),
@@ -8044,6 +8069,8 @@ function consumeUserAiBudget() {
 }
 
 // server/routers/research.ts
+init_referralRewards();
+init_appAdmin();
 async function fetchTokenData(symbol) {
   const cacheKey2 = `token:search:${symbol.toLowerCase()}`;
   const searchUrl = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`;
@@ -8330,15 +8357,22 @@ var researchRouter = router({
       riskLevel,
       nxcCost: input.mode === "quick" ? 5 : 10
     });
-    await awardTaskEvent(db, ctx.user.id, "first_research");
-    await awardTaskEvent(db, ctx.user.id, "research_daily");
+    const canAward = isAppAdmin(ctx.user) || await isReferralBound(db, ctx.user.id);
+    let npEarned = 0;
+    const awardHint = canAward ? "ok" : "need_invite";
+    if (canAward) {
+      npEarned += await awardTaskEvent(db, ctx.user.id, "first_research");
+      npEarned += await awardTaskEvent(db, ctx.user.id, "research_daily");
+    }
     return {
       reportId: result.insertId,
       reportContent,
       tokenData,
       sentiment,
       riskLevel,
-      mode: input.mode
+      mode: input.mode,
+      npEarned,
+      awardHint
     };
   }),
   // List user's reports
@@ -8716,7 +8750,7 @@ var postsRouter = router({
             fromUserName: liker?.name ?? ctx.user.name ?? "Someone",
             fromUserAvatar: liker?.avatar ?? "\u{1F44D}",
             type: "like",
-            content: "liked your post",
+            content: "\u8D5E\u4E86\u4F60\u7684\u52A8\u6001",
             postId: input.postId
           });
         }
@@ -8802,7 +8836,7 @@ var postsRouter = router({
         fromUserName: commenter?.name ?? ctx.user.name ?? "Someone",
         fromUserAvatar: commenter?.avatar ?? "\u{1F4AC}",
         type: "comment",
-        content: `commented: "${sanitizeInput(input.content, 50)}${input.content.length > 50 ? "..." : ""}"`,
+        content: `\u8BC4\u8BBA\u4E86\uFF1A\u300C${sanitizeInput(input.content, 50)}${input.content.length > 50 ? "\u2026" : ""}\u300D`,
         postId: input.postId
       });
     }
@@ -8878,15 +8912,17 @@ var postsRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.update(posts).set({ shareCount: sql11`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
-    const [original] = await db.select({ content: posts.content, authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
+    const [original] = await db.select({ content: posts.content, authorId: posts.authorId, mediaUrls: posts.mediaUrls, mediaThumbs: posts.mediaThumbs }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
     if (!original) throw new Error("Post not found");
     const [originalAuthor] = await db.select({ name: users.name }).from(users).where(eq19(users.id, original.authorId)).limit(1);
-    const repostContent = `\u{1F501} Reposted from @${originalAuthor?.name ?? "user"}:
+    const repostContent = `\u{1F501} \u8F6C\u53D1\u81EA @${originalAuthor?.name ?? "\u7528\u6237"}:
 
 ${original.content.slice(0, 500)}`;
     const [result] = await db.insert(posts).values({
       authorId: ctx.user.id,
       content: repostContent,
+      mediaUrls: original.mediaUrls ?? void 0,
+      mediaThumbs: original.mediaThumbs ?? void 0,
       tags: JSON.stringify(["#repost"])
     });
     if (original.authorId !== ctx.user.id) {
@@ -8898,7 +8934,7 @@ ${original.content.slice(0, 500)}`;
           fromUserName: ctx.user.name ?? "Someone",
           fromUserAvatar: ctx.user.avatar ?? "",
           type: "system",
-          content: `reposted your post`,
+          content: `\u8F6C\u53D1\u4E86\u4F60\u7684\u52A8\u6001`,
           postId: input.postId
         });
       } catch (_) {
@@ -8914,16 +8950,18 @@ ${original.content.slice(0, 500)}`;
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     await db.update(posts).set({ shareCount: sql11`${posts.shareCount} + 1` }).where(eq19(posts.id, input.postId));
-    const [original] = await db.select({ content: posts.content, authorId: posts.authorId }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
+    const [original] = await db.select({ content: posts.content, authorId: posts.authorId, mediaUrls: posts.mediaUrls, mediaThumbs: posts.mediaThumbs }).from(posts).where(eq19(posts.id, input.postId)).limit(1);
     if (!original) throw new Error("Post not found");
     const [originalAuthor] = await db.select({ name: users.name }).from(users).where(eq19(users.id, original.authorId)).limit(1);
     const quoteContent = `${sanitizeInput(input.comment, 280)}
 
-\u{1F4AC} Quoting @${originalAuthor?.name ?? "user"}:
+\u{1F4AC} \u5F15\u7528 @${originalAuthor?.name ?? "\u7528\u6237"}:
 > ${original.content.slice(0, 300)}`;
     const [result] = await db.insert(posts).values({
       authorId: ctx.user.id,
       content: quoteContent,
+      mediaUrls: original.mediaUrls ?? void 0,
+      mediaThumbs: original.mediaThumbs ?? void 0,
       tags: JSON.stringify(["#quote"])
     });
     if (original.authorId !== ctx.user.id) {
@@ -8935,7 +8973,7 @@ ${original.content.slice(0, 500)}`;
           fromUserName: ctx.user.name ?? "Someone",
           fromUserAvatar: ctx.user.avatar ?? "",
           type: "system",
-          content: `quoted your post`,
+          content: `\u5F15\u7528\u4E86\u4F60\u7684\u52A8\u6001`,
           postId: input.postId
         });
       } catch (_) {
@@ -9474,9 +9512,9 @@ async function createFollowNotification(db, fromUser, toUserId) {
     userId: toUserId,
     type: "follow",
     fromUserId: fromUser.id,
-    fromUserName: fromUser.name ?? "Anonymous",
+    fromUserName: fromUser.name ?? "\u6709\u4EBA",
     fromUserAvatar: fromUser.avatar ?? null,
-    content: `${fromUser.name ?? "Someone"} started following you`,
+    content: "\u5173\u6CE8\u4E86\u4F60",
     isRead: false
   });
 }
@@ -10519,7 +10557,7 @@ import { TRPCError as TRPCError12 } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { eq as eq27, and as and24, gt as gt5, isNull as isNull4, sql as sql15 } from "drizzle-orm";
 import { z as z16 } from "zod";
-import { randomBytes as randomBytes2 } from "crypto";
+import { randomBytes as randomBytes2, randomInt } from "crypto";
 init_db();
 init_env();
 
@@ -10532,14 +10570,14 @@ function getResend() {
   if (!resend) resend = new Resend(ENV.resendApiKey);
   return resend;
 }
-var FROM_ADDRESS = "NexusChat <onboarding@resend.dev>";
-var APP_NAME = "NexusChat";
+var FROM_ADDRESS = "\u6BD4\u7279AI\u793E\u4EA4 <onboarding@resend.dev>";
+var APP_NAME = "\u6BD4\u7279AI\u793E\u4EA4";
 async function sendPasswordResetEmail(params) {
   const client = getResend();
   if (!client) {
     return { success: false, error: "RESEND_API_KEY not configured" };
   }
-  const { to, resetUrl, expiresInMinutes = 60 } = params;
+  const { to, resetUrl, code, expiresInMinutes = 60 } = params;
   const html = `
 <!DOCTYPE html>
 <html lang="zh">
@@ -10560,7 +10598,7 @@ async function sendPasswordResetEmail(params) {
                 <span style="font-size:24px;">\u{1F4AC}</span>
               </div>
               <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${APP_NAME}</h1>
-              <p style="margin:6px 0 0;color:rgba(255,255,255,0.4);font-size:13px;">\u5168\u7403\u9996\u6B3E AI \u667A\u80FD\u4F53 \xB7 Web3 \u793E\u4EA4\u5E73\u53F0</p>
+              <p style="margin:6px 0 0;color:rgba(255,255,255,0.4);font-size:13px;">\u8BA9AI\u793E\u4EA4\u6210\u4E3A\u751F\u6D3B\u4E60\u60EF \xB7 \u6FB3\u6D32 AFT \u96C6\u56E2</p>
             </td>
           </tr>
           <!-- Divider -->
@@ -10572,19 +10610,25 @@ async function sendPasswordResetEmail(params) {
           <!-- Body -->
           <tr>
             <td style="padding:28px 32px;">
-              <h2 style="margin:0 0 12px;color:#ffffff;font-size:18px;font-weight:600;">\u5BC6\u7801\u91CD\u7F6E\u8BF7\u6C42</h2>
+              <h2 style="margin:0 0 12px;color:#ffffff;font-size:18px;font-weight:600;">\u5BC6\u7801\u91CD\u7F6E\u9A8C\u8BC1\u7801</h2>
               <p style="margin:0 0 20px;color:rgba(255,255,255,0.55);font-size:14px;line-height:1.7;">
-                \u6211\u4EEC\u6536\u5230\u4E86\u60A8\u7684\u5BC6\u7801\u91CD\u7F6E\u8BF7\u6C42\u3002\u70B9\u51FB\u4E0B\u65B9\u6309\u94AE\u8BBE\u7F6E\u65B0\u5BC6\u7801\uFF0C\u94FE\u63A5\u5C06\u5728 <strong style="color:rgba(255,255,255,0.8);">${expiresInMinutes} \u5206\u949F</strong>\u540E\u5931\u6548\u3002
+                \u8BF7\u6253\u5F00\u6BD4\u7279AI\u793E\u4EA4 App\uFF0C\u5728\u300C\u91CD\u7F6E\u5BC6\u7801\u300D\u9875\u586B\u5199\u4E0B\u65B9 6 \u4F4D\u9A8C\u8BC1\u7801\u5E76\u8BBE\u7F6E\u65B0\u5BC6\u7801\u3002\u9A8C\u8BC1\u7801 <strong style="color:rgba(255,255,255,0.8);">${expiresInMinutes} \u5206\u949F</strong>\u5185\u6709\u6548\u3002
               </p>
-              <!-- CTA Button -->
-              <div style="text-align:center;margin:24px 0;">
+              <div style="text-align:center;margin:8px 0 24px;padding:18px 12px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:14px;">
+                <div style="color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.12em;margin-bottom:8px;">\u9A8C\u8BC1\u7801</div>
+                <div style="color:#ffffff;font-size:32px;font-weight:700;letter-spacing:0.35em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${code}</div>
+              </div>
+              <p style="margin:0 0 16px;color:rgba(255,255,255,0.35);font-size:12px;line-height:1.6;text-align:center;">
+                \u4E5F\u53EF\u4EE5\u70B9\u51FB\u4E0B\u65B9\u6309\u94AE\u5728\u7F51\u9875\u5B8C\u6210\u91CD\u7F6E
+              </p>
+              <div style="text-align:center;margin:0 0 16px;">
                 <a href="${resetUrl}"
-                   style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:12px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
-                  \u91CD\u7F6E\u5BC6\u7801
+                   style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:12px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">
+                  \u5728\u7F51\u9875\u91CD\u7F6E\u5BC6\u7801
                 </a>
               </div>
-              <p style="margin:20px 0 0;color:rgba(255,255,255,0.3);font-size:12px;line-height:1.6;">
-                \u5982\u679C\u6309\u94AE\u65E0\u6CD5\u70B9\u51FB\uFF0C\u8BF7\u590D\u5236\u4EE5\u4E0B\u94FE\u63A5\u5230\u6D4F\u89C8\u5668\u5730\u5740\u680F\uFF1A<br/>
+              <p style="margin:0;color:rgba(255,255,255,0.3);font-size:12px;line-height:1.6;">
+                \u6309\u94AE\u65E0\u6CD5\u70B9\u51FB\u65F6\uFF0C\u628A\u94FE\u63A5\u590D\u5236\u5230\u7CFB\u7EDF\u6D4F\u89C8\u5668\u6253\u5F00\uFF1A<br/>
                 <span style="color:rgba(0,212,255,0.6);word-break:break-all;">${resetUrl}</span>
               </p>
             </td>
@@ -10615,7 +10659,7 @@ async function sendPasswordResetEmail(params) {
     const result = await client.emails.send({
       from: FROM_ADDRESS,
       to,
-      subject: `\u91CD\u7F6E\u60A8\u7684 ${APP_NAME} \u5BC6\u7801`,
+      subject: `\u4F60\u7684\u6BD4\u7279AI\u793E\u4EA4\u9A8C\u8BC1\u7801\uFF1A${code}`,
       html
     });
     if (result.error) {
@@ -11107,12 +11151,21 @@ async function verifyTurnstile(token, remoteip) {
 }
 var SALT_ROUNDS = 10;
 var RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1e3;
+var OTP_TOKEN_PREFIX = "otp:";
+function otpToken(userId, code) {
+  return `${OTP_TOKEN_PREFIX}${userId}:${code}`;
+}
 var ipRegisterAttempts = /* @__PURE__ */ new Map();
 var IP_REGISTER_LIMIT = 5;
 var IP_REGISTER_WINDOW_MS = 24 * 60 * 60 * 1e3;
 var loginAttempts = /* @__PURE__ */ new Map();
 var LOGIN_ATTEMPT_LIMIT = 10;
 var LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1e3;
+var resetRequestAttempts = /* @__PURE__ */ new Map();
+var RESET_REQUEST_LIMIT = 5;
+var RESET_REQUEST_WINDOW_MS = 15 * 60 * 1e3;
+var resetCodeAttempts = /* @__PURE__ */ new Map();
+var RESET_CODE_LIMIT = 8;
 function isLoginLocked(key, now) {
   const rec = loginAttempts.get(key);
   if (!rec) return false;
@@ -11132,6 +11185,24 @@ function registerLoginFailure(key, now) {
 }
 function clearLoginFailures(...keys) {
   for (const key of keys) loginAttempts.delete(key);
+}
+function bumpWindow(map, key, now, windowMs) {
+  const rec = map.get(key);
+  if (!rec || now >= rec.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return 1;
+  }
+  rec.count++;
+  return rec.count;
+}
+function isWindowLocked(map, key, now, limit) {
+  const rec = map.get(key);
+  if (!rec) return false;
+  if (now >= rec.resetAt) {
+    map.delete(key);
+    return false;
+  }
+  return rec.count >= limit;
 }
 function clientIpOf(req) {
   return req.ip || req.socket?.remoteAddress || "unknown";
@@ -11285,17 +11356,23 @@ var emailAuthRouter = router({
       /** Frontend origin (e.g. https://nexuschat.best) used to build the reset URL */
       origin: z16.string().url().max(200)
     })
-  ).mutation(async ({ input }) => {
+  ).use(rateLimitWrite).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
     const normalizedEmail = input.email.toLowerCase().trim();
+    const now = Date.now();
+    if (isWindowLocked(resetRequestAttempts, normalizedEmail, now, RESET_REQUEST_LIMIT)) {
+      throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: "\u53D1\u9001\u8FC7\u4E8E\u9891\u7E41\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5" });
+    }
+    bumpWindow(resetRequestAttempts, normalizedEmail, now, RESET_REQUEST_WINDOW_MS);
     const openId = emailOpenId(normalizedEmail);
     const result = await db.select().from(users).where(eq27(users.openId, openId)).limit(1);
     const user = result[0];
     if (!user || !user.passwordHash) {
-      return { success: true, message: "\u5982\u679C\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u91CD\u7F6E\u94FE\u63A5\u5DF2\u53D1\u9001" };
+      return { success: true, message: "\u5982\u679C\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001" };
     }
     const token = randomBytes2(48).toString("hex");
+    const code = String(randomInt(1e5, 1e6));
     const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
     await db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
       and24(
@@ -11303,32 +11380,26 @@ var emailAuthRouter = router({
         isNull4(passwordResetTokens.usedAt)
       )
     );
-    await db.insert(passwordResetTokens).values({
-      userId: user.id,
-      token,
-      expiresAt
-    });
+    await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
+    await db.insert(passwordResetTokens).values({ userId: user.id, token: otpToken(user.id, code), expiresAt });
     const resetUrl = `${ENV.publicOrigin}/reset-password?token=${token}`;
     const emailResult = await sendPasswordResetEmail({
       to: normalizedEmail,
       resetUrl,
+      code,
       expiresInMinutes: 60
     });
     const emailSent = emailResult.success;
     notifyOwner({
-      title: "NexusChat \u5BC6\u7801\u91CD\u7F6E\u8BF7\u6C42",
+      title: "\u6BD4\u7279AI\u793E\u4EA4 \u5BC6\u7801\u91CD\u7F6E\u8BF7\u6C42",
       content: `\u7528\u6237 ${normalizedEmail} \u8BF7\u6C42\u91CD\u7F6E\u5BC6\u7801\u3002
-\u90AE\u4EF6\u53D1\u9001\uFF1A${emailSent ? "\u6210\u529F" : "\u5931\u8D25\uFF0C\u964D\u7EA7\u5C55\u793A\u94FE\u63A5"}
-
-\u91CD\u7F6E\u94FE\u63A5\uFF081\u5C0F\u65F6\u5185\u6709\u6548\uFF09\uFF1A
-${resetUrl}`
+\u90AE\u4EF6\u53D1\u9001\uFF1A${emailSent ? "\u6210\u529F" : "\u5931\u8D25\uFF0C\u964D\u7EA7\u5C55\u793A\u94FE\u63A5"}`
     }).catch(() => {
     });
     return {
       success: true,
-      message: emailSent ? "\u91CD\u7F6E\u90AE\u4EF6\u5DF2\u53D1\u9001\u5230\u60A8\u7684\u90AE\u7B71" : "\u91CD\u7F6E\u94FE\u63A5\u5DF2\u751F\u6210",
+      message: emailSent ? "\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001\u5230\u60A8\u7684\u90AE\u7BB1" : "\u91CD\u7F6E\u94FE\u63A5\u5DF2\u751F\u6210",
       emailSent,
-      // Only expose resetUrl when email sending is not available
       resetUrl: emailSent ? void 0 : resetUrl
     };
   }),
@@ -11373,7 +11444,9 @@ ${resetUrl}`
     const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
     await Promise.all([
       db.update(users).set({ passwordHash: newPasswordHash }).where(eq27(users.id, user.id)),
-      db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq27(passwordResetTokens.id, resetToken.id))
+      db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
+        and24(eq27(passwordResetTokens.userId, user.id), isNull4(passwordResetTokens.usedAt))
+      )
     ]);
     const sessionToken = await sdk.signSession(
       { openId: user.openId, appId: ENV.appId, name: user.name || "" },
@@ -11381,7 +11454,59 @@ ${resetUrl}`
     );
     const cookieOptions = getSessionCookieOptions(ctx.req);
     ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-    return { success: true, message: "\u5BC6\u7801\u5DF2\u91CD\u7F6E\uFF0C\u6B63\u5728\u767B\u5F55..." };
+    return { success: true, message: "\u5BC6\u7801\u5DF2\u91CD\u7F6E\uFF0C\u6B63\u5728\u767B\u5F55...", sessionToken };
+  }),
+  /** App / 网页：用邮箱验证码重置密码（不必点邮件链接） */
+  resetPasswordWithCode: publicProcedure.input(
+    z16.object({
+      email: z16.string().email("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740").max(320),
+      code: z16.string().regex(/^\d{6}$/, "\u8BF7\u8F93\u5165 6 \u4F4D\u9A8C\u8BC1\u7801"),
+      newPassword: z16.string().min(8, "\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128)
+    })
+  ).use(rateLimitWrite).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const now = Date.now();
+    if (isWindowLocked(resetCodeAttempts, normalizedEmail, now, RESET_CODE_LIMIT)) {
+      throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: "\u5C1D\u8BD5\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5\u6216\u91CD\u65B0\u83B7\u53D6\u9A8C\u8BC1\u7801" });
+    }
+    const invalidError = new TRPCError12({ code: "BAD_REQUEST", message: "\u9A8C\u8BC1\u7801\u9519\u8BEF\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u83B7\u53D6" });
+    const openId = emailOpenId(normalizedEmail);
+    const userResult = await db.select().from(users).where(eq27(users.openId, openId)).limit(1);
+    const user = userResult[0];
+    if (!user) {
+      bumpWindow(resetCodeAttempts, normalizedEmail, now, LOGIN_ATTEMPT_WINDOW_MS);
+      throw invalidError;
+    }
+    const tokenResult = await db.select().from(passwordResetTokens).where(
+      and24(
+        eq27(passwordResetTokens.token, otpToken(user.id, input.code)),
+        eq27(passwordResetTokens.userId, user.id),
+        isNull4(passwordResetTokens.usedAt),
+        gt5(passwordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+      )
+    ).limit(1);
+    const resetToken = tokenResult[0];
+    if (!resetToken) {
+      bumpWindow(resetCodeAttempts, normalizedEmail, now, LOGIN_ATTEMPT_WINDOW_MS);
+      throw invalidError;
+    }
+    resetCodeAttempts.delete(normalizedEmail);
+    const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+    await Promise.all([
+      db.update(users).set({ passwordHash: newPasswordHash }).where(eq27(users.id, user.id)),
+      db.update(passwordResetTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
+        and24(eq27(passwordResetTokens.userId, user.id), isNull4(passwordResetTokens.usedAt))
+      )
+    ]);
+    const sessionToken = await sdk.signSession(
+      { openId: user.openId, appId: ENV.appId, name: user.name || "" },
+      { expiresInMs: ONE_YEAR_MS }
+    );
+    const cookieOptions = getSessionCookieOptions(ctx.req);
+    ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+    return { success: true, message: "\u5BC6\u7801\u5DF2\u91CD\u7F6E", sessionToken };
   })
 });
 
@@ -12602,7 +12727,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 
 // server/routers/appVersion.ts
 init_appAdmin();
-var CURRENT_APP_VERSION = "1.9.1";
+var CURRENT_APP_VERSION = "1.9.2";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
