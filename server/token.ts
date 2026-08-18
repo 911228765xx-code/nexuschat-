@@ -147,7 +147,7 @@ export async function getTokenInfo(db: Db, userId?: number) {
  * 从用户扣 AI（付费）。原子操作：余额足够才扣。
  * 返回是否成功。AI 回流金库（流通减少）。
  */
-export async function spendNN(db: Db, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
+export async function spendNN(db: any, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
   if (amount <= 0) return true;
   const res: any = await db.update(users)
     .set({ nnBalance: sql`${users.nnBalance} - ${amount}` })
@@ -161,7 +161,7 @@ export async function spendNN(db: Db, userId: number, amount: number, meta?: NNT
  * 向用户发放 AI（空投/任务/兑换）。不可超过金库余额（守恒）。
  * 返回是否成功。
  */
-export async function grantNN(db: Db, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
+export async function grantNN(db: any, userId: number, amount: number, meta?: NNTxMeta): Promise<boolean> {
   if (amount <= 0) return false;
   const circulating = await getCirculating(db);
   if (circulating + amount > NN_TOTAL_SUPPLY) return false; // 金库不足

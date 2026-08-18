@@ -774,7 +774,7 @@ export const userRouter = router({
               .where(and(eq(users.id, ctx.user.id), sql`${users.npPoints} >= ${input.amount}`));
             const affected = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
             if (affected <= 0) throw new Error("INSUFFICIENT_IT");
-            const ok = await grantNN(tx as typeof db, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
+            const ok = await grantNN(tx, ctx.user.id, bitOut, { type: "convert_it_to_bit", memo: `${input.amount}IT` });
             if (!ok) throw new Error("TREASURY");
           });
         } catch (e: any) {
@@ -786,7 +786,7 @@ export const userRouter = router({
         const itOut = input.amount * IT_PER_BIT;
         try {
           await db.transaction(async (tx) => {
-            const ok = await spendNN(tx as typeof db, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
+            const ok = await spendNN(tx, ctx.user.id, input.amount, { type: "convert_bit_to_it", memo: `${itOut}IT` });
             if (!ok) throw new Error("INSUFFICIENT_BIT");
             await tx.update(users).set({ npPoints: sql`${users.npPoints} + ${itOut}` }).where(eq(users.id, ctx.user.id));
           });
