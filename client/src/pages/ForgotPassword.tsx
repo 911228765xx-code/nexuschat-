@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Mail, ArrowLeft, Loader2, CheckCircle2, Copy, ExternalLink, MessageCircle, Send } from "lucide-react";
+import { Mail, ArrowLeft, Loader2, CheckCircle2, Copy, ExternalLink, MessageCircle, Send, Lock } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -197,6 +197,19 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [result, setResult] = useState<ResultState | null>(null);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const resetWithCode = trpc.emailAuth.resetPasswordWithCode.useMutation({
+    onSuccess: () => {
+      toast.success("密码已重置，即将进入…");
+      setTimeout(() => setLocation("/app/chat"), 1200);
+    },
+    onError: (err) => {
+      toast.error(err.message || "重置失败，请重试");
+    },
+  });
 
   const requestReset = trpc.emailAuth.requestPasswordReset.useMutation({
     onSuccess: (data) => {
@@ -205,7 +218,6 @@ export default function ForgotPassword() {
       } else if (data.resetUrl) {
         setResult({ type: "link_ready", resetUrl: data.resetUrl });
       } else {
-        // Fallback: just show success
         setResult({ type: "email_sent", email: email.trim() });
       }
     },
@@ -241,10 +253,10 @@ export default function ForgotPassword() {
         <h1 style={S.title}>忘记密码</h1>
         <p style={S.subtitle}>
           {result?.type === "email_sent"
-            ? "重置邮件已发送，请查收"
+            ? "验证码已发送，请在本页填写"
             : result?.type === "link_ready"
             ? "重置链接已生成，请点击直接重置"
-            : "输入注册邮箱，获取密码重置链接"}
+            : "输入注册邮箱，获取 6 位验证码"}
         </p>
 
         {/* ── 表单（未提交时显示） ── */}
@@ -269,31 +281,88 @@ export default function ForgotPassword() {
             <button type="submit" disabled={requestReset.isPending} style={S.submitBtn(requestReset.isPending)}>
               {requestReset.isPending ? (
                 <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />发送中...</>
-              ) : "获取重置链接"}
+              ) : "发送验证码"}
             </button>
           </form>
         )}
 
         {/* ── 邮件已发送状态 ── */}
         {result?.type === "email_sent" && (
-          <div style={S.successBox("0,212,255")}>
-            <div style={S.successTitle("0,212,255")}>
-              <Send size={14} />
-              邮件已发送
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const otp = code.replace(/\s/g, "");
+            if (!/^\d{6}$/.test(otp)) { toast.error("请输入 6 位验证码"); return; }
+            if (password.length < 8) { toast.error("密码至少 8 位"); return; }
+            if (password !== confirmPassword) { toast.error("两次密码不一致"); return; }
+            resetWithCode.mutate({ email: result.email, code: otp, newPassword: password });
+          }}>
+            <div style={S.successBox("0,212,255")}>
+              <div style={S.successTitle("0,212,255")}>
+                <Send size={14} />
+                验证码已发送
+              </div>
+              <p style={S.successDesc}>
+                已发送至 <strong style={{ color: "rgba(255,255,255,0.8)" }}>{result.email}</strong>。请在下方填写邮件中的 6 位验证码并设置新密码，不必离开本页。
+              </p>
             </div>
-            <p style={S.successDesc}>
-              重置链接已发送至 <strong style={{ color: "rgba(255,255,255,0.8)" }}>{result.email}</strong>，请在 1 小时内点击邮件中的链接完成重置。
-            </p>
-            <p style={{ ...S.successDesc, marginBottom: 0, fontSize: "11px" }}>
-              没收到邮件？请检查垃圾邮件文件夹，或
+            <div style={{ ...S.fieldWrap, marginTop: 16 }}>
+              <label style={S.label}>6 位验证码</label>
+              <div style={S.inputWrap}>
+                <span style={S.iconLeft}><Lock size={14} /></span>
+                <input
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="邮件里的数字"
+                  autoComplete="one-time-code"
+                  style={S.input(false)}
+                />
+              </div>
+            </div>
+            <div style={S.fieldWrap}>
+              <label style={S.label}>新密码</label>
+              <div style={S.inputWrap}>
+                <span style={S.iconLeft}><Lock size={14} /></span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="至少 8 位"
+                  autoComplete="new-password"
+                  style={S.input(false)}
+                />
+              </div>
+            </div>
+            <div style={S.fieldWrap}>
+              <label style={S.label}>确认新密码</label>
+              <div style={S.inputWrap}>
+                <span style={S.iconLeft}><Lock size={14} /></span>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="再输入一次"
+                  autoComplete="new-password"
+                  style={S.input(false)}
+                />
+              </div>
+            </div>
+            <button type="submit" disabled={resetWithCode.isPending} style={S.submitBtn(resetWithCode.isPending)}>
+              {resetWithCode.isPending ? (
+                <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />重置中...</>
+              ) : "确认重置"}
+            </button>
+            <p style={{ ...S.successDesc, marginTop: 12, marginBottom: 0, fontSize: "11px", textAlign: "center" }}>
+              没收到？请检查垃圾箱，或
               <button
-                onClick={() => setResult(null)}
+                type="button"
+                onClick={() => { setResult(null); setCode(""); }}
                 style={{ background: "none", border: "none", color: "rgba(0,212,255,0.7)", cursor: "pointer", fontSize: "11px", padding: "0 2px", fontFamily: "inherit" }}
               >
                 重新发送
               </button>
             </p>
-          </div>
+          </form>
         )}
 
         {/* ── 降级模式：直接显示链接 ── */}

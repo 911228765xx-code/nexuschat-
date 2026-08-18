@@ -15,8 +15,8 @@ function getResend(): Resend | null {
 }
 
 /** 发件地址：免费账号使用 onboarding@resend.dev，配置自定义域名后可改为 noreply@nexuschat.best */
-const FROM_ADDRESS = "NexusChat <onboarding@resend.dev>";
-const APP_NAME = "NexusChat";
+const FROM_ADDRESS = "比特AI社交 <onboarding@resend.dev>";
+const APP_NAME = "比特AI社交";
 
 export type SendEmailResult =
   | { success: true; messageId: string }
@@ -29,6 +29,7 @@ export type SendEmailResult =
 export async function sendPasswordResetEmail(params: {
   to: string;
   resetUrl: string;
+  code: string;
   expiresInMinutes?: number;
 }): Promise<SendEmailResult> {
   const client = getResend();
@@ -36,7 +37,7 @@ export async function sendPasswordResetEmail(params: {
     return { success: false, error: "RESEND_API_KEY not configured" };
   }
 
-  const { to, resetUrl, expiresInMinutes = 60 } = params;
+  const { to, resetUrl, code, expiresInMinutes = 60 } = params;
 
   const html = `
 <!DOCTYPE html>
@@ -70,19 +71,25 @@ export async function sendPasswordResetEmail(params: {
           <!-- Body -->
           <tr>
             <td style="padding:28px 32px;">
-              <h2 style="margin:0 0 12px;color:#ffffff;font-size:18px;font-weight:600;">密码重置请求</h2>
+              <h2 style="margin:0 0 12px;color:#ffffff;font-size:18px;font-weight:600;">密码重置验证码</h2>
               <p style="margin:0 0 20px;color:rgba(255,255,255,0.55);font-size:14px;line-height:1.7;">
-                我们收到了您的密码重置请求。点击下方按钮设置新密码，链接将在 <strong style="color:rgba(255,255,255,0.8);">${expiresInMinutes} 分钟</strong>后失效。
+                请打开比特AI社交 App，在「重置密码」页填写下方 6 位验证码并设置新密码。验证码 <strong style="color:rgba(255,255,255,0.8);">${expiresInMinutes} 分钟</strong>内有效。
               </p>
-              <!-- CTA Button -->
-              <div style="text-align:center;margin:24px 0;">
+              <div style="text-align:center;margin:8px 0 24px;padding:18px 12px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:14px;">
+                <div style="color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.12em;margin-bottom:8px;">验证码</div>
+                <div style="color:#ffffff;font-size:32px;font-weight:700;letter-spacing:0.35em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${code}</div>
+              </div>
+              <p style="margin:0 0 16px;color:rgba(255,255,255,0.35);font-size:12px;line-height:1.6;text-align:center;">
+                也可以点击下方按钮在网页完成重置
+              </p>
+              <div style="text-align:center;margin:0 0 16px;">
                 <a href="${resetUrl}"
-                   style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:12px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
-                  重置密码
+                   style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:12px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">
+                  在网页重置密码
                 </a>
               </div>
-              <p style="margin:20px 0 0;color:rgba(255,255,255,0.3);font-size:12px;line-height:1.6;">
-                如果按钮无法点击，请复制以下链接到浏览器地址栏：<br/>
+              <p style="margin:0;color:rgba(255,255,255,0.3);font-size:12px;line-height:1.6;">
+                按钮无法点击时，把链接复制到系统浏览器打开：<br/>
                 <span style="color:rgba(0,212,255,0.6);word-break:break-all;">${resetUrl}</span>
               </p>
             </td>
@@ -114,7 +121,7 @@ export async function sendPasswordResetEmail(params: {
     const result = await client.emails.send({
       from: FROM_ADDRESS,
       to,
-      subject: `重置您的 ${APP_NAME} 密码`,
+      subject: `你的比特AI社交验证码：${code}`,
       html,
     });
 
