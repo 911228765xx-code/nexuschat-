@@ -87,7 +87,7 @@ export function serveStatic(app: Express) {
     etag: true,
   }));
 
-  // Crestline Technologies About 页（静态 HTML，避免被 SPA 回退吃掉）
+  // 澳洲 AFT 集团 About 页（静态 HTML，避免被 SPA 回退吃掉）
   // 必须在 SPA `*` 回退之前；多路径兜底，防止 outDir/cwd 差异导致漏文件
   app.get(["/about", "/about/"], (_req, res, next) => {
     const candidates = [

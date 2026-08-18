@@ -58,7 +58,7 @@ export async function sendPasswordResetEmail(params: {
                 <span style="font-size:24px;">💬</span>
               </div>
               <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${APP_NAME}</h1>
-              <p style="margin:6px 0 0;color:rgba(255,255,255,0.4);font-size:13px;">全球首款 AI 智能体 · Web3 社交平台</p>
+              <p style="margin:6px 0 0;color:rgba(255,255,255,0.4);font-size:13px;">让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
             </td>
           </tr>
           <!-- Divider -->
