@@ -44,6 +44,7 @@ __export(schema_exports, {
   icoPurchases: () => icoPurchases,
   icoRewardRuns: () => icoRewardRuns,
   icoStakeLots: () => icoStakeLots,
+  itTransactions: () => itTransactions,
   messageReactions: () => messageReactions,
   messageReadReceipts: () => messageReadReceipts,
   messages: () => messages,
@@ -101,7 +102,7 @@ import {
   index,
   uniqueIndex
 } from "drizzle-orm/mysql-core";
-var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
+var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, itTransactions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -935,6 +936,20 @@ var init_schema = __esm({
         createdAt: timestamp("createdAt").defaultNow().notNull()
       },
       (t3) => [index("idx_nntx_user").on(t3.userId, t3.createdAt), index("idx_nntx_type").on(t3.type)]
+    );
+    itTransactions = mysqlTable(
+      "it_transactions",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        userId: int("userId").notNull(),
+        amount: int("amount").notNull(),
+        type: varchar("type", { length: 30 }).notNull(),
+        refType: varchar("refType", { length: 20 }),
+        refId: int("refId"),
+        memo: varchar("memo", { length: 200 }),
+        createdAt: timestamp("createdAt").defaultNow().notNull()
+      },
+      (t3) => [index("idx_ittx_user").on(t3.userId, t3.createdAt)]
     );
     nnPool = mysqlTable("nn_pool", {
       id: int("id").primaryKey(),
@@ -4107,6 +4122,22 @@ var userRouter = router({
           const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? spent?.rowsAffected ?? 0;
           if (affected2 <= 0) throw new Error("INSUFFICIENT_IT");
           await tx.update(users).set({ npPoints: sql6`${users.npPoints} + ${input.amount}` }).where(eq11(users.id, input.toUserId));
+          await tx.insert(itTransactions).values({
+            userId: ctx.user.id,
+            amount: -input.amount,
+            type: "transfer_out",
+            refType: "user",
+            refId: input.toUserId,
+            memo: memo ?? `to#${input.toUserId}`
+          });
+          await tx.insert(itTransactions).values({
+            userId: input.toUserId,
+            amount: input.amount,
+            type: "transfer_in",
+            refType: "user",
+            refId: ctx.user.id,
+            memo: memo ?? `from#${ctx.user.id}`
+          });
         });
       } catch (e) {
         if (e?.message === "INSUFFICIENT_IT") {
@@ -4139,6 +4170,40 @@ var userRouter = router({
       it: u?.npPoints ?? 0,
       bit: Number(u?.nnBalance ?? 0)
     };
+  }),
+  /** BIT / IT 转账记录（本人视角） */
+  listTransfers: protectedProcedure.input(z4.object({ limit: z4.number().int().min(1).max(100).default(50) }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const limit = input?.limit ?? 50;
+    const [itRows, bitRows] = await Promise.all([
+      db.select().from(itTransactions).where(eq11(itTransactions.userId, ctx.user.id)).orderBy(desc3(itTransactions.createdAt)).limit(limit),
+      db.select().from(nnTransactions).where(and9(
+        eq11(nnTransactions.userId, ctx.user.id),
+        inArray5(nnTransactions.type, ["transfer_in", "transfer_out"])
+      )).orderBy(desc3(nnTransactions.createdAt)).limit(limit)
+    ]);
+    const rows = [
+      ...itRows.map((r) => ({
+        id: `it-${r.id}`,
+        currency: "it",
+        amount: r.amount,
+        type: r.type,
+        peerId: r.refId ?? null,
+        memo: r.memo ?? null,
+        createdAt: r.createdAt
+      })),
+      ...bitRows.map((r) => ({
+        id: `bit-${r.id}`,
+        currency: "bit",
+        amount: r.amount,
+        type: r.type,
+        peerId: r.refId ?? null,
+        memo: r.memo ?? null,
+        createdAt: r.createdAt
+      }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return rows.slice(0, limit);
   }),
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────
   adminRunRankAgg: adminProcedure.input(z4.object({ ymd: z4.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).mutation(async ({ input }) => {
@@ -5271,12 +5336,12 @@ var BOT_CATALOG = [
     name: "\u6DFB\u7C89\u673A\u5668\u4EBA",
     icon: "rocket",
     tagline: "\u62C9\u65B0\u589E\u957F \xB7 \u9080\u8BF7\u5956\u52B1",
-    desc: "\u6210\u5458\u901A\u8FC7\u9080\u8BF7\u94FE\u63A5\u62C9\u6765\u65B0\u4EBA\u65F6\uFF0C\u81EA\u52A8\u5956\u52B1\u9080\u8BF7\u4EBA AC \u5E76\u5728\u7FA4\u91CC\u81F4\u8C22\uFF0C\u6FC0\u52B1\u5927\u5BB6\u62C9\u65B0\u6DA8\u7C89\u3002",
+    desc: "\u6210\u5458\u901A\u8FC7\u9080\u8BF7\u94FE\u63A5\u62C9\u6765\u65B0\u4EBA\u65F6\uFF0C\u81EA\u52A8\u5956\u52B1\u9080\u8BF7\u4EBA IT \u5E76\u5728\u7FA4\u91CC\u81F4\u8C22\uFF0C\u6FC0\u52B1\u5927\u5BB6\u62C9\u65B0\u6DA8\u7C89\u3002",
     monthlyNN: 35,
     currency: "AI",
     interactive: true,
     configFields: [
-      { key: "inviteReward", label: "\u6BCF\u9080\u8BF71\u4EBA\u5956\u52B1(AC)", type: "number", placeholder: "5", hint: "\u4E0A\u9650 100/\u4EBA" },
+      { key: "inviteReward", label: "\u6BCF\u9080\u8BF71\u4EBA\u5956\u52B1(IT)", type: "number", placeholder: "5", hint: "\u4E0A\u9650 100/\u4EBA" },
       { key: "announceInvite", label: "\u7FA4\u5185\u81F4\u8C22\u9080\u8BF7\u4EBA", type: "switch", hint: "\u65B0\u4EBA\u52A0\u5165\u65F6\u81EA\u52A8\u53D1\u611F\u8C22\u6D88\u606F" },
       { key: "promoText", label: "\u63A8\u5E7F\u6587\u6848(\u9009\u586B)", type: "textarea", placeholder: "\u672C\u7FA4\u4E13\u6CE8 Web3 alpha\uFF0C\u6B22\u8FCE\u9080\u8BF7\u597D\u53CB\u4E00\u8D77\u6765\uFF01", hint: "\u7528\u4E8E\u5206\u4EAB/\u672A\u6765\u5B9A\u65F6\u63A8\u5E7F\u5230\u5E7F\u573A" }
     ],
@@ -5481,7 +5546,7 @@ async function runGrowthReward(db, groupId, inviterId, newMemberName) {
     await sendGroupBotMessage(
       db,
       groupId,
-      `\u{1F389} \u6B22\u8FCE ${newMemberName || "\u65B0\u670B\u53CB"} \u52A0\u5165\uFF01\u611F\u8C22 ${invName} \u7684\u9080\u8BF7${reward > 0 ? `\uFF0C\u5DF2\u5956\u52B1 ${reward} AC` : ""}`
+      `\u{1F389} \u6B22\u8FCE ${newMemberName || "\u65B0\u670B\u53CB"} \u52A0\u5165\uFF01\u611F\u8C22 ${invName} \u7684\u9080\u8BF7${reward > 0 ? `\uFF0C\u5DF2\u5956\u52B1 ${reward} IT` : ""}`
     );
   }
 }
@@ -7465,7 +7530,7 @@ var chatRouter = router({
     const totalShares = isDM ? 1 : input.totalShares;
     const isRandom = isDM ? false : input.isRandom;
     if (totalShares > input.totalAmount) {
-      throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E2A\u6570\u4E0D\u80FD\u8D85\u8FC7\u603B\u79EF\u5206\uFF08\u6BCF\u4EFD\u81F3\u5C11 1 AC\uFF09" });
+      throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7EA2\u5305\u4E2A\u6570\u4E0D\u80FD\u8D85\u8FC7\u603B\u79EF\u5206\uFF08\u6BCF\u4EFD\u81F3\u5C11 1 IT\uFF09" });
     }
     const blessing = sanitizeInput(input.blessing?.trim() || "\u606D\u559C\u53D1\u8D22\uFF0C\u5927\u5409\u5927\u5229", 100);
     let messageId = 0;
@@ -7757,7 +7822,7 @@ var chatRouter = router({
       const cost = meta.monthlyNN * months;
       if (meta.currency === "AC") {
         const ok = await spendNP(db, ctx.user.id, cost);
-        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
+        if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `IT \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} IT\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 IT` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
         if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A" });
@@ -7806,7 +7871,7 @@ var chatRouter = router({
     const cost = pkg.monthlyNN * input.months;
     if (pkg.currency === "AC") {
       const ok = await spendNP(db, ctx.user.id, cost);
-      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `AC \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} AC\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 AC` });
+      if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: `IT \u4F59\u989D\u4E0D\u8DB3\uFF08\u9700 ${cost.toLocaleString()} IT\uFF09\uFF0C\u5B8C\u6210\u4EFB\u52A1\u53EF\u83B7\u53D6 IT` });
     } else {
       const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
       if (!ok) throw new TRPCError8({ code: "BAD_REQUEST", message: "BIT \u4F59\u989D\u4E0D\u8DB3\uFF0C\u65E0\u6CD5\u5F00\u901A\u5957\u9910" });
@@ -15389,14 +15454,18 @@ function mix01(key, salt) {
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
   return h % 1e4 / 1e4;
 }
+var SLOW_DAY = shanghaiParts(Date.UTC(2026, 7, 18, 16, 0, 0)).dayIndex;
+function dailyUsersBoost(dayIndex) {
+  if (dayIndex >= SLOW_DAY) return 280 + Math.floor(mix01("users", dayIndex) * 41);
+  return 300 + Math.floor(mix01("users", dayIndex) * 301);
+}
 function usersDelta(nowMs) {
   const { sec, dayIndex } = shanghaiParts(nowMs);
   const epochDay = shanghaiParts(EPOCH).dayIndex;
   const daysElapsed = Math.max(0, dayIndex - epochDay);
   let sum = 0;
-  for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
-  const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
-  return sum + Math.floor(today * (sec / 86400));
+  for (let d = 0; d < daysElapsed; d++) sum += dailyUsersBoost(epochDay + d);
+  return sum + Math.floor(dailyUsersBoost(dayIndex) * (sec / 86400));
 }
 function liveDelta(kind, base, key, nowMs) {
   const { sec, dayIndex } = shanghaiParts(nowMs);
@@ -16528,7 +16597,19 @@ var PATCHES = [
     KEY \`idx_bit_airdrop_claim_ymd\` (\`ymd\`)
   )`,
   // 发现页生态仪表盘配置（加成 + 额外指标行）
-  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT"
+  "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
+  `CREATE TABLE IF NOT EXISTS \`it_transactions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`amount\` int NOT NULL,
+    \`type\` varchar(30) NOT NULL,
+    \`refType\` varchar(20),
+    \`refId\` int,
+    \`memo\` varchar(200),
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    KEY \`idx_ittx_user\` (\`userId\`, \`createdAt\`)
+  )`
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;

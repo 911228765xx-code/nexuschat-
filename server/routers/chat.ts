@@ -2099,7 +2099,7 @@ export const chatRouter = router({
       const totalShares = isDM ? 1 : input.totalShares;
       const isRandom = isDM ? false : input.isRandom;
       if (totalShares > input.totalAmount) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 AC）" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "红包个数不能超过总积分（每份至少 1 IT）" });
       }
       const blessing = sanitizeInput(input.blessing?.trim() || "恭喜发财，大吉大利", 100); // 净化,与其它 DM 内容路径一致(原来直接 slice 未过滤)
       let messageId = 0;
@@ -2467,7 +2467,7 @@ export const chatRouter = router({
         if (meta.currency === "AC") {
           // 基础机器人按 AC 计价（任务积分的消耗出口）
           const ok = await spendNP(db, ctx.user.id, cost);
-          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
+          if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `IT 余额不足（需 ${cost.toLocaleString()} IT），完成任务可获取 IT` });
         } else {
           // 原子扣 AI 治理代币（余额足够才扣，AI 回流金库）
           const ok = await spendNN(db, ctx.user.id, cost, { type: "bot_sub", refType: "group", refId: input.groupId, memo: input.botType });
@@ -2529,7 +2529,7 @@ export const chatRouter = router({
       const cost = pkg.monthlyNN * input.months;
       if (pkg.currency === "AC") {
         const ok = await spendNP(db, ctx.user.id, cost);
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `AC 余额不足（需 ${cost.toLocaleString()} AC），完成任务可获取 AC` });
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: `IT 余额不足（需 ${cost.toLocaleString()} IT），完成任务可获取 IT` });
       } else {
         const ok = await spendNN(db, ctx.user.id, cost, { type: "package", refType: "group", refId: input.groupId, memo: pkg.key });
         if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "BIT 余额不足，无法开通套餐" });

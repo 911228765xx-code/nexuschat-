@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp, feedback } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp, feedback, itTransactions, nnTransactions } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -849,6 +849,14 @@ export const userRouter = router({
             await tx.update(users)
               .set({ npPoints: sql`${users.npPoints} + ${input.amount}` })
               .where(eq(users.id, input.toUserId));
+            await tx.insert(itTransactions).values({
+              userId: ctx.user.id, amount: -input.amount, type: "transfer_out",
+              refType: "user", refId: input.toUserId, memo: memo ?? `to#${input.toUserId}`,
+            });
+            await tx.insert(itTransactions).values({
+              userId: input.toUserId, amount: input.amount, type: "transfer_in",
+              refType: "user", refId: ctx.user.id, memo: memo ?? `from#${ctx.user.id}`,
+            });
           });
         } catch (e: any) {
           if (e?.message === "INSUFFICIENT_IT") {
@@ -884,6 +892,47 @@ export const userRouter = router({
         it: u?.npPoints ?? 0,
         bit: Number(u?.nnBalance ?? 0),
       };
+    }),
+
+  /** BIT / IT 转账记录（本人视角） */
+  listTransfers: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const limit = input?.limit ?? 50;
+      const [itRows, bitRows] = await Promise.all([
+        db.select().from(itTransactions)
+          .where(eq(itTransactions.userId, ctx.user.id))
+          .orderBy(desc(itTransactions.createdAt)).limit(limit),
+        db.select().from(nnTransactions)
+          .where(and(
+            eq(nnTransactions.userId, ctx.user.id),
+            inArray(nnTransactions.type, ["transfer_in", "transfer_out"]),
+          ))
+          .orderBy(desc(nnTransactions.createdAt)).limit(limit),
+      ]);
+      const rows = [
+        ...itRows.map((r) => ({
+          id: `it-${r.id}`,
+          currency: "it" as const,
+          amount: r.amount,
+          type: r.type,
+          peerId: r.refId ?? null,
+          memo: r.memo ?? null,
+          createdAt: r.createdAt,
+        })),
+        ...bitRows.map((r) => ({
+          id: `bit-${r.id}`,
+          currency: "bit" as const,
+          amount: r.amount,
+          type: r.type,
+          peerId: r.refId ?? null,
+          memo: r.memo ?? null,
+          createdAt: r.createdAt,
+        })),
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return rows.slice(0, limit);
     }),
 
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────

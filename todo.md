@@ -558,4 +558,4 @@
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
-- [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
+- [x] 拉取后端 0e147db、构建、重启并保存 Manus checkpoint 供发布

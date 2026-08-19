@@ -1016,6 +1016,22 @@ export const nnTransactions = mysqlTable(
 export type NnTransaction = typeof nnTransactions.$inferSelect;
 export type InsertNnTransaction = typeof nnTransactions.$inferInsert;
 
+// ─── IT 转账流水（用户间积分转账）──────────────────────────────────────────────
+export const itTransactions = mysqlTable(
+  "it_transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    amount: int("amount").notNull(),
+    type: varchar("type", { length: 30 }).notNull(),
+    refType: varchar("refType", { length: 20 }),
+    refId: int("refId"),
+    memo: varchar("memo", { length: 200 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_ittx_user").on(t.userId, t.createdAt)]
+);
+
 // ─── NN 底池（流动性共建）────────────────────────────────────────────────────────
 // 单行配置：储备/已售/单价(每 1 USDT 兑多少 NN)/累计募集。普通用户从底池购买 NN。
 export const nnPool = mysqlTable("nn_pool", {
