@@ -42,6 +42,18 @@ const PATCHES: string[] = [
   )`,
   // 发现页生态仪表盘配置（加成 + 额外指标行）
   "ALTER TABLE `app_config` ADD COLUMN IF NOT EXISTS `dashboardConfig` TEXT",
+  `CREATE TABLE IF NOT EXISTS \`it_transactions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`amount\` int NOT NULL,
+    \`type\` varchar(30) NOT NULL,
+    \`refType\` varchar(20),
+    \`refId\` int,
+    \`memo\` varchar(200),
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    KEY \`idx_ittx_user\` (\`userId\`, \`createdAt\`)
+  )`,
 ];
 
 export async function applySchemaPatches(): Promise<void> {

@@ -25,15 +25,21 @@ function mix01(key: string, salt: number): number {
   return (h % 10000) / 10000;
 }
 
-/** 每天确定性 +300～600，跨日累加；日内按秒线性长，夜里不会回落。 */
+/** 上海 2026-08-19 起每天约 +300；此前已累加的日子不回撤。 */
+const SLOW_DAY = shanghaiParts(Date.UTC(2026, 7, 18, 16, 0, 0)).dayIndex;
+
+function dailyUsersBoost(dayIndex: number): number {
+  if (dayIndex >= SLOW_DAY) return 280 + Math.floor(mix01("users", dayIndex) * 41);
+  return 300 + Math.floor(mix01("users", dayIndex) * 301);
+}
+
 function usersDelta(nowMs: number): number {
   const { sec, dayIndex } = shanghaiParts(nowMs);
   const epochDay = shanghaiParts(EPOCH).dayIndex;
   const daysElapsed = Math.max(0, dayIndex - epochDay);
   let sum = 0;
-  for (let d = 0; d < daysElapsed; d++) sum += 300 + Math.floor(mix01("users", epochDay + d) * 301);
-  const today = 300 + Math.floor(mix01("users", dayIndex) * 301);
-  return sum + Math.floor(today * (sec / 86400));
+  for (let d = 0; d < daysElapsed; d++) sum += dailyUsersBoost(epochDay + d);
+  return sum + Math.floor(dailyUsersBoost(dayIndex) * (sec / 86400));
 }
 
 export function liveDelta(kind: DashKind, base: number, key: string, nowMs: number): number {

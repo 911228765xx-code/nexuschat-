@@ -28,4 +28,12 @@ describe("dashboardLive 用户数只增不减", () => {
     const live = applyDashboardLive(base, Date.UTC(2026, 7, 18, 8, 0, 0));
     expect(live.usersTotal).toBeGreaterThanOrEqual(base.usersTotal);
   });
+
+  it("8 月 19 日起当天增量约 300", () => {
+    const start = Date.UTC(2026, 7, 18, 16, 0, 0); // 上海 8/19 00:00
+    const end = Date.UTC(2026, 7, 19, 15, 59, 0); // 上海 8/19 23:59
+    const gained = liveDelta("users", 1200, "users", end) - liveDelta("users", 1200, "users", start);
+    expect(gained).toBeGreaterThanOrEqual(270);
+    expect(gained).toBeLessThanOrEqual(330);
+  });
 });

@@ -6,7 +6,7 @@
  * - 读写每个群开了哪些机器人 + 配置（group_bots 表）。
  * - 执行：欢迎机器人（入群自动欢迎）已接入 joinGroup；管理机器人关键词检测在发消息时调用。
  *
- * 计费用 AI 治理代币（红包/积分仍用 AC），订阅到期 expiresAt 控制是否生效。
+ * 计费用 BIT 治理代币（红包/积分用 IT），订阅到期 expiresAt 控制是否生效。
  */
 import { eq, and, gt, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -123,12 +123,12 @@ export const BOT_CATALOG: BotCatalogItem[] = [
     name: "添粉机器人",
     icon: "rocket",
     tagline: "拉新增长 · 邀请奖励",
-    desc: "成员通过邀请链接拉来新人时，自动奖励邀请人 AC 并在群里致谢，激励大家拉新涨粉。",
+    desc: "成员通过邀请链接拉来新人时，自动奖励邀请人 IT 并在群里致谢，激励大家拉新涨粉。",
     monthlyNN: 35,
     currency: "AI",
     interactive: true,
     configFields: [
-      { key: "inviteReward", label: "每邀请1人奖励(AC)", type: "number", placeholder: "5", hint: "上限 100/人" },
+      { key: "inviteReward", label: "每邀请1人奖励(IT)", type: "number", placeholder: "5", hint: "上限 100/人" },
       { key: "announceInvite", label: "群内致谢邀请人", type: "switch", hint: "新人加入时自动发感谢消息" },
       { key: "promoText", label: "推广文案(选填)", type: "textarea", placeholder: "本群专注 Web3 alpha，欢迎邀请好友一起来！", hint: "用于分享/未来定时推广到广场" },
     ],
@@ -413,7 +413,7 @@ export async function runGrowthReward(db: Db, groupId: number, inviterId: number
     const invName = inv?.name ?? inv?.username ?? "群友";
     await sendGroupBotMessage(
       db, groupId,
-      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} AC` : ""}`,
+      `🎉 欢迎 ${newMemberName || "新朋友"} 加入！感谢 ${invName} 的邀请${reward > 0 ? `，已奖励 ${reward} IT` : ""}`,
     );
   }
 }
