@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 
 describe("WalletConnect ProjectID configuration", () => {
@@ -15,5 +16,11 @@ describe("WalletConnect ProjectID configuration", () => {
       // WalletConnect ProjectIDs are hex strings
       expect(/^[a-f0-9]+$/.test(projectId)).toBe(true);
     }
+  });
+
+  it("uses BitChat branding in wallet connection metadata", () => {
+    const source = readFileSync(new URL("../client/src/lib/wagmi.ts", import.meta.url), "utf8");
+    expect(source).toContain('appName: "BitChat"');
+    expect(source).not.toContain('appName: "NexusChat"');
   });
 });

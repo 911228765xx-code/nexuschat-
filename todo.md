@@ -192,11 +192,13 @@
 
 ## v38 Web3 真实钱包连接完善
 
-- [ ] 安装 wagmi + viem 依赖并配置 WalletConnect ProjectID
-- [ ] 重写 WalletContext 使用 wagmi hooks（useAccount, useConnect, useDisconnect）
-- [ ] 更新 WalletConnectModal 支持 MetaMask 直连 + WalletConnect 二维码扫描
-- [ ] 更新钱包页面移除硬编码演示地址，使用真实连接地址
-- [ ] 导航栏"连接钱包"按钮状态同步（已连接显示地址缩写+断开选项）
+- [ ] 验证 wagmi/viem 安装与 WalletConnect ProjectID 配置，再确认钱包依赖配置完整
+
+- [x] 将 WalletConnect 配置中的旧 NexusChat 应用名更新为 BitChat 并补充回归测试
+- [x] WalletContext 已通过 wagmi hooks 维护地址、连接状态、链路与余额
+- [ ] WalletConnectModal：注入钱包直连与移动端深链已核验；桌面二维码扫描仍待实现或明确下线
+- [ ] 读取并验证钱包页面，确认已移除硬编码演示地址并显示真实连接地址与链上余额
+- [ ] 读取并验证导航栏钱包入口，确认连接状态显示地址缩写且支持断开连接
 
 ## v39 钱包数据同步修复
 
@@ -259,11 +261,11 @@
 - [ ] 确保生产环境首次访问无需刷新即可正常显示
 
 ## v47 移动端钱包连接优化
-- [ ] 检测移动端环境，WalletConnect 改为深度链接（直接跳转钱包 App）
-- [ ] 移动端显示热门钱包列表（Trust/MetaMask/OKX/imToken/TokenPocket/Coinbase）带深度链接
-- [ ] 桌面端保留二维码扫描模式
-- [ ] 连接失败时显示明确错误提示和替代方案
-- [ ] 添加更多热门钱包图标（OKX、imToken、TokenPocket、Bitget）
+- [x] 检测移动端环境并使用钱包深链直接打开 DApp
+- [x] 移动端展示 Trust、MetaMask、OKX、Coinbase、imToken、TokenPocket、Bitget 等钱包深链与商店降级
+- [ ] 桌面端二维码扫描连接（当前提供注入钱包直连与扩展安装降级）
+- [x] 连接失败时显示错误、超时提示与钱包安装/商店替代方案
+- [x] 热门钱包列表已覆盖 OKX、imToken、TokenPocket、Bitget 等图标标识
 
 ## v48 忘记密码 + 新用户 Onboarding 引导
 - [x] schema.ts 添加 passwordResetTokens 表（token, userId, expiresAt, usedAt）
