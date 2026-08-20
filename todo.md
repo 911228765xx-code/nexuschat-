@@ -414,8 +414,8 @@
 ## v66 流畅度与体验感全面优化（不改变功能和UI）
 
 ### 登录流程优化
-- [ ] AppLayout loading 骨架屏：auth loading 时显示与 index.html 骨架屏一致的骨架，避免 spinner 闪烁
-- [ ] AppLayout 未登录跳转：加快 redirect，减少中间状态停留时间（已有，确认无延迟）
+- [x] AppLayout loading 骨架屏：auth loading 时显示与 index.html 骨架屏一致的骨架，避免 spinner 闪烁
+- [x] AppLayout 未登录跳转：使用 replace 跳转并提供登录引导，减少中间状态停留时间
 - [ ] Login 页面：添加 touch-action: manipulation 消除 300ms 点击延迟
 
 ### 首页 CTA 转化优化
@@ -424,10 +424,10 @@
 
 ### 全站流畅度优化
 - [ ] index.css：添加 overscroll-behavior: contain，防止 iOS 橡皮筋效果影响体验
-- [ ] index.css：添加 touch-action: manipulation，消除移动端 300ms 点击延迟
-- [ ] index.css：page-enter 动画加入 will-change: opacity, transform
+- [x] index.css：添加 touch-action: manipulation，消除移动端 300ms 点击延迟
+- [x] index.css：page-enter 动画加入 will-change: opacity, transform
 - [ ] index.css：优化 button active 反馈（已有 scale(0.94)，确认 iOS 生效）
-- [ ] AppLayout：auth loading 骨架屏替换 Loader2 spinner
+- [x] AppLayout：auth loading 骨架屏替换 Loader2 spinner
 - [ ] 全局字体：确认 font-display: swap 已配置（Google Fonts 不阻塞渲染）
 - [ ] 图片懒加载：确认关键页面图片有 loading="lazy"
 
