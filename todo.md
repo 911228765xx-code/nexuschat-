@@ -219,13 +219,13 @@
 - [x] 检查个人主页移动端布局（375px）
 - [x] 修复移动端溢出/遮挡/字体/间距问题
 ## v42 PWA安装引导 - 让用户方便下载App
-- [ ] 创建 usePWAInstall Hook（监听 beforeinstallprompt 事件，支持 Android Chrome 原生安装）
-- [ ] 创建 PWAInstallBanner 组件（底部横幅，Android Chrome 显示"添加到主屏幕"）
-- [ ] 创建 iOS 安装引导弹窗（Safari 用户显示"分享 → 添加到主屏幕"步骤说明）
-- [ ] 在首页 Hero 区域添加"下载 App"按钮，点击触发安装流程
-- [ ] 在 AppLayout 底部添加 PWA 安装横幅（仅未安装时显示）
-- [ ] 添加 Service Worker（sw.js）实现离线缓存和快速启动
-- [ ] 国际化：添加 PWA 安装相关文案到 I18nContext
+- [x] 创建 usePWAInstall Hook（监听 beforeinstallprompt 事件，支持 Android Chrome 原生安装）
+- [x] 创建 PWAInstallBanner 组件（底部横幅，Android Chrome 显示"添加到主屏幕"）
+- [x] 创建 iOS 安装引导弹窗（Safari 用户显示"分享 → 添加到主屏幕"步骤说明）
+- [x] 首页下载 App 入口：Android 优先调用 triggerInstall，iOS 打开安装引导，不可安装时回退 /download
+- [ ] 核验 PWAInstallBanner 的挂载位置与仅未安装时显示条件
+- [x] 添加 Service Worker（sw.js）实现离线缓存和快速启动
+- [ ] 核验 I18nContext/语言资源已包含并使用 PWA 安装相关文案
 
 ## v43 下载页面优化
 - [x] 生成 Android/iOS 下载二维码图片并上传 CDN
