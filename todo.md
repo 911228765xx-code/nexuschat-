@@ -423,10 +423,10 @@
 - [x] 首页底部 CTA 区域同步复用直接登录跳转逻辑
 
 ### 全站流畅度优化
-- [ ] index.css：添加 overscroll-behavior: contain，防止 iOS 橡皮筋效果影响体验
+- [x] index.css：使用 overscroll-behavior: none 限制滚动链与 iOS 橡皮筋效果（强于 contain）
 - [x] index.css：添加 touch-action: manipulation，消除移动端 300ms 点击延迟
 - [x] index.css：page-enter 动画加入 will-change: opacity, transform
-- [ ] index.css：优化 button active 反馈（已有 scale(0.94)，确认 iOS 生效）
+- [x] index.css：按钮与 role=button 已提供 :active scale(0.94) 按压反馈
 - [x] AppLayout：auth loading 骨架屏替换 Loader2 spinner
 - [x] 全局字体：Google Fonts 通过非阻塞 preload 加载并配置 display=swap，避免阻塞首屏渲染
 - [x] 图片懒加载：聊天媒体、群聊内容和钱包 NFT 等非首屏内容图片使用 loading="lazy"；头像、预览与主视觉按交互需求保持即时加载
