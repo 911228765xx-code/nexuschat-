@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.nexuschat.app',
-  appName: 'NexusChat',
+  appName: 'BitChat',
   webDir: 'dist/public',
   // Production server URL — the app loads your deployed website
   // For development/testing, comment this out to use local webDir bundle

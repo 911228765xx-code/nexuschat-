@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>NexusChat</string>
+	<string>BitChat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,6 +27,7 @@
 			<string>com.nexuschat.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>bitchat</string>
 				<string>nexuschat</string>
 			</array>
 		</dict>

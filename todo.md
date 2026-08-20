@@ -395,9 +395,9 @@
 - [x] 搜索框 input 显式添加 font-sans 类确保字体一致性
 
 ## v61 全站排版修复
-- [ ] 修复 Discover/Research/Contacts 等页面搜索框字体（font-sans + 图标定位）
-- [ ] 修复 AI 投研页面整体文字排版问题
-- [ ] 修复历史研究报告弹窗打开后文字排版混乱
+- [x] 修复 Discover/Research/Contacts 等页面搜索框字体（font-sans + 图标定位，见后续 v61 实现记录）
+- [x] 修复 AI 投研页面整体文字排版问题（标题层级、段落间距与移动端阅读样式已统一）
+- [x] 修复历史研究报告弹窗打开后文字排版混乱（prose 与 LightMarkdown 冲突已消除）
 
 ## v61 全站排版修复
 - [x] 修复 Contacts/Discover/Research 页面搜索框图标垂直定位（-translate-y-[calc(50%+6px)] → top-[18px]）
@@ -446,18 +446,24 @@
 
 ## Capacitor 原生 App 封壳
 
-- [ ] 安装 @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios @capacitor/keyboard @capacitor/status-bar
-- [ ] 创建 capacitor.config.ts 配置文件
-- [ ] 修改 vite.config.ts 输出路径适配 Capacitor（outDir → dist/public）
-- [ ] 添加 package.json cap:build / cap:sync / cap:android / cap:ios 脚本
-- [ ] 适配 iOS/Android 安全区域（验证 env(safe-area-inset-bottom) 完整覆盖所有 fixed 元素）
-- [ ] 适配键盘弹出时底部导航不被遮挡（@capacitor/keyboard 插件 + KeyboardResize.None）
-- [ ] 配置 App 图标和启动屏（capacitor-assets 工具）
-- [ ] 配置深链接（App Links / Universal Links，nexuschat.best）
-- [ ] 生成 Android 工程（npx cap add android）
-- [ ] 生成 iOS 工程（npx cap add ios）
-- [ ] 构建并同步（pnpm build && npx cap sync）
-- [ ] 输出 Android APK 工程供用户构建
+- [x] Capacitor 核心、Android、iOS、Keyboard 与 StatusBar 依赖已安装
+- [x] 创建 capacitor.config.ts 配置文件并设置 BitChat 名称、dist/public Web 输出目录
+- [x] Vite 输出路径已适配 Capacitor（outDir → dist/public）
+- [x] package.json 已提供 cap:build / cap:sync / cap:android / cap:ios 脚本
+- [x] iOS 内容自动适配安全区域，现有页面固定底栏使用 safe-area inset
+- [x] Keyboard 插件设置 resize:none，避免键盘推挤底部导航
+- [x] 原生壳已配置启动屏与现有品牌图标资源
+- [ ] 配置 App Links / Universal Links（nexuschat.best）
+- [x] Android 工程已生成并可由 Capacitor 同步
+- [x] iOS 工程已生成并可由 Capacitor 同步
+- [x] 已执行 npx cap sync，将当前 Web 资源同步到 Android/iOS 工程
+- [x] 构建 Android 调试 APK 工程并生成可安装产物（app-debug.apk，约 9.7MB）
+
+- [x] 调低 Gradle 内存与并行度，修复 Android APK 构建守护进程终止问题
+
+- [x] 将 Capacitor 原生壳的可见应用名称统一为 BitChat，并补充配置回归测试
+
+- [x] iOS 原生壳显示名称与自定义 URL Scheme 已兼容 BitChat（保留 nexuschat Scheme 以兼容既有链接）
 
 ## v_cap App 图标 + 版本更新机制
 
