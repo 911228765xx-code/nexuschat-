@@ -246,7 +246,7 @@ export default function Trading() {
   // ─── Positions (real backend) ──────────────────────────────────────────
   const { data: positionsData, refetch: refetchPositions } = trpc.trading.listPositions.useQuery(
     { status: "open" },
-    { staleTime: 30_000, refetchInterval: 60_000 }
+    { enabled: isAuthenticated, staleTime: 30_000, refetchInterval: 60_000 }
   );
   const realPositions = positionsData ?? [];
   const closePositionMutation = trpc.trading.closePosition.useMutation({
@@ -293,7 +293,7 @@ export default function Trading() {
   // ─── Price Alerts (real backend) ──────────────────────────────────────────
   const { data: alertsData, refetch: refetchAlerts } = trpc.trading.listAlerts.useQuery(
     undefined,
-    { staleTime: 30_000 }
+    { enabled: isAuthenticated, staleTime: 30_000 }
   );
   const realAlerts = alertsData ?? [];
 
@@ -313,7 +313,7 @@ export default function Trading() {
 
   const { data: pnlCalendar = [] } = trpc.trading.getPnlCalendar.useQuery(
     { year: calendarYear, month: calendarMonth },
-    { staleTime: 60_000 }
+    { enabled: isAuthenticated, staleTime: 60_000 }
   );
 
   const totalProfit = strategies.reduce((s, st) => s + st.totalProfit, 0);
