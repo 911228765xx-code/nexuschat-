@@ -355,7 +355,7 @@
 - [x] 图片消息渲染（显示缩略图而非文字）
 - [x] 消息搜索界面优化（替换浏览器prompt）
 - [x] 群主/管理员身份标识（消息气泡旁显示角色标签）
-- [ ] 双端模拟测试（电脑端 + 手机端）
+- [x] 双端模拟测试（桌面 1280×720 与移动端 393×852 延迟渲染均完整显示，无横向溢出或启动遮罩残留）
 
 ## v55 用户反馈修复
 - [x] 修复群组侧边栏布局：邀请链接按钮已位于顶部快捷操作区，减少页面滚动
@@ -453,7 +453,9 @@
 - [x] iOS 内容自动适配安全区域，现有页面固定底栏使用 safe-area inset
 - [x] Keyboard 插件设置 resize:none，避免键盘推挤底部导航
 - [x] 原生壳已配置启动屏与现有品牌图标资源
-- [ ] 配置 App Links / Universal Links（nexuschat.best）
+- [x] 配置 App Links / Universal Links（nexuschat.best）：Android autoVerify 与 iOS Associated Domains 均已在原生工程启用；上线签名后由对应商店证书完成平台验证
+
+- [x] 配置 Android Debug App Links：发布 nexuschat.best 的 assetlinks.json，与 Android autoVerify 过滤器及调试签名指纹一致
 - [x] Android 工程已生成并可由 Capacitor 同步
 - [x] iOS 工程已生成并可由 Capacitor 同步
 - [x] 已执行 npx cap sync，将当前 Web 资源同步到 Android/iOS 工程
@@ -615,7 +617,7 @@
 - [x] 对每个模块执行接口、错误状态、空状态、权限边界与移动端交互细节检查
 - [x] 修复确认缺陷并为每项修复补充可重复执行的回归测试
 
-- [ ] 按优先级继续处理现有清单中的核心稳定性、聊天体验与移动端关键未完成事项
+- [x] 按优先级继续处理现有清单中的核心稳定性、聊天体验与移动端关键未完成事项（本轮审计、修复与跨端回归已完成）
 
 - [x] 修复交易页面访客状态下私有查询导致的首屏加载风险，并补充回归测试
 

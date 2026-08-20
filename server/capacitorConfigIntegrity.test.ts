@@ -5,6 +5,8 @@ describe("Capacitor native shell configuration", () => {
   const source = readFileSync(new URL("../capacitor.config.ts", import.meta.url), "utf8");
   const iosInfo = readFileSync(new URL("../ios/App/App/Info.plist", import.meta.url), "utf8");
   const androidGradle = readFileSync(new URL("../android/gradle.properties", import.meta.url), "utf8");
+  const iosProject = readFileSync(new URL("../ios/App/App.xcodeproj/project.pbxproj", import.meta.url), "utf8");
+  const iosEntitlements = readFileSync(new URL("../ios/App/App/BitChat.entitlements", import.meta.url), "utf8");
 
   it("uses the BitChat name and production web bundle directory", () => {
     expect(source).toContain("appName: 'BitChat'");
@@ -22,6 +24,11 @@ describe("Capacitor native shell configuration", () => {
     expect(iosInfo).toContain("<string>BitChat</string>");
     expect(iosInfo).toContain("<string>bitchat</string>");
     expect(iosInfo).toContain("<string>nexuschat</string>");
+  });
+
+  it("enables the BitChat domain as an iOS associated domain", () => {
+    expect(iosProject).toContain("CODE_SIGN_ENTITLEMENTS = App/BitChat.entitlements;");
+    expect(iosEntitlements).toContain("applinks:nexuschat.best");
   });
 
   it("keeps Android debug builds within the sandbox memory budget", () => {
