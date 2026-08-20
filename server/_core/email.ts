@@ -14,11 +14,8 @@ function getResend(): Resend | null {
   return resend;
 }
 
-/** 必须用已在 Resend 验证的域名。onboarding@resend.dev 只能寄到账号本人，普通用户收不到。 */
-function fromAddress(): string {
-  return ENV.resendFrom || "比特AI社交 <noreply@nexuschat.best>";
-}
 const APP_NAME = "比特AI社交";
+const FROM_ADDRESS = ENV.resendFrom || `${APP_NAME} <noreply@nexuschat.best>`;
 
 export type SendEmailResult =
   | { success: true; messageId: string }
@@ -121,14 +118,14 @@ export async function sendPasswordResetEmail(params: {
 
   try {
     const result = await client.emails.send({
-      from: fromAddress(),
+      from: FROM_ADDRESS,
       to,
       subject: `你的比特AI社交验证码：${code}`,
       html,
     });
 
     if (result.error) {
-      console.warn("[Email] Resend error:", result.error);
+      console.warn("[Email] Resend error:", result.error, "from=", FROM_ADDRESS);
       return { success: false, error: result.error.message };
     }
 

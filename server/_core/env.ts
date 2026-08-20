@@ -8,7 +8,7 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
-  /** 已在 Resend 验证的发件人，例如 比特AI社交 <noreply@nexuschat.best> */
+  /** 已在 Resend 验证的发件地址。测试号 onboarding@resend.dev 只能寄到账号本人。 */
   resendFrom: (process.env.RESEND_FROM ?? "比特AI社交 <noreply@nexuschat.best>").trim(),
   turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
   /** LiveKit 语音房：livekit.cloud 项目设置拿 API Key/Secret + WS URL（密钥仅服务端，绝不下发客户端） */
