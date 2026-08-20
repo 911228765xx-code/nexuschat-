@@ -87,19 +87,9 @@ export function AppUpdateDialog({
       setTimeout(() => {
         window.location.reload();
       }, 300);
-    } else if (data?.downloadUrl) {
-      // Native app (Android/iOS): open download URL to install the new APK/IPA
-      window.open(data.downloadUrl, "_blank");
     } else {
-      // Fallback: reload page
-      if (data?.latestVersion) {
-        sessionStorage.setItem(SHOWN_DIALOG_KEY, data.latestVersion);
-      }
-      setOpen(false);
-      onClose?.();
-      setTimeout(() => {
-        window.location.reload();
-      }, 300);
+      // 原生壳 / 其它：进本站下载页（不要开裸 /apk，国内会跳到被墙的 expo.dev）
+      window.open("/download", "_blank");
     }
   };
 

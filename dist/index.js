@@ -15696,6 +15696,167 @@ var statsRouter = router({
   })
 });
 
+// server/routers/adminMaintenance.ts
+init_db();
+import { z as z28 } from "zod";
+import { sql as sql26 } from "drizzle-orm";
+import { TRPCError as TRPCError25 } from "@trpc/server";
+import mysql from "mysql2/promise";
+var WIPE_ALL = [
+  // 聊天(机器人+真实用户)
+  "messages",
+  "message_reactions",
+  "message_read_receipts",
+  "group_unread_counts",
+  "conversation_prefs",
+  "red_packets",
+  "red_packet_claims",
+  "group_files",
+  "voice_rooms",
+  "group_join_requests",
+  "group_invite_links",
+  "group_mutes",
+  // 广场
+  "posts",
+  "post_comments",
+  "post_likes",
+  "promo_banners",
+  // 用户从属/社交
+  "notifications",
+  "friend_requests",
+  "contact_metadata",
+  "user_follows",
+  "user_blocklist",
+  "user_settings",
+  "user_tasks",
+  "user_daily_np",
+  "user_watchlist",
+  "user_api_keys",
+  "password_reset_tokens",
+  "device_push_tokens",
+  "push_subscriptions",
+  "price_alerts",
+  "ai_daily_usage",
+  "feedback",
+  "content_violations",
+  // 推荐关系(重新绑定)
+  "referrals",
+  "referral_milestones",
+  // AI 生成内容
+  "consulting_reports",
+  "consulting_payments",
+  "research_reports",
+  // 财务/经济流水(决策:一并清)
+  "calls",
+  "curation_stakes",
+  "nn_transactions",
+  "nn_vesting",
+  "nn_node_orders",
+  "nn_pool_orders",
+  "swap_history",
+  "ai_swap_trades",
+  "usdt_deposits",
+  "usdt_withdrawals",
+  "ico_orders",
+  "ico_purchases",
+  "ico_accounts",
+  "ico_stake_lots",
+  "ico_reward_runs",
+  "tge_claims",
+  "partner_bonuses",
+  "partner_earnings",
+  "partner_payouts",
+  "partner_settle_runs",
+  "platform_fee_ledger",
+  "rank_agg_run",
+  "bit_rank_airdrop_run",
+  // 未上线金融模块残留
+  "trading_positions",
+  "trading_strategies",
+  "copy_traders",
+  "copy_trader_follows"
+];
+var BACKUP_TABLES = ["users", "usdt_deposits", "usdt_withdrawals", "ico_purchases", "ico_orders", "nn_transactions", "referrals"];
+async function rawRows(db, query) {
+  const res = await db.execute(sql26.raw(query));
+  if (Array.isArray(res)) return Array.isArray(res[0]) ? res[0] : res;
+  return [];
+}
+async function countRows(db, table) {
+  const rows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`${table}\``);
+  return Number(rows[0]?.c ?? 0);
+}
+var adminMaintenanceRouter = router({
+  resetOperationalData: adminProcedure.input(z28.object({
+    mode: z28.enum(["dryRun", "execute"]),
+    confirm: z28.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const keepRows = await rawRows(db, `SELECT id, isBot, role FROM users WHERE isBot = 1 OR role = 'admin'`);
+    const keepIds = keepRows.map((r) => Number(r.id)).filter((n2) => Number.isFinite(n2));
+    const botCount = keepRows.filter((r) => Number(r.isBot) === 1).length;
+    const adminCount = keepRows.filter((r) => String(r.role) === "admin").length;
+    if (adminCount === 0 || !keepIds.includes(ctx.user.id)) {
+      throw new TRPCError25({ code: "PRECONDITION_FAILED", message: "\u4FDD\u7559\u540D\u5355\u6821\u9A8C\u5931\u8D25(\u65E0\u7BA1\u7406\u5458),\u5DF2\u4E2D\u6B62" });
+    }
+    const idList = keepIds.join(",");
+    const usersTotal = await countRows(db, "users");
+    const usersToDelete = usersTotal - keepIds.length;
+    const gmRows = await rawRows(db, `SELECT COUNT(*) AS c FROM \`group_members\` WHERE userId NOT IN (${idList})`);
+    const groupMembersToDelete = Number(gmRows[0]?.c ?? 0);
+    const tables = [];
+    for (const t3 of WIPE_ALL) tables.push({ name: t3, rows: await countRows(db, t3) });
+    const totalRows = tables.reduce((s, t3) => s + t3.rows, 0) + usersToDelete + groupMembersToDelete;
+    const report = {
+      mode: input.mode,
+      keep: { bots: botCount, admins: adminCount },
+      usersToDelete,
+      groupMembersToDelete,
+      tables,
+      totalRows
+    };
+    if (input.mode === "dryRun") return { ...report, backups: [] };
+    if (input.confirm !== "\u6E05\u96F6") {
+      throw new TRPCError25({ code: "BAD_REQUEST", message: "\u786E\u8BA4\u53E3\u4EE4\u4E0D\u7B26:\u9700\u8F93\u5165\u300C\u6E05\u96F6\u300D\u4E8C\u5B57" });
+    }
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "\u7F3A\u5C11 DATABASE_URL" });
+    const ts = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    const backups = [];
+    const conn = await mysql.createConnection(url);
+    try {
+      for (const b of BACKUP_TABLES) {
+        const bk = `bk${ts}_${b}`;
+        await conn.query(`DROP TABLE IF EXISTS \`${bk}\``);
+        await conn.query(`CREATE TABLE \`${bk}\` LIKE \`${b}\``);
+        await conn.query(`INSERT INTO \`${bk}\` SELECT * FROM \`${b}\``);
+        backups.push(bk);
+      }
+      await conn.beginTransaction();
+      for (const t3 of WIPE_ALL) {
+        await conn.query(`DELETE FROM \`${t3}\``);
+      }
+      await conn.query(`DELETE FROM \`group_members\` WHERE userId NOT IN (${idList})`);
+      await conn.query(`DELETE FROM \`users\` WHERE id NOT IN (${idList})`);
+      await conn.query(`UPDATE \`chat_groups\` SET creatorId = ${ctx.user.id} WHERE creatorId NOT IN (${idList})`);
+      await conn.query(`UPDATE \`group_announcements\` SET createdBy = ${ctx.user.id} WHERE createdBy NOT IN (${idList})`);
+      await conn.query(`UPDATE \`chat_groups\` SET memberCount = (SELECT COUNT(*) FROM \`group_members\` gm WHERE gm.groupId = chat_groups.id)`);
+      await conn.query(`UPDATE \`ai_amm_pool\` SET aiReserve=0, usdtReserve=0, reserveR=0, circulatingAi=0, crisisFund=0, divPool=0, cumBoughtUsdt=0, totalVolUsdt=0, peakPrice=0, peakUpdatedAt=NULL, seeded=0, dividendClaimsEnabled=0`);
+      await conn.commit();
+    } catch (e) {
+      try {
+        await conn.rollback();
+      } catch {
+      }
+      throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: `\u6E05\u96F6\u5931\u8D25(\u5DF2\u56DE\u6EDA,\u6570\u636E\u672A\u53D8\u52A8):${e.message}` });
+    } finally {
+      await conn.end();
+    }
+    return { ...report, backups };
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   system: systemRouter,
@@ -15723,6 +15884,7 @@ var appRouter = router({
   npStore: npStoreRouter,
   tge: tgeRouter,
   partner: partnerRouter,
+  adminMaintenance: adminMaintenanceRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
@@ -16593,7 +16755,7 @@ function startIcoRewardScheduler() {
 }
 
 // server/schemaPatches.ts
-import mysql from "mysql2/promise";
+import mysql2 from "mysql2/promise";
 var PATCHES = [
   "ALTER TABLE `user_settings` ADD COLUMN IF NOT EXISTS `dmOnlyFriends` BOOLEAN NOT NULL DEFAULT FALSE",
   // 群模块三列(2026-07-17 审计):alias 无任何 migration 覆盖,新建库缺列会让
@@ -16647,12 +16809,12 @@ async function applySchemaPatches() {
   if (!url) return;
   let conn = null;
   try {
-    conn = await mysql.createConnection(url);
-    for (const sql26 of PATCHES) {
+    conn = await mysql2.createConnection(url);
+    for (const sql27 of PATCHES) {
       try {
-        await conn.query(sql26);
+        await conn.query(sql27);
       } catch (e) {
-        console.error(`[SchemaPatch] failed: ${sql26}`, e);
+        console.error(`[SchemaPatch] failed: ${sql27}`, e);
       }
     }
   } catch (e) {
@@ -16865,14 +17027,32 @@ async function handleApkDownload(req, res) {
     }
     const clientRange = req.headers.range;
     if (typeof clientRange !== "string") {
-      const wantsHtml = (req.headers.accept ?? "").includes("text/html");
-      res.redirect(302, wantsHtml ? "/download" : url);
+      const ref = typeof req.query.ref === "string" ? req.query.ref : "";
+      const q = new URLSearchParams();
+      if (req.query.v) q.set("v", String(req.query.v));
+      if (ref) q.set("ref", ref);
+      const qs = q.toString();
+      res.redirect(302, qs ? `/download?${qs}` : "/download");
       return;
     }
     const upstreamHeaders = { Range: clientRange };
-    const upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
-    if (!upstream.ok && upstream.status !== 206) {
-      res.status(502).send(`\u4E0B\u8F7D\u6E90\u6682\u4E0D\u53EF\u7528\uFF08${upstream.status}\uFF09\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5`);
+    let upstream = null;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
+        lastStatus = upstream.status;
+        if (upstream.ok || upstream.status === 206) break;
+      } catch {
+        lastStatus = 0;
+        upstream = null;
+      }
+      if (upstream && (upstream.ok || upstream.status === 206)) break;
+      upstream = null;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+    if (!upstream || !upstream.ok && upstream.status !== 206) {
+      res.status(502).send(`\u4E0B\u8F7D\u6E90\u6682\u4E0D\u53EF\u7528\uFF08${lastStatus || "\u7F51\u7EDC\u4E2D\u65AD"}\uFF09\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5`);
       return;
     }
     if (upstream.status !== 206) {

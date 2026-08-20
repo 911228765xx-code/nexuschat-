@@ -181,8 +181,22 @@ export default function DownloadPage() {
     try {
       for (;;) {
         const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
-        const res = await fetch("/apk", { headers: { Range: `bytes=${start}-${end}` } });
-        if (res.status !== 206) throw new Error(`no partial (${res.status})`);
+        const apkPath = `/apk?v=${encodeURIComponent(ver?.latestVersion || "1")}`;
+        let res: globalThis.Response | null = null;
+        let lastErr = "";
+        for (let tryN = 0; tryN < 3; tryN++) {
+          try {
+            res = await fetch(apkPath, { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store" });
+            if (res.status === 206) break;
+            lastErr = `no partial (${res.status})`;
+            res = null;
+          } catch (e) {
+            lastErr = e instanceof Error ? e.message : "network";
+            res = null;
+          }
+          if (tryN < 2) await new Promise((r) => setTimeout(r, 500 * (tryN + 1)));
+        }
+        if (!res || res.status !== 206) throw new Error(lastErr || "no partial");
         const type = res.headers.get("content-type")?.toLowerCase() ?? "";
         if (type.includes("text/html")) throw new Error("received html");
         const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
@@ -238,14 +252,7 @@ export default function DownloadPage() {
       setDlProgress(null);
     } catch {
       setDlProgress(null);
-      // 分块失败 → 退到外部整包直链(绕平台 32MiB 上限)。绝不退回裸 /apk。
-      const directUrl = usableDirectUrl(ver?.directUrl);
-      if (directUrl) {
-        const ok = window.confirm("本地下载未完成。是否改用备用线路继续下载？（约 180MB，建议 Wi‑Fi）");
-        if (ok) window.location.href = directUrl;
-      } else {
-        alert("下载未完成。请用系统浏览器（Chrome/自带浏览器）打开本页重试，勿在微信内下载。");
-      }
+      alert("下载未完成。请用系统浏览器（Chrome / 自带浏览器）打开本页，连上 Wi‑Fi 后重试，勿在微信内下载。");
     }
   }
 
@@ -514,7 +521,7 @@ export default function DownloadPage() {
                   href={safeDirectUrl}
                   className="text-xs text-muted-foreground/70 underline hover:text-[#00d4ff] transition-colors"
                 >
-                  下载慢或失败？点这里用备用线路下载
+                  海外备用线路（国内可能打不开）
                 </a>
               )}
 
