@@ -192,13 +192,13 @@
 
 ## v38 Web3 真实钱包连接完善
 
-- [ ] 验证 wagmi/viem 安装与 WalletConnect ProjectID 配置，再确认钱包依赖配置完整
+- [x] wagmi、viem 与 WalletConnect ProjectID 已核验：依赖已安装，配置和格式回归测试通过
 
 - [x] 将 WalletConnect 配置中的旧 NexusChat 应用名更新为 BitChat 并补充回归测试
 - [x] WalletContext 已通过 wagmi hooks 维护地址、连接状态、链路与余额
 - [ ] WalletConnectModal：注入钱包直连与移动端深链已核验；桌面二维码扫描仍待实现或明确下线
-- [ ] 读取并验证钱包页面，确认已移除硬编码演示地址并显示真实连接地址与链上余额
-- [ ] 读取并验证导航栏钱包入口，确认连接状态显示地址缩写且支持断开连接
+- [x] 钱包页面已验证：使用 WalletContext 真实连接地址、wagmi 原生余额及链上代币/交易查询，不保留演示地址
+- [x] 导航栏钱包入口已验证：桌面与移动端按连接状态显示地址缩写，点击打开钱包连接面板并提供断开操作
 
 ## v39 钱包数据同步修复
 
