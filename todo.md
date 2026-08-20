@@ -419,8 +419,8 @@
 - [ ] Login 页面：添加 touch-action: manipulation 消除 300ms 点击延迟
 
 ### 首页 CTA 转化优化
-- [ ] "立即体验" 按钮：未登录时跳转 /login?returnTo=/app/chat（当前跳转 /app/chat 再被 AppLayout 重定向，多一跳）
-- [ ] 首页底部 CTA 区域同步优化
+- [x] "立即体验" 按钮：未登录时直接跳转 /login?returnTo=/app/chat，避免经过 AppLayout 的额外重定向
+- [x] 首页底部 CTA 区域同步复用直接登录跳转逻辑
 
 ### 全站流畅度优化
 - [ ] index.css：添加 overscroll-behavior: contain，防止 iOS 橡皮筋效果影响体验
