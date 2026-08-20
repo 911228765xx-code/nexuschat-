@@ -565,9 +565,9 @@
 
 - [x] 核实 Resend 验证域名并配置 RESEND_FROM，修复密码重置验证码邮件投递
 
-- [ ] 在 Cloudflare 添加 Resend 所需 DNS 记录并验证 nexuschat.best 发件域名
+- [x] 在 Cloudflare 添加 Resend 所需 DNS 记录并验证 nexuschat.best 发件域名（不适用：nexuschat.best DNS 由 Manus 管理，相关记录已在 Manus 验证）
 
-- [ ] 定位 Global Domain Group 域名管理入口并添加 Resend 验证记录
+- [x] 定位 Global Domain Group 域名管理入口并添加 Resend 验证记录（不适用：使用 Manus 域名管理完成验证）
 
 - [x] 在 Manus 域名管理中定位 nexuschat.best DNS 配置并添加 Resend 记录
 
