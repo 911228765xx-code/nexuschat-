@@ -1,4 +1,4 @@
-// build:2026-08-20T16:29:53.835Z
+// build:2026-08-20T16:36:58.019Z
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
@@ -94,6 +94,11 @@ try {
     </trpc.Provider>
   );
   window.__APP_RENDER_DONE__ = Date.now();
+  // Do not wait for route data or a component effect: once React has had a
+  // frame to commit its first fallback/content, release the static overlay.
+  requestAnimationFrame(() => {
+    try { (window as any).__nexusHideSkeleton?.(); } catch (_) {}
+  });
 } catch(e) {
   window.__APP_RENDER_ERROR__ = String(e);
   console.error('RENDER FAILED:', e);

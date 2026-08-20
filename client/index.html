@@ -266,18 +266,16 @@
           var rootEl = document.getElementById('root');
           root = rootEl;
 
-          // Only hide skeleton when root has meaningful content
-          // Use a short delay (300ms) to avoid hiding on loading spinners
+          // Release the static overlay as soon as React commits any fallback
+          // or page content. React owns subsequent loading states.
           var hideTimer = null;
           var observer = new MutationObserver(function() {
             if (rootEl && rootEl.children.length > 0) {
-              // Check if the content is more than just a loading spinner
-              // by waiting a short moment for React to settle
               if (hideTimer) clearTimeout(hideTimer);
               hideTimer = setTimeout(function() {
                 observer.disconnect();
                 hideSkeleton();
-              }, 400);
+              }, 50);
             }
           });
 
@@ -289,12 +287,12 @@
           // Fallback: show skeleton after 1.5s if splash is still showing
           setTimeout(showSkeleton, 1500);
 
-          // Hard timeout: remove everything after 8s
+          // Never let the static overlay outlive a slow first route/chunk.
           setTimeout(function() {
             observer.disconnect();
             if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
             if (skeleton && skeleton.parentNode) skeleton.parentNode.removeChild(skeleton);
-          }, 8000);
+          }, 3000);
         });
 
         // Expose function for React to call when it's ready

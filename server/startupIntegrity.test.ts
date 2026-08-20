@@ -35,4 +35,14 @@ describe("startup and Service Worker integrity", () => {
     expect(app.indexOf("<I18nProvider>")).toBeLessThan(app.indexOf("<AppContent />"));
     expect(onboarding).toContain('useI18n');
   });
+
+  it("releases the static skeleton after the first React frame", () => {
+    const main = readProjectFile("../client/src/main.tsx");
+    const html = readProjectFile("../client/index.html");
+
+    expect(main).toContain("requestAnimationFrame");
+    expect(main).toContain("__nexusHideSkeleton");
+    expect(html).toContain("}, 50);");
+    expect(html).toContain("}, 3000);");
+  });
 });
