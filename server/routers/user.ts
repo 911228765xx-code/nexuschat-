@@ -37,8 +37,7 @@ const IT_PER_BIT = 100;
 const TRANSFER_MAX_IT = 1_000_000;
 const TRANSFER_MAX_BIT = 100_000;
 
-/** C 折中：这些"高价值任务"需先绑定邀请人才发 AC（基础任务不受限）。 */
-const REQUIRES_BINDING = new Set(["first_research", "research_daily"]);
+/** 所有任务积分都需先绑定邀请人。未绑定可正常用产品，但不发 IT。管理员不受限。 */
 
 // ─── AC 产出：每日上限 + 连续签到 + 统一发放（防刷地基）─────────────────────────
 /** UTC 日期 YYYY-MM-DD */
@@ -168,7 +167,7 @@ export const TASK_DEFINITIONS: Record<
   },
   daily_login: {
     label: "每日签到",
-    description: "每天签到，连续签到奖励递增",
+    description: "每天签到，连续签到奖励递增（需先绑定邀请人）",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1,
@@ -600,7 +599,11 @@ export const userRouter = router({
       // 事件型任务（发帖/获赞等）只能由服务端真实事件触发，禁止客户端认领
       if (def.eventOnly) throw new TRPCError({ code: "FORBIDDEN", message: "该任务由系统自动发放" });
 
-      return _completeTask(ctx.user.id, input.taskType, db);
+      const result = await _completeTask(ctx.user.id, input.taskType, db);
+      if (result.needBind) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "请先绑定邀请人，再领取任务积分" });
+      }
+      return result;
     }),
 
   // ─── 上报设备指纹（防多号撸AC；App 启动后调用）────────────────────────────────
@@ -1108,13 +1111,13 @@ async function _completeTask(
   userId: number,
   taskType: string,
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>
-): Promise<{ success: boolean; npEarned: number; alreadyCompleted: boolean }> {
+): Promise<{ success: boolean; npEarned: number; alreadyCompleted: boolean; needBind?: boolean }> {
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
 
-  // C 折中：高价值任务需先绑定邀请人才发 AC（管理员不受限）
-  if (REQUIRES_BINDING.has(taskType) && !isAppAdmin({ id: userId }) && !(await isReferralBound(db, userId))) {
-    return { success: false, npEarned: 0, alreadyCompleted: false };
+  // 未绑定邀请人不发任务积分（管理员不受限）。聊天/发帖等主流程仍可用。
+  if (!isAppAdmin({ id: userId }) && !(await isReferralBound(db, userId))) {
+    return { success: false, npEarned: 0, alreadyCompleted: false, needBind: true };
   }
 
   const overrides = await getTaskRewardOverrides(db);

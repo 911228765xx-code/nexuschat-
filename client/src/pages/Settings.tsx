@@ -46,6 +46,18 @@ export default function Settings() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [curPwd, setCurPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const changePwdMut = trpc.emailAuth.changePassword.useMutation({
+    onSuccess: () => {
+      toast.success("密码已更新");
+      setCurPwd("");
+      setNewPwd("");
+      setConfirmPwd("");
+    },
+    onError: (err) => toast.error(err.message || "修改失败"),
+  });
 
   // ─── Backend-backed settings ─────────────────────────────────────────────
   const settingsQuery = trpc.settings.getSettings.useQuery(undefined, {
@@ -222,6 +234,38 @@ export default function Settings() {
         </div>
       </header>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-neon-cyan/10 flex items-center justify-center">
+                <Lock size={18} className="text-neon-cyan" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">修改密码</p>
+                <p className="text-sm text-muted-foreground">验证当前密码即可设置新密码</p>
+              </div>
+            </div>
+            <input type="password" value={curPwd} onChange={(e) => setCurPwd(e.target.value)} placeholder="当前密码" className="w-full h-10 px-3 rounded-xl bg-secondary/30 border border-border/20 text-sm" />
+            <input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} placeholder="新密码（至少 8 位）" className="w-full h-10 px-3 rounded-xl bg-secondary/30 border border-border/20 text-sm" />
+            <input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} placeholder="确认新密码" className="w-full h-10 px-3 rounded-xl bg-secondary/30 border border-border/20 text-sm" />
+            <button
+              type="button"
+              disabled={changePwdMut.isPending}
+              onClick={() => {
+                if (newPwd.length < 8) { toast.error("新密码至少 8 位"); return; }
+                if (newPwd !== confirmPwd) { toast.error("两次新密码不一致"); return; }
+                changePwdMut.mutate({ currentPassword: curPwd, newPassword: newPwd });
+              }}
+              className="w-full h-10 rounded-xl bg-neon-cyan/15 text-neon-cyan text-sm font-medium disabled:opacity-50"
+            >
+              {changePwdMut.isPending ? "提交中…" : "确认修改"}
+            </button>
+            <button type="button" onClick={() => setLocation("/forgot-password")} className="w-full text-sm text-muted-foreground hover:underline">
+              忘记当前密码？用邮箱验证码重置
+            </button>
+          </div>
+        </div>
+
         {/* 2FA */}
         <div className="rounded-2xl bg-card/50 border border-border/20 overflow-hidden">
           <div className="p-4">

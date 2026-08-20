@@ -14,9 +14,8 @@ function getResend(): Resend | null {
   return resend;
 }
 
-/** 发件地址：免费账号使用 onboarding@resend.dev，配置自定义域名后可改为 noreply@nexuschat.best */
-const FROM_ADDRESS = "比特AI社交 <onboarding@resend.dev>";
 const APP_NAME = "比特AI社交";
+const FROM_ADDRESS = ENV.resendFrom || `${APP_NAME} <noreply@nexuschat.best>`;
 
 export type SendEmailResult =
   | { success: true; messageId: string }
@@ -126,7 +125,7 @@ export async function sendPasswordResetEmail(params: {
     });
 
     if (result.error) {
-      console.warn("[Email] Resend error:", result.error);
+      console.warn("[Email] Resend error:", result.error, "from=", FROM_ADDRESS);
       return { success: false, error: result.error.message };
     }
 

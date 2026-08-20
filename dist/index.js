@@ -1383,6 +1383,8 @@ var init_env = __esm({
       forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
       forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
       resendApiKey: process.env.RESEND_API_KEY ?? "",
+      /** 已在 Resend 验证的发件地址。测试号 onboarding@resend.dev 只能寄到账号本人。 */
+      resendFrom: (process.env.RESEND_FROM ?? "\u6BD4\u7279AI\u793E\u4EA4 <noreply@nexuschat.best>").trim(),
       turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
       /** LiveKit 语音房：livekit.cloud 项目设置拿 API Key/Secret + WS URL（密钥仅服务端，绝不下发客户端） */
       livekitUrl: process.env.LIVEKIT_URL ?? "",
@@ -3506,7 +3508,6 @@ async function getTaskRewardOverrides(db) {
 var IT_PER_BIT = 100;
 var TRANSFER_MAX_IT = 1e6;
 var TRANSFER_MAX_BIT = 1e5;
-var REQUIRES_BINDING = /* @__PURE__ */ new Set(["first_research", "research_daily"]);
 function ymdUtc3(d = /* @__PURE__ */ new Date()) {
   return d.toISOString().slice(0, 10);
 }
@@ -3594,7 +3595,7 @@ var TASK_DEFINITIONS = {
   },
   daily_login: {
     label: "\u6BCF\u65E5\u7B7E\u5230",
-    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E",
+    description: "\u6BCF\u5929\u7B7E\u5230\uFF0C\u8FDE\u7EED\u7B7E\u5230\u5956\u52B1\u9012\u589E\uFF08\u9700\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF09",
     npReward: 10,
     maxCompletions: 999999,
     daily: 1
@@ -3929,7 +3930,11 @@ var userRouter = router({
     const def = TASK_DEFINITIONS[input.taskType];
     if (!def) throw new Error("Unknown task type");
     if (def.eventOnly) throw new TRPCError6({ code: "FORBIDDEN", message: "\u8BE5\u4EFB\u52A1\u7531\u7CFB\u7EDF\u81EA\u52A8\u53D1\u653E" });
-    return _completeTask(ctx.user.id, input.taskType, db);
+    const result = await _completeTask(ctx.user.id, input.taskType, db);
+    if (result.needBind) {
+      throw new TRPCError6({ code: "FORBIDDEN", message: "\u8BF7\u5148\u7ED1\u5B9A\u9080\u8BF7\u4EBA\uFF0C\u518D\u9886\u53D6\u4EFB\u52A1\u79EF\u5206" });
+    }
+    return result;
   }),
   // ─── 上报设备指纹（防多号撸AC；App 启动后调用）────────────────────────────────
   reportDevice: protectedProcedure.input(z4.object({ deviceId: z4.string().min(8).max(64) })).mutation(async ({ ctx, input }) => {
@@ -4308,8 +4313,8 @@ var userRouter = router({
 async function _completeTask(userId, taskType, db) {
   const def = TASK_DEFINITIONS[taskType];
   if (!def) return { success: false, npEarned: 0, alreadyCompleted: false };
-  if (REQUIRES_BINDING.has(taskType) && !isAppAdmin({ id: userId }) && !await isReferralBound(db, userId)) {
-    return { success: false, npEarned: 0, alreadyCompleted: false };
+  if (!isAppAdmin({ id: userId }) && !await isReferralBound(db, userId)) {
+    return { success: false, npEarned: 0, alreadyCompleted: false, needBind: true };
   }
   const overrides = await getTaskRewardOverrides(db);
   let reward = Number.isFinite(overrides[taskType]) ? overrides[taskType] : def.npReward;
@@ -10637,8 +10642,8 @@ function getResend() {
   if (!resend) resend = new Resend(ENV.resendApiKey);
   return resend;
 }
-var FROM_ADDRESS = "\u6BD4\u7279AI\u793E\u4EA4 <onboarding@resend.dev>";
 var APP_NAME = "\u6BD4\u7279AI\u793E\u4EA4";
+var FROM_ADDRESS = ENV.resendFrom || `${APP_NAME} <noreply@nexuschat.best>`;
 async function sendPasswordResetEmail(params) {
   const client = getResend();
   if (!client) {
@@ -10730,7 +10735,7 @@ async function sendPasswordResetEmail(params) {
       html
     });
     if (result.error) {
-      console.warn("[Email] Resend error:", result.error);
+      console.warn("[Email] Resend error:", result.error, "from=", FROM_ADDRESS);
       return { success: false, error: result.error.message };
     }
     return { success: true, messageId: result.data?.id ?? "unknown" };
@@ -11436,7 +11441,7 @@ var emailAuthRouter = router({
     const result = await db.select().from(users).where(eq27(users.openId, openId)).limit(1);
     const user = result[0];
     if (!user || !user.passwordHash) {
-      return { success: true, message: "\u5982\u679C\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001" };
+      return { success: true, emailSent: true, message: "\u5982\u679C\u8BE5\u90AE\u7BB1\u5DF2\u6CE8\u518C\uFF0C\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001" };
     }
     const token = randomBytes2(48).toString("hex");
     const code = String(randomInt(1e5, 1e6));
@@ -11457,15 +11462,16 @@ var emailAuthRouter = router({
       expiresInMinutes: 60
     });
     const emailSent = emailResult.success;
+    const sendError = emailResult.success ? void 0 : emailResult.error;
     notifyOwner({
       title: "\u6BD4\u7279AI\u793E\u4EA4 \u5BC6\u7801\u91CD\u7F6E\u8BF7\u6C42",
       content: `\u7528\u6237 ${normalizedEmail} \u8BF7\u6C42\u91CD\u7F6E\u5BC6\u7801\u3002
-\u90AE\u4EF6\u53D1\u9001\uFF1A${emailSent ? "\u6210\u529F" : "\u5931\u8D25\uFF0C\u964D\u7EA7\u5C55\u793A\u94FE\u63A5"}`
+\u90AE\u4EF6\u53D1\u9001\uFF1A${emailSent ? "\u6210\u529F" : `\u5931\u8D25\uFF1A${sendError}`}`
     }).catch(() => {
     });
     return {
       success: true,
-      message: emailSent ? "\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001\u5230\u60A8\u7684\u90AE\u7BB1" : "\u91CD\u7F6E\u94FE\u63A5\u5DF2\u751F\u6210",
+      message: emailSent ? "\u9A8C\u8BC1\u7801\u5DF2\u53D1\u9001\u5230\u60A8\u7684\u90AE\u7BB1\uFF0C\u8BF7\u67E5\u6536\uFF08\u542B\u5783\u573E\u7BB1\uFF09" : "\u9A8C\u8BC1\u7801\u90AE\u4EF6\u53D1\u9001\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u6216\u7528\u7F51\u9875\u94FE\u63A5\u91CD\u7F6E",
       emailSent,
       resetUrl: emailSent ? void 0 : resetUrl
     };
@@ -11574,6 +11580,31 @@ var emailAuthRouter = router({
     const cookieOptions = getSessionCookieOptions(ctx.req);
     ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
     return { success: true, message: "\u5BC6\u7801\u5DF2\u91CD\u7F6E", sessionToken };
+  }),
+  /** 已登录用户用当前密码改密，不依赖邮箱投递 */
+  changePassword: protectedProcedure.input(
+    z16.object({
+      currentPassword: z16.string().min(1, "\u8BF7\u8F93\u5165\u5F53\u524D\u5BC6\u7801").max(128),
+      newPassword: z16.string().min(8, "\u65B0\u5BC6\u7801\u81F3\u5C11 8 \u4F4D").max(128)
+    })
+  ).use(rateLimitWrite).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u6682\u65F6\u4E0D\u53EF\u7528" });
+    if (input.currentPassword === input.newPassword) {
+      throw new TRPCError12({ code: "BAD_REQUEST", message: "\u65B0\u5BC6\u7801\u4E0D\u80FD\u4E0E\u5F53\u524D\u5BC6\u7801\u76F8\u540C" });
+    }
+    const userResult = await db.select().from(users).where(eq27(users.id, ctx.user.id)).limit(1);
+    const user = userResult[0];
+    if (!user?.passwordHash) {
+      throw new TRPCError12({ code: "BAD_REQUEST", message: "\u5F53\u524D\u8D26\u53F7\u672A\u8BBE\u7F6E\u767B\u5F55\u5BC6\u7801\uFF0C\u8BF7\u7528\u90AE\u7BB1\u9A8C\u8BC1\u7801\u91CD\u7F6E" });
+    }
+    const ok = await bcrypt.compare(input.currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new TRPCError12({ code: "UNAUTHORIZED", message: "\u5F53\u524D\u5BC6\u7801\u4E0D\u6B63\u786E" });
+    }
+    const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+    await db.update(users).set({ passwordHash: newPasswordHash }).where(eq27(users.id, user.id));
+    return { success: true, message: "\u5BC6\u7801\u5DF2\u66F4\u65B0" };
   })
 });
 

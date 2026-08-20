@@ -10,7 +10,7 @@ import { randomBytes, randomInt } from "crypto";
 import { users, passwordResetTokens } from "../../drizzle/schema";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { ENV } from "../_core/env";
@@ -336,7 +336,7 @@ export const emailAuthRouter = router({
 
       // Always return success to prevent email enumeration
       if (!user || !user.passwordHash) {
-        return { success: true, message: "如果该邮箱已注册，验证码已发送" };
+        return { success: true, emailSent: true, message: "如果该邮箱已注册，验证码已发送" };
       }
 
       const token = randomBytes(48).toString("hex"); // 96 hex chars — 网页链接兜底
@@ -366,15 +366,18 @@ export const emailAuthRouter = router({
       });
 
       const emailSent = emailResult.success;
+      const sendError = emailResult.success ? undefined : emailResult.error;
 
       notifyOwner({
         title: "比特AI社交 密码重置请求",
-        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : "失败，降级展示链接"}`,
+        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : `失败：${sendError}`}`,
       }).catch(() => {});
 
       return {
         success: true,
-        message: emailSent ? "验证码已发送到您的邮箱" : "重置链接已生成",
+        message: emailSent
+          ? "验证码已发送到您的邮箱，请查收（含垃圾箱）"
+          : "验证码邮件发送失败，请稍后重试或用网页链接重置",
         emailSent,
         resetUrl: emailSent ? undefined : resetUrl,
       };
@@ -524,5 +527,37 @@ export const emailAuthRouter = router({
       ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       return { success: true, message: "密码已重置", sessionToken };
+    }),
+
+  /** 已登录用户用当前密码改密，不依赖邮箱投递 */
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1, "请输入当前密码").max(128),
+        newPassword: z.string().min(8, "新密码至少 8 位").max(128),
+      })
+    )
+    .use(rateLimitWrite)
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂时不可用" });
+      if (input.currentPassword === input.newPassword) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "新密码不能与当前密码相同" });
+      }
+
+      const userResult = await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1);
+      const user = userResult[0];
+      if (!user?.passwordHash) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "当前账号未设置登录密码，请用邮箱验证码重置" });
+      }
+
+      const ok = await bcrypt.compare(input.currentPassword, user.passwordHash);
+      if (!ok) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "当前密码不正确" });
+      }
+
+      const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+      await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id));
+      return { success: true, message: "密码已更新" };
     }),
 });

@@ -46,6 +46,8 @@ export default function TaskCenter() {
     staleTime: 30_000,
   });
   const { data: myRank } = trpc.user.myRank.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const { data: bindStatus } = trpc.referral.bindStatus.useQuery(undefined, { enabled: isAuthenticated, retry: false, staleTime: 30_000 });
+  const bound = bindStatus?.bound === true;
 
   const completeTask = trpc.user.completeTask.useMutation({
     onSuccess: (result, variables) => {
@@ -123,9 +125,11 @@ export default function TaskCenter() {
 
   const handleCheckin = () => {
     if (todayChecked) return;
-    // Try real backend first
+    if (!bound) {
+      toast.error("请先绑定邀请人，再领取任务积分");
+      return;
+    }
     completeTask.mutate({ taskType: "daily_login" });
-    // Optimistic UI update
     const reward = CHECKIN_REWARDS[checkinDay] || 10;
     toast.success(`${t("tasks.checkinSuccess")} +${reward} IT`);
   };
@@ -133,7 +137,10 @@ export default function TaskCenter() {
   const handleClaim = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    // Complete backend task if mapped
+    if (!bound) {
+      toast.error("请先绑定邀请人，再领取任务积分");
+      return;
+    }
     const backendTaskType = TASK_TYPE_MAP[taskId];
     if (backendTaskType) {
       completeTask.mutate({ taskType: backendTaskType });
