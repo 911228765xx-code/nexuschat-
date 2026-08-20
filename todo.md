@@ -560,3 +560,23 @@
 - [x] 拉取最新后端代码、构建、重启并保存 Manus checkpoint 供发布
 
 - [x] 使用公开仓库匿名拉取后端 5ed2e4f、构建、重启并保存 Manus checkpoint 供发布
+
+- [x] 只读核对密码重置邮件发送失败原因与降级链接行为
+
+- [ ] 核实 Resend 验证域名并配置 RESEND_FROM，修复密码重置验证码邮件投递
+
+- [ ] 在 Cloudflare 添加 Resend 所需 DNS 记录并验证 nexuschat.best 发件域名
+
+- [ ] 定位 Global Domain Group 域名管理入口并添加 Resend 验证记录
+
+- [ ] 在 Manus 域名管理中定位 nexuschat.best DNS 配置并添加 Resend 记录
+
+- [x] 查询 nexuschat.best 的权威 DNS 与实际托管服务商，定位可修改的 DNS 区域
+
+- [ ] 自主完成 Resend DNS 验证、固定发件地址配置与密码重置邮件投递测试
+
+- [x] 创建并安全配置有效的 Resend Sending API Key，恢复密码重置邮件投递
+
+- [x] 写入用户提供的新 Resend API Key，并通过 Resend 认证测试验证
+
+- [x] 在 Resend 控制台创建最小权限 Sending API Key 并安全配置
