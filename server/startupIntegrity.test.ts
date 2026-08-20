@@ -27,4 +27,12 @@ describe("startup and Service Worker integrity", () => {
     expect(layout).not.toContain("key={location}");
     expect(layout).not.toContain('className="page-enter"');
   });
+
+  it("mounts Onboarding inside the internationalization provider", () => {
+    const app = readProjectFile("../client/src/App.tsx");
+    const onboarding = readProjectFile("../client/src/components/Onboarding.tsx");
+
+    expect(app.indexOf("<I18nProvider>")).toBeLessThan(app.indexOf("<AppContent />"));
+    expect(onboarding).toContain('useI18n');
+  });
 });
