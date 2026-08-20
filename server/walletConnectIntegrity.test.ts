@@ -15,5 +15,11 @@ describe("wallet connection integrity", () => {
     const removals = source.match(/document\.removeEventListener\("visibilitychange", handleVisibilityChange\)/g) ?? [];
     expect(removals.length).toBeGreaterThanOrEqual(2);
   });
-});
 
+  it("offers a desktop WalletConnect QR path when no browser extension is detected", () => {
+    expect(source).toContain('import { ConnectButton } from "@rainbow-me/rainbowkit"');
+    expect(source).toContain("<ConnectButton.Custom>");
+    expect(source).toContain("使用 WalletConnect 扫码连接");
+    expect(source).toContain("openConnectModal");
+  });
+});

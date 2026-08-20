@@ -16190,36 +16190,17 @@ var vite_config_default = defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    // Use Terser for better compression (15% smaller than esbuild default)
-    minify: "terser",
-    terserOptions: {
-      compress: {
-        drop_console: false,
-        // Keep console for debugging
-        drop_debugger: true,
-        pure_funcs: ["console.debug"],
-        passes: 2
-        // Two compression passes for better results
-      },
-      mangle: {
-        safari10: true
-        // Fix Safari 10 bugs
-      },
-      format: {
-        comments: false
-        // Remove all comments
-      }
-    },
+    // esbuild avoids the high peak memory of two-pass Terser minification while
+    // preserving the existing chunk strategy and source-level debugging output.
+    minify: "esbuild",
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,
-    // Merge chunks smaller than 20KB into their importers to reduce file count
-    // This reduces 8 tiny chunks (1-15KB) into larger ones, cutting upload count
+    // Keep Rollup's natural code splitting. Merging every small chunk increases
+    // the memory needed during the final render phase on this Web3-heavy bundle.
     chunkSizeWarningLimit: 1e3,
     rollupOptions: {
       output: {
-        // Merge small chunks (< 20KB) into their importers automatically
-        experimentalMinChunkSize: 2e4,
         // Prevent Rollup from hoisting transitive imports of dynamic chunks
         // to the entry chunk's synchronous dependencies.
         // This keeps vendor-web3, vendor-misc etc. as truly async chunks.

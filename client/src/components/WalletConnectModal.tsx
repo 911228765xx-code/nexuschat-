@@ -12,9 +12,10 @@
  *  - 未安装 → 显示推荐扩展下载链接
  */
 import { useState, useEffect } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
-import { Copy, ExternalLink, LogOut, CheckCircle2, Loader2, X, AlertCircle, Smartphone, Monitor } from "lucide-react";
+import { Copy, ExternalLink, LogOut, CheckCircle2, Loader2, X, AlertCircle, Smartphone, Monitor, QrCode } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 
 interface Props {
@@ -99,19 +100,6 @@ function isMobile(): boolean {
 }
 function isIOS(): boolean {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on: (event: string, handler: (...args: unknown[]) => void) => void;
-      removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
-      isMetaMask?: boolean;
-      isOKExWallet?: boolean;
-      isCoinbaseWallet?: boolean;
-    };
-  }
 }
 
 export default function WalletConnectModal({ open, onClose }: Props) {
@@ -404,8 +392,20 @@ export default function WalletConnectModal({ open, onClose }: Props) {
                     </a>
                   ))}
                 </div>
+                <ConnectButton.Custom>
+                  {({ openConnectModal, mounted }) => (
+                    <button
+                      type="button"
+                      onClick={openConnectModal}
+                      disabled={!mounted}
+                      className="mt-3 w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#00d4ff]/10 hover:bg-[#00d4ff]/20 transition-colors border border-[#00d4ff]/30 text-[#00d4ff] text-sm font-medium disabled:opacity-50"
+                    >
+                      <QrCode size={16} />使用 WalletConnect 扫码连接
+                    </button>
+                  )}
+                </ConnectButton.Custom>
                 <p className="text-sm text-gray-600 mt-4">
-                  安装后刷新页面即可连接
+                  安装扩展后刷新页面即可连接，或使用手机钱包扫码连接
                 </p>
               </div>
             )}

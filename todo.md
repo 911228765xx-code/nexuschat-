@@ -196,7 +196,7 @@
 
 - [x] 将 WalletConnect 配置中的旧 NexusChat 应用名更新为 BitChat 并补充回归测试
 - [x] WalletContext 已通过 wagmi hooks 维护地址、连接状态、链路与余额
-- [ ] WalletConnectModal：注入钱包直连与移动端深链已核验；桌面二维码扫描仍待实现或明确下线
+- [x] WalletConnectModal：注入钱包直连、移动端深链与桌面 WalletConnect 二维码连接均已接入并有回归测试
 - [x] 钱包页面已验证：使用 WalletContext 真实连接地址、wagmi 原生余额及链上代币/交易查询，不保留演示地址
 - [x] 导航栏钱包入口已验证：桌面与移动端按连接状态显示地址缩写，点击打开钱包连接面板并提供断开操作
 
@@ -263,7 +263,10 @@
 ## v47 移动端钱包连接优化
 - [x] 检测移动端环境并使用钱包深链直接打开 DApp
 - [x] 移动端展示 Trust、MetaMask、OKX、Coinbase、imToken、TokenPocket、Bitget 等钱包深链与商店降级
-- [ ] 桌面端二维码扫描连接（当前提供注入钱包直连与扩展安装降级）
+- [x] 桌面端二维码扫描连接：无扩展时可打开 RainbowKit WalletConnect 扫码流程
+
+- [x] 将高内存 Terser 两轮压缩改为低内存 esbuild 压缩，并验证生产构建成功
+- [x] 恢复并验证桌面 WalletConnect 二维码扫描连接与回归测试
 - [x] 连接失败时显示错误、超时提示与钱包安装/商店替代方案
 - [x] 热门钱包列表已覆盖 OKX、imToken、TokenPocket、Bitget 等图标标识
 
