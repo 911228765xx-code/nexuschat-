@@ -223,6 +223,8 @@
 - [x] 创建 PWAInstallBanner 组件（底部横幅，Android Chrome 显示"添加到主屏幕"）
 - [x] 创建 iOS 安装引导弹窗（Safari 用户显示"分享 → 添加到主屏幕"步骤说明）
 - [x] 首页下载 App 入口：Android 优先调用 triggerInstall，iOS 打开安装引导，不可安装时回退 /download
+
+- [x] 核验生产版本检查接口：客户端正确调用 appVersion.checkVersion，生产返回 200 与当前版本信息
 - [ ] 核验 PWAInstallBanner 的挂载位置与仅未安装时显示条件
 - [x] 添加 Service Worker（sw.js）实现离线缓存和快速启动
 - [ ] 核验 I18nContext/语言资源已包含并使用 PWA 安装相关文案
