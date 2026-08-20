@@ -580,3 +580,5 @@
 - [x] 写入用户提供的新 Resend API Key，并通过 Resend 认证测试验证
 
 - [x] 在 Resend 控制台创建最小权限 Sending API Key 并安全配置
+
+- [x] 核验生产 /apk 下载通道：有界 Range 返回 206、Content-Range、本站 APK 类型及 PK 文件头；无 Range 按设计跳转至原始 Expo 下载源
