@@ -63,18 +63,8 @@ export function UpdateBanner() {
       setTimeout(() => {
         window.location.reload();
       }, 300);
-    } else if (data?.downloadUrl) {
-      // Native app (Android/iOS): open download URL to install the new APK/IPA
-      window.open(data.downloadUrl, "_blank");
     } else {
-      // Fallback: reload page
-      if (data?.latestVersion) {
-        sessionStorage.setItem(DISMISSED_KEY, data.latestVersion);
-      }
-      setDismissed(true);
-      setTimeout(() => {
-        window.location.reload();
-      }, 300);
+      window.open("/download", "_blank");
     }
   }, [data?.downloadUrl, data?.latestVersion, platform]);
 

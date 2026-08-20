@@ -45,24 +45,41 @@ export async function handleApkDownload(req: Request, res: Response) {
 
     const clientRange = req.headers.range;
 
-    // 不带 Range 的整包请求：本路由无法服务（2026-08-08 实测恒 500 + text/html）。
-    // 中转 180MB 单响应会中平台边缘 32MiB 上限，边缘吐回 HTML → 手机把网页当 APK 装
-    // →「解析包出现问题」。这正是「分享下载链接装不上」的根因，所以整包请求一律改道：
-    //   浏览器(Accept: text/html) → /download 页面（页内 JS 走 4MB 有界 Range 分块，可用）
-    //   其它下载器/curl        → 302 到上游 .apk 直链（让它自己去 CDN 分段，不经本站边缘）
-    // 带 Range 的客户端（应内更新、下载页分块）继续走下面的流式中转：块小、链路稳。
+    // 不带 Range 的整包请求：本路由无法中转 180MB（边缘 32MiB 上限会吐 HTML）。
+    // 一律 302 到 /download，由页内 JS 用有界 Range 分块下载。
+    // 不要 302 到 expo.dev：国内访问常失败，用户就会反馈「下载不了」。
     if (typeof clientRange !== "string") {
-      const wantsHtml = (req.headers.accept ?? "").includes("text/html");
-      res.redirect(302, wantsHtml ? "/download" : url);
+      // 一律进本站下载页（页内用有界 Range 分块）。
+      // 以前非 HTML 客户端会被 302 到 expo.dev，国内常被墙 → 「下载不了」。
+      const ref = typeof req.query.ref === "string" ? req.query.ref : "";
+      const q = new URLSearchParams();
+      if (req.query.v) q.set("v", String(req.query.v));
+      if (ref) q.set("ref", ref);
+      const qs = q.toString();
+      res.redirect(302, qs ? `/download?${qs}` : "/download");
       return;
     }
 
     // 外部 URL：流式中转 + 规范文件名（EAS 原始链接是一串乱码哈希名）。
     const upstreamHeaders: Record<string, string> = { Range: clientRange };
 
-    const upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
-    if (!upstream.ok && upstream.status !== 206) {
-      res.status(502).send(`下载源暂不可用（${upstream.status}），请稍后再试`);
+    let upstream: Awaited<ReturnType<typeof fetch>> | null = null;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        upstream = await fetch(url, { headers: upstreamHeaders, redirect: "follow" });
+        lastStatus = upstream.status;
+        if (upstream.ok || upstream.status === 206) break;
+      } catch {
+        lastStatus = 0;
+        upstream = null;
+      }
+      if (upstream && (upstream.ok || upstream.status === 206)) break;
+      upstream = null;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+    if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+      res.status(502).send(`下载源暂不可用（${lastStatus || "网络中断"}），请稍后再试`);
       return;
     }
     if (upstream.status !== 206) {
