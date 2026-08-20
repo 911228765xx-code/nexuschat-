@@ -147,8 +147,14 @@ export default function WalletConnectModal({ open, onClose }: Props) {
     }
     setConnecting(true);
     setConnectError(null);
+    let connectTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      await connect();
+      await Promise.race([
+        connect(),
+        new Promise<never>((_, reject) => {
+          connectTimeout = setTimeout(() => reject(new Error("连接超时，请检查网络或改用其他钱包")), 15_000);
+        }),
+      ]);
       toast.success("钱包连接成功！");
       onClose();
     } catch (err: unknown) {
@@ -160,6 +166,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
         toast.error("连接失败，请重试");
       }
     } finally {
+      if (connectTimeout) clearTimeout(connectTimeout);
       setConnecting(false);
     }
   };
@@ -183,6 +190,7 @@ export default function WalletConnectModal({ open, onClose }: Props) {
       if (document.visibilityState !== "hidden") {
         window.open(storeUrl, "_blank");
         setDeepLinkAttempted(null);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
       }
     }, 1500);
 
