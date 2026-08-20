@@ -416,7 +416,7 @@
 ### 登录流程优化
 - [x] AppLayout loading 骨架屏：auth loading 时显示与 index.html 骨架屏一致的骨架，避免 spinner 闪烁
 - [x] AppLayout 未登录跳转：使用 replace 跳转并提供登录引导，减少中间状态停留时间
-- [ ] Login 页面：添加 touch-action: manipulation 消除 300ms 点击延迟
+- [x] Login 页面：添加 touch-action: manipulation 消除 300ms 点击延迟
 
 ### 首页 CTA 转化优化
 - [x] "立即体验" 按钮：未登录时直接跳转 /login?returnTo=/app/chat，避免经过 AppLayout 的额外重定向
