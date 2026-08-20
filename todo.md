@@ -225,9 +225,13 @@
 - [x] 首页下载 App 入口：Android 优先调用 triggerInstall，iOS 打开安装引导，不可安装时回退 /download
 
 - [x] 核验生产版本检查接口：客户端正确调用 appVersion.checkVersion，生产返回 200 与当前版本信息
-- [ ] 核验 PWAInstallBanner 的挂载位置与仅未安装时显示条件
+- [x] 核验 PWAInstallBanner：挂载于应用壳层，且仅在可安装、未安装、未主动关闭时显示
 - [x] 添加 Service Worker（sw.js）实现离线缓存和快速启动
-- [ ] 核验 I18nContext/语言资源已包含并使用 PWA 安装相关文案
+- [x] 核验 PWA 安装相关文案：全部六种语言资源均定义横幅与 iOS 引导所需 pwa 词条，并由 I18nContext 渲染
+
+- [x] 修复 PWA 安装横幅残留的 NexusChat 图标替代文本为 BitChat，并加入回归测试
+
+- [x] 将 Resend 远程认证探测改为显式网络测试，避免外部网络波动阻塞本地全量回归
 
 ## v43 下载页面优化
 - [x] 生成 Android/iOS 下载二维码图片并上传 CDN

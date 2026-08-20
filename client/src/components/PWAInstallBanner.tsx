@@ -62,7 +62,7 @@ export default function PWAInstallBanner() {
         <div className="mx-3 mb-3 rounded-2xl bg-[#0d1117] border border-[#00d4ff]/20 shadow-2xl p-4">
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
-              <img src="/icon-192.png" alt="NexusChat" className="w-9 h-9 rounded-xl" />
+              <img src="/icon-192.png" alt="BitChat" className="w-9 h-9 rounded-xl" />
               <div>
                 <p className="text-sm font-semibold text-white">{t("pwa.installTitle")}</p>
                 <p className="text-sm text-[#00d4ff]">{t("pwa.installSubtitle")}</p>
@@ -114,7 +114,7 @@ export default function PWAInstallBanner() {
         /* Android: native install banner */
         <div className="mx-3 mb-3 rounded-2xl bg-[#0d1117] border border-[#00d4ff]/20 shadow-2xl p-4">
           <div className="flex items-center gap-3">
-            <img src="/icon-192.png" alt="NexusChat" className="w-12 h-12 rounded-xl flex-shrink-0" />
+            <img src="/icon-192.png" alt="BitChat" className="w-12 h-12 rounded-xl flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{t("pwa.installTitle")}</p>
               <p className="text-sm text-gray-400 truncate">{t("pwa.androidDesc")}</p>

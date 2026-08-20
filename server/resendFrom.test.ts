@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-describe("Resend 发件地址配置", () => {
-  it("使用已验证域名发件地址，且 Resend API 凭据可被认证", async () => {
-    expect(process.env.RESEND_FROM).toBe("noreply@nexuschat.best");
+const networkIt = process.env.RESEND_NETWORK_TEST === "1" ? it : it.skip;
 
+describe("Resend 发件地址配置", () => {
+  it("使用已验证域名发件地址", () => {
+    expect(process.env.RESEND_FROM).toBe("noreply@nexuschat.best");
+    expect(process.env.RESEND_API_KEY).toBeTruthy();
+  });
+
+  networkIt("使用已验证域名发件地址，且 Resend API 凭据可被认证", async () => {
     const apiKey = process.env.RESEND_API_KEY;
     expect(apiKey).toBeTruthy();
 
     const response = await fetch("https://api.resend.com/domains", {
       headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
     });
 
     const responseBody = await response.text();
@@ -19,5 +25,5 @@ describe("Resend 发件地址配置", () => {
     if (response.status === 401) {
       expect(responseBody.toLowerCase()).toContain("restricted to only send emails");
     }
-  });
+  }, 15_000);
 });
