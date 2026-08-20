@@ -105,7 +105,7 @@
     <noscript>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     </noscript>
-    <script type="module" crossorigin src="/assets/index-EEKu1Nhu.js"></script>
+    <script type="module" crossorigin src="/assets/index-B5q3SkRL.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-DuHs5RIH.css">
     <script src="/__manus__/debug-collector.js" defer></script>
   </head>
@@ -366,27 +366,17 @@ Error generating stack: `+l.message+`
       })();
     </script>
 
-    <!-- SW registration: v7 self-destruct SW clears all caches and unregisters itself -->
+    <!-- Service Worker only provides push notifications.  It never owns app-shell caching. -->
     <script>
       (function() {
         if (!('serviceWorker' in navigator)) return;
 
-        // Register the self-destruct SW so it can clear old caches
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
-
-        // Listen for SW_UPDATED message: reload page to load fresh JS
-        navigator.serviceWorker.addEventListener('message', function(event) {
-          if (event.data && event.data.type === 'SW_UPDATED') {
-            window.location.reload();
-          }
-        });
-
-        // Also clear all caches eagerly on page load (belt-and-suspenders)
-        if ('caches' in window) {
-          caches.keys().then(function(keys) {
-            keys.forEach(function(key) { caches.delete(key); });
-          });
-        }
+        // Do not reload a live chat page when the worker updates: a forced reload
+        // races React's splash/skeleton hand-off and looks like a flash on mobile.
+        navigator.serviceWorker.register('/sw.js', {
+          scope: '/',
+          updateViaCache: 'none'
+        }).catch(function() {});
       })();
     </script>
 

@@ -148,8 +148,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
       {/* Main content area — page-level ErrorBoundary catches per-page crashes */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary mode="page">
-          {/* key=location forces re-mount on route change, re-triggering the CSS animation */}
-          <div key={location} className="page-enter">
+          {/* 保持内容容器稳定：聊天页切换时不再强制重挂载/淡入，避免移动端短暂闪屏。 */}
+          <div>
             {children}
           </div>
         </ErrorBoundary>

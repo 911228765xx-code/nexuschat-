@@ -1,5 +1,5 @@
 /**
- * NexusChat Service Worker v8 - Push Notifications Support
+ * Bitchat Service Worker v9 - Push Notifications Support
  *
  * 策略：不缓存任何资源（依赖 HTTP 缓存头），仅处理 Web Push 通知。
  * 这样既解决了旧版本 SW 缓存导致的黑屏问题，又支持推送通知。
@@ -10,30 +10,22 @@ self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
-// 激活：清空所有缓存，接管所有客户端，然后注销自身
+// 激活：清空旧应用缓存并接管所有客户端。
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
-      .then(() => {
-        // 通知所有已打开的页面刷新以加载最新版本
-        return self.clients.matchAll({ type: "window" }).then((clients) => {
-          clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
-        });
-      })
   );
 });
 
-// Fetch：直接透传，不缓存任何资源
-self.addEventListener("fetch", (event) => {
-  event.respondWith(fetch(event.request));
-});
+// 不注册 fetch 处理器：让导航和带哈希的 JS chunk 直接由浏览器请求，
+// 避免旧页面壳或短暂网络错误导致首屏空白。
 
 // ---- Web Push: receive push notification ----
 self.addEventListener("push", (event) => {
-  let data = { title: "NexusChat", body: "你有一条新消息", url: "/app/chat", icon: "/icons/icon-192x192.png", badge: "/icons/icon-72x72.png" };
+  let data = { title: "Bitchat", body: "你有一条新消息", url: "/app/chat", icon: "/icons/icon-192x192.png", badge: "/icons/icon-72x72.png" };
 
   if (event.data) {
     try {

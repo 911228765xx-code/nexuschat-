@@ -1,4 +1,4 @@
-// build:2026-08-20T15:35:46.916Z
+// build:2026-08-20T16:06:02.388Z
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
@@ -76,15 +76,6 @@ window.addEventListener('unhandledrejection', (event) => {
     return;
   }
 });
-
-// Register Service Worker for PWA offline support
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // SW registration failure is non-fatal
-    });
-  });
-}
 
 // JS is now loaded — immediately switch from splash to skeleton screen
 // This ensures users see a skeleton instead of black screen while React initializes

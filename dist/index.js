@@ -14455,7 +14455,8 @@ async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
     sources.push(
       { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
       { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
-      { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines }
+      { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
+      { url: `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines }
     );
   }
   const bv = bybitInterval(horizonMin);
@@ -14472,32 +14473,11 @@ async function fetchCallWindowOHLC(symbol, openMs, horizonMin) {
     const oneMin = await raceParsedKlines([
       { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
       { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
+      { url: `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
       { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&start=${openMs}&limit=${need}`, parse: parseBybitKlines }
     ], Math.max(2, Math.floor(need * 0.7)));
     const from1m = ohlcFrom1m(oneMin, openMs, horizonMin);
     if (from1m) return from1m;
-  }
-  const toTs = Math.floor((openMs + horizonMin * 6e4) / 1e3);
-  const cc = await cachedFetch(
-    `call-histominute:${sym}:${openMs}:${horizonMin}`,
-    `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${sym}&tsym=USD&limit=${Math.min(horizonMin, 60)}&toTs=${toTs}`,
-    15e3,
-    (res) => res.json()
-  );
-  const pts = cc?.Data?.Data ?? [];
-  if (pts.length >= 2) {
-    const first = pts[0];
-    const last = pts[pts.length - 1];
-    if (first?.open > 0 && last?.close > 0) {
-      const highs = pts.map((p) => Number(p.high ?? Math.max(p.open, p.close)));
-      const lows = pts.map((p) => Number(p.low ?? Math.min(p.open, p.close)));
-      return {
-        open: first.open,
-        close: last.close,
-        high: Math.max(...highs.filter((n2) => n2 > 0), first.open, last.close),
-        low: Math.min(...lows.filter((n2) => n2 > 0), first.open, last.close)
-      };
-    }
   }
   return null;
 }
