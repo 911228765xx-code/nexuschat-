@@ -369,7 +369,7 @@ export const emailAuthRouter = router({
 
       notifyOwner({
         title: "比特AI社交 密码重置请求",
-        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : "失败，降级展示链接"}`,
+        content: `用户 ${normalizedEmail} 请求重置密码。\n邮件发送：${emailSent ? "成功" : `失败：${emailResult.success ? "" : emailResult.error}`}`,
       }).catch(() => {});
 
       return {
