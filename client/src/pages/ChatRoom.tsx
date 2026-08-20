@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
+import VoiceRecorder from "@/components/VoiceRecorder";
 
 type MessageType = "text" | "image" | "voice" | "location" | "file" | "redpacket" | "transfer" | "ai";
 
@@ -37,6 +38,7 @@ interface Message {
   // Voice message
   voiceDuration?: number;
   voiceWaveform?: number[];
+  voiceUrl?: string;
   // Location message
   locationName?: string;
   locationAddress?: string;
@@ -75,10 +77,7 @@ export default function ChatRoom() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const recordingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   // isTyping is derived from typingUsers below; placeholder to avoid scroll effect issue
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
@@ -524,6 +523,9 @@ export default function ChatRoom() {
   const renderVoiceBubble = (msg: Message) => {
     const isPlaying = playingVoiceId === msg.id;
     const bars = msg.voiceWaveform || [];
+    if (msg.voiceUrl) {
+      return <audio controls preload="metadata" src={msg.voiceUrl} className="max-w-[220px] h-9" />;
+    }
     return (
       <div
         className={`rounded-2xl px-3.5 py-2.5 ${msg.isMine ? "rounded-br-md" : "rounded-bl-md"} ${msg.isMine ? "bg-neon-cyan/15 border border-neon-cyan/20" : "bg-secondary/60 border border-border/20"}`}
@@ -1211,57 +1213,6 @@ export default function ChatRoom() {
           </div>
         )}
 
-        {/* Recording UI */}
-        <AnimatePresence>
-          {isRecording && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="flex items-center gap-3 mb-2 px-3 py-2.5 rounded-xl bg-neon-red/10 border border-neon-red/20"
-            >
-              <motion.div
-                className="w-3 h-3 rounded-full bg-neon-red"
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              />
-              <span className="text-sm text-neon-red font-mono flex-1">
-                Recording... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, "0")}
-              </span>
-              <button
-                onClick={() => {
-                  if (recordingInterval.current) clearInterval(recordingInterval.current);
-                  setIsRecording(false);
-                  setRecordingTime(0);
-                  toast.info("Recording cancelled");
-                }}
-                className="w-8 h-8 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary transition-colors"
-              >
-                <X size={14} className="text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => {
-                  if (recordingInterval.current) clearInterval(recordingInterval.current);
-                  const duration = recordingTime;
-                  setIsRecording(false);
-                  setRecordingTime(0);
-                  const waveform = Array.from({ length: 20 }, () => Math.random() * 0.7 + 0.2);
-                  const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-                  setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    sender: "me", senderAvatar: "M", content: "", time: now, isMine: true,
-                    type: "voice", voiceDuration: duration || 1, voiceWaveform: waveform,
-                  }]);
-                  toast.success("Voice message sent!");
-                }}
-                className="w-8 h-8 rounded-full bg-neon-cyan flex items-center justify-center hover:bg-neon-cyan/80 transition-colors"
-              >
-                <Send size={14} className="text-background" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Attach menu */}
         <AnimatePresence>
           {showAttachMenu && (
@@ -1286,12 +1237,6 @@ export default function ChatRoom() {
                   { icon: FileText, label: "File", color: "text-amber-400", bg: "bg-amber-400/10", action: () => { fileDocRef.current?.click(); setShowAttachMenu(false); } },
                   { icon: Gift, label: "Red Packet", color: "text-red-400", bg: "bg-red-400/10", action: () => { setShowRedPacket(true); setShowAttachMenu(false); } },
                   { icon: ArrowUpDown, label: "Transfer", color: "text-neon-cyan", bg: "bg-neon-cyan/10", action: () => { setShowTransfer(true); setShowAttachMenu(false); } },
-                  { icon: Mic, label: "Voice", color: "text-neon-purple", bg: "bg-neon-purple/10", action: () => {
-                    setIsRecording(true);
-                    setRecordingTime(0);
-                    recordingInterval.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-                    setShowAttachMenu(false);
-                  }},
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
@@ -1360,16 +1305,22 @@ export default function ChatRoom() {
           </div>
           {/* Mic button */}
           {!input.trim() && !imagePreview && (
-            <button
-              onClick={() => {
-                setIsRecording(true);
-                setRecordingTime(0);
-                recordingInterval.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+            <VoiceRecorder
+              disabled={!isValidRoom}
+              onVoiceMessage={(audioUrl, transcription, durationSeconds) => {
+                const content = transcription || "[语音消息]";
+                const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+                setMessages((prev) => [...prev, {
+                  id: Date.now().toString(), sender: "me", senderAvatar: "M", content, time: now,
+                  isMine: true, type: "voice", voiceUrl: audioUrl, voiceDuration: durationSeconds, pending: true,
+                }]);
+                if (socket.connected) {
+                  socket.sendMessage({ groupId, content, messageType: "file", mediaUrl: audioUrl });
+                } else {
+                  saveMessage.mutate({ groupId, content, messageType: "file", mediaUrl: audioUrl, durationSeconds });
+                }
               }}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-all shrink-0"
-            >
-              <Mic size={18} />
-            </button>
+            />
           )}
         </div>
       </div>
