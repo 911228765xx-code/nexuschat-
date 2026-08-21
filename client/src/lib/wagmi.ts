@@ -55,7 +55,7 @@ import {
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "beaaf227055fc3619bc2af9615e94000";
 
 export const wagmiConfig = getDefaultConfig({
-  appName: "BitChat",
+  appName: "NexusChat",
   projectId,
   chains: [mainnet, bsc, polygon, arbitrum, optimism, base, avalanche, fantom, bscTestnet],
   ssr: false,

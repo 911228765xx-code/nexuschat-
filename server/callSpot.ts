@@ -320,7 +320,7 @@ async function raceParsedKlines(
   return best;
 }
 
-/** 取该时间窗 K 线的开盘价 / 收盘价。币安主站不通时走 vision / Binance US / Bybit / 1 分钟线拼。 */
+/** 取该时间窗 K 线的开盘价 / 收盘价。币安主站不通时走 vision / Bybit / 1 分钟线拼。 */
 export async function fetchCallWindowOHLC(
   symbol: string,
   openMs: number,
@@ -337,7 +337,6 @@ export async function fetchCallWindowOHLC(
       { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
       { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
       { url: `https://api1.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
-      { url: `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${interval}&startTime=${start}&limit=2`, parse: parseKlines },
     );
   }
   const bv = bybitInterval(horizonMin);
@@ -356,14 +355,33 @@ export async function fetchCallWindowOHLC(
     const oneMin = await raceParsedKlines([
       { url: `https://data-api.binance.vision/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
       { url: `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
-      { url: `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=1m&startTime=${openMs}&limit=${need}`, parse: parseKlines },
       { url: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${pair}&interval=1&start=${openMs}&limit=${need}`, parse: parseBybitKlines },
     ], Math.max(2, Math.floor(need * 0.7)));
     const from1m = ohlcFrom1m(oneMin, openMs, horizonMin);
     if (from1m) return from1m;
   }
 
-  // CryptoCompare 的历史接口已要求 API key；不要在无凭据环境反复请求 401，
-  // 避免结算定时任务被无效重试拖慢。上面的公开 K 线源已覆盖主线路和备用线路。
+  const toTs = Math.floor((openMs + horizonMin * 60_000) / 1000);
+  const cc = await cachedFetch<{ Data?: { Data?: Array<{ time: number; open: number; close: number }> } }>(
+    `call-histominute:${sym}:${openMs}:${horizonMin}`,
+    `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${sym}&tsym=USD&limit=${Math.min(horizonMin, 60)}&toTs=${toTs}`,
+    15_000,
+    (res) => res.json(),
+  );
+  const pts = cc?.Data?.Data ?? [];
+  if (pts.length >= 2) {
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (first?.open > 0 && last?.close > 0) {
+      const highs = pts.map((p) => Number((p as { high?: number }).high ?? Math.max(p.open, p.close)));
+      const lows = pts.map((p) => Number((p as { low?: number }).low ?? Math.min(p.open, p.close)));
+      return {
+        open: first.open,
+        close: last.close,
+        high: Math.max(...highs.filter((n) => n > 0), first.open, last.close),
+        low: Math.min(...lows.filter((n) => n > 0), first.open, last.close),
+      };
+    }
+  }
   return null;
 }

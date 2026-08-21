@@ -266,16 +266,18 @@
           var rootEl = document.getElementById('root');
           root = rootEl;
 
-          // Release the static overlay as soon as React commits any fallback
-          // or page content. React owns subsequent loading states.
+          // Only hide skeleton when root has meaningful content
+          // Use a short delay (300ms) to avoid hiding on loading spinners
           var hideTimer = null;
           var observer = new MutationObserver(function() {
             if (rootEl && rootEl.children.length > 0) {
+              // Check if the content is more than just a loading spinner
+              // by waiting a short moment for React to settle
               if (hideTimer) clearTimeout(hideTimer);
               hideTimer = setTimeout(function() {
                 observer.disconnect();
                 hideSkeleton();
-              }, 50);
+              }, 400);
             }
           });
 
@@ -287,12 +289,12 @@
           // Fallback: show skeleton after 1.5s if splash is still showing
           setTimeout(showSkeleton, 1500);
 
-          // Never let the static overlay outlive a slow first route/chunk.
+          // Hard timeout: remove everything after 8s
           setTimeout(function() {
             observer.disconnect();
             if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
             if (skeleton && skeleton.parentNode) skeleton.parentNode.removeChild(skeleton);
-          }, 3000);
+          }, 8000);
         });
 
         // Expose function for React to call when it's ready
@@ -301,17 +303,27 @@
       })();
     </script>
 
-    <!-- Service Worker only provides push notifications.  It never owns app-shell caching. -->
+    <!-- SW registration: v7 self-destruct SW clears all caches and unregisters itself -->
     <script>
       (function() {
         if (!('serviceWorker' in navigator)) return;
 
-        // Do not reload a live chat page when the worker updates: a forced reload
-        // races React's splash/skeleton hand-off and looks like a flash on mobile.
-        navigator.serviceWorker.register('/sw.js', {
-          scope: '/',
-          updateViaCache: 'none'
-        }).catch(function() {});
+        // Register the self-destruct SW so it can clear old caches
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+
+        // Listen for SW_UPDATED message: reload page to load fresh JS
+        navigator.serviceWorker.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'SW_UPDATED') {
+            window.location.reload();
+          }
+        });
+
+        // Also clear all caches eagerly on page load (belt-and-suspenders)
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            keys.forEach(function(key) { caches.delete(key); });
+          });
+        }
       })();
     </script>
 

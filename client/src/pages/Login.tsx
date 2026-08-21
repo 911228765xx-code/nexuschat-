@@ -95,7 +95,6 @@ export default function Login() {
       minHeight: "100dvh",
       backgroundColor: "#050810",
       display: "flex",
-      touchAction: "manipulation" as const,
       flexDirection: "column" as const,
       alignItems: "center",
       justifyContent: "center",

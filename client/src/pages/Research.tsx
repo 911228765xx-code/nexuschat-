@@ -263,9 +263,6 @@ export default function Research() {
   const [aiKeyMetrics, setAiKeyMetrics] = useState<Array<{label: string; value: string; isChange?: boolean; changeVal?: number; isProgress?: boolean; progressVal?: number}>>([]);
   const [aiScore, setAiScore] = useState<number | null>(null);
 
-  // Auth state gates private history, alert and sharing flows on this public route.
-  const { user: authUser, isAuthenticated: isResearchAuthed } = useAuth();
-
 
 
    // tRPC: report history
@@ -274,7 +271,7 @@ export default function Research() {
   const [historySortFilter, setHistorySortFilter] = useState<"newest" | "oldest" | "bullish" | "bearish">("newest");
   const { data: reportHistory, refetch: refetchHistory } = trpc.research.getHistory.useQuery(
     undefined,
-    { enabled: isResearchAuthed, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
 
   const filteredHistory = useMemo(() => {
@@ -298,7 +295,7 @@ export default function Research() {
   // tRPC: price alerts
   const { data: serverAlerts, refetch: refetchAlerts } = trpc.research.myAlerts.useQuery(
     undefined,
-    { enabled: isResearchAuthed, staleTime: 30_000 }
+    { staleTime: 30_000 }
   );
   const createResearchAlert = trpc.research.createAlert.useMutation({
     onSuccess: () => {
@@ -309,6 +306,8 @@ export default function Research() {
       toast.error("设置预警失败: " + err.message);
     },
   });
+  // Auth state for share button
+  const { user: authUser, isAuthenticated: isResearchAuthed } = useAuth();
   const [showResearchLoginPrompt, setShowResearchLoginPrompt] = useState(false);
   // tRPC: direct post creation (for unauthenticated or no-reportId share)
   const createPost = trpc.posts.create.useMutation({

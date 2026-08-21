@@ -94,7 +94,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const avatars = ["🦊", "🐻", "🦁", "🐺", "🦅", "🐲", "🦈", "🐙"];
 
   const recommendedGroups = [
-    { id: "1", name: "BitChat Official", members: "12.4K", icon: "🌐" },
+    { id: "1", name: "NexusChat Official", members: "12.4K", icon: "🌐" },
     { id: "2", name: "DeFi Alpha", members: "8.7K", icon: "💎" },
     { id: "3", name: "NFT Collectors", members: "5.2K", icon: "🎨" },
     { id: "4", name: "BTC Maximalists", members: "15.1K", icon: "₿" },
@@ -147,7 +147,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     },
     {
       q: t("onboarding.faq.whatCanDo") || "What can I do with a wallet?",
-      a: t("onboarding.faq.whatCanDoA") || "Send and receive crypto, interact with DeFi protocols, collect NFTs, vote in DAOs, sign in to Web3 apps (like BitChat!) — all without creating an account. Your wallet IS your account.",
+      a: t("onboarding.faq.whatCanDoA") || "Send and receive crypto, interact with DeFi protocols, collect NFTs, vote in DAOs, sign in to Web3 apps (like NexusChat!) — all without creating an account. Your wallet IS your account.",
       icon: Globe,
     },
   ];
@@ -250,7 +250,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <h1 className="text-3xl font-bold font-display">
                   {t("onboarding.welcomeTo") || "Welcome to"}{" "}
                   <span className="bg-gradient-to-r from-neon-cyan to-neon-purple bg-clip-text text-transparent">
-                    BitChat
+                    NexusChat
                   </span>
                 </h1>
                 <p className="text-muted-foreground text-sm leading-relaxed">
@@ -389,7 +389,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <div>
                   <p className="text-[13px] font-semibold text-neon-red">{t("onboarding.goldenRule") || "Golden Rule"}</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {t("onboarding.goldenRuleDesc") || "NEVER share your seed phrase or private key with anyone — not even BitChat. We will never ask for it."}
+                    {t("onboarding.goldenRuleDesc") || "NEVER share your seed phrase or private key with anyone — not even NexusChat. We will never ask for it."}
                   </p>
                 </div>
               </motion.div>

@@ -61,15 +61,6 @@ export default function Home() {
   const { canInstall, platform, triggerInstall, isInstalling } = usePWAInstall();
   const { address: walletAddress, isConnected: walletConnected, disconnect: disconnectWallet } = useWallet();
 
-  const handleInstallOrDownload = async () => {
-    if (platform === "ios") {
-      setShowIOSGuide(true);
-      return;
-    }
-    if (canInstall && await triggerInstall()) return;
-    setLocation("/download");
-  };
-
   const features = [
     {
       icon: MessageCircle, titleKey: "feat.1t", descKey: "feat.1d", img: CHAT_IMG,
@@ -159,13 +150,12 @@ export default function Home() {
               </Button>
             )}
             <Button
-              onClick={handleInstallOrDownload}
-              disabled={isInstalling}
+              onClick={() => setLocation('/download')}
               className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3"
               variant="outline"
             >
               <Download size={14} className="mr-1.5" />
-              {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
+              {t('pwa.downloadApp')}
             </Button>
             <Button
               onClick={handleEnterApp}
@@ -274,13 +264,12 @@ export default function Home() {
               {t("home.learnMore")}
             </Button>
             <Button
-              onClick={handleInstallOrDownload}
-              disabled={isInstalling}
+              onClick={() => setLocation('/download')}
               variant="outline"
               className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent"
             >
               <Download size={16} className="mr-2" />
-              {isInstalling ? t('pwa.installing') : t('pwa.downloadApp')}
+              {t('pwa.downloadApp')}
             </Button>
           </motion.div>
 

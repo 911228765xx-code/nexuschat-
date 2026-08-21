@@ -236,7 +236,10 @@ export default function InviteFriends() {
                           <span className="text-sm font-medium">{t("invite.invite")} {tier.count} {t("invite.friends")}</span>
                           {tier.unlocked && <CheckCircle2 size={12} className="text-neon-green" />}
                         </div>
-                        <p className="text-sm text-muted-foreground">{tier.reward}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {tier.reward}
+                          {tier.available === false ? " · 即将开放" : ""}
+                        </p>
                       </div>
                       {!tier.unlocked && (
                         <div className="px-2 py-1 rounded-full bg-secondary/40 border border-border/20">

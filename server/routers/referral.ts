@@ -15,11 +15,11 @@ const INVITEE_REWARD = 200;  // AC for invitee
 
 // ─── Milestone tiers ─────────────────────────────────────────────────────────
 const REWARD_TIERS = [
-  { count: 5, reward: "累计约 500 IT", icon: "🎁" },
-  { count: 10, reward: "Exclusive Badge", icon: "🏅" },
-  { count: 25, reward: "1% Fee Rebate", icon: "💰" },
-  { count: 50, reward: "VIP Status", icon: "👑" },
-  { count: 100, reward: "Revenue Share", icon: "💎" },
+  { count: 5, reward: "累计约 500 IT", icon: "🎁", available: true },
+  { count: 10, reward: "专属徽章", icon: "🏅", available: false },
+  { count: 25, reward: "额外 IT 礼包", icon: "✨", available: false }, // 手续费分红只在合伙人节点
+  { count: 50, reward: "VIP 特权", icon: "👑", available: false },
+  { count: 100, reward: "收入分成", icon: "💎", available: false },
 ];
 
 export const referralRouter = router({
@@ -57,7 +57,7 @@ export const referralRouter = router({
     // Compute tier unlock status
     const tiers = REWARD_TIERS.map((tier) => ({
       ...tier,
-      unlocked: activeInvited >= tier.count,
+      unlocked: tier.available && activeInvited >= tier.count,
     }));
 
     return {

@@ -1,4 +1,4 @@
-// build:2026-08-21T03:16:17.550Z
+// build:2026-08-21T14:53:11.981Z
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
@@ -77,6 +77,15 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// Register Service Worker for PWA offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW registration failure is non-fatal
+    });
+  });
+}
+
 // JS is now loaded — immediately switch from splash to skeleton screen
 // This ensures users see a skeleton instead of black screen while React initializes
 try {
@@ -94,11 +103,6 @@ try {
     </trpc.Provider>
   );
   window.__APP_RENDER_DONE__ = Date.now();
-  // Do not wait for route data or a component effect: once React has had a
-  // frame to commit its first fallback/content, release the static overlay.
-  requestAnimationFrame(() => {
-    try { (window as any).__nexusHideSkeleton?.(); } catch (_) {}
-  });
 } catch(e) {
   window.__APP_RENDER_ERROR__ = String(e);
   console.error('RENDER FAILED:', e);
