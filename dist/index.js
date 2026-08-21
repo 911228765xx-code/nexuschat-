@@ -15508,10 +15508,11 @@ function mix01(key, salt) {
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
   return h % 1e4 / 1e4;
 }
-var SLOW_DAY = shanghaiParts(Date.UTC(2026, 7, 18, 16, 0, 0)).dayIndex;
 function dailyUsersBoost(dayIndex) {
-  if (dayIndex >= SLOW_DAY) return 280 + Math.floor(mix01("users", dayIndex) * 41);
-  return 300 + Math.floor(mix01("users", dayIndex) * 301);
+  return 14 + Math.floor(mix01("users", dayIndex) * 13);
+}
+function dailyActiveFactor(dayIndex) {
+  return 0.72 + mix01("active-day", dayIndex) * 0.56;
 }
 function usersDelta(nowMs) {
   const { sec, dayIndex } = shanghaiParts(nowMs);
@@ -15530,7 +15531,7 @@ function liveDelta(kind, base, key, nowMs) {
     return Math.floor((nowMs - EPOCH) / 36e5 * perHour2);
   }
   if (kind === "active") {
-    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
+    const span = Math.max(420, Math.round(Math.max(floor, 120) * 1.88 * dailyActiveFactor(dayIndex)));
     return Math.floor(span * (sec / 86400));
   }
   if (kind === "daily") {

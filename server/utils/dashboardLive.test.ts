@@ -29,11 +29,24 @@ describe("dashboardLive 用户数只增不减", () => {
     expect(live.usersTotal).toBeGreaterThanOrEqual(base.usersTotal);
   });
 
-  it("8 月 19 日起当天增量约 300", () => {
-    const start = Date.UTC(2026, 7, 18, 16, 0, 0); // 上海 8/19 00:00
-    const end = Date.UTC(2026, 7, 19, 15, 59, 0); // 上海 8/19 23:59
+  it("社区用户每天约增长 20 人", () => {
+    const start = Date.UTC(2026, 7, 20, 16, 0, 0); // 上海 8/21 00:00
+    const end = Date.UTC(2026, 7, 21, 15, 59, 0); // 上海 8/22 23:59
     const gained = liveDelta("users", 1200, "users", end) - liveDelta("users", 1200, "users", start);
-    expect(gained).toBeGreaterThanOrEqual(270);
-    expect(gained).toBeLessThanOrEqual(330);
+    expect(gained).toBeGreaterThanOrEqual(14);
+    expect(gained).toBeLessThanOrEqual(26);
+  });
+
+  it("今日活跃在不同日期具有明显但确定的日间变化幅度", () => {
+    const noonA = liveDelta("active", 1200, "active", Date.UTC(2026, 7, 20, 4, 0, 0));
+    const noonB = liveDelta("active", 1200, "active", Date.UTC(2026, 7, 22, 4, 0, 0));
+    expect(Math.abs(noonA - noonB)).toBeGreaterThan(100);
+  });
+
+  it("当前下午时段的演示活跃基线保持在约 3,500 范围", () => {
+    const baseWithRealActive = 1455;
+    const display = baseWithRealActive + liveDelta("active", baseWithRealActive, "active", Date.UTC(2026, 7, 21, 7, 20, 0));
+    expect(display).toBeGreaterThanOrEqual(3300);
+    expect(display).toBeLessThanOrEqual(3700);
   });
 });

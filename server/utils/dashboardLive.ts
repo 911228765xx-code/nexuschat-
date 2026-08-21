@@ -25,12 +25,14 @@ function mix01(key: string, salt: number): number {
   return (h % 10000) / 10000;
 }
 
-/** 上海 2026-08-19 起每天约 +300；此前已累加的日子不回撤。 */
-const SLOW_DAY = shanghaiParts(Date.UTC(2026, 7, 18, 16, 0, 0)).dayIndex;
-
 function dailyUsersBoost(dayIndex: number): number {
-  if (dayIndex >= SLOW_DAY) return 280 + Math.floor(mix01("users", dayIndex) * 41);
-  return 300 + Math.floor(mix01("users", dayIndex) * 301);
+  // 演示型社区增长：每天约 +20，保留小幅确定性波动，避免每日完全相同。
+  return 14 + Math.floor(mix01("users", dayIndex) * 13);
+}
+
+function dailyActiveFactor(dayIndex: number): number {
+  // 日活展示在不同日期保持较明显的日间差异（约 ±28%），同一天内仍只增不减。
+  return 0.72 + mix01("active-day", dayIndex) * 0.56;
 }
 
 function usersDelta(nowMs: number): number {
@@ -55,7 +57,7 @@ export function liveDelta(kind: DashKind, base: number, key: string, nowMs: numb
 
   // 今日活跃 / 今日类：当天内只增不减，跨日自然从 0 再长
   if (kind === "active") {
-    const span = Math.max(180, Math.round(Math.max(floor, 120) * 0.88));
+    const span = Math.max(420, Math.round(Math.max(floor, 120) * 1.88 * dailyActiveFactor(dayIndex)));
     return Math.floor(span * (sec / 86400));
   }
   if (kind === "daily") {
