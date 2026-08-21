@@ -18,4 +18,17 @@ describe("group avatar isolation", () => {
     expect(groupRoom).not.toContain("trpc.user.uploadAvatar");
     expect(groupRoom).toContain("updateGroupInfoMutation.mutate({ groupId");
   });
+
+  it("updates only the edited group cache after saving group settings", () => {
+    const saveSection = groupRoom.slice(
+      groupRoom.indexOf("const updateGroupInfoMutation"),
+      groupRoom.indexOf("// ─── Group management mutations")
+    );
+
+    expect(saveSection).toContain("utils.chat.getGroupInfo.setData({ groupId: input.groupId }");
+    expect(saveSection).toContain("utils.chat.myGroups.invalidate()");
+    expect(saveSection).not.toContain("utils.auth.me.invalidate()");
+    expect(saveSection).not.toContain("utils.user.getProfile.invalidate()");
+    expect(saveSection).not.toContain("updateProfile(");
+  });
 });

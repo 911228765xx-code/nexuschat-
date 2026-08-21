@@ -996,7 +996,26 @@ export default function GroupChatRoom() {
     onError: (e) => toast.error(e.message),
   });
   const updateGroupInfoMutation = trpc.chat.updateGroupInfo.useMutation({
-    onSuccess: () => { toast.success("群组信息已更新"); setShowGroupSettings(false); refetchGroupInfo(); },
+    onSuccess: (_result, input) => {
+      // Keep this mutation strictly scoped to the edited group. In particular, do
+      // not invalidate auth.me, user.getProfile, or AppContext's personal profile.
+      // This prevents a group-avatar save from ever participating in a personal
+      // avatar refresh path.
+      utils.chat.getGroupInfo.setData({ groupId: input.groupId }, (cached) => {
+        if (!cached) return cached;
+        return {
+          ...cached,
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.avatar !== undefined ? { avatar: input.avatar } : {}),
+        };
+      });
+      // The group list has a separate, group-only avatar consumer. Refresh it
+      // without touching any user-profile query cache.
+      void utils.chat.myGroups.invalidate();
+      toast.success("群组信息已更新");
+      setShowGroupSettings(false);
+    },
     onError: (e) => toast.error(e.message),
   });
 
