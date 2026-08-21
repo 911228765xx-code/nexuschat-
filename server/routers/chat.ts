@@ -1229,6 +1229,33 @@ export const chatRouter = router({
       return { url };
     }),
 
+  // Upload group avatar without updating a user's profile avatar.
+  uploadGroupAvatar: protectedProcedure
+    .input(z.object({
+      groupId: z.number().int().positive(),
+      base64: z.string().max(6_000_000),
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const [actor] = await db.select({ role: groupMembers.role }).from(groupMembers)
+        .where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!actor || (actor.role !== "owner" && actor.role !== "admin")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅群主或管理员可更新群头像" });
+      }
+      const raw = Buffer.from(input.base64, "base64");
+      if (raw.length > 4 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "群头像不能超过 4MB" });
+      const { storagePut } = await import("../storage");
+      const { downscaleImage } = await import("../utils/image");
+      const { buffer, mime } = await downscaleImage(raw, 512, 85, input.mimeType);
+      const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+      const key = `group-avatars/${input.groupId}/${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buffer, mime);
+      return { url };
+    }),
+
   // Upload chat video to S3 (short clips; stays under the 50MB JSON body limit)
   uploadChatVideo: protectedProcedure
     .input(z.object({
@@ -2835,5 +2862,4 @@ export const chatRouter = router({
     }),
 
 });
-
 

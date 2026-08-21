@@ -411,6 +411,7 @@ export default function GroupChatRoom() {
   const [editGroupName, setEditGroupName] = useState("");
   const [editGroupDesc, setEditGroupDesc] = useState("");
   const [editGroupAvatar, setEditGroupAvatar] = useState("");
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null);
   // ─── Attachment menu ────────────────────────────────────────────────────────
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   // ─── Red packet modal ─────────────────────────────────────────────────────
@@ -752,7 +753,20 @@ export default function GroupChatRoom() {
 
   // ─── File upload ──────────────────────────────────────────────────────────
   const uploadImageMutation = trpc.chat.uploadChatImage.useMutation();
+  const uploadGroupAvatarMutation = trpc.chat.uploadGroupAvatar.useMutation();
   const saveGroupFileMutation = trpc.chat.saveGroupFile.useMutation();
+
+  const handleGroupAvatarUpload = async (file: File) => {
+    if (file.size > 4 * 1024 * 1024) { toast.error("群头像不能超过 4MB"); return; }
+    try {
+      const { base64, mimeType } = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.85, maxSizeBytes: 4 * 1024 * 1024 });
+      const result = await uploadGroupAvatarMutation.mutateAsync({ groupId, base64, mimeType });
+      setEditGroupAvatar(result.url);
+      toast.success("群头像已上传，点击保存修改后生效");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "群头像上传失败");
+    }
+  };
 
   const handleFileUpload = async (file: File) => {
     if (file.size > 16 * 1024 * 1024) { toast.error("File too large (max 16MB)"); return; }
@@ -1616,7 +1630,13 @@ export default function GroupChatRoom() {
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground mb-2.5 block">群组头像 URL（可选）</label>
-                  <input value={editGroupAvatar} onChange={e => setEditGroupAvatar(e.target.value)} placeholder="https://... 或输入 emoji" className="w-full px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                  <div className="flex gap-2">
+                    <input value={editGroupAvatar} onChange={e => setEditGroupAvatar(e.target.value)} placeholder="https://... 或输入 emoji" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-secondary/40 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-neon-cyan/50" />
+                    <input ref={groupAvatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleGroupAvatarUpload(file); e.target.value = ""; }} />
+                    <button type="button" onClick={() => groupAvatarInputRef.current?.click()} disabled={uploadGroupAvatarMutation.isPending} className="shrink-0 px-3 rounded-xl border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/10 disabled:opacity-50" title="上传群头像">
+                      <ImageIcon size={16} />
+                    </button>
+                  </div>
                 </div>
                 <button onClick={() => updateGroupInfoMutation.mutate({ groupId, name: editGroupName.trim() || undefined, description: editGroupDesc.trim() || undefined, avatar: editGroupAvatar.trim() || undefined })} disabled={updateGroupInfoMutation.isPending} className="w-full py-3 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/25 transition-colors text-sm font-medium disabled:opacity-50">
                   {updateGroupInfoMutation.isPending ? "保存中..." : "保存修改"}

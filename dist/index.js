@@ -6875,6 +6875,28 @@ var chatRouter = router({
     const { url } = await storagePut2(key, buffer, mime);
     return { url };
   }),
+  // Upload group avatar without updating a user's profile avatar.
+  uploadGroupAvatar: protectedProcedure.input(z6.object({
+    groupId: z6.number().int().positive(),
+    base64: z6.string().max(6e6),
+    mimeType: z6.string().default("image/jpeg")
+  })).use(rateLimitWrite).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const [actor] = await db.select({ role: groupMembers.role }).from(groupMembers).where(and14(eq17(groupMembers.groupId, input.groupId), eq17(groupMembers.userId, ctx.user.id))).limit(1);
+    if (!actor || actor.role !== "owner" && actor.role !== "admin") {
+      throw new TRPCError8({ code: "FORBIDDEN", message: "\u4EC5\u7FA4\u4E3B\u6216\u7BA1\u7406\u5458\u53EF\u66F4\u65B0\u7FA4\u5934\u50CF" });
+    }
+    const raw = Buffer.from(input.base64, "base64");
+    if (raw.length > 4 * 1024 * 1024) throw new TRPCError8({ code: "BAD_REQUEST", message: "\u7FA4\u5934\u50CF\u4E0D\u80FD\u8D85\u8FC7 4MB" });
+    const { storagePut: storagePut2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    const { downscaleImage: downscaleImage2 } = await Promise.resolve().then(() => (init_image(), image_exports));
+    const { buffer, mime } = await downscaleImage2(raw, 512, 85, input.mimeType);
+    const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    const key = `group-avatars/${input.groupId}/${Date.now()}.${ext}`;
+    const { url } = await storagePut2(key, buffer, mime);
+    return { url };
+  }),
   // Upload chat video to S3 (short clips; stays under the 50MB JSON body limit)
   uploadChatVideo: protectedProcedure.input(z6.object({
     base64: z6.string().max(4e7),
