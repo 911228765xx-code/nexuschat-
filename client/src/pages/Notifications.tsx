@@ -56,6 +56,14 @@ export default function Notifications() {
   const markAllReadMutation = trpc.notifications.markRead.useMutation({
     onSuccess: () => utils.notifications.list.invalidate(),
   });
+  const clearAllMutation = trpc.notifications.deleteAll.useMutation({
+    onSuccess: () => {
+      void utils.notifications.list.invalidate();
+      void utils.notifications.unreadCount.invalidate();
+      toast.success("通知已全部清除");
+    },
+    onError: (error) => toast.error(`清除失败: ${error.message}`),
+  });
 
   // Map server notifications to local format for rendering
   const serverNotifications = useMemo(() => {
@@ -105,8 +113,7 @@ export default function Notifications() {
   };
 
   const clearAll = () => {
-    clearAllNotifications();
-    toast.success(t("notifications.allCleared"));
+    clearAllMutation.mutate();
   };
 
   const handleMarkRead = (notif: typeof notifications[0]) => {

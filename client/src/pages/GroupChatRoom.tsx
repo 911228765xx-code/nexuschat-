@@ -121,9 +121,20 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
 
   return (
     <div
-      className="relative flex items-center gap-0.5 cursor-default"
+      className="relative flex items-center gap-0.5 cursor-pointer"
+      role="button"
+      tabIndex={0}
+      aria-expanded={showTooltip}
+      aria-label="查看已读成员"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
+      onClick={() => setShowTooltip((visible) => !visible)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setShowTooltip((visible) => !visible);
+        }
+      }}
     >
       {/* Avatar stack: show up to 3 */}
       <div className="flex items-center">

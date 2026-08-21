@@ -37,10 +37,10 @@ interface AppLayoutProps {
 export default function AppLayout({ children, hideNav, requireAuth = true }: AppLayoutProps) {
   const [location] = useLocation();
   const { t } = useI18n();
-  const { conversations, notifications } = useApp();
-  // Dynamic badge counts from AppContext
+  const { conversations } = useApp();
+  // Chat unread state is local to its conversation UI. Notification counts are
+  // always read from the server below, never from legacy demo state.
   const chatUnread = conversations.reduce((sum, c) => sum + c.unread, 0);
-  const localNotifUnread = notifications.filter((n) => !n.read).length;
 
   const { isAuthenticated, loading: authLoading } = useAuth();
 
@@ -60,7 +60,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
     refetchInterval: isAuthenticated ? 30_000 : false,
     staleTime: 20_000,
   });
-  const notifUnread = unreadData?.count ?? localNotifUnread;
+  const notifUnread = unreadData?.count ?? 0;
 
   const tabs = [
     { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: chatUnread },

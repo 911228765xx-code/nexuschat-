@@ -8,6 +8,7 @@ describe("native deep link integrity", () => {
   it("declares the BitChat domain as an auto-verified Android App Link", () => {
     expect(manifest).toContain('android:autoVerify="true"');
     expect(manifest).toContain('android:host="nexuschat.best"');
+    expect(manifest).toContain('android:scheme="bitchat"');
     expect(manifest).toContain('android:scheme="nexuschat"');
   });
 

@@ -25,9 +25,21 @@ export default function Profile() {
   const currentLocale = LOCALES.find(l => l.code === locale) || LOCALES[0];
 
   // ✅ AppContext全局状态
-  const { profile, totalUnreadMessages, unreadNotificationCount } = useApp();
+  const { profile, totalUnreadMessages } = useApp();
 
   const { isAuthenticated, logout } = useAuth();
+  // Identity data must come from the persisted profile. AppContext remains only
+  // as a backwards-compatible fallback for local presentation preferences.
+  const { data: profileData } = trpc.user.getProfile.useQuery(undefined, {
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const { data: notificationUnreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
+    enabled: isAuthenticated,
+    staleTime: 20_000,
+  });
+  const notificationUnreadCount = notificationUnreadData?.count ?? 0;
   // ─── Real stats from backend (protectedProcedure) ───
   const { data: stats, isLoading: statsLoading } = trpc.user.getUserStats.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -73,6 +85,13 @@ export default function Profile() {
     return `$${walletTotalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }, [walletConnected, bnbLoading, tokenLoading, walletTotalUsd, t]);
 
+  const displayedProfile = {
+    displayName: profileData?.name || me?.name || profile.displayName,
+    avatar: profileData?.avatar ?? profile.avatar,
+    walletAddress: profileData?.walletAddress || profile.walletAddress,
+    bio: profileData?.bio ?? profile.bio,
+  };
+
   const menuSections = [
     {
       title: t("profile.activity"),
@@ -94,14 +113,14 @@ export default function Profile() {
   ];
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText(profile.walletAddress);
+    navigator.clipboard.writeText(displayedProfile.walletAddress);
     toast.success(t("profile.copied"));
   };
 
   // Truncate wallet address
-  const shortAddress = profile.walletAddress.length > 10
-    ? profile.walletAddress.slice(0, 6) + "..." + profile.walletAddress.slice(-4)
-    : profile.walletAddress;
+  const shortAddress = displayedProfile.walletAddress.length > 10
+    ? displayedProfile.walletAddress.slice(0, 6) + "..." + displayedProfile.walletAddress.slice(-4)
+    : displayedProfile.walletAddress;
 
   return (
     <div className="flex flex-col h-full">
@@ -134,8 +153,8 @@ export default function Profile() {
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
               <Avatar className="w-16 h-16 ring-2 ring-neon-cyan/40">
-                {profile.avatar?.startsWith("http") && <AvatarImage src={profile.avatar} alt={profile.displayName} className="object-cover" />}
-                <AvatarFallback className="bg-secondary text-xl font-display">{profile.avatar?.startsWith("http") ? profile.displayName?.slice(0,2).toUpperCase() : profile.avatar}</AvatarFallback>
+                {displayedProfile.avatar?.startsWith("http") && <AvatarImage src={displayedProfile.avatar} alt={displayedProfile.displayName} className="object-cover" />}
+                <AvatarFallback className="bg-secondary text-xl font-display">{displayedProfile.avatar?.startsWith("http") ? displayedProfile.displayName?.slice(0,2).toUpperCase() : displayedProfile.avatar}</AvatarFallback>
               </Avatar>
               {profile.ensVerified && (
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">
@@ -144,7 +163,7 @@ export default function Profile() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-bold font-display">{profile.displayName}</h2>
+              <h2 className="text-lg font-bold font-display">{displayedProfile.displayName}</h2>
               <button
                 onClick={handleCopyAddress}
                 className="flex items-center gap-2 text-sm text-muted-foreground font-mono hover:text-neon-cyan transition-colors"
@@ -164,8 +183,8 @@ export default function Profile() {
           </div>
 
           {/* Bio */}
-          {profile.bio && (
-            <p className="text-sm text-muted-foreground mb-4 leading-relaxed line-clamp-2">{profile.bio}</p>
+          {displayedProfile.bio && (
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed line-clamp-2">{displayedProfile.bio}</p>
           )}
 
           {/* Core Stats */}
@@ -306,9 +325,9 @@ export default function Profile() {
                     <Bell size={16} className="text-foreground" />
                   </div>
                   <span className="flex-1 text-sm text-left">{t("profile.notifications")}</span>
-                  {unreadNotificationCount > 0 && (
+                  {notificationUnreadCount > 0 && (
                     <span className="min-w-5 h-5 px-2.5 rounded-full bg-neon-red flex items-center justify-center">
-                      <span className="text-sm font-bold text-white">{unreadNotificationCount}</span>
+                      <span className="text-sm font-bold text-white">{notificationUnreadCount}</span>
                     </span>
                   )}
                   <ChevronRight size={14} className="text-muted-foreground" />

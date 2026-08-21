@@ -137,11 +137,10 @@ export default function Chat() {
     muteConversation,
     deleteConversation,
     markConversationRead,
-    unreadNotificationCount: localUnreadCount,
   } = useApp();
 
-  // Use real count if available, fallback to local
-  const unreadNotificationCount = notifCountData?.count ?? localUnreadCount;
+  // Do not fall back to legacy demo notifications: only display a server count.
+  const unreadNotificationCount = notifCountData?.count ?? 0;
 
   // Merge real DM conversations + my groups into the list (memoized)
   const mergedConversations = useMemo(() => [
@@ -164,7 +163,9 @@ export default function Chat() {
     ...(dmConversations ?? []).map(dm => ({
       id: `dm-${dm.userId}`,
       name: dm.name,
-      avatar: dm.avatar ? dm.avatar.slice(0, 2).toUpperCase() : dm.name?.slice(0, 1) ?? "U",
+      // Preserve a real avatar URL. AvatarImage below renders URLs directly;
+      // truncating one to "HT" silently forced every DM back to initials.
+      avatar: dm.avatar || dm.name?.slice(0, 1) || "U",
       lastMessage: dm.lastMessage,
       time: formatMessageTime(new Date(dm.lastMessageAt)),
       unread: 0,

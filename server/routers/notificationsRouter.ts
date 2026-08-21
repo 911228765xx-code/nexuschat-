@@ -148,6 +148,17 @@ export const notificationsRouter = router({
 
       return { success: true };
     }),
+
+  // ─── Delete all notifications for the current user ─────────────────────────
+  deleteAll: protectedProcedure
+    .use(rateLimitWrite)
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      await db.delete(notifications).where(eq(notifications.userId, ctx.user.id));
+      return { success: true };
+    }),
 });
 
 // ─── Helper: create notification from server-side code ──────────────────────

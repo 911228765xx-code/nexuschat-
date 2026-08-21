@@ -23,11 +23,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Custom URL scheme deep links: nexuschat://app/chat etc. -->
+            <!-- Custom URL scheme deep links: bitchat://app/chat; retain the
+                 legacy nexuschat:// scheme so existing links continue to work. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bitchat" />
                 <data android:scheme="nexuschat" />
             </intent-filter>
 
