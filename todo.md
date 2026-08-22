@@ -691,3 +691,7 @@
 ## v68.5 原生游戏更新包发布
 - [x] 上传包含岛屿农场的 Android 更新包，并更新原生版本检查配置与下载入口：v1.9.3、版本配置与下载源已更新
 - [x] 验证新 APK 资源中含“岛屿”导航、IslandFarm 分包和正式场景地址：APK 已验证含 IslandFarm 分包和正式场景地址；/apk?v=1.9.3 返回 206、Content-Range 和 PK 文件头
+
+## v68.6 原生应用名称修复
+- [x] 定位并修复 Android/iOS 安装包仍显示 NexusChat 的原生标签或资源名称：Android strings.xml 的 app_name 与 title_activity_main 已统一为 BitChat；iOS 显示名保持 BitChat
+- [x] 重建、验证并发布安装后显示为 BitChat 的更新包：v1.9.4 APK 已验证 resources.arsc 仅含 BitChat 标签，更新接口和 /apk?v=1.9.4 断点下载均已通过

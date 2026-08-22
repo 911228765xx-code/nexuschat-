@@ -12912,7 +12912,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 
 // server/routers/appVersion.ts
 init_appAdmin();
-var CURRENT_APP_VERSION = "1.9.3";
+var CURRENT_APP_VERSION = "1.9.4";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -12954,7 +12954,7 @@ var appVersionRouter = router({
           downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
           downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
           downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-          releaseNotes: /v1\.9\.[0-2]/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u5C9B\u5C7F\u519C\u573A\u66F4\u65B0
+          releaseNotes: /v1\.9\.[0-3]/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u5C9B\u5C7F\u519C\u573A\u66F4\u65B0
 
 \u2022 \u65B0\u589E\u9AD8\u54C1\u8D28 2D \u5C9B\u5C7F\u519C\u573A\u4E0E\u5E95\u90E8\u201C\u5C9B\u5C7F\u201D\u5165\u53E3
 \u2022 \u652F\u6301\u79CD\u690D\u3001\u6536\u83B7\u3001\u5BA0\u7269\u3001IT \u8D21\u732E\u4E0E BIT \u7ED3\u7B97\u5C55\u793A
