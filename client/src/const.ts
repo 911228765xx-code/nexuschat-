@@ -22,7 +22,7 @@ export const getLoginUrl = (returnPath?: string) => {
 };
 
 // Current native app shell version — bump when releasing a new APK/IPA
-export const CURRENT_APP_VERSION = "1.1.0";
+export const CURRENT_APP_VERSION = "1.9.3";
 
 // Cloudflare Turnstile site key (public, safe to expose)
 export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";

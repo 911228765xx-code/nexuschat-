@@ -12912,7 +12912,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 
 // server/routers/appVersion.ts
 init_appAdmin();
-var CURRENT_APP_VERSION = "1.9.2";
+var CURRENT_APP_VERSION = "1.9.3";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -12954,12 +12954,11 @@ var appVersionRouter = router({
           downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
           downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
           downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-          releaseNotes: /v1\.9\.0/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u7248\u672C\u66F4\u65B0
+          releaseNotes: /v1\.9\.[0-2]/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u5C9B\u5C7F\u519C\u573A\u66F4\u65B0
 
-\u2022 \u627E\u56DE\u5BC6\u7801\u53EF\u5728 App \u5185\u586B\u5199\u90AE\u7BB1\u9A8C\u8BC1\u7801
-\u2022 \u9080\u8BF7\u4E0E\u5B98\u7F51\u53E3\u5F84\uFF1A\u6BD4\u7279AI\u793E\u4EA4 \xB7 \u6FB3\u6D32 AFT
-\u2022 \u731C\u6DA8\u8DCC\u4E0D\u9650\u6BCF\u65E5\u6B21\u6570
-\u2022 \u79EF\u5206 IT / \u4EE3\u5E01 BIT \u540D\u79F0\u7EDF\u4E00` : notes,
+\u2022 \u65B0\u589E\u9AD8\u54C1\u8D28 2D \u5C9B\u5C7F\u519C\u573A\u4E0E\u5E95\u90E8\u201C\u5C9B\u5C7F\u201D\u5165\u53E3
+\u2022 \u652F\u6301\u79CD\u690D\u3001\u6536\u83B7\u3001\u5BA0\u7269\u3001IT \u8D21\u732E\u4E0E BIT \u7ED3\u7B97\u5C55\u793A
+\u2022 \u4F18\u5316\u539F\u751F App \u6E38\u620F\u8D44\u6E90\u540C\u6B65` : notes,
           isForceUpdate: rows[0].isForceUpdate
         };
       }

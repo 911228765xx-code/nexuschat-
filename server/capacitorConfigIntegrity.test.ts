@@ -26,6 +26,14 @@ describe("Capacitor native shell configuration", () => {
     expect(iosInfo).toContain("<string>nexuschat</string>");
   });
 
+  it("keeps the island farm native update version consistent on Android and iOS", () => {
+    const androidAppGradle = readFileSync(new URL("../android/app/build.gradle", import.meta.url), "utf8");
+    expect(androidAppGradle).toContain('versionCode 193');
+    expect(androidAppGradle).toContain('versionName "1.9.3"');
+    expect(iosProject).toContain("CURRENT_PROJECT_VERSION = 193;");
+    expect(iosProject).toContain("MARKETING_VERSION = 1.9.3;");
+  });
+
   it("enables the BitChat domain as an iOS associated domain", () => {
     expect(iosProject).toContain("CODE_SIGN_ENTITLEMENTS = App/BitChat.entitlements;");
     expect(iosEntitlements).toContain("applinks:nexuschat.best");
