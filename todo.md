@@ -695,3 +695,11 @@
 ## v68.6 原生应用名称修复
 - [x] 定位并修复 Android/iOS 安装包仍显示 NexusChat 的原生标签或资源名称：Android strings.xml 的 app_name 与 title_activity_main 已统一为 BitChat；iOS 显示名保持 BitChat
 - [x] 重建、验证并发布安装后显示为 BitChat 的更新包：v1.9.4 APK 已验证 resources.arsc 仅含 BitChat 标签，更新接口和 /apk?v=1.9.4 断点下载均已通过
+
+## v68.7 Android 签名兼容更新
+- [ ] 比对已安装旧版与 1.9.4 更新包的证书签名来源，定位覆盖安装失败的签名差异
+- [ ] 发现既有正式签名时，使用同一签名重新构建可覆盖升级包；无法恢复时，提供不丢失服务器数据的安全重装路径
+
+## v68.8 后端 e418f2b 同步发布
+- [x] 在 /home/ubuntu/nexuschat 对齐 e418f2b 的唯一后端变更：远端仅将 appVersion 默认版本由 1.9.2 调整为 1.9.4，当前本地已为 1.9.4，故未覆盖较新的本地岛屿与原生修复
+- [x] 完成完整测试、生产构建、服务重启、版本核验和发布准备：279 项测试、低内存构建通过，版本检查接口返回 1.9.4，IslandFarm 生产分包存在
