@@ -117,6 +117,15 @@ nexuschat.zip
 # NP 积分模型设计文档（含合规讨论，勿入公开仓库）
 NP积分模型_*.md
 
+# 本地游戏审计与用户录屏分析工作文件（不随产品代码公开同步）
+ASSETS.md
+MEMORY.md
+PLAN.md
+STRUCTURE.md
+audit-notes.md
+native-sync-verification.md
+video_*_analysis_*.md
+
 # PDF.js 静态资源的 build 目录是发行产物,必须入库(全局 build/ 规则的例外)
 !client/public/pdfjs/build/
 !client/public/pdfjs/build/**
