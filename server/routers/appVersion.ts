@@ -9,7 +9,7 @@ import { assertAndroidApkSource, getAndroidApkDirectUrl } from "../utils/android
 import { isAppAdmin } from "../appAdmin";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.9.2";
+export const CURRENT_APP_VERSION = "1.9.4";
 
 /**
  * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
