@@ -1,7 +1,7 @@
 /*
  * AppLayout — Cyberpunk Noir mobile-first layout
  * Bottom tab navigation with glassmorphism effect + dynamic unread badges from AppContext
- * 5 tabs: Chat / Discover / Research / Trading / Profile
+ * 6 tabs: Chat / Discover / Island / Research / Trading / Profile
  * NOTE: framer-motion removed — uses CSS animations to keep initial bundle small
  *
  * GLOBAL LOGIN GUARD: All /app/* routes require authentication by default.
@@ -9,7 +9,7 @@
  * Unauthenticated users on protected routes are redirected to the Manus OAuth login page.
  */
 import { useLocation, Link } from "wouter";
-import { MessageCircle, Compass, Brain, TrendingUp, User } from "lucide-react";
+import { MessageCircle, Compass, Gamepad2, Brain, TrendingUp, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
@@ -17,6 +17,7 @@ import { useEffect } from "react";
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   "/app/chat":     () => import("@/pages/Chat"),
   "/app/discover": () => import("@/pages/Discover"),
+  "/app/island":   () => import("@/pages/IslandFarm"),
   "/app/research": () => import("@/pages/Research"),
   "/app/trading":  () => import("@/pages/Trading"),
   "/app/profile":  () => import("@/pages/Profile"),
@@ -65,6 +66,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
   const tabs = [
     { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: chatUnread },
     { path: "/app/discover", labelKey: "tab.discover", icon: Compass, badge: 0 },
+    { path: "/app/island", labelKey: "tab.island", icon: Gamepad2, badge: 0 },
     { path: "/app/research", labelKey: "tab.research", icon: Brain, badge: 0 },
     { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 0 },
     { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
@@ -163,13 +165,14 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
               const isActive =
                 location === tab.path ||
                 (tab.path === "/app/chat" && location.startsWith("/app/chat/")) ||
+                (tab.path === "/app/island" && location.startsWith("/app/island")) ||
                 (tab.path === "/app/profile" && (location === "/app/wallet" || location === "/app/edit-profile" || location === "/app/notifications"));
               const Icon = tab.icon;
 
               return (
                 <Link key={tab.path} href={tab.path}>
                   <button
-                    className="relative flex flex-col items-center justify-center gap-1.5 w-16 h-[58px] rounded-xl transition-colors active:scale-90 transition-transform duration-100"
+                    className="relative flex flex-col items-center justify-center gap-1.5 w-14 sm:w-16 h-[58px] rounded-xl transition-colors active:scale-90 transition-transform duration-100"
                     onMouseEnter={() => prefetchMap[tab.path]?.()}
                     onTouchStart={() => prefetchMap[tab.path]?.()}
                   >

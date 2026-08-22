@@ -243,7 +243,7 @@ function RouteContent() {
               </AppLayout>
             </Route>
             <Route path="/app/island">
-              <AppLayout hideNav requireAuth={!(import.meta.env.DEV && new URLSearchParams(window.location.search).get("demo") === "1")}>
+              <AppLayout requireAuth={!(import.meta.env.DEV && new URLSearchParams(window.location.search).get("demo") === "1")}>
                 <IslandFarm />
               </AppLayout>
             </Route>
