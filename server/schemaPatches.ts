@@ -100,7 +100,35 @@ const PATCHES: string[] = [
     PRIMARY KEY (\`id\`),
     UNIQUE KEY \`uniq_island_pet_key\` (\`farmId\`, \`petKey\`)
   )`,
+  `CREATE TABLE IF NOT EXISTS \`island_daily_orders\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`orderDate\` varchar(10) NOT NULL,
+    \`orderKey\` varchar(40) NOT NULL,
+    \`status\` varchar(20) NOT NULL DEFAULT 'available',
+    \`claimedAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_daily_order\` (\`farmId\`, \`orderDate\`, \`orderKey\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_group_contributions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`groupId\` int NOT NULL,
+    \`userId\` int NOT NULL,
+    \`contributionDate\` varchar(10) NOT NULL,
+    \`amount\` int NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_group_daily\` (\`farmId\`, \`groupId\`, \`contributionDate\`),
+    KEY \`idx_island_group_daily\` (\`groupId\`, \`contributionDate\`)
+  )`,
 ];
+
+const ISLAND_COLUMN_PATCHES = [
+  { table: "island_pets", column: "lastExploredAt", definition: "timestamp NULL" },
+  { table: "island_pets", column: "explorationCount", definition: "int NOT NULL DEFAULT 0" },
+] as const;
 
 export async function applySchemaPatches(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -114,6 +142,13 @@ export async function applySchemaPatches(): Promise<void> {
       } catch (e) {
         console.error(`[SchemaPatch] failed: ${sql}`, e);
       }
+    }
+    for (const patch of ISLAND_COLUMN_PATCHES) {
+      const [columns] = await conn.query<any[]>(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1",
+        [patch.table, patch.column]
+      );
+      if (columns.length === 0) await conn.query(`ALTER TABLE \`${patch.table}\` ADD COLUMN \`${patch.column}\` ${patch.definition}`);
     }
   } catch (e) {
     console.error("[SchemaPatch] connection failed:", e);

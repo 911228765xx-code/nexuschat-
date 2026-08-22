@@ -44,7 +44,9 @@ __export(schema_exports, {
   icoPurchases: () => icoPurchases,
   icoRewardRuns: () => icoRewardRuns,
   icoStakeLots: () => icoStakeLots,
+  islandDailyOrders: () => islandDailyOrders,
   islandFarms: () => islandFarms,
+  islandGroupContributions: () => islandGroupContributions,
   islandInventories: () => islandInventories,
   islandPets: () => islandPets,
   islandPlots: () => islandPlots,
@@ -106,7 +108,7 @@ import {
   index,
   uniqueIndex
 } from "drizzle-orm/mysql-core";
-var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, itTransactions, islandFarms, islandPlots, islandInventories, islandPets, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
+var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, itTransactions, islandFarms, islandPlots, islandInventories, islandPets, islandDailyOrders, islandGroupContributions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -1003,10 +1005,41 @@ var init_schema = __esm({
         level: int("level").default(1).notNull(),
         affection: int("affection").default(0).notNull(),
         lastCaredAt: timestamp("lastCaredAt"),
+        lastExploredAt: timestamp("lastExploredAt"),
+        explorationCount: int("explorationCount").default(0).notNull(),
         createdAt: timestamp("createdAt").defaultNow().notNull(),
         updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
       },
       (t3) => [uniqueIndex("uniq_island_pet_key").on(t3.farmId, t3.petKey)]
+    );
+    islandDailyOrders = mysqlTable(
+      "island_daily_orders",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        farmId: int("farmId").notNull(),
+        orderDate: varchar("orderDate", { length: 10 }).notNull(),
+        orderKey: varchar("orderKey", { length: 40 }).notNull(),
+        status: varchar("status", { length: 20 }).default("available").notNull(),
+        claimedAt: timestamp("claimedAt"),
+        createdAt: timestamp("createdAt").defaultNow().notNull()
+      },
+      (t3) => [uniqueIndex("uniq_island_daily_order").on(t3.farmId, t3.orderDate, t3.orderKey)]
+    );
+    islandGroupContributions = mysqlTable(
+      "island_group_contributions",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        farmId: int("farmId").notNull(),
+        groupId: int("groupId").notNull(),
+        userId: int("userId").notNull(),
+        contributionDate: varchar("contributionDate", { length: 10 }).notNull(),
+        amount: int("amount").default(0).notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+      },
+      (t3) => [
+        uniqueIndex("uniq_island_group_daily").on(t3.farmId, t3.groupId, t3.contributionDate),
+        index("idx_island_group_daily").on(t3.groupId, t3.contributionDate)
+      ]
     );
     nnPool = mysqlTable("nn_pool", {
       id: int("id").primaryKey(),
@@ -15948,7 +15981,7 @@ var adminMaintenanceRouter = router({
 init_schema();
 init_db();
 import { TRPCError as TRPCError26 } from "@trpc/server";
-import { and as and37, eq as eq41, isNull as isNull5, sql as sql27 } from "drizzle-orm";
+import { and as and37, eq as eq41, inArray as inArray12, isNull as isNull5, sql as sql27 } from "drizzle-orm";
 import { z as z29 } from "zod";
 
 // server/islandFarmRules.ts
@@ -15966,6 +15999,31 @@ var ISLAND_ECONOMY_BOUNDARY = {
   itRole: "contribution_and_access"
 };
 var PET_CARE_COOLDOWN_MS = 10 * 60 * 1e3;
+var PET_EXPLORE_COOLDOWN_MS = 4 * 60 * 60 * 1e3;
+var FARM_LEVEL_EVERY_IT = 80;
+var FARM_LEVEL_CAP = 20;
+var STARTER_SEEDS = {
+  seed_wheat: 12,
+  seed_tomato: 8,
+  seed_moonberry: 4
+};
+var DAILY_ORDERS = [
+  { orderKey: "wheat_parcel", label: "\u7801\u5934\u7CAE\u98DF\u8BA2\u5355", cropKey: "wheat", requiredQuantity: 6, itReward: 16, seedRewardKey: "seed_tomato", seedRewardQuantity: 2 },
+  { orderKey: "tomato_basket", label: "\u5546\u5E97\u9C9C\u679C\u8BA2\u5355", cropKey: "tomato", requiredQuantity: 4, itReward: 24, seedRewardKey: "seed_moonberry", seedRewardQuantity: 1 }
+];
+var WORKSHOP_RECIPES = {
+  sunrise_crate: {
+    label: "\u6668\u66E6\u8865\u7ED9\u7BB1",
+    inputs: { wheat: 3, tomato: 2 },
+    outputKey: "sunrise_crate",
+    outputQuantity: 1,
+    itReward: 8,
+    requiredWorkshopLevel: 1
+  }
+};
+function currentUtcDay(now = /* @__PURE__ */ new Date()) {
+  return now.toISOString().slice(0, 10);
+}
 function cropReadyAt(cropKey, plantedAt) {
   return new Date(plantedAt.getTime() + ISLAND_CROPS[cropKey].growMinutes * 6e4);
 }
@@ -15981,6 +16039,7 @@ async function ensureFarm(db, userId) {
       if (farmId) {
         await db.insert(islandPlots).values(Array.from({ length: 6 }, (_, slotIndex) => ({ farmId, slotIndex })));
         await db.insert(islandPets).values([{ farmId, petKey: "fox" }, { farmId, petKey: "chick" }]);
+        await db.insert(islandInventories).values(Object.entries(STARTER_SEEDS).map(([itemKey, quantity]) => ({ farmId, itemKey, quantity })));
       }
     } catch {
     }
@@ -16001,11 +16060,13 @@ async function ensureFarm(db, userId) {
 }
 async function snapshot(db, userId) {
   const farm = await ensureFarm(db, userId);
-  const [plots, inventory, pets, account] = await Promise.all([
+  const day = currentUtcDay();
+  const [plots, inventory, pets, account, claimedOrders] = await Promise.all([
     db.select().from(islandPlots).where(eq41(islandPlots.farmId, farm.id)).orderBy(islandPlots.slotIndex),
     db.select().from(islandInventories).where(eq41(islandInventories.farmId, farm.id)),
     db.select().from(islandPets).where(eq41(islandPets.farmId, farm.id)),
-    db.select({ it: users.npPoints, bit: users.nnBalance }).from(users).where(eq41(users.id, userId)).limit(1)
+    db.select({ it: users.npPoints, bit: users.nnBalance }).from(users).where(eq41(users.id, userId)).limit(1),
+    db.select().from(islandDailyOrders).where(and37(eq41(islandDailyOrders.farmId, farm.id), eq41(islandDailyOrders.orderDate, day)))
   ]);
   const now = Date.now();
   return {
@@ -16018,6 +16079,8 @@ async function snapshot(db, userId) {
     })),
     inventory: inventory.reduce((acc, row) => ({ ...acc, [row.itemKey]: row.quantity }), {}),
     pets,
+    orders: DAILY_ORDERS.map((order) => ({ ...order, status: claimedOrders.find((row) => row.orderKey === order.orderKey)?.status ?? "available" })),
+    recipes: WORKSHOP_RECIPES,
     economy: {
       it: Number(account[0]?.it ?? 0),
       bit: Number(account[0]?.bit ?? 0),
@@ -16029,7 +16092,10 @@ async function snapshot(db, userId) {
 }
 async function grantIt(db, userId, farmId, amount, memo) {
   await db.update(users).set({ npPoints: sql27`${users.npPoints} + ${amount}` }).where(eq41(users.id, userId));
-  await db.update(islandFarms).set({ itEarned: sql27`${islandFarms.itEarned} + ${amount}` }).where(eq41(islandFarms.id, farmId));
+  await db.update(islandFarms).set({
+    itEarned: sql27`${islandFarms.itEarned} + ${amount}`,
+    level: sql27`LEAST(${FARM_LEVEL_CAP}, FLOOR((${islandFarms.itEarned} + ${amount}) / ${FARM_LEVEL_EVERY_IT}) + 1)`
+  }).where(eq41(islandFarms.id, farmId));
   await db.insert(itTransactions).values({ userId, amount, type: "island_farm", refType: "farm", refId: farmId, memo });
 }
 var islandFarmRouter = router({
@@ -16045,9 +16111,20 @@ var islandFarmRouter = router({
     const crop = ISLAND_CROPS[input.cropKey];
     const plantedAt = /* @__PURE__ */ new Date();
     const readyAt = cropReadyAt(input.cropKey, plantedAt);
-    const changed = await db.update(islandPlots).set({ cropKey: input.cropKey, plantedAt, readyAt }).where(and37(eq41(islandPlots.farmId, farm.id), eq41(islandPlots.slotIndex, input.slotIndex), isNull5(islandPlots.cropKey)));
-    const affected2 = changed?.[0]?.affectedRows ?? changed?.affectedRows ?? 0;
-    if (affected2 <= 0) throw new TRPCError26({ code: "BAD_REQUEST", message: "\u8FD9\u5757\u519C\u7530\u6B63\u5728\u751F\u957F\uFF0C\u7B49\u5F85\u6536\u83B7\u540E\u518D\u79CD\u690D" });
+    try {
+      await db.transaction(async (tx) => {
+        const spentSeed = await tx.update(islandInventories).set({ quantity: sql27`${islandInventories.quantity} - 1` }).where(and37(eq41(islandInventories.farmId, farm.id), eq41(islandInventories.itemKey, `seed_${input.cropKey}`), sql27`${islandInventories.quantity} >= 1`));
+        const seedAffected = spentSeed?.[0]?.affectedRows ?? spentSeed?.affectedRows ?? 0;
+        if (seedAffected <= 0) throw new Error("INSUFFICIENT_SEED");
+        const changed = await tx.update(islandPlots).set({ cropKey: input.cropKey, plantedAt, readyAt }).where(and37(eq41(islandPlots.farmId, farm.id), eq41(islandPlots.slotIndex, input.slotIndex), isNull5(islandPlots.cropKey)));
+        const affected2 = changed?.[0]?.affectedRows ?? changed?.affectedRows ?? 0;
+        if (affected2 <= 0) throw new Error("PLOT_OCCUPIED");
+      });
+    } catch (error) {
+      if (error?.message === "INSUFFICIENT_SEED") throw new TRPCError26({ code: "BAD_REQUEST", message: "\u6CA1\u6709\u5BF9\u5E94\u79CD\u5B50\uFF0C\u8BF7\u5148\u5B8C\u6210\u8BA2\u5355\u6216\u5BA0\u7269\u63A2\u7D22" });
+      if (error?.message === "PLOT_OCCUPIED") throw new TRPCError26({ code: "BAD_REQUEST", message: "\u8FD9\u5757\u519C\u7530\u6B63\u5728\u751F\u957F\uFF0C\u7B49\u5F85\u6536\u83B7\u540E\u518D\u79CD\u690D" });
+      throw error;
+    }
     return snapshot(db, ctx.user.id);
   }),
   harvest: protectedProcedure.use(rateLimitWrite).input(z29.object({ slotIndex: z29.number().int().min(0).max(5) })).mutation(async ({ ctx, input }) => {
@@ -16093,6 +16170,53 @@ var islandFarmRouter = router({
     }
     return snapshot(db, ctx.user.id);
   }),
+  craftWorkshop: protectedProcedure.use(rateLimitWrite).input(z29.object({ recipeKey: z29.enum(["sunrise_crate"]) })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const recipe = WORKSHOP_RECIPES[input.recipeKey];
+    if (farm.workshopLevel < recipe.requiredWorkshopLevel) throw new TRPCError26({ code: "BAD_REQUEST", message: "\u5DE5\u574A\u7B49\u7EA7\u4E0D\u8DB3" });
+    try {
+      await db.transaction(async (tx) => {
+        for (const [itemKey, quantity] of Object.entries(recipe.inputs)) {
+          const spent = await tx.update(islandInventories).set({ quantity: sql27`${islandInventories.quantity} - ${quantity}` }).where(and37(eq41(islandInventories.farmId, farm.id), eq41(islandInventories.itemKey, itemKey), sql27`${islandInventories.quantity} >= ${quantity}`));
+          const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? 0;
+          if (affected2 <= 0) throw new Error("INSUFFICIENT_RECIPE_INPUT");
+        }
+        await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: recipe.outputKey, quantity: recipe.outputQuantity }).onDuplicateKeyUpdate({ set: { quantity: sql27`${islandInventories.quantity} + ${recipe.outputQuantity}` } });
+        await grantIt(tx, ctx.user.id, farm.id, recipe.itReward, `\u5236\u4F5C${recipe.label}`);
+      });
+    } catch (error) {
+      if (error?.message === "INSUFFICIENT_RECIPE_INPUT") throw new TRPCError26({ code: "BAD_REQUEST", message: "\u5236\u4F5C\u6750\u6599\u4E0D\u8DB3" });
+      throw error;
+    }
+    return snapshot(db, ctx.user.id);
+  }),
+  claimDailyOrder: protectedProcedure.use(rateLimitWrite).input(z29.object({ orderKey: z29.enum(["wheat_parcel", "tomato_basket"]) })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const order = DAILY_ORDERS.find((candidate) => candidate.orderKey === input.orderKey);
+    const day = currentUtcDay();
+    try {
+      await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(islandDailyOrders).where(and37(eq41(islandDailyOrders.farmId, farm.id), eq41(islandDailyOrders.orderDate, day), eq41(islandDailyOrders.orderKey, order.orderKey))).limit(1);
+        if (existing?.status === "claimed") throw new Error("ORDER_ALREADY_CLAIMED");
+        if (!existing) await tx.insert(islandDailyOrders).values({ farmId: farm.id, orderDate: day, orderKey: order.orderKey });
+        const delivered = await tx.update(islandInventories).set({ quantity: sql27`${islandInventories.quantity} - ${order.requiredQuantity}` }).where(and37(eq41(islandInventories.farmId, farm.id), eq41(islandInventories.itemKey, order.cropKey), sql27`${islandInventories.quantity} >= ${order.requiredQuantity}`));
+        const affected2 = delivered?.[0]?.affectedRows ?? delivered?.affectedRows ?? 0;
+        if (affected2 <= 0) throw new Error("INSUFFICIENT_ORDER_CROPS");
+        await tx.update(islandDailyOrders).set({ status: "claimed", claimedAt: /* @__PURE__ */ new Date() }).where(and37(eq41(islandDailyOrders.farmId, farm.id), eq41(islandDailyOrders.orderDate, day), eq41(islandDailyOrders.orderKey, order.orderKey), eq41(islandDailyOrders.status, "available")));
+        await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: order.seedRewardKey, quantity: order.seedRewardQuantity }).onDuplicateKeyUpdate({ set: { quantity: sql27`${islandInventories.quantity} + ${order.seedRewardQuantity}` } });
+        await grantIt(tx, ctx.user.id, farm.id, order.itReward, `\u5B8C\u6210${order.label}`);
+      });
+    } catch (error) {
+      if (error?.message === "ORDER_ALREADY_CLAIMED") throw new TRPCError26({ code: "CONFLICT", message: "\u8BE5\u8BA2\u5355\u4ECA\u65E5\u5DF2\u5B8C\u6210" });
+      if (error?.message === "INSUFFICIENT_ORDER_CROPS") throw new TRPCError26({ code: "BAD_REQUEST", message: `\u9700\u8981 ${order.requiredQuantity} \u4EFD${ISLAND_CROPS[order.cropKey].label}` });
+      throw error;
+    }
+    return snapshot(db, ctx.user.id);
+  }),
   carePet: protectedProcedure.use(rateLimitWrite).input(z29.object({ petKey: z29.enum(["fox", "chick"]) })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
@@ -16106,6 +16230,68 @@ var islandFarmRouter = router({
       await tx.update(islandPets).set({ affection: sql27`LEAST(${islandPets.affection} + 1, 99)`, lastCaredAt: /* @__PURE__ */ new Date() }).where(eq41(islandPets.id, pet.id));
       await grantIt(tx, ctx.user.id, farm.id, 3, `\u7167\u6599${input.petKey === "fox" ? "\u5C0F\u72D0" : "\u5C0F\u9E21"}`);
     });
+    return snapshot(db, ctx.user.id);
+  }),
+  exploreWithPet: protectedProcedure.use(rateLimitWrite).input(z29.object({ petKey: z29.enum(["fox", "chick"]) })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const [pet] = await db.select().from(islandPets).where(and37(eq41(islandPets.farmId, farm.id), eq41(islandPets.petKey, input.petKey))).limit(1);
+    if (!pet) throw new TRPCError26({ code: "NOT_FOUND", message: "\u5BA0\u7269\u4E0D\u5B58\u5728" });
+    if (pet.affection < 2) throw new TRPCError26({ code: "BAD_REQUEST", message: "\u4EB2\u5BC6\u5EA6\u8FBE\u5230 2 \u540E\u624D\u80FD\u63A2\u7D22" });
+    if (pet.lastExploredAt && Date.now() - pet.lastExploredAt.getTime() < PET_EXPLORE_COOLDOWN_MS) throw new TRPCError26({ code: "TOO_MANY_REQUESTS", message: "\u4F19\u4F34\u6B63\u5728\u63A2\u7D22\uFF0C4 \u5C0F\u65F6\u540E\u518D\u6765\u770B\u770B\u5B83\u5427" });
+    const rewardKey = input.petKey === "fox" ? "seed_tomato" : "seed_wheat";
+    const rewardQuantity = input.petKey === "fox" ? 2 : 3;
+    await db.transaction(async (tx) => {
+      await tx.update(islandPets).set({ lastExploredAt: /* @__PURE__ */ new Date(), explorationCount: sql27`${islandPets.explorationCount} + 1` }).where(eq41(islandPets.id, pet.id));
+      await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: rewardKey, quantity: rewardQuantity }).onDuplicateKeyUpdate({ set: { quantity: sql27`${islandInventories.quantity} + ${rewardQuantity}` } });
+      await grantIt(tx, ctx.user.id, farm.id, 6, `${input.petKey === "fox" ? "\u5C0F\u72D0" : "\u5C0F\u9E21"}\u63A2\u7D22\u5F52\u6765`);
+    });
+    return snapshot(db, ctx.user.id);
+  }),
+  getGroupIslandProgress: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const memberships = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(eq41(groupMembers.userId, ctx.user.id));
+    if (memberships.length === 0) return { day: currentUtcDay(), groups: [], boundary: "\u7FA4\u5C9B\u534F\u4F5C\u4E0D\u4EA7\u751F BIT\u3001\u5151\u6362\u6216\u5E02\u573A\u4EA4\u6613\u3002" };
+    const groupIds = memberships.map((membership) => membership.groupId);
+    const farm = await ensureFarm(db, ctx.user.id);
+    const [groups, contributions] = await Promise.all([
+      db.select({ id: chatGroups.id, name: chatGroups.name, avatar: chatGroups.avatar }).from(chatGroups).where(inArray12(chatGroups.id, groupIds)),
+      db.select().from(islandGroupContributions).where(and37(inArray12(islandGroupContributions.groupId, groupIds), eq41(islandGroupContributions.contributionDate, currentUtcDay())))
+    ]);
+    return {
+      day: currentUtcDay(),
+      groups: groups.map((group) => ({
+        ...group,
+        myContribution: contributions.find((row) => row.groupId === group.id && row.farmId === farm.id)?.amount ?? 0,
+        participantCount: new Set(contributions.filter((row) => row.groupId === group.id).map((row) => row.userId)).size
+      })),
+      boundary: "\u7FA4\u5C9B\u534F\u4F5C\u53EA\u6D88\u8017\u6E38\u620F\u5185\u6668\u66E6\u8865\u7ED9\u7BB1\u5E76\u8BB0\u5F55 IT \u8D21\u732E\uFF0C\u4E0D\u4EA7\u751F BIT\u3001\u5151\u6362\u6216\u5E02\u573A\u4EA4\u6613\u3002"
+    };
+  }),
+  contributeToGroupIsland: protectedProcedure.use(rateLimitWrite).input(z29.object({ groupId: z29.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const [membership] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and37(eq41(groupMembers.groupId, input.groupId), eq41(groupMembers.userId, ctx.user.id))).limit(1);
+    if (!membership) throw new TRPCError26({ code: "FORBIDDEN", message: "\u4EC5\u5F53\u524D\u7FA4\u7EC4\u6210\u5458\u53EF\u4EE5\u53C2\u4E0E\u7FA4\u5C9B\u534F\u4F5C" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const day = currentUtcDay();
+    try {
+      await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(islandGroupContributions).where(and37(eq41(islandGroupContributions.farmId, farm.id), eq41(islandGroupContributions.groupId, input.groupId), eq41(islandGroupContributions.contributionDate, day))).limit(1);
+        if (existing) throw new Error("GROUP_CONTRIBUTION_COMPLETE");
+        const spent = await tx.update(islandInventories).set({ quantity: sql27`${islandInventories.quantity} - 1` }).where(and37(eq41(islandInventories.farmId, farm.id), eq41(islandInventories.itemKey, "sunrise_crate"), sql27`${islandInventories.quantity} >= 1`));
+        const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? 0;
+        if (affected2 <= 0) throw new Error("NO_SUNRISE_CRATE");
+        await tx.insert(islandGroupContributions).values({ farmId: farm.id, groupId: input.groupId, userId: ctx.user.id, contributionDate: day, amount: 1 });
+        await grantIt(tx, ctx.user.id, farm.id, 5, "\u5B8C\u6210\u7FA4\u5C9B\u534F\u4F5C\u8D21\u732E");
+      });
+    } catch (error) {
+      if (error?.message === "GROUP_CONTRIBUTION_COMPLETE") throw new TRPCError26({ code: "CONFLICT", message: "\u4F60\u4ECA\u5929\u5DF2\u4E3A\u8BE5\u7FA4\u5C9B\u8D21\u732E\u8FC7\u8865\u7ED9\u7BB1" });
+      if (error?.message === "NO_SUNRISE_CRATE") throw new TRPCError26({ code: "BAD_REQUEST", message: "\u9700\u8981 1 \u4E2A\u6668\u66E6\u8865\u7ED9\u7BB1" });
+      throw error;
+    }
     return snapshot(db, ctx.user.id);
   })
 });
@@ -17086,7 +17272,34 @@ var PATCHES = [
     \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (\`id\`),
     UNIQUE KEY \`uniq_island_pet_key\` (\`farmId\`, \`petKey\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_daily_orders\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`orderDate\` varchar(10) NOT NULL,
+    \`orderKey\` varchar(40) NOT NULL,
+    \`status\` varchar(20) NOT NULL DEFAULT 'available',
+    \`claimedAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_daily_order\` (\`farmId\`, \`orderDate\`, \`orderKey\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_group_contributions\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`groupId\` int NOT NULL,
+    \`userId\` int NOT NULL,
+    \`contributionDate\` varchar(10) NOT NULL,
+    \`amount\` int NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_group_daily\` (\`farmId\`, \`groupId\`, \`contributionDate\`),
+    KEY \`idx_island_group_daily\` (\`groupId\`, \`contributionDate\`)
   )`
+];
+var ISLAND_COLUMN_PATCHES = [
+  { table: "island_pets", column: "lastExploredAt", definition: "timestamp NULL" },
+  { table: "island_pets", column: "explorationCount", definition: "int NOT NULL DEFAULT 0" }
 ];
 async function applySchemaPatches() {
   const url = process.env.DATABASE_URL;
@@ -17100,6 +17313,13 @@ async function applySchemaPatches() {
       } catch (e) {
         console.error(`[SchemaPatch] failed: ${sql28}`, e);
       }
+    }
+    for (const patch of ISLAND_COLUMN_PATCHES) {
+      const [columns] = await conn.query(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1",
+        [patch.table, patch.column]
+      );
+      if (columns.length === 0) await conn.query(`ALTER TABLE \`${patch.table}\` ADD COLUMN \`${patch.column}\` ${patch.definition}`);
     }
   } catch (e) {
     console.error("[SchemaPatch] connection failed:", e);

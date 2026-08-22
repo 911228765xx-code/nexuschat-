@@ -1089,12 +1089,47 @@ export const islandPets = mysqlTable(
     level: int("level").default(1).notNull(),
     affection: int("affection").default(0).notNull(),
     lastCaredAt: timestamp("lastCaredAt"),
+    lastExploredAt: timestamp("lastExploredAt"),
+    explorationCount: int("explorationCount").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [uniqueIndex("uniq_island_pet_key").on(t.farmId, t.petKey)]
 );
 export type IslandPet = typeof islandPets.$inferSelect;
+
+export const islandDailyOrders = mysqlTable(
+  "island_daily_orders",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    farmId: int("farmId").notNull(),
+    orderDate: varchar("orderDate", { length: 10 }).notNull(),
+    orderKey: varchar("orderKey", { length: 40 }).notNull(),
+    status: varchar("status", { length: 20 }).default("available").notNull(),
+    claimedAt: timestamp("claimedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_island_daily_order").on(t.farmId, t.orderDate, t.orderKey)]
+);
+export type IslandDailyOrder = typeof islandDailyOrders.$inferSelect;
+
+export const islandGroupContributions = mysqlTable(
+  "island_group_contributions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    farmId: int("farmId").notNull(),
+    groupId: int("groupId").notNull(),
+    userId: int("userId").notNull(),
+    contributionDate: varchar("contributionDate", { length: 10 }).notNull(),
+    amount: int("amount").default(0).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uniq_island_group_daily").on(t.farmId, t.groupId, t.contributionDate),
+    index("idx_island_group_daily").on(t.groupId, t.contributionDate),
+  ]
+);
+export type IslandGroupContribution = typeof islandGroupContributions.$inferSelect;
 
 // ─── NN 底池（流动性共建）────────────────────────────────────────────────────────
 // 单行配置：储备/已售/单价(每 1 USDT 兑多少 NN)/累计募集。普通用户从底池购买 NN。

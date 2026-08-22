@@ -1,18 +1,22 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   islandFarms,
+  islandDailyOrders,
+  islandGroupContributions,
   islandInventories,
   islandPets,
   islandPlots,
   itTransactions,
+  chatGroups,
+  groupMembers,
   users,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { rateLimitWrite } from "../rateLimit";
 import { protectedProcedure, router } from "../_core/trpc";
-import { cropReadyAt, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, type IslandCropKey } from "../islandFarmRules";
+import { cropReadyAt, currentUtcDay, DAILY_ORDERS, FARM_LEVEL_CAP, FARM_LEVEL_EVERY_IT, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, PET_EXPLORE_COOLDOWN_MS, STARTER_SEEDS, WORKSHOP_RECIPES, type IslandCropKey } from "../islandFarmRules";
 
 const cropKeySchema = z.enum(["wheat", "tomato", "moonberry"]);
 
@@ -25,6 +29,7 @@ async function ensureFarm(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, us
       if (farmId) {
         await db.insert(islandPlots).values(Array.from({ length: 6 }, (_, slotIndex) => ({ farmId, slotIndex })));
         await db.insert(islandPets).values([{ farmId, petKey: "fox" }, { farmId, petKey: "chick" }]);
+        await db.insert(islandInventories).values(Object.entries(STARTER_SEEDS).map(([itemKey, quantity]) => ({ farmId, itemKey, quantity })));
       }
     } catch {
       // Unique userId ownership safely collapses simultaneous first-load initialization.
@@ -46,11 +51,13 @@ async function ensureFarm(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, us
 
 async function snapshot(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number) {
   const farm = await ensureFarm(db, userId);
-  const [plots, inventory, pets, account] = await Promise.all([
+  const day = currentUtcDay();
+  const [plots, inventory, pets, account, claimedOrders] = await Promise.all([
     db.select().from(islandPlots).where(eq(islandPlots.farmId, farm.id)).orderBy(islandPlots.slotIndex),
     db.select().from(islandInventories).where(eq(islandInventories.farmId, farm.id)),
     db.select().from(islandPets).where(eq(islandPets.farmId, farm.id)),
     db.select({ it: users.npPoints, bit: users.nnBalance }).from(users).where(eq(users.id, userId)).limit(1),
+    db.select().from(islandDailyOrders).where(and(eq(islandDailyOrders.farmId, farm.id), eq(islandDailyOrders.orderDate, day))),
   ]);
   const now = Date.now();
   return {
@@ -65,6 +72,8 @@ async function snapshot(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, user
     })),
     inventory: inventory.reduce<Record<string, number>>((acc, row) => ({ ...acc, [row.itemKey]: row.quantity }), {}),
     pets,
+    orders: DAILY_ORDERS.map((order) => ({ ...order, status: claimedOrders.find((row) => row.orderKey === order.orderKey)?.status ?? "available" })),
+    recipes: WORKSHOP_RECIPES,
     economy: {
       it: Number(account[0]?.it ?? 0),
       bit: Number(account[0]?.bit ?? 0),
@@ -83,7 +92,10 @@ async function grantIt(
   memo: string,
 ) {
   await db.update(users).set({ npPoints: sql`${users.npPoints} + ${amount}` }).where(eq(users.id, userId));
-  await db.update(islandFarms).set({ itEarned: sql`${islandFarms.itEarned} + ${amount}` }).where(eq(islandFarms.id, farmId));
+  await db.update(islandFarms).set({
+    itEarned: sql`${islandFarms.itEarned} + ${amount}`,
+    level: sql`LEAST(${FARM_LEVEL_CAP}, FLOOR((${islandFarms.itEarned} + ${amount}) / ${FARM_LEVEL_EVERY_IT}) + 1)`,
+  }).where(eq(islandFarms.id, farmId));
   await db.insert(itTransactions).values({ userId, amount, type: "island_farm", refType: "farm", refId: farmId, memo });
 }
 
@@ -104,10 +116,22 @@ export const islandFarmRouter = router({
       const crop = ISLAND_CROPS[input.cropKey];
       const plantedAt = new Date();
       const readyAt = cropReadyAt(input.cropKey, plantedAt);
-      const changed = await db.update(islandPlots).set({ cropKey: input.cropKey, plantedAt, readyAt })
-        .where(and(eq(islandPlots.farmId, farm.id), eq(islandPlots.slotIndex, input.slotIndex), isNull(islandPlots.cropKey)));
-      const affected = (changed as any)?.[0]?.affectedRows ?? (changed as any)?.affectedRows ?? 0;
-      if (affected <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "这块农田正在生长，等待收获后再种植" });
+      try {
+        await db.transaction(async (tx) => {
+          const spentSeed = await tx.update(islandInventories).set({ quantity: sql`${islandInventories.quantity} - 1` })
+            .where(and(eq(islandInventories.farmId, farm.id), eq(islandInventories.itemKey, `seed_${input.cropKey}`), sql`${islandInventories.quantity} >= 1`));
+          const seedAffected = (spentSeed as any)?.[0]?.affectedRows ?? (spentSeed as any)?.affectedRows ?? 0;
+          if (seedAffected <= 0) throw new Error("INSUFFICIENT_SEED");
+          const changed = await tx.update(islandPlots).set({ cropKey: input.cropKey, plantedAt, readyAt })
+            .where(and(eq(islandPlots.farmId, farm.id), eq(islandPlots.slotIndex, input.slotIndex), isNull(islandPlots.cropKey)));
+          const affected = (changed as any)?.[0]?.affectedRows ?? (changed as any)?.affectedRows ?? 0;
+          if (affected <= 0) throw new Error("PLOT_OCCUPIED");
+        });
+      } catch (error: any) {
+        if (error?.message === "INSUFFICIENT_SEED") throw new TRPCError({ code: "BAD_REQUEST", message: "没有对应种子，请先完成订单或宠物探索" });
+        if (error?.message === "PLOT_OCCUPIED") throw new TRPCError({ code: "BAD_REQUEST", message: "这块农田正在生长，等待收获后再种植" });
+        throw error;
+      }
       return snapshot(db, ctx.user.id);
     }),
 
@@ -164,6 +188,66 @@ export const islandFarmRouter = router({
       return snapshot(db, ctx.user.id);
     }),
 
+  craftWorkshop: protectedProcedure
+    .use(rateLimitWrite)
+    .input(z.object({ recipeKey: z.enum(["sunrise_crate"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const farm = await ensureFarm(db, ctx.user.id);
+      const recipe = WORKSHOP_RECIPES[input.recipeKey];
+      if (farm.workshopLevel < recipe.requiredWorkshopLevel) throw new TRPCError({ code: "BAD_REQUEST", message: "工坊等级不足" });
+      try {
+        await db.transaction(async (tx) => {
+          for (const [itemKey, quantity] of Object.entries(recipe.inputs)) {
+            const spent = await tx.update(islandInventories).set({ quantity: sql`${islandInventories.quantity} - ${quantity}` })
+              .where(and(eq(islandInventories.farmId, farm.id), eq(islandInventories.itemKey, itemKey), sql`${islandInventories.quantity} >= ${quantity}`));
+            const affected = (spent as any)?.[0]?.affectedRows ?? (spent as any)?.affectedRows ?? 0;
+            if (affected <= 0) throw new Error("INSUFFICIENT_RECIPE_INPUT");
+          }
+          await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: recipe.outputKey, quantity: recipe.outputQuantity })
+            .onDuplicateKeyUpdate({ set: { quantity: sql`${islandInventories.quantity} + ${recipe.outputQuantity}` } });
+          await grantIt(tx, ctx.user.id, farm.id, recipe.itReward, `制作${recipe.label}`);
+        });
+      } catch (error: any) {
+        if (error?.message === "INSUFFICIENT_RECIPE_INPUT") throw new TRPCError({ code: "BAD_REQUEST", message: "制作材料不足" });
+        throw error;
+      }
+      return snapshot(db, ctx.user.id);
+    }),
+
+  claimDailyOrder: protectedProcedure
+    .use(rateLimitWrite)
+    .input(z.object({ orderKey: z.enum(["wheat_parcel", "tomato_basket"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const farm = await ensureFarm(db, ctx.user.id);
+      const order = DAILY_ORDERS.find((candidate) => candidate.orderKey === input.orderKey)!;
+      const day = currentUtcDay();
+      try {
+        await db.transaction(async (tx) => {
+          const [existing] = await tx.select().from(islandDailyOrders).where(and(eq(islandDailyOrders.farmId, farm.id), eq(islandDailyOrders.orderDate, day), eq(islandDailyOrders.orderKey, order.orderKey))).limit(1);
+          if (existing?.status === "claimed") throw new Error("ORDER_ALREADY_CLAIMED");
+          if (!existing) await tx.insert(islandDailyOrders).values({ farmId: farm.id, orderDate: day, orderKey: order.orderKey });
+          const delivered = await tx.update(islandInventories).set({ quantity: sql`${islandInventories.quantity} - ${order.requiredQuantity}` })
+            .where(and(eq(islandInventories.farmId, farm.id), eq(islandInventories.itemKey, order.cropKey), sql`${islandInventories.quantity} >= ${order.requiredQuantity}`));
+          const affected = (delivered as any)?.[0]?.affectedRows ?? (delivered as any)?.affectedRows ?? 0;
+          if (affected <= 0) throw new Error("INSUFFICIENT_ORDER_CROPS");
+          await tx.update(islandDailyOrders).set({ status: "claimed", claimedAt: new Date() })
+            .where(and(eq(islandDailyOrders.farmId, farm.id), eq(islandDailyOrders.orderDate, day), eq(islandDailyOrders.orderKey, order.orderKey), eq(islandDailyOrders.status, "available")));
+          await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: order.seedRewardKey, quantity: order.seedRewardQuantity })
+            .onDuplicateKeyUpdate({ set: { quantity: sql`${islandInventories.quantity} + ${order.seedRewardQuantity}` } });
+          await grantIt(tx, ctx.user.id, farm.id, order.itReward, `完成${order.label}`);
+        });
+      } catch (error: any) {
+        if (error?.message === "ORDER_ALREADY_CLAIMED") throw new TRPCError({ code: "CONFLICT", message: "该订单今日已完成" });
+        if (error?.message === "INSUFFICIENT_ORDER_CROPS") throw new TRPCError({ code: "BAD_REQUEST", message: `需要 ${order.requiredQuantity} 份${ISLAND_CROPS[order.cropKey].label}` });
+        throw error;
+      }
+      return snapshot(db, ctx.user.id);
+    }),
+
   carePet: protectedProcedure
     .use(rateLimitWrite)
     .input(z.object({ petKey: z.enum(["fox", "chick"]) }))
@@ -180,6 +264,78 @@ export const islandFarmRouter = router({
         await tx.update(islandPets).set({ affection: sql`LEAST(${islandPets.affection} + 1, 99)`, lastCaredAt: new Date() }).where(eq(islandPets.id, pet.id));
         await grantIt(tx, ctx.user.id, farm.id, 3, `照料${input.petKey === "fox" ? "小狐" : "小鸡"}`);
       });
+      return snapshot(db, ctx.user.id);
+    }),
+
+  exploreWithPet: protectedProcedure
+    .use(rateLimitWrite)
+    .input(z.object({ petKey: z.enum(["fox", "chick"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const farm = await ensureFarm(db, ctx.user.id);
+      const [pet] = await db.select().from(islandPets).where(and(eq(islandPets.farmId, farm.id), eq(islandPets.petKey, input.petKey))).limit(1);
+      if (!pet) throw new TRPCError({ code: "NOT_FOUND", message: "宠物不存在" });
+      if (pet.affection < 2) throw new TRPCError({ code: "BAD_REQUEST", message: "亲密度达到 2 后才能探索" });
+      if (pet.lastExploredAt && Date.now() - pet.lastExploredAt.getTime() < PET_EXPLORE_COOLDOWN_MS) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "伙伴正在探索，4 小时后再来看看它吧" });
+      const rewardKey = input.petKey === "fox" ? "seed_tomato" : "seed_wheat";
+      const rewardQuantity = input.petKey === "fox" ? 2 : 3;
+      await db.transaction(async (tx) => {
+        await tx.update(islandPets).set({ lastExploredAt: new Date(), explorationCount: sql`${islandPets.explorationCount} + 1` }).where(eq(islandPets.id, pet.id));
+        await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: rewardKey, quantity: rewardQuantity }).onDuplicateKeyUpdate({ set: { quantity: sql`${islandInventories.quantity} + ${rewardQuantity}` } });
+        await grantIt(tx, ctx.user.id, farm.id, 6, `${input.petKey === "fox" ? "小狐" : "小鸡"}探索归来`);
+      });
+      return snapshot(db, ctx.user.id);
+    }),
+
+  getGroupIslandProgress: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+    const memberships = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(eq(groupMembers.userId, ctx.user.id));
+    if (memberships.length === 0) return { day: currentUtcDay(), groups: [], boundary: "群岛协作不产生 BIT、兑换或市场交易。" };
+    const groupIds = memberships.map((membership) => membership.groupId);
+    const farm = await ensureFarm(db, ctx.user.id);
+    const [groups, contributions] = await Promise.all([
+      db.select({ id: chatGroups.id, name: chatGroups.name, avatar: chatGroups.avatar }).from(chatGroups).where(inArray(chatGroups.id, groupIds)),
+      db.select().from(islandGroupContributions).where(and(inArray(islandGroupContributions.groupId, groupIds), eq(islandGroupContributions.contributionDate, currentUtcDay()))),
+    ]);
+    return {
+      day: currentUtcDay(),
+      groups: groups.map((group) => ({
+        ...group,
+        myContribution: contributions.find((row) => row.groupId === group.id && row.farmId === farm.id)?.amount ?? 0,
+        participantCount: new Set(contributions.filter((row) => row.groupId === group.id).map((row) => row.userId)).size,
+      })),
+      boundary: "群岛协作只消耗游戏内晨曦补给箱并记录 IT 贡献，不产生 BIT、兑换或市场交易。",
+    };
+  }),
+
+  contributeToGroupIsland: protectedProcedure
+    .use(rateLimitWrite)
+    .input(z.object({ groupId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+      const [membership] = await db.select({ id: groupMembers.id }).from(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id))).limit(1);
+      if (!membership) throw new TRPCError({ code: "FORBIDDEN", message: "仅当前群组成员可以参与群岛协作" });
+      const farm = await ensureFarm(db, ctx.user.id);
+      const day = currentUtcDay();
+      try {
+        await db.transaction(async (tx) => {
+          const [existing] = await tx.select().from(islandGroupContributions).where(and(eq(islandGroupContributions.farmId, farm.id), eq(islandGroupContributions.groupId, input.groupId), eq(islandGroupContributions.contributionDate, day))).limit(1);
+          if (existing) throw new Error("GROUP_CONTRIBUTION_COMPLETE");
+          const spent = await tx.update(islandInventories).set({ quantity: sql`${islandInventories.quantity} - 1` })
+            .where(and(eq(islandInventories.farmId, farm.id), eq(islandInventories.itemKey, "sunrise_crate"), sql`${islandInventories.quantity} >= 1`));
+          const affected = (spent as any)?.[0]?.affectedRows ?? (spent as any)?.affectedRows ?? 0;
+          if (affected <= 0) throw new Error("NO_SUNRISE_CRATE");
+          await tx.insert(islandGroupContributions).values({ farmId: farm.id, groupId: input.groupId, userId: ctx.user.id, contributionDate: day, amount: 1 });
+          await grantIt(tx, ctx.user.id, farm.id, 5, "完成群岛协作贡献");
+        });
+      } catch (error: any) {
+        if (error?.message === "GROUP_CONTRIBUTION_COMPLETE") throw new TRPCError({ code: "CONFLICT", message: "你今天已为该群岛贡献过补给箱" });
+        if (error?.message === "NO_SUNRISE_CRATE") throw new TRPCError({ code: "BAD_REQUEST", message: "需要 1 个晨曦补给箱" });
+        throw error;
+      }
       return snapshot(db, ctx.user.id);
     }),
 });
