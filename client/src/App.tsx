@@ -49,6 +49,7 @@ const UpdateBanner = lazy(() => import("./components/UpdateBanner").then(m => ({
 const Consulting = lazy(() => import("./pages/Consulting"));
 const ConsultingPayment = lazy(() => import("./pages/ConsultingPayment"));
 const ConsultingReport = lazy(() => import("./pages/ConsultingReport"));
+const IslandFarm = lazy(() => import("./pages/IslandFarm"));
 
 // ─── Route prefetch helpers (called on nav hover/touch to preload JS chunks) ──
 // Each function triggers the dynamic import so the chunk is fetched before navigation.
@@ -239,6 +240,11 @@ function RouteContent() {
             <Route path="/app/consulting">
               <AppLayout hideNav>
                 <Consulting />
+              </AppLayout>
+            </Route>
+            <Route path="/app/island">
+              <AppLayout hideNav requireAuth={!(import.meta.env.DEV && new URLSearchParams(window.location.search).get("demo") === "1")}>
+                <IslandFarm />
               </AppLayout>
             </Route>
             {/* ─────────────────────────────────────────────────────────── */}

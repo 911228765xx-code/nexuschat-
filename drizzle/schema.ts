@@ -1032,6 +1032,70 @@ export const itTransactions = mysqlTable(
   (t) => [index("idx_ittx_user").on(t.userId, t.createdAt)]
 );
 
+// ─── Island Farm ─────────────────────────────────────────────────────────────
+// 首期只保存岛屿玩法与 IT 贡献。BIT 作为统一结算货币仅只读展示，市场结算在后续
+// 完成风控、合规与托管设计前保持关闭。
+export const islandFarms = mysqlTable(
+  "island_farms",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    name: varchar("name", { length: 60 }).default("晨曦小岛").notNull(),
+    level: int("level").default(1).notNull(),
+    workshopLevel: int("workshopLevel").default(1).notNull(),
+    itEarned: int("itEarned").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_island_farm_user").on(t.userId)]
+);
+export type IslandFarm = typeof islandFarms.$inferSelect;
+
+export const islandPlots = mysqlTable(
+  "island_plots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    farmId: int("farmId").notNull(),
+    slotIndex: int("slotIndex").notNull(),
+    cropKey: varchar("cropKey", { length: 30 }),
+    plantedAt: timestamp("plantedAt"),
+    readyAt: timestamp("readyAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_island_plot_slot").on(t.farmId, t.slotIndex)]
+);
+export type IslandPlot = typeof islandPlots.$inferSelect;
+
+export const islandInventories = mysqlTable(
+  "island_inventories",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    farmId: int("farmId").notNull(),
+    itemKey: varchar("itemKey", { length: 30 }).notNull(),
+    quantity: int("quantity").default(0).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_island_inventory_item").on(t.farmId, t.itemKey)]
+);
+export type IslandInventory = typeof islandInventories.$inferSelect;
+
+export const islandPets = mysqlTable(
+  "island_pets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    farmId: int("farmId").notNull(),
+    petKey: varchar("petKey", { length: 30 }).notNull(),
+    level: int("level").default(1).notNull(),
+    affection: int("affection").default(0).notNull(),
+    lastCaredAt: timestamp("lastCaredAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_island_pet_key").on(t.farmId, t.petKey)]
+);
+export type IslandPet = typeof islandPets.$inferSelect;
+
 // ─── NN 底池（流动性共建）────────────────────────────────────────────────────────
 // 单行配置：储备/已售/单价(每 1 USDT 兑多少 NN)/累计募集。普通用户从底池购买 NN。
 export const nnPool = mysqlTable("nn_pool", {

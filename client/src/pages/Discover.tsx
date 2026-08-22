@@ -803,6 +803,21 @@ export default function Discover() {
               </button>
             </div>
 
+            {/* Island Farm — first-party playable world entry */}
+            <div className="px-4 pb-3">
+              <button
+                onClick={() => isAuthenticated ? setLocation("/app/island") : setShowLoginPrompt(true)}
+                className="group relative w-full overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-[#123448] via-[#162a3a] to-[#2a2148] p-4 text-left active:scale-[0.99] transition-transform"
+              >
+                <div className="absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(circle_at_75%_15%,rgba(129,232,255,0.26),transparent_58%)]" />
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#78be6a]/20 text-2xl shadow-[0_0_20px_rgba(95,211,171,0.12)]">🏝️</div>
+                  <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="text-sm font-bold text-white">晨曦小岛 · 农场经营</span><Sparkles size={14} className="text-[#77e4ff]" /></div><p className="mt-1 text-xs leading-5 text-slate-300">种植、收获、照料伙伴，获得 IT 贡献；未来以 BIT 统一结算岛屿资产。</p></div>
+                  <ExternalLink size={17} className="shrink-0 text-cyan-200/80 group-hover:text-cyan-100" />
+                </div>
+              </button>
+            </div>
+
             {/* Pull to refresh indicator */}
             {isRefreshing && (
               <div className="flex items-center justify-center py-4 gap-2">

@@ -44,6 +44,10 @@ __export(schema_exports, {
   icoPurchases: () => icoPurchases,
   icoRewardRuns: () => icoRewardRuns,
   icoStakeLots: () => icoStakeLots,
+  islandFarms: () => islandFarms,
+  islandInventories: () => islandInventories,
+  islandPets: () => islandPets,
+  islandPlots: () => islandPlots,
   itTransactions: () => itTransactions,
   messageReactions: () => messageReactions,
   messageReadReceipts: () => messageReadReceipts,
@@ -102,7 +106,7 @@ import {
   index,
   uniqueIndex
 } from "drizzle-orm/mysql-core";
-var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, itTransactions, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
+var users, userDailyNp, rankAggRun, bitRankAirdropRun, bitRankAirdropClaim, referralMilestones, calls, curationStakes, tgeConfig, tgeClaims, chatGroups, groupMembers, messages, conversationPrefs, groupJoinRequests, messageReactions, posts, postLikes, postComments, researchReports, priceAlerts, userTasks, notifications, userFollows, friendRequests, contactMetadata, userBlocklist, userWatchlist, tradingPositions, copyTraders, copyTraderFollows, tradingStrategies, userSettings, userApiKeys, referrals, swapHistory, passwordResetTokens, pushSubscriptions, devicePushTokens, groupUnreadCounts, groupInviteLinks, groupFiles, messageReadReceipts, groupMutes, appConfig, redPacketClaims, redPackets, groupAnnouncements, groupBots, nnNodeOrders, nnTransactions, itTransactions, islandFarms, islandPlots, islandInventories, islandPets, nnPool, nnPoolOrders, aiDailyUsage, nnVesting, partnerBonuses, partnerPayouts, partnerEarnings, partnerSettleRuns, promoBanners, platformFeeLedger, contentViolations, consultingReports, consultingPayments, voiceRooms, icoConfig, icoOrders, icoPurchases, icoAccounts, icoStakeLots, icoRewardRuns, feedback, aiAmmPool, usdtDeposits, usdtWithdrawals, aiSwapTrades;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -950,6 +954,59 @@ var init_schema = __esm({
         createdAt: timestamp("createdAt").defaultNow().notNull()
       },
       (t3) => [index("idx_ittx_user").on(t3.userId, t3.createdAt)]
+    );
+    islandFarms = mysqlTable(
+      "island_farms",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        userId: int("userId").notNull(),
+        name: varchar("name", { length: 60 }).default("\u6668\u66E6\u5C0F\u5C9B").notNull(),
+        level: int("level").default(1).notNull(),
+        workshopLevel: int("workshopLevel").default(1).notNull(),
+        itEarned: int("itEarned").default(0).notNull(),
+        createdAt: timestamp("createdAt").defaultNow().notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+      },
+      (t3) => [uniqueIndex("uniq_island_farm_user").on(t3.userId)]
+    );
+    islandPlots = mysqlTable(
+      "island_plots",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        farmId: int("farmId").notNull(),
+        slotIndex: int("slotIndex").notNull(),
+        cropKey: varchar("cropKey", { length: 30 }),
+        plantedAt: timestamp("plantedAt"),
+        readyAt: timestamp("readyAt"),
+        createdAt: timestamp("createdAt").defaultNow().notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+      },
+      (t3) => [uniqueIndex("uniq_island_plot_slot").on(t3.farmId, t3.slotIndex)]
+    );
+    islandInventories = mysqlTable(
+      "island_inventories",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        farmId: int("farmId").notNull(),
+        itemKey: varchar("itemKey", { length: 30 }).notNull(),
+        quantity: int("quantity").default(0).notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+      },
+      (t3) => [uniqueIndex("uniq_island_inventory_item").on(t3.farmId, t3.itemKey)]
+    );
+    islandPets = mysqlTable(
+      "island_pets",
+      {
+        id: int("id").autoincrement().primaryKey(),
+        farmId: int("farmId").notNull(),
+        petKey: varchar("petKey", { length: 30 }).notNull(),
+        level: int("level").default(1).notNull(),
+        affection: int("affection").default(0).notNull(),
+        lastCaredAt: timestamp("lastCaredAt"),
+        createdAt: timestamp("createdAt").defaultNow().notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+      },
+      (t3) => [uniqueIndex("uniq_island_pet_key").on(t3.farmId, t3.petKey)]
     );
     nnPool = mysqlTable("nn_pool", {
       id: int("id").primaryKey(),
@@ -15888,6 +15945,172 @@ var adminMaintenanceRouter = router({
   })
 });
 
+// server/routers/islandFarm.ts
+init_schema();
+init_db();
+import { TRPCError as TRPCError26 } from "@trpc/server";
+import { and as and37, eq as eq41, isNull as isNull5, sql as sql27 } from "drizzle-orm";
+import { z as z29 } from "zod";
+
+// server/islandFarmRules.ts
+var ISLAND_CROPS = {
+  wheat: { label: "\u91D1\u7A57\u5C0F\u9EA6", growMinutes: 1, yield: 3, itReward: 4, color: "#f8c860" },
+  tomato: { label: "\u73CA\u745A\u756A\u8304", growMinutes: 2, yield: 2, itReward: 6, color: "#ef6a62" },
+  moonberry: { label: "\u661F\u8F89\u6D46\u679C", growMinutes: 3, yield: 1, itReward: 10, color: "#8e7cff" }
+};
+var ISLAND_ECONOMY_BOUNDARY = {
+  settlementCurrency: "BIT",
+  bitMarketEnabled: false,
+  bitConversionEnabled: false,
+  automaticBitRewardsEnabled: false,
+  itTransferable: false,
+  itRole: "contribution_and_access"
+};
+var PET_CARE_COOLDOWN_MS = 10 * 60 * 1e3;
+function cropReadyAt(cropKey, plantedAt) {
+  return new Date(plantedAt.getTime() + ISLAND_CROPS[cropKey].growMinutes * 6e4);
+}
+
+// server/routers/islandFarm.ts
+var cropKeySchema = z29.enum(["wheat", "tomato", "moonberry"]);
+async function ensureFarm(db, userId) {
+  let [farm] = await db.select().from(islandFarms).where(eq41(islandFarms.userId, userId)).limit(1);
+  if (!farm) {
+    try {
+      const created = await db.insert(islandFarms).values({ userId });
+      const farmId = Number(created?.insertId ?? created?.[0]?.insertId ?? 0);
+      if (farmId) {
+        await db.insert(islandPlots).values(Array.from({ length: 6 }, (_, slotIndex) => ({ farmId, slotIndex })));
+        await db.insert(islandPets).values([{ farmId, petKey: "fox" }, { farmId, petKey: "chick" }]);
+      }
+    } catch {
+    }
+    [farm] = await db.select().from(islandFarms).where(eq41(islandFarms.userId, userId)).limit(1);
+  }
+  if (!farm) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u5C9B\u5C7F\u521D\u59CB\u5316\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5" });
+  const existingPlots = await db.select({ id: islandPlots.id }).from(islandPlots).where(eq41(islandPlots.farmId, farm.id));
+  if (existingPlots.length === 0) {
+    await db.insert(islandPlots).values(Array.from({ length: 6 }, (_, slotIndex) => ({ farmId: farm.id, slotIndex }))).catch(() => {
+    });
+  }
+  const existingPets = await db.select({ id: islandPets.id }).from(islandPets).where(eq41(islandPets.farmId, farm.id));
+  if (existingPets.length === 0) {
+    await db.insert(islandPets).values([{ farmId: farm.id, petKey: "fox" }, { farmId: farm.id, petKey: "chick" }]).catch(() => {
+    });
+  }
+  return farm;
+}
+async function snapshot(db, userId) {
+  const farm = await ensureFarm(db, userId);
+  const [plots, inventory, pets, account] = await Promise.all([
+    db.select().from(islandPlots).where(eq41(islandPlots.farmId, farm.id)).orderBy(islandPlots.slotIndex),
+    db.select().from(islandInventories).where(eq41(islandInventories.farmId, farm.id)),
+    db.select().from(islandPets).where(eq41(islandPets.farmId, farm.id)),
+    db.select({ it: users.npPoints, bit: users.nnBalance }).from(users).where(eq41(users.id, userId)).limit(1)
+  ]);
+  const now = Date.now();
+  return {
+    farm,
+    crops: ISLAND_CROPS,
+    plots: plots.map((plot) => ({
+      ...plot,
+      state: !plot.cropKey ? "empty" : plot.readyAt && plot.readyAt.getTime() <= now ? "ready" : "growing",
+      progress: !plot.cropKey || !plot.plantedAt || !plot.readyAt ? 0 : Math.min(1, Math.max(0, (now - plot.plantedAt.getTime()) / (plot.readyAt.getTime() - plot.plantedAt.getTime())))
+    })),
+    inventory: inventory.reduce((acc, row) => ({ ...acc, [row.itemKey]: row.quantity }), {}),
+    pets,
+    economy: {
+      it: Number(account[0]?.it ?? 0),
+      bit: Number(account[0]?.bit ?? 0),
+      bitSettlement: "BIT \u662F\u5C9B\u5C7F\u672A\u6765\u5E02\u573A\u7684\u7EDF\u4E00\u7ED3\u7B97\u8D27\u5E01\uFF1B\u9996\u671F\u5E02\u573A\u4E0E\u5151\u6362\u5C1A\u672A\u5F00\u653E\u3002",
+      itRole: "IT \u662F\u4E0D\u53EF\u4EA4\u6613\u7684\u8D21\u732E\u4E0E\u8D44\u683C\u6307\u6807\uFF0C\u7531\u670D\u52A1\u7AEF\u9A8C\u8BC1\u7684\u79CD\u690D\u3001\u6536\u83B7\u3001\u5EFA\u8BBE\u4E0E\u7167\u6599\u884C\u4E3A\u83B7\u5F97\u3002",
+      boundaries: ISLAND_ECONOMY_BOUNDARY
+    }
+  };
+}
+async function grantIt(db, userId, farmId, amount, memo) {
+  await db.update(users).set({ npPoints: sql27`${users.npPoints} + ${amount}` }).where(eq41(users.id, userId));
+  await db.update(islandFarms).set({ itEarned: sql27`${islandFarms.itEarned} + ${amount}` }).where(eq41(islandFarms.id, farmId));
+  await db.insert(itTransactions).values({ userId, amount, type: "island_farm", refType: "farm", refId: farmId, memo });
+}
+var islandFarmRouter = router({
+  getState: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    return snapshot(db, ctx.user.id);
+  }),
+  plant: protectedProcedure.use(rateLimitWrite).input(z29.object({ slotIndex: z29.number().int().min(0).max(5), cropKey: cropKeySchema })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const crop = ISLAND_CROPS[input.cropKey];
+    const plantedAt = /* @__PURE__ */ new Date();
+    const readyAt = cropReadyAt(input.cropKey, plantedAt);
+    const changed = await db.update(islandPlots).set({ cropKey: input.cropKey, plantedAt, readyAt }).where(and37(eq41(islandPlots.farmId, farm.id), eq41(islandPlots.slotIndex, input.slotIndex), isNull5(islandPlots.cropKey)));
+    const affected2 = changed?.[0]?.affectedRows ?? changed?.affectedRows ?? 0;
+    if (affected2 <= 0) throw new TRPCError26({ code: "BAD_REQUEST", message: "\u8FD9\u5757\u519C\u7530\u6B63\u5728\u751F\u957F\uFF0C\u7B49\u5F85\u6536\u83B7\u540E\u518D\u79CD\u690D" });
+    return snapshot(db, ctx.user.id);
+  }),
+  harvest: protectedProcedure.use(rateLimitWrite).input(z29.object({ slotIndex: z29.number().int().min(0).max(5) })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    try {
+      await db.transaction(async (tx) => {
+        const [plot] = await tx.select().from(islandPlots).where(and37(eq41(islandPlots.farmId, farm.id), eq41(islandPlots.slotIndex, input.slotIndex))).limit(1);
+        const cropKey = plot?.cropKey;
+        if (!plot || !cropKey || !plot.readyAt || plot.readyAt.getTime() > Date.now()) throw new Error("NOT_READY");
+        const crop = ISLAND_CROPS[cropKey];
+        await tx.update(islandPlots).set({ cropKey: null, plantedAt: null, readyAt: null }).where(eq41(islandPlots.id, plot.id));
+        await tx.insert(islandInventories).values({ farmId: farm.id, itemKey: cropKey, quantity: crop.yield }).onDuplicateKeyUpdate({ set: { quantity: sql27`${islandInventories.quantity} + ${crop.yield}` } });
+        await grantIt(tx, ctx.user.id, farm.id, crop.itReward, `\u6536\u83B7${crop.label}`);
+      });
+    } catch (error) {
+      if (error?.message === "NOT_READY") throw new TRPCError26({ code: "BAD_REQUEST", message: "\u4F5C\u7269\u5C1A\u672A\u6210\u719F" });
+      throw error;
+    }
+    return snapshot(db, ctx.user.id);
+  }),
+  upgradeWorkshop: protectedProcedure.use(rateLimitWrite).mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const nextLevel = farm.workshopLevel + 1;
+    const wheatCost = nextLevel * 4;
+    const tomatoCost = nextLevel * 2;
+    try {
+      await db.transaction(async (tx) => {
+        for (const [itemKey, cost] of [["wheat", wheatCost], ["tomato", tomatoCost]]) {
+          const spent = await tx.update(islandInventories).set({ quantity: sql27`${islandInventories.quantity} - ${cost}` }).where(and37(eq41(islandInventories.farmId, farm.id), eq41(islandInventories.itemKey, itemKey), sql27`${islandInventories.quantity} >= ${cost}`));
+          const affected2 = spent?.[0]?.affectedRows ?? spent?.affectedRows ?? 0;
+          if (affected2 <= 0) throw new Error("INSUFFICIENT_CROPS");
+        }
+        await tx.update(islandFarms).set({ workshopLevel: nextLevel }).where(eq41(islandFarms.id, farm.id));
+        await grantIt(tx, ctx.user.id, farm.id, 12, `\u5347\u7EA7\u7801\u5934\u5DE5\u574A Lv.${nextLevel}`);
+      });
+    } catch (error) {
+      if (error?.message === "INSUFFICIENT_CROPS") throw new TRPCError26({ code: "BAD_REQUEST", message: `\u5347\u7EA7\u9700\u8981 ${wheatCost} \u5C0F\u9EA6\u4E0E ${tomatoCost} \u756A\u8304` });
+      throw error;
+    }
+    return snapshot(db, ctx.user.id);
+  }),
+  carePet: protectedProcedure.use(rateLimitWrite).input(z29.object({ petKey: z29.enum(["fox", "chick"]) })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636E\u5E93\u4E0D\u53EF\u7528" });
+    const farm = await ensureFarm(db, ctx.user.id);
+    const [pet] = await db.select().from(islandPets).where(and37(eq41(islandPets.farmId, farm.id), eq41(islandPets.petKey, input.petKey))).limit(1);
+    if (!pet) throw new TRPCError26({ code: "NOT_FOUND", message: "\u5BA0\u7269\u4E0D\u5B58\u5728" });
+    if (pet.lastCaredAt && Date.now() - pet.lastCaredAt.getTime() < PET_CARE_COOLDOWN_MS) {
+      throw new TRPCError26({ code: "TOO_MANY_REQUESTS", message: "\u5BA0\u7269\u6B63\u5728\u4F11\u606F\uFF0C\u7A0D\u540E\u518D\u6765\u770B\u770B\u5B83\u5427" });
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(islandPets).set({ affection: sql27`LEAST(${islandPets.affection} + 1, 99)`, lastCaredAt: /* @__PURE__ */ new Date() }).where(eq41(islandPets.id, pet.id));
+      await grantIt(tx, ctx.user.id, farm.id, 3, `\u7167\u6599${input.petKey === "fox" ? "\u5C0F\u72D0" : "\u5C0F\u9E21"}`);
+    });
+    return snapshot(db, ctx.user.id);
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   system: systemRouter,
@@ -15916,6 +16139,7 @@ var appRouter = router({
   tge: tgeRouter,
   partner: partnerRouter,
   adminMaintenance: adminMaintenanceRouter,
+  islandFarm: islandFarmRouter,
   notifications: notificationsRouter,
   trading: tradingRouter,
   follow: followRouter,
@@ -16244,6 +16468,9 @@ var vite_config_default = defineConfig({
     // esbuild avoids the high peak memory of two-pass Terser minification while
     // preserving the existing chunk strategy and source-level debugging output.
     minify: "esbuild",
+    // Gzip size reporting walks every emitted Web3 and 3D chunk in memory. It is
+    // diagnostic only, so keep it off to make low-memory production builds stable.
+    reportCompressedSize: false,
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,
@@ -16400,7 +16627,7 @@ function serveStatic(app) {
 // server/priceAlertChecker.ts
 init_db();
 init_schema();
-import { eq as eq41, and as and37 } from "drizzle-orm";
+import { eq as eq42, and as and38 } from "drizzle-orm";
 init_logger();
 var COINGECKO_BASE2 = "https://api.coingecko.com/api/v3";
 var CHECK_INTERVAL_MS = 2 * 60 * 1e3;
@@ -16425,7 +16652,7 @@ async function fetchPrices(tokenIds) {
 }
 async function checkAlerts() {
   const activeAlerts = await withDbRetry(
-    (db) => db.select().from(priceAlerts).where(and37(eq41(priceAlerts.isActive, true), eq41(priceAlerts.isTriggered, false)))
+    (db) => db.select().from(priceAlerts).where(and38(eq42(priceAlerts.isActive, true), eq42(priceAlerts.isTriggered, false)))
   );
   if (!activeAlerts || activeAlerts.length === 0) return;
   const tokenIds = activeAlerts.map((a) => a.tokenId);
@@ -16439,7 +16666,7 @@ async function checkAlerts() {
     const triggered = alert.condition === "above" && currentPrice >= target || alert.condition === "below" && currentPrice <= target;
     if (!triggered) continue;
     await withDbRetry(
-      (db) => db.update(priceAlerts).set({ isTriggered: true, isActive: false }).where(eq41(priceAlerts.id, alert.id))
+      (db) => db.update(priceAlerts).set({ isTriggered: true, isActive: false }).where(eq42(priceAlerts.id, alert.id))
     );
     const directionLabel = alert.condition === "above" ? "above \u2191" : "below \u2193";
     const content = `\u{1F514} Price Alert: ${alert.tokenSymbol} is now $${currentPrice.toLocaleString()} \u2014 your target of $${target.toLocaleString()} (${directionLabel}) has been reached!`;
@@ -16479,7 +16706,7 @@ function startPriceAlertChecker() {
 // server/botScheduler.ts
 init_db();
 init_schema();
-import { eq as eq42, and as and38, desc as desc25 } from "drizzle-orm";
+import { eq as eq43, and as and39, desc as desc25 } from "drizzle-orm";
 import pino2 from "pino";
 var logger2 = pino2({ level: "info" });
 var BOT_OPEN_IDS = {
@@ -16496,7 +16723,7 @@ async function loadBotIds() {
   const db = await getDb();
   if (!db) return;
   for (const [name, openId] of Object.entries(BOT_OPEN_IDS)) {
-    const [bot] = await db.select({ id: users.id }).from(users).where(eq42(users.openId, openId)).limit(1);
+    const [bot] = await db.select({ id: users.id }).from(users).where(eq43(users.openId, openId)).limit(1);
     if (bot) botIds[name] = bot.id;
   }
 }
@@ -16600,7 +16827,7 @@ async function sendBotMessage(groupId, botName, content) {
     messageType: "text"
   }).$returningId();
   try {
-    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(eq42(users.id, botId)).limit(1);
+    const [bot] = await db.select({ id: users.id, name: users.name, avatar: users.avatar, username: users.username }).from(users).where(eq43(users.id, botId)).limit(1);
     const messagePayload = {
       id: result.id,
       groupId,
@@ -16646,15 +16873,15 @@ async function runAmbientChatter() {
   if (Math.random() > AMBIENT_TICK_PROB) return;
   const db = await getDb();
   if (!db) return;
-  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq42(chatGroups.isPublic, true)).limit(500);
+  const groups = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq43(chatGroups.isPublic, true)).limit(500);
   const now = Date.now();
   const eligible = groups.filter((g) => !lastAmbientPerGroup[g.id] || now - lastAmbientPerGroup[g.id] > AMBIENT_COOLDOWN_MS);
   if (eligible.length === 0) return;
   const group = eligible[Math.floor(Math.random() * eligible.length)];
   const personaOpenIds = new Set(Object.values(BOT_PERSONAS).map((p) => p.openId));
-  const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq42(users.id, groupMembers.userId)).where(and38(eq42(groupMembers.groupId, group.id), eq42(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
+  const bots = (await db.select({ id: users.id, name: users.name, avatar: users.avatar, openId: users.openId }).from(groupMembers).innerJoin(users, eq43(users.id, groupMembers.userId)).where(and39(eq43(groupMembers.groupId, group.id), eq43(users.isBot, true)))).filter((b) => personaOpenIds.has(b.openId ?? ""));
   if (bots.length === 0) return;
-  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq42(messages.senderId, users.id)).where(and38(eq42(messages.groupId, group.id), eq42(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
+  const recent = await db.select({ content: messages.content, name: users.name, createdAt: messages.createdAt, senderId: messages.senderId }).from(messages).leftJoin(users, eq43(messages.senderId, users.id)).where(and39(eq43(messages.groupId, group.id), eq43(messages.isDeleted, false))).orderBy(desc25(messages.createdAt)).limit(6);
   const lastAge = recent[0]?.createdAt ? now - new Date(recent[0].createdAt).getTime() : Infinity;
   const pool = bots.filter((b) => b.id !== recent[0]?.senderId);
   const cand = pool.length ? pool : bots;
@@ -16726,12 +16953,12 @@ function startBotScheduler() {
 init_db();
 init_schema();
 init_logger();
-import { and as and39, isNotNull as isNotNull2, lt as lt6 } from "drizzle-orm";
+import { and as and40, isNotNull as isNotNull2, lt as lt6 } from "drizzle-orm";
 var INTERVAL_MS = 10 * 60 * 1e3;
 async function purgeExpired() {
   const db = await getDb();
   if (!db) return;
-  const res = await db.delete(messages).where(and39(isNotNull2(messages.expiresAt), lt6(messages.expiresAt, /* @__PURE__ */ new Date())));
+  const res = await db.delete(messages).where(and40(isNotNull2(messages.expiresAt), lt6(messages.expiresAt, /* @__PURE__ */ new Date())));
   const removed = res?.[0]?.affectedRows ?? res?.rowsAffected ?? res?.affectedRows;
   if (removed) logger_default.info({ removed }, "MessageCleanup: purged expired messages");
 }
@@ -16814,6 +17041,52 @@ var PATCHES = [
     \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (\`id\`),
     KEY \`idx_ittx_user\` (\`userId\`, \`createdAt\`)
+  )`,
+  // 岛屿农场首期：独立持久化地块、背包与宠物；BIT 市场不在本补丁中开放。
+  `CREATE TABLE IF NOT EXISTS \`island_farms\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`name\` varchar(60) NOT NULL DEFAULT '\u6668\u66E6\u5C0F\u5C9B',
+    \`level\` int NOT NULL DEFAULT 1,
+    \`workshopLevel\` int NOT NULL DEFAULT 1,
+    \`itEarned\` int NOT NULL DEFAULT 0,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_farm_user\` (\`userId\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_plots\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`slotIndex\` int NOT NULL,
+    \`cropKey\` varchar(30),
+    \`plantedAt\` timestamp NULL,
+    \`readyAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_plot_slot\` (\`farmId\`, \`slotIndex\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_inventories\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`itemKey\` varchar(30) NOT NULL,
+    \`quantity\` int NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_inventory_item\` (\`farmId\`, \`itemKey\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_pets\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`petKey\` varchar(30) NOT NULL,
+    \`level\` int NOT NULL DEFAULT 1,
+    \`affection\` int NOT NULL DEFAULT 0,
+    \`lastCaredAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_pet_key\` (\`farmId\`, \`petKey\`)
   )`
 ];
 async function applySchemaPatches() {
@@ -16822,11 +17095,11 @@ async function applySchemaPatches() {
   let conn = null;
   try {
     conn = await mysql2.createConnection(url);
-    for (const sql27 of PATCHES) {
+    for (const sql28 of PATCHES) {
       try {
-        await conn.query(sql27);
+        await conn.query(sql28);
       } catch (e) {
-        console.error(`[SchemaPatch] failed: ${sql27}`, e);
+        console.error(`[SchemaPatch] failed: ${sql28}`, e);
       }
     }
   } catch (e) {
@@ -17015,14 +17288,14 @@ ${tokenContext}
 init_db();
 init_schema();
 import { Readable as Readable2 } from "stream";
-import { eq as eq43 } from "drizzle-orm";
+import { eq as eq44 } from "drizzle-orm";
 async function handleApkDownload(req, res) {
   try {
     const db = await getDb();
     let url = "";
     let version = "";
     if (db) {
-      const rows = await db.select().from(appConfig).where(eq43(appConfig.platform, "all")).limit(1);
+      const rows = await db.select().from(appConfig).where(eq44(appConfig.platform, "all")).limit(1);
       if (rows.length > 0) {
         url = rows[0].downloadUrlAndroid ?? "";
         version = rows[0].latestVersion ?? "";

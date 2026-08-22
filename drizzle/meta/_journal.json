@@ -393,6 +393,13 @@
       "when": 1781244024527,
       "tag": "0055_ico_curve_subscription",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "5",
+      "when": 1787359788510,
+      "tag": "0056_remarkable_sumo",
+      "breakpoints": true
     }
   ]
 }

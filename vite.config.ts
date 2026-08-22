@@ -405,6 +405,9 @@ export default defineConfig({
     // esbuild avoids the high peak memory of two-pass Terser minification while
     // preserving the existing chunk strategy and source-level debugging output.
     minify: "esbuild",
+    // Gzip size reporting walks every emitted Web3 and 3D chunk in memory. It is
+    // diagnostic only, so keep it off to make low-memory production builds stable.
+    reportCompressedSize: false,
     // Disable automatic modulepreload injection to prevent mobile white screen
     // (10MB+ JS preloaded on first visit caused blank page on mobile)
     modulePreload: false,

@@ -54,6 +54,52 @@ const PATCHES: string[] = [
     PRIMARY KEY (\`id\`),
     KEY \`idx_ittx_user\` (\`userId\`, \`createdAt\`)
   )`,
+  // 岛屿农场首期：独立持久化地块、背包与宠物；BIT 市场不在本补丁中开放。
+  `CREATE TABLE IF NOT EXISTS \`island_farms\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`userId\` int NOT NULL,
+    \`name\` varchar(60) NOT NULL DEFAULT '晨曦小岛',
+    \`level\` int NOT NULL DEFAULT 1,
+    \`workshopLevel\` int NOT NULL DEFAULT 1,
+    \`itEarned\` int NOT NULL DEFAULT 0,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_farm_user\` (\`userId\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_plots\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`slotIndex\` int NOT NULL,
+    \`cropKey\` varchar(30),
+    \`plantedAt\` timestamp NULL,
+    \`readyAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_plot_slot\` (\`farmId\`, \`slotIndex\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_inventories\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`itemKey\` varchar(30) NOT NULL,
+    \`quantity\` int NOT NULL DEFAULT 0,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_inventory_item\` (\`farmId\`, \`itemKey\`)
+  )`,
+  `CREATE TABLE IF NOT EXISTS \`island_pets\` (
+    \`id\` int AUTO_INCREMENT NOT NULL,
+    \`farmId\` int NOT NULL,
+    \`petKey\` varchar(30) NOT NULL,
+    \`level\` int NOT NULL DEFAULT 1,
+    \`affection\` int NOT NULL DEFAULT 0,
+    \`lastCaredAt\` timestamp NULL,
+    \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`uniq_island_pet_key\` (\`farmId\`, \`petKey\`)
+  )`,
 ];
 
 export async function applySchemaPatches(): Promise<void> {
