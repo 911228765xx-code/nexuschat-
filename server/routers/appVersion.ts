@@ -9,7 +9,7 @@ import { assertAndroidApkSource, getAndroidApkDirectUrl } from "../utils/android
 import { isAppAdmin } from "../appAdmin";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.9.5";
+export const CURRENT_APP_VERSION = "1.9.7";
 
 /**
  * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
@@ -67,8 +67,8 @@ export const appVersionRouter = router({
             downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
             downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
             downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-            releaseNotes: /v1\.9\.[0-4]/.test(notes)
-              ? `🎉 v${CURRENT_APP_VERSION} 岛屿农场更新\n\n• 新增高品质 2D 岛屿农场与底部“岛屿”入口\n• 支持种植、收获、宠物、IT 贡献与 BIT 结算展示\n• 优化原生 App 游戏资源同步`
+            releaseNotes: /v1\.9\.[0-6]/.test(notes)
+              ? `🎉 v${CURRENT_APP_VERSION} 岛屿农场完整玩法更新\n\n• 新增种子库存、每日订单、工坊补给箱与岛屿成长\n• 新增宠物探索与群岛协作贡献入口\n• 所有种植、收获与 IT 贡献均由服务端结算；BIT 市场与兑换仍未开放`
               : notes,
             isForceUpdate: rows[0].isForceUpdate,
           };

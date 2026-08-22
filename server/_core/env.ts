@@ -33,7 +33,7 @@ export const ENV = {
    * 正常发布仍以数据库 downloadUrlAndroid 为准；此值只负责防止下载链路整体熔断。
    */
   androidApkFallbackUrl: process.env.ANDROID_APK_FALLBACK_URL?.trim()
-    || "https://expo.dev/artifacts/eas/78Y8WC0yA6facXvoJT-byD38-Hk0neS09ze6DUjYBC8.apk",
+    || "https://expo.dev/artifacts/eas/BA2s8LLoKoo77bgZg0mDGF9-lUFG_-Ek8vTj4CYE_4g.apk",
 };
 
 // 安全断言:JWT_SECRET 是整个会话签名的根密钥。原来缺失时静默退化为空 HMAC key → 任何人可用空密钥

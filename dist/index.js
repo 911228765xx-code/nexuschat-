@@ -1495,7 +1495,7 @@ var init_env = __esm({
        * app_config 被误配成本站 /apk 或 /download 时的应急真实 APK 源。
        * 正常发布仍以数据库 downloadUrlAndroid 为准；此值只负责防止下载链路整体熔断。
        */
-      androidApkFallbackUrl: process.env.ANDROID_APK_FALLBACK_URL?.trim() || "https://expo.dev/artifacts/eas/78Y8WC0yA6facXvoJT-byD38-Hk0neS09ze6DUjYBC8.apk"
+      androidApkFallbackUrl: process.env.ANDROID_APK_FALLBACK_URL?.trim() || "https://expo.dev/artifacts/eas/BA2s8LLoKoo77bgZg0mDGF9-lUFG_-Ek8vTj4CYE_4g.apk"
     };
     if (ENV.isProduction && (!ENV.cookieSecret || ENV.cookieSecret.length < 16)) {
       throw new Error("[FATAL] JWT_SECRET \u672A\u914D\u7F6E\u6216\u8FC7\u77ED(\u9700 \u226516 \u5B57\u8282):\u4F1A\u8BDD\u7B7E\u540D\u5BC6\u94A5\u7F3A\u5931\u4F1A\u5BFC\u81F4\u4F1A\u8BDD\u53EF\u88AB\u4F2A\u9020,\u62D2\u7EDD\u542F\u52A8\u3002");
@@ -12945,7 +12945,7 @@ function getAndroidApkDirectUrl(url, publicOrigin = ENV.publicOrigin, fallbackUr
 
 // server/routers/appVersion.ts
 init_appAdmin();
-var CURRENT_APP_VERSION = "1.9.5";
+var CURRENT_APP_VERSION = "1.9.7";
 function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -12987,11 +12987,11 @@ var appVersionRouter = router({
           downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
           downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
           downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
-          releaseNotes: /v1\.9\.[0-4]/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u5C9B\u5C7F\u519C\u573A\u66F4\u65B0
+          releaseNotes: /v1\.9\.[0-6]/.test(notes) ? `\u{1F389} v${CURRENT_APP_VERSION} \u5C9B\u5C7F\u519C\u573A\u5B8C\u6574\u73A9\u6CD5\u66F4\u65B0
 
-\u2022 \u65B0\u589E\u9AD8\u54C1\u8D28 2D \u5C9B\u5C7F\u519C\u573A\u4E0E\u5E95\u90E8\u201C\u5C9B\u5C7F\u201D\u5165\u53E3
-\u2022 \u652F\u6301\u79CD\u690D\u3001\u6536\u83B7\u3001\u5BA0\u7269\u3001IT \u8D21\u732E\u4E0E BIT \u7ED3\u7B97\u5C55\u793A
-\u2022 \u4F18\u5316\u539F\u751F App \u6E38\u620F\u8D44\u6E90\u540C\u6B65` : notes,
+\u2022 \u65B0\u589E\u79CD\u5B50\u5E93\u5B58\u3001\u6BCF\u65E5\u8BA2\u5355\u3001\u5DE5\u574A\u8865\u7ED9\u7BB1\u4E0E\u5C9B\u5C7F\u6210\u957F
+\u2022 \u65B0\u589E\u5BA0\u7269\u63A2\u7D22\u4E0E\u7FA4\u5C9B\u534F\u4F5C\u8D21\u732E\u5165\u53E3
+\u2022 \u6240\u6709\u79CD\u690D\u3001\u6536\u83B7\u4E0E IT \u8D21\u732E\u5747\u7531\u670D\u52A1\u7AEF\u7ED3\u7B97\uFF1BBIT \u5E02\u573A\u4E0E\u5151\u6362\u4ECD\u672A\u5F00\u653E` : notes,
           isForceUpdate: rows[0].isForceUpdate
         };
       }
