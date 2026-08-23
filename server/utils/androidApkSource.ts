@@ -1,6 +1,40 @@
 import { ENV } from "../_core/env";
 
-const LOOP_PATHS = new Set(["/apk", "/download", "/download/apk"]);
+const LOOP_PATHS = new Set(["/apk", "/download", "/download/apk", "/apk-download"]);
+
+/** 已验证的当前官方原生包（EAS 1.9.9 / versionCode 22）。后台配置落后时用它顶上。 */
+export const PINNED_ANDROID_RELEASE = {
+  version: "1.9.9",
+  url: "https://expo.dev/artifacts/eas/wKwYz84XlrBfPgt5iqtzhrUMEgygTEZzSOD_bq5I9W4.apk",
+} as const;
+
+export function compareSemver(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * 后台若仍指向 1.9.8 及更旧的包，强制切到已验证的 1.9.9 EAS 直链。
+ * 新版本号 + 非旧包 URL 原样放行。
+ */
+export function resolvePublishedAndroidRelease(
+  version: string | null | undefined,
+  url: string | null | undefined,
+): { version: string; url: string; pinned: boolean } {
+  const ver = version?.trim() || "";
+  const raw = url?.trim() || "";
+  const behind = !ver || compareSemver(ver, PINNED_ANDROID_RELEASE.version) < 0;
+  const staleFile = /v?1\.9\.[0-8](?!\d)/i.test(raw);
+  if (behind || staleFile || !raw) {
+    return { version: PINNED_ANDROID_RELEASE.version, url: PINNED_ANDROID_RELEASE.url, pinned: true };
+  }
+  return { version: ver, url: raw, pinned: false };
+}
 
 /** 是否把本站下载入口误当成了真正 APK 文件源。 */
 export function isOwnDownloadLoop(
@@ -44,7 +78,7 @@ export function assertAndroidApkSource(url: string | null | undefined): string |
   const raw = url?.trim();
   if (!raw) return null;
   if (isOwnDownloadLoop(raw)) {
-    return "Android 下载地址必须是 APK 文件源，不能填写本站 /apk 或 /download";
+    return "Android 下载地址必须是 APK 文件源，不能填写本站 /apk、/download 或 /apk-download";
   }
   if (isExpoBuildPageUrl(raw)) {
     return "请填写 APK 直链（…/artifacts/eas/xxx.apk），不要填构建详情页（…/builds/…）";
@@ -71,7 +105,33 @@ export function resolveAndroidApkSource(
   return { url: raw, usedFallback: false };
 }
 
-/** 浏览器整包备用线路只允许绝对 http(s) 文件源。 */
+/**
+ * 备用「整包直链」不能发给国内用户的地址：
+ * /manus-storage 会被平台 Worker 307 到 CloudFront；/apk-download 是坏掉的分块页。
+ */
+export function isUnreliableDirectApkUrl(
+  url: string | null | undefined,
+  publicOrigin = ENV.publicOrigin,
+): boolean {
+  const raw = url?.trim();
+  if (!raw) return true;
+  try {
+    const origin = new URL(publicOrigin);
+    const target = new URL(raw, origin);
+    if (/(^|\.)cloudfront\.net$/i.test(target.hostname)) return true;
+    if (target.origin !== origin.origin) return false;
+    const path = target.pathname.replace(/\/+$/, "") || "/";
+    return (
+      LOOP_PATHS.has(path) ||
+      path.startsWith("/manus-storage") ||
+      path.startsWith("/apk-download")
+    );
+  } catch {
+    return true;
+  }
+}
+
+/** 浏览器整包备用线路只允许绝对 http(s) 文件源，且不能是 CloudFront / 本站回环。 */
 export function getAndroidApkDirectUrl(
   url: string | null | undefined,
   publicOrigin = ENV.publicOrigin,
@@ -82,5 +142,7 @@ export function getAndroidApkDirectUrl(
     publicOrigin,
     fallbackUrl,
   ).url;
-  return /^https?:\/\//i.test(source) ? source : "";
+  if (!/^https?:\/\//i.test(source)) return "";
+  if (isUnreliableDirectApkUrl(source, publicOrigin)) return "";
+  return source;
 }

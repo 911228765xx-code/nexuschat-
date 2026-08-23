@@ -3,20 +3,38 @@ import { Readable } from "stream";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { appConfig } from "../../drizzle/schema";
-import { resolveAndroidApkSource } from "../utils/androidApkSource";
+import { ENV } from "../_core/env";
+import { resolveAndroidApkSource, resolvePublishedAndroidRelease } from "../utils/androidApkSource";
+
+/** 无 Range 的整包请求进 React 下载页（页内用有界 Range 分块）。 */
+export function redirectToDownloadPage(req: Request, res: Response) {
+  const q = new URLSearchParams();
+  if (req.query.v) q.set("v", String(req.query.v));
+  if (typeof req.query.ref === "string" && req.query.ref) q.set("ref", req.query.ref);
+  const qs = q.toString();
+  res.redirect(302, qs ? `/download?${qs}` : "/download");
+}
+
+function toAbsoluteApkUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${ENV.publicOrigin}${path}`;
+}
 
 /**
  * /apk — 固定下载短链（对外只发这一个地址，永不过期）。
  *
  * 行为：
  *  1) 读 appConfig.downloadUrlAndroid（后台「版本发布」里配置的地址，随版本更新）。
- *  2) 同源相对路径（如 /manus-storage/xxx.apk）→ 302 跳过去（本域名已有多端点容灾）。
+ *  2) 同源相对路径（如 /manus-storage/xxx.apk）→ 拼成绝对 URL 后 Range 流式中转。
+ *     不要 302 到 /app-media：边缘对该别名会 502。
+ *     不要 302 到 /manus-storage：平台 Worker 会 307 到 CloudFront，国内常打不开。
  *  3) 外部绝对 URL（如 expo.dev 的 EAS 构建产物）+ 客户端带 Range → 【流式中转】而非 302：
  *     大陆网络直连海外 CDN 常被掐/超时（与 storageProxy 同一结构性原因），
  *     服务器到 CDN 链路稳定，用户只需连通本 API 域名。
  *     顺带把文件名规范成 Bitchat-v{版本}.apk（EAS 原始链接是一串乱码哈希名）。
  *
- * 只服务带 Range 的客户端；不带 Range 的整包请求改道 /download 或上游直链（见下方注释）。
+ * 只服务带 Range 的客户端；不带 Range 的整包请求改道 /download。
  */
 export async function handleApkDownload(req: Request, res: Response) {
   try {
@@ -30,33 +48,22 @@ export async function handleApkDownload(req: Request, res: Response) {
         version = (rows[0] as { latestVersion?: string | null }).latestVersion ?? "";
       }
     }
+    const published = resolvePublishedAndroidRelease(version, url);
+    version = published.version;
+    url = published.url;
     const source = resolveAndroidApkSource(url);
-    url = source.url;
+    url = toAbsoluteApkUrl(source.url);
     if (source.usedFallback) {
       console.warn("[APK] downloadUrlAndroid 为空或指回本站下载入口，已切换应急 APK 源");
-    }
-
-    // 同源相对路径：直接 302（storageProxy 等本域名路由自己会流式中转）
-    // /manus-storage 换成 /app-media 别名——旧路径在平台边缘被 Worker 劫持 307 到 CloudFront(大陆挂)
-    if (url.startsWith("/")) {
-      res.redirect(302, url.replace(/^\/manus-storage\//, "/app-media/"));
-      return;
     }
 
     const clientRange = req.headers.range;
 
     // 不带 Range 的整包请求：本路由无法中转 180MB（边缘 32MiB 上限会吐 HTML）。
     // 一律 302 到 /download，由页内 JS 用有界 Range 分块下载。
-    // 不要 302 到 expo.dev：国内访问常失败，用户就会反馈「下载不了」。
+    // 不要 302 到 expo.dev / CloudFront / /apk-download：国内会下不动或落到坏页。
     if (typeof clientRange !== "string") {
-      // 一律进本站下载页（页内用有界 Range 分块）。
-      // 以前非 HTML 客户端会被 302 到 expo.dev，国内常被墙 → 「下载不了」。
-      const ref = typeof req.query.ref === "string" ? req.query.ref : "";
-      const q = new URLSearchParams();
-      if (req.query.v) q.set("v", String(req.query.v));
-      if (ref) q.set("ref", ref);
-      const qs = q.toString();
-      res.redirect(302, qs ? `/download?${qs}` : "/download");
+      redirectToDownloadPage(req, res);
       return;
     }
 

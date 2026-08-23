@@ -49,7 +49,15 @@ function usableDirectUrl(value: string | null | undefined): string {
   try {
     const target = new URL(value, ORIGIN);
     const path = target.pathname.replace(/\/+$/, "") || "/";
-    if (target.origin === ORIGIN && ["/apk", "/download", "/download/apk"].includes(path)) return "";
+    if (/(^|\.)cloudfront\.net$/i.test(target.hostname)) return "";
+    if (
+      target.origin === ORIGIN &&
+      (
+        ["/apk", "/download", "/download/apk", "/apk-download"].includes(path) ||
+        path.startsWith("/manus-storage") ||
+        path.startsWith("/apk-download")
+      )
+    ) return "";
     return target.href;
   } catch {
     return "";

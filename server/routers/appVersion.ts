@@ -5,24 +5,16 @@ import { appConfig } from "../../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
-import { assertAndroidApkSource, getAndroidApkDirectUrl } from "../utils/androidApkSource";
+import {
+  assertAndroidApkSource,
+  compareSemver,
+  getAndroidApkDirectUrl,
+  resolvePublishedAndroidRelease,
+} from "../utils/androidApkSource";
 import { isAppAdmin } from "../appAdmin";
 
 // Current native shell version (bump this when releasing a new APK/IPA)
-export const CURRENT_APP_VERSION = "1.9.7";
-
-/**
- * Compare semver strings: returns negative if a < b, 0 if equal, positive if a > b
- */
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
+export const CURRENT_APP_VERSION = "1.9.9";
 
 export const appVersionRouter = router({
   /**
@@ -61,10 +53,14 @@ export const appVersionRouter = router({
 
         if (rows.length > 0) {
           const notes = rows[0].releaseNotes ?? "";
+          const published = resolvePublishedAndroidRelease(
+            rows[0].latestVersion,
+            rows[0].downloadUrlAndroid,
+          );
           config = {
-            latestVersion: rows[0].latestVersion || CURRENT_APP_VERSION,
+            latestVersion: published.version,
             minVersion: rows[0].minVersion,
-            downloadUrlAndroid: rows[0].downloadUrlAndroid ?? defaultConfig.downloadUrlAndroid,
+            downloadUrlAndroid: published.url,
             downloadUrlIos: rows[0].downloadUrlIos ?? defaultConfig.downloadUrlIos,
             downloadUrlWeb: rows[0].downloadUrlWeb ?? defaultConfig.downloadUrlWeb,
             releaseNotes: /v1\.9\.[0-6]/.test(notes)

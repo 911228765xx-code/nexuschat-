@@ -20,7 +20,7 @@ import { startPartnerSettlement } from "../partner";
 import { startIcoRewardScheduler } from "../icoRewardScheduler";
 import { applySchemaPatches } from "../schemaPatches";
 import { handleTokenChatStream } from "../express/tokenChatStream";
-import { handleApkDownload } from "../express/apkDownload";
+import { handleApkDownload, redirectToDownloadPage } from "../express/apkDownload";
 import { handleVideoUpload } from "../express/videoUpload";
 import { handleFileUpload } from "../express/fileUpload";
 import { handleChunkStart, handleChunkPart, handleChunkFinish } from "../express/chunkedUpload";
@@ -99,6 +99,9 @@ async function startServer() {
   registerOAuthRoutes(app);
   // APK 固定下载短链：对外只发 https://<域名>/apk（外链流式中转,大陆可直连;版本随后台配置)
   app.get(["/apk", "/download/apk"], handleApkDownload);
+  // 线上曾把 /apk 302 到 /apk-download（页内正则被转义吃掉，点下载必失败）。
+  // 存量链接 / 书签一律送回可用的 React 下载页。
+  app.get("/apk-download", redirectToDownloadPage);
   // 邀请短链 /i/<code>：跳到下载落地页并带上推荐码（比原 /invite/<长码> 短;原 /invite 前端无路由=404,一并修活）
   app.get("/i/:code", (req, res) => {
     const code = String(req.params.code || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 30);
