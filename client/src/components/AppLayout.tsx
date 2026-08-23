@@ -1,25 +1,19 @@
 /*
- * AppLayout — Cyberpunk Noir mobile-first layout
- * Bottom tab navigation with glassmorphism effect + dynamic unread badges from AppContext
- * 6 tabs: Chat / Discover / Island / Research / Trading / Profile
- * NOTE: framer-motion removed — uses CSS animations to keep initial bundle small
+ * AppLayout — 与原生 App 同一套信息架构和视觉
+ * 底栏 4 Tab：消息 / 广场 / 发现 / 我的（岛屿、投研、跟单从发现页进入，不占底栏）
  *
  * GLOBAL LOGIN GUARD: All /app/* routes require authentication by default.
  * Pass requireAuth={false} to allow guest access (e.g. Discover, Trading public view).
- * Unauthenticated users on protected routes are redirected to the Manus OAuth login page.
  */
 import { useLocation, Link } from "wouter";
-import { MessageCircle, Compass, Gamepad2, Brain, TrendingUp, User } from "lucide-react";
+import { MessageCircle, Newspaper, Compass, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-// Prefetch helpers — trigger dynamic import on hover/touch so the chunk loads before navigation
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   "/app/chat":     () => import("@/pages/Chat"),
+  "/app/feed":     () => import("@/pages/Discover"),
   "/app/discover": () => import("@/pages/Discover"),
-  "/app/island":   () => import("@/pages/IslandFarm"),
-  "/app/research": () => import("@/pages/Research"),
-  "/app/trading":  () => import("@/pages/Trading"),
   "/app/profile":  () => import("@/pages/Profile"),
 };
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -65,10 +59,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
 
   const tabs = [
     { path: "/app/chat", labelKey: "tab.chat", icon: MessageCircle, badge: chatUnread },
+    { path: "/app/feed", labelKey: "tab.feed", icon: Newspaper, badge: 0 },
     { path: "/app/discover", labelKey: "tab.discover", icon: Compass, badge: 0 },
-    { path: "/app/island", labelKey: "tab.island", icon: Gamepad2, badge: 0 },
-    { path: "/app/research", labelKey: "tab.research", icon: Brain, badge: 0 },
-    { path: "/app/trading", labelKey: "tab.trading", icon: TrendingUp, badge: 0 },
     { path: "/app/profile", labelKey: "tab.profile", icon: User, badge: notifUnread },
   ];
 
@@ -100,7 +92,7 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
         {/* Bottom nav skeleton */}
         <div className="flex-shrink-0 border-t border-border/20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', background: 'var(--background)' }}>
           <div className="flex items-center justify-around" style={{ height: '62px' }}>
-            {[...Array(5)].map((_, i) => (
+            {[...Array(4)].map((_, i) => (
               <div key={i} className="flex flex-col items-center gap-1.5">
                 <div className="w-6 h-6 rounded bg-secondary/60 animate-pulse" />
                 <div className="w-8 h-2 rounded bg-secondary/40 animate-pulse" />
@@ -119,25 +111,25 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
     return (
       <div
         className="flex flex-col h-[100dvh] items-center justify-center gap-6 px-8"
-        style={{ background: '#060b18' }}
+        style={{ background: '#F5F4F2' }}
       >
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center shadow-[0_0_32px_rgba(0,212,255,0.3)]">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #2942AB, #4F6BE8)" }}>
             <MessageCircle size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white font-['Space_Grotesk'] tracking-tight">比特AI</h1>
-          <p className="text-sm text-gray-400 text-center">让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#16171A" }}>比特AI</h1>
+          <p className="text-sm text-center" style={{ color: "#76787E" }}>让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
         </div>
         {/* Login button */}
         <a
           href={`/login?returnTo=${returnTo}`}
           className="w-full max-w-xs flex items-center justify-center gap-2 h-12 rounded-2xl font-semibold text-white text-base"
-          style={{ background: 'linear-gradient(135deg, #00d4ff, #a855f7)', boxShadow: '0 0 24px rgba(0,212,255,0.25)' }}
+          style={{ background: "linear-gradient(135deg, #2942AB, #4F6BE8)" }}
         >
           立即登录 / 注册
         </a>
-        <p className="text-sm text-gray-600 text-center">登录后即可访问所有功能</p>
+        <p className="text-sm text-center" style={{ color: "#A8AAB0" }}>登录后即可访问所有功能</p>
       </div>
     );
   }
@@ -159,59 +151,55 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
 
       {/* Bottom Tab Navigation */}
       {!hideNav && (
-        <nav className="glass border-t border-border/50 px-2 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around h-[62px] max-w-lg mx-auto">
+        <nav className="border-t px-1 pb-[env(safe-area-inset-bottom)]" style={{ background: "var(--card)", borderColor: "#EFEDE8", boxShadow: "0 -2px 8px rgba(15,23,42,0.04)" }}>
+          <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
             {tabs.map((tab) => {
               const isActive =
                 location === tab.path ||
-                (tab.path === "/app/chat" && location.startsWith("/app/chat/")) ||
-                (tab.path === "/app/island" && location.startsWith("/app/island")) ||
-                (tab.path === "/app/profile" && (location === "/app/wallet" || location === "/app/edit-profile" || location === "/app/notifications"));
+                (tab.path === "/app/chat" && (location.startsWith("/app/chat/") || location.startsWith("/app/dm/") || location.startsWith("/app/group/"))) ||
+                (tab.path === "/app/feed" && (location.startsWith("/app/feed") || location.startsWith("/app/post/"))) ||
+                (tab.path === "/app/discover" && (
+                  location.startsWith("/app/discover") ||
+                  location.startsWith("/app/island") ||
+                  location.startsWith("/app/research") ||
+                  location.startsWith("/app/trading") ||
+                  location.startsWith("/app/tasks")
+                )) ||
+                (tab.path === "/app/profile" && (location === "/app/wallet" || location === "/app/edit-profile" || location === "/app/notifications" || location === "/app/settings" || location === "/app/invite"));
               const Icon = tab.icon;
 
               return (
                 <Link key={tab.path} href={tab.path}>
                   <button
-                    className="relative flex flex-col items-center justify-center gap-1.5 w-14 sm:w-16 h-[58px] rounded-xl transition-colors active:scale-90 transition-transform duration-100"
+                    className="relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 active:scale-95 transition-transform duration-100"
                     onMouseEnter={() => prefetchMap[tab.path]?.()}
                     onTouchStart={() => prefetchMap[tab.path]?.()}
                   >
-                    {/* CSS-based tab indicator (replaces framer-motion layoutId) */}
-                    {isActive && (
-                      <div
-                        className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-neon-cyan transition-all duration-300"
-                        style={{
-                          boxShadow: "0 0 8px oklch(0.82 0.15 195 / 0.6)",
-                        }}
-                      />
-                    )}
                     <div className="relative">
-                      <Icon
-                        size={23}
-                        className={
-                          isActive
-                            ? "text-neon-cyan drop-shadow-[0_0_6px_oklch(0.82_0.15_195/0.5)]"
-                            : "text-muted-foreground"
-                        }
-                      />
-                      {/* Unread badge — CSS scale animation */}
+                      <div
+                        className="flex items-center justify-center rounded-[13px]"
+                        style={{
+                          width: 36,
+                          height: 26,
+                          background: isActive ? "linear-gradient(135deg, #2942AB, #4F6BE8)" : "transparent",
+                        }}
+                      >
+                        <Icon size={18} color={isActive ? "#FFFFFF" : "#A8AAB0"} strokeWidth={isActive ? 2.2 : 1.8} />
+                      </div>
                       {tab.badge > 0 && (
                         <div
-                          className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-2 rounded-full bg-neon-red flex items-center justify-center animate-in zoom-in-50 duration-200"
-                          style={{
-                            boxShadow: "0 0 6px oklch(0.65 0.25 25 / 0.5)",
-                          }}
+                          className="absolute -top-1 -right-2 min-w-[17px] h-[17px] px-1 rounded-full flex items-center justify-center"
+                          style={{ background: "#FF3B30", border: "1.5px solid var(--card)" }}
                         >
-                          <span className="text-sm font-bold text-white leading-none">
+                          <span className="text-[10px] font-extrabold text-white leading-none">
                             {tab.badge > 99 ? "99+" : tab.badge}
                           </span>
                         </div>
                       )}
                     </div>
                     <span
-                      className={`text-[11px] font-medium leading-none ${
-                        isActive ? "text-neon-cyan" : "text-muted-foreground"
-                      }`}
+                      className="text-[10px] leading-none tracking-wide"
+                      style={{ color: isActive ? "#3554D1" : "#A8AAB0", fontWeight: isActive ? 700 : 500 }}
                     >
                       {t(tab.labelKey)}
                     </span>

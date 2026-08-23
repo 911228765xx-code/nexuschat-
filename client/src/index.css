@@ -50,87 +50,86 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Light theme (default) */
+/* Light theme (default) — 与原生 App「Refined Indigo」对齐 */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.97 0.005 260);
-  --foreground: oklch(0.18 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.55 0.2 195);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.93 0.008 260);
-  --secondary-foreground: oklch(0.35 0.02 260);
-  --muted: oklch(0.93 0.008 260);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.93 0.02 295);
-  --accent-foreground: oklch(0.18 0.02 260);
-  --destructive: oklch(0.55 0.25 15);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.01 260);
-  --input: oklch(0.93 0.008 260);
-  --ring: oklch(0.55 0.2 195);
-  --chart-1: oklch(0.55 0.2 195);
-  --chart-2: oklch(0.5 0.25 295);
-  --chart-3: oklch(0.6 0.22 155);
-  --chart-4: oklch(0.55 0.15 60);
-  --chart-5: oklch(0.5 0.2 340);
-  --sidebar: oklch(0.96 0.005 260);
-  --sidebar-foreground: oklch(0.18 0.02 260);
-  --sidebar-primary: oklch(0.55 0.2 195);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.93 0.02 295);
-  --sidebar-accent-foreground: oklch(0.18 0.02 260);
-  --sidebar-border: oklch(0.88 0.01 260);
-  --sidebar-ring: oklch(0.55 0.2 195);
-  /* NexusChat brand colors - light mode */
-  --neon-cyan: oklch(0.55 0.2 195);
-  --neon-purple: oklch(0.5 0.25 295);
-  --neon-green: oklch(0.55 0.22 155);
-  --neon-red: oklch(0.55 0.25 15);
+  --background: #F5F4F2;
+  --foreground: #16171A;
+  --card: #FFFFFF;
+  --card-foreground: #16171A;
+  --popover: #FFFFFF;
+  --popover-foreground: #16171A;
+  --primary: #3554D1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EFEEEB;
+  --secondary-foreground: #4A4C52;
+  --muted: #EFEEEB;
+  --muted-foreground: #76787E;
+  --accent: #E7ECFB;
+  --accent-foreground: #2942AB;
+  --destructive: #D9504B;
+  --destructive-foreground: #FFFFFF;
+  --border: #E6E4DF;
+  --input: #EFEEEB;
+  --ring: #3554D1;
+  --chart-1: #3554D1;
+  --chart-2: #6D5BD0;
+  --chart-3: #2F9E6B;
+  --chart-4: #B0883F;
+  --chart-5: #D9504B;
+  --sidebar: #F5F4F2;
+  --sidebar-foreground: #16171A;
+  --sidebar-primary: #3554D1;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E7ECFB;
+  --sidebar-accent-foreground: #2942AB;
+  --sidebar-border: #E6E4DF;
+  --sidebar-ring: #3554D1;
+  /* 旧 neon-* 类名映射到靛蓝，避免网页再出现赛博青紫 */
+  --neon-cyan: #3554D1;
+  --neon-purple: #6D5BD0;
+  --neon-green: #2F9E6B;
+  --neon-red: #D9504B;
 }
 
-/* Dark theme */
+/* Dark theme — 与原生 App 暗色靛蓝对齐，不再用赛博青 */
 .dark {
-  --background: oklch(0.11 0.02 260);
-  --foreground: oklch(0.93 0.005 260);
-  --card: oklch(0.15 0.02 260);
-  --card-foreground: oklch(0.93 0.005 260);
-  --popover: oklch(0.15 0.02 260);
-  --popover-foreground: oklch(0.93 0.005 260);
-  --primary: oklch(0.82 0.15 195);
-  --primary-foreground: oklch(0.11 0.02 260);
-  --secondary: oklch(0.2 0.02 260);
-  --secondary-foreground: oklch(0.85 0.01 260);
-  --muted: oklch(0.2 0.015 260);
-  --muted-foreground: oklch(0.6 0.02 260);
-  --accent: oklch(0.2 0.03 295);
-  --accent-foreground: oklch(0.93 0.005 260);
-  --destructive: oklch(0.65 0.25 15);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0.02 260);
-  --input: oklch(0.2 0.02 260);
-  --ring: oklch(0.82 0.15 195);
-  --chart-1: oklch(0.82 0.15 195);
-  --chart-2: oklch(0.65 0.25 295);
-  --chart-3: oklch(0.82 0.22 155);
-  --chart-4: oklch(0.7 0.15 60);
-  --chart-5: oklch(0.65 0.2 340);
-  --sidebar: oklch(0.13 0.02 260);
-  --sidebar-foreground: oklch(0.93 0.005 260);
-  --sidebar-primary: oklch(0.82 0.15 195);
-  --sidebar-primary-foreground: oklch(0.11 0.02 260);
-  --sidebar-accent: oklch(0.2 0.03 295);
-  --sidebar-accent-foreground: oklch(0.93 0.005 260);
-  --sidebar-border: oklch(0.25 0.02 260);
-  --sidebar-ring: oklch(0.82 0.15 195);
-  /* NexusChat brand colors - dark mode (brighter/neon) */
-  --neon-cyan: oklch(0.82 0.15 195);
-  --neon-purple: oklch(0.65 0.25 295);
-  --neon-green: oklch(0.82 0.22 155);
-  --neon-red: oklch(0.65 0.25 15);
+  --background: #0E0F13;
+  --foreground: #F2F3F6;
+  --card: #17181D;
+  --card-foreground: #F2F3F6;
+  --popover: #17181D;
+  --popover-foreground: #F2F3F6;
+  --primary: #6E86F5;
+  --primary-foreground: #FFFFFF;
+  --secondary: #212329;
+  --secondary-foreground: #C8CAD0;
+  --muted: #212329;
+  --muted-foreground: #8B8E96;
+  --accent: #1C2440;
+  --accent-foreground: #8AA0FF;
+  --destructive: #E06A66;
+  --destructive-foreground: #FFFFFF;
+  --border: #2A2C34;
+  --input: #212329;
+  --ring: #6E86F5;
+  --chart-1: #6E86F5;
+  --chart-2: #8B7AE0;
+  --chart-3: #34C77B;
+  --chart-4: #D6B25F;
+  --chart-5: #E06A66;
+  --sidebar: #0E0F13;
+  --sidebar-foreground: #F2F3F6;
+  --sidebar-primary: #6E86F5;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1C2440;
+  --sidebar-accent-foreground: #8AA0FF;
+  --sidebar-border: #2A2C34;
+  --sidebar-ring: #6E86F5;
+  --neon-cyan: #6E86F5;
+  --neon-purple: #8B7AE0;
+  --neon-green: #34C77B;
+  --neon-red: #E06A66;
 }
 
 @layer base {

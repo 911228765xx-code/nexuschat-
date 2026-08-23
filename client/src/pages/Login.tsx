@@ -93,7 +93,7 @@ export default function Login() {
   const S = {
     page: {
       minHeight: "100dvh",
-      backgroundColor: "#050810",
+      backgroundColor: "#F5F4F2",
       display: "flex",
       flexDirection: "column" as const,
       alignItems: "center",
@@ -109,7 +109,7 @@ export default function Login() {
       alignItems: "center",
       gap: "6px",
       fontSize: "13px",
-      color: "rgba(0,212,255,0.7)",
+      color: "#3554D1",
       background: "none",
       border: "none",
       cursor: "pointer",
@@ -126,7 +126,7 @@ export default function Login() {
       width: "56px",
       height: "56px",
       borderRadius: "16px",
-      background: "linear-gradient(135deg, #00d4ff, #a855f7)",
+      background: "linear-gradient(135deg, #2942AB, #4F6BE8)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -135,29 +135,27 @@ export default function Login() {
     logoTitle: {
       fontSize: "22px",
       fontWeight: 700,
-      color: "#ffffff",
+      color: "#16171A",
       margin: 0,
       letterSpacing: "-0.3px",
     },
     logoSub: {
       fontSize: "11px",
-      color: "rgba(0,212,255,0.6)",
+      color: "#76787E",
       marginTop: "4px",
-      fontFamily: "monospace",
-      letterSpacing: "1px",
+      letterSpacing: "0.4px",
     },
     card: {
       width: "100%",
       maxWidth: "360px",
-      // Solid background — NO backdrop-blur (Android Chrome rendering bug)
-      backgroundColor: "#0d1225",
-      border: "1px solid rgba(255,255,255,0.08)",
+      backgroundColor: "#FFFFFF",
+      border: "1px solid #E6E4DF",
       borderRadius: "20px",
       padding: "24px",
     },
     tabRow: {
       display: "flex",
-      backgroundColor: "rgba(255,255,255,0.05)",
+      backgroundColor: "#EFEEEB",
       borderRadius: "12px",
       padding: "4px",
       marginBottom: "24px",
@@ -169,10 +167,10 @@ export default function Login() {
       borderRadius: "8px",
       fontSize: "14px",
       fontWeight: 600,
-      border: "1px solid rgba(0,212,255,0.3)",
+      border: "1px solid #C9D3F5",
       cursor: "pointer",
-      backgroundColor: "rgba(0,212,255,0.12)",
-      color: "#ffffff",
+      backgroundColor: "#E7ECFB",
+      color: "#2942AB",
     },
     tabInactive: {
       flex: 1,
@@ -183,7 +181,7 @@ export default function Login() {
       border: "1px solid transparent",
       cursor: "pointer",
       backgroundColor: "transparent",
-      color: "rgba(255,255,255,0.4)",
+      color: "#76787E",
     },
     fieldWrap: {
       marginBottom: "16px",
@@ -191,10 +189,9 @@ export default function Login() {
     label: {
       display: "block",
       fontSize: "11px",
-      color: "rgba(0,212,255,0.6)",
+      color: "#76787E",
       marginBottom: "6px",
-      fontFamily: "monospace",
-      letterSpacing: "0.5px",
+      letterSpacing: "0.4px",
     },
     inputWrap: {
       position: "relative" as const,
@@ -204,10 +201,10 @@ export default function Login() {
       height: "44px",
       paddingLeft: "36px",
       paddingRight: "16px",
-      backgroundColor: "rgba(255,255,255,0.05)",
-      border: `1px solid ${hasError ? "#f87171" : "rgba(255,255,255,0.1)"}`,
+      backgroundColor: "#F5F4F2",
+      border: `1px solid ${hasError ? "#D9504B" : "#E6E4DF"}`,
       borderRadius: "12px",
-      color: "#ffffff",
+      color: "#16171A",
       fontSize: "14px",
       outline: "none",
       boxSizing: "border-box" as const,
@@ -218,10 +215,10 @@ export default function Login() {
       height: "44px",
       paddingLeft: "36px",
       paddingRight: "44px",
-      backgroundColor: "rgba(255,255,255,0.05)",
-      border: `1px solid ${hasError ? "#f87171" : "rgba(255,255,255,0.1)"}`,
+      backgroundColor: "#F5F4F2",
+      border: `1px solid ${hasError ? "#D9504B" : "#E6E4DF"}`,
       borderRadius: "12px",
-      color: "#ffffff",
+      color: "#16171A",
       fontSize: "14px",
       outline: "none",
       boxSizing: "border-box" as const,
@@ -232,7 +229,7 @@ export default function Login() {
       left: "12px",
       top: "50%",
       transform: "translateY(-50%)",
-      color: "rgba(255,255,255,0.3)",
+      color: "#A8AAB0",
       pointerEvents: "none" as const,
     },
     eyeBtn: {
@@ -243,7 +240,7 @@ export default function Login() {
       background: "none",
       border: "none",
       cursor: "pointer",
-      color: "rgba(255,255,255,0.3)",
+      color: "#A8AAB0",
       padding: "4px",
       display: "flex",
       alignItems: "center",
@@ -257,8 +254,8 @@ export default function Login() {
       width: "100%",
       height: "48px",
       background: disabled
-        ? "rgba(0,212,255,0.25)"
-        : "linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)",
+        ? "#C9D3F5"
+        : "linear-gradient(135deg, #2942AB 0%, #4F6BE8 100%)",
       border: "none",
       borderRadius: "12px",
       color: "#ffffff",
@@ -281,12 +278,11 @@ export default function Login() {
     dividerLine: {
       flex: 1,
       height: "1px",
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: "#E6E4DF",
     },
     dividerText: {
       fontSize: "12px",
-      color: "rgba(255,255,255,0.25)",
-      fontFamily: "monospace",
+      color: "#A8AAB0",
     },
     oauthBtn: {
       display: "flex",
@@ -295,24 +291,23 @@ export default function Login() {
       gap: "8px",
       width: "100%",
       height: "44px",
-      backgroundColor: "rgba(168,85,247,0.08)",
-      border: "1px solid rgba(168,85,247,0.2)",
+      backgroundColor: "#F2F5FE",
+      border: "1px solid #C9D3F5",
       borderRadius: "12px",
-      color: "rgba(255,255,255,0.7)",
+      color: "#3554D1",
       fontSize: "14px",
       textDecoration: "none",
       boxSizing: "border-box" as const,
     },
     terms: {
       fontSize: "11px",
-      color: "rgba(255,255,255,0.2)",
+      color: "#A8AAB0",
       textAlign: "center" as const,
       marginTop: "16px",
       lineHeight: 1.6,
-      fontFamily: "monospace",
     },
     termsLink: {
-      color: "rgba(0,212,255,0.5)",
+      color: "#3554D1",
       textDecoration: "none",
     },
   };
@@ -422,7 +417,7 @@ export default function Login() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "rgba(0,212,255,0.6)",
+                  color: "#3554D1",
                   fontSize: "12px",
                   cursor: "pointer",
                   padding: "2px 0",
@@ -443,7 +438,7 @@ export default function Login() {
                 onSuccess={(token) => setTurnstileToken(token)}
                 onExpire={() => setTurnstileToken("")}
                 onError={() => setTurnstileToken("")}
-                options={{ theme: "dark", size: "normal" }}
+                options={{ theme: "light", size: "normal" }}
               />
             </div>
           )}

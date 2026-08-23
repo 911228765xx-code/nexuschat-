@@ -55,18 +55,14 @@ const IslandFarm = lazy(() => import("./pages/IslandFarm"));
 // Each function triggers the dynamic import so the chunk is fetched before navigation.
 const prefetchChat = () => import("./pages/Chat");
 const prefetchDiscover = () => import("./pages/Discover");
-const prefetchResearch = () => import("./pages/Research");
-const prefetchTrading = () => import("./pages/Trading");
 const prefetchProfile = () => import("./pages/Profile");
 const prefetchGroupChatRoom = () => import("./pages/GroupChatRoom");
 
-// Prefetch the 5 main tabs after the initial render is complete (idle-time preloading)
+// Prefetch the 4 native tabs after the initial render is complete
 if (typeof window !== 'undefined') {
   const prefetchAll = () => {
     prefetchChat();
     prefetchDiscover();
-    prefetchResearch();
-    prefetchTrading();
     prefetchProfile();
     prefetchGroupChatRoom();
   };
@@ -216,6 +212,11 @@ function RouteContent() {
                 <Settings />
               </AppLayout>
             </Route>
+            <Route path="/app/feed">
+              <AppLayout>
+                <Discover />
+              </AppLayout>
+            </Route>
             <Route path="/app/discover">
               <AppLayout requireAuth={false}>
                 <Discover />
@@ -359,7 +360,7 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary mode="app">
-      <ThemeProvider defaultTheme="dark" switchable>
+      <ThemeProvider defaultTheme="light" switchable>
         <I18nProvider>
           <AppProvider>
             <TooltipProvider>

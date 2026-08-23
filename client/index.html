@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- build:bitchat-20260806 -->
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
 
   <head>
     <meta charset="UTF-8" />
@@ -12,7 +12,7 @@
     <meta name="keywords" content="比特AI社交, Bitchat, 澳洲AFT, AI社交, 即时通讯, 智能体" />
     <meta name="author" content="澳洲AFT集团 · 比特AI社交（Bitchat）" />
     <meta name="robots" content="index, follow" />
-    <meta name="theme-color" content="#0a0a0f" />
+    <meta name="theme-color" content="#F5F4F2" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -46,9 +46,9 @@
     <style>
       /* Reset and base: only box-sizing here; Tailwind preflight handles margin/padding reset */
       *, *::before, *::after { box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; background-color: #0a0a14; color: #ffffff; }
+      html, body { width: 100%; height: 100%; background-color: #F5F4F2; color: #16171A; }
       body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-      #root { min-height: 100vh; background-color: #0a0a14; }
+      #root { min-height: 100vh; background-color: #F5F4F2; }
 
       /* Splash screen */
       @keyframes splashBounce {
@@ -65,7 +65,7 @@
 
       /* Inline skeleton screen styles */
       .sk-shimmer {
-        background: linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+        background: linear-gradient(90deg, #EFEEEB 25%, #E6E4DF 50%, #EFEEEB 75%);
         background-size: 200% 100%;
         animation: shimmer 1.5s infinite;
         border-radius: 6px;
@@ -76,20 +76,20 @@
     <script>
       (function() {
         try {
-          var stored = localStorage.getItem('theme');
-          var theme = (stored === 'light') ? 'light' : 'dark';
+          var stored = localStorage.getItem('bitchat-theme');
+          var theme = (stored === 'dark') ? 'dark' : 'light';
           if (theme === 'dark') {
             document.documentElement.classList.add('dark');
-            document.documentElement.style.backgroundColor = '#0a0a14';
-            document.body && (document.body.style.backgroundColor = '#0a0a14');
+            document.documentElement.style.backgroundColor = '#0E0F13';
+            document.body && (document.body.style.backgroundColor = '#0E0F13');
           } else {
             document.documentElement.classList.remove('dark');
-            document.documentElement.style.backgroundColor = '#f5f5f7';
-            document.body && (document.body.style.backgroundColor = '#f5f5f7');
+            document.documentElement.style.backgroundColor = '#F5F4F2';
+            document.body && (document.body.style.backgroundColor = '#F5F4F2');
           }
         } catch(e) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.backgroundColor = '#0a0a14';
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.backgroundColor = '#F5F4F2';
         }
       })();
     </script>
@@ -111,7 +111,7 @@
     <!-- Splash screen: visible immediately, removed when React mounts -->
     <div id="splash-screen" style="
       position: fixed; inset: 0; z-index: 9999;
-      background: #0a0a14;
+      background: #F5F4F2;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 20px;
@@ -121,7 +121,6 @@
       <div style="
         width: 96px; height: 96px;
         display: flex; align-items: center; justify-content: center;
-        filter: drop-shadow(0 0 20px rgba(0,212,255,0.5)) drop-shadow(0 0 40px rgba(168,85,247,0.3));
       ">
         <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_993b13c7.png"
           width="96" height="96"
@@ -130,28 +129,28 @@
       </div>
       <!-- App name -->
       <div style="text-align: center;">
-        <div style="font-family: 'Space Grotesk', -apple-system, sans-serif; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">比特AI</div>
-        <div style="font-family: 'Inter', -apple-system, sans-serif; font-size: 12px; color: rgba(0,212,255,0.6); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase;">AI · Web3 · Social</div>
+        <div style="font-family: 'Space Grotesk', -apple-system, sans-serif; font-size: 22px; font-weight: 700; color: #16171A; letter-spacing: -0.5px;">比特AI</div>
+        <div style="font-family: 'Inter', -apple-system, sans-serif; font-size: 12px; color: #76787E; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase;">AI · Social</div>
       </div>
       <!-- Loading dots -->
       <div style="display: flex; gap: 6px; margin-top: 8px;">
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
-        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: rgba(0,212,255,0.5);"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #3554D1;"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #3554D1;"></div>
+        <div class="splash-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #3554D1;"></div>
       </div>
     </div>
 
     <!-- Inline skeleton screen: shown after splash fades, before React renders content -->
     <div id="skeleton-screen" style="
       position: fixed; inset: 0; z-index: 9998;
-      background: #0a0a14;
+      background: #F5F4F2;
       display: none;
       flex-direction: column;
       opacity: 0;
       transition: opacity 0.2s ease;
     ">
       <!-- Top nav skeleton -->
-      <div style="height: 56px; background: #111120; border-bottom: 1px solid #1e1e3a; display: flex; align-items: center; padding: 0 16px; gap: 12px;">
+      <div style="height: 56px; background: #FFFFFF; border-bottom: 1px solid #E6E4DF; display: flex; align-items: center; padding: 0 16px; gap: 12px;">
         <div class="sk-shimmer" style="width: 32px; height: 32px; border-radius: 50%;"></div>
         <div class="sk-shimmer" style="width: 120px; height: 16px;"></div>
         <div style="flex: 1;"></div>
@@ -161,7 +160,7 @@
       <!-- Content area skeleton -->
       <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
         <!-- Row 1 -->
-        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #FFFFFF; border-radius: 12px;">
           <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
             <div class="sk-shimmer" style="width: 60%; height: 14px;"></div>
@@ -170,7 +169,7 @@
           <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
         </div>
         <!-- Row 2 -->
-        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #FFFFFF; border-radius: 12px;">
           <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
             <div class="sk-shimmer" style="width: 50%; height: 14px;"></div>
@@ -179,7 +178,7 @@
           <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
         </div>
         <!-- Row 3 -->
-        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #FFFFFF; border-radius: 12px;">
           <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
             <div class="sk-shimmer" style="width: 55%; height: 14px;"></div>
@@ -188,7 +187,7 @@
           <div class="sk-shimmer" style="width: 40px; height: 12px;"></div>
         </div>
         <!-- Row 4 -->
-        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #111120; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #FFFFFF; border-radius: 12px;">
           <div class="sk-shimmer" style="width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;"></div>
           <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
             <div class="sk-shimmer" style="width: 65%; height: 14px;"></div>
@@ -198,11 +197,7 @@
         </div>
       </div>
       <!-- Bottom nav skeleton -->
-      <div style="height: 64px; background: #111120; border-top: 1px solid #1e1e3a; display: flex; align-items: center; justify-content: space-around; padding: 0 8px;">
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-          <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
-          <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>
-        </div>
+      <div style="height: 64px; background: #FFFFFF; border-top: 1px solid #EFEDE8; display: flex; align-items: center; justify-content: space-around; padding: 0 8px;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
           <div class="sk-shimmer" style="width: 24px; height: 24px; border-radius: 4px;"></div>
           <div class="sk-shimmer" style="width: 28px; height: 10px;"></div>

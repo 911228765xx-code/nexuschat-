@@ -6,7 +6,7 @@
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { focusOnMount } from "@/lib/focusOnMount";
-import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles, LogIn } from "lucide-react";
+import { Search, Users, Lock, Star, Globe, Heart, MessageSquare, Share2, Image, Send, MoreHorizontal, Repeat2, Bookmark, X, AtSign, Smile, Quote, Loader2, BarChart3, TrendingUp, ExternalLink, Sparkles, LogIn, Newspaper, Brain, Gamepad2, CheckSquare } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { motion, AnimatePresence } from "framer-motion";
@@ -104,7 +104,9 @@ export default function Discover() {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [activeTab, setActiveTab] = useState<"moments" | "communities" | "users">("moments");
+  const [activeTab, setActiveTab] = useState<"moments" | "communities" | "users">(() =>
+    typeof window !== "undefined" && window.location.pathname.startsWith("/app/feed") ? "moments" : "communities",
+  );
   const [moments, setMoments] = useState<MomentPost[]>([]);
   const [showCompose, setShowCompose] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -263,7 +265,11 @@ export default function Discover() {
   const commentInputRef = useRef<HTMLInputElement>(null);
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const [composeImages, setComposeImages] = useState<string[]>([]);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const surface = location.startsWith("/app/feed") ? "feed" : "discover";
+  useEffect(() => {
+    setActiveTab(surface === "feed" ? "moments" : "communities");
+  }, [surface]);
   const [repostMenuPostId, setRepostMenuPostId] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
@@ -636,8 +642,8 @@ export default function Discover() {
       {/* Header */}
       <header className="glass sticky top-0 z-10 px-4 pt-[env(safe-area-inset-top)] border-b border-border/30">
         <div className="flex items-center gap-2 h-14">
-          <Globe size={20} className="text-neon-cyan" />
-          <h1 className="text-lg font-semibold font-display">{t("discover.title")}</h1>
+          {surface === "feed" ? <Newspaper size={20} className="text-primary" /> : <Globe size={20} className="text-primary" />}
+          <h1 className="text-lg font-semibold font-display">{surface === "feed" ? t("tab.feed") : t("discover.title")}</h1>
         </div>
 
         {/* Search */}
@@ -701,22 +707,28 @@ export default function Discover() {
           </div>
         )}
 
-        {/* Tabs: Moments / Communities / Users */}
-        <div className="flex gap-0 pb-0">
-          {(["moments", "communities", "users"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === tab
-                  ? "border-neon-cyan text-foreground"
-                  : "border-transparent text-muted-foreground"
-              }`}
-            >
-              {tab === "moments" ? (t("discover.moments") || "Moments") : tab === "communities" ? t("discover.communities") : t("discover.users")}
-            </button>
-          ))}
-        </div>
+        {surface === "discover" && (
+          <div className="grid grid-cols-4 gap-2 px-1 pb-3">
+            {([
+              { icon: Brain, label: "AI 分析", href: "/app/research" },
+              { icon: Gamepad2, label: "岛屿", href: "/app/island" },
+              { icon: TrendingUp, label: "跟单", href: "/app/trading" },
+              { icon: CheckSquare, label: "任务", href: "/app/tasks" },
+            ] as const).map((item) => (
+              <button
+                key={item.href}
+                type="button"
+                onClick={() => setLocation(item.href)}
+                className="flex flex-col items-center gap-1.5 py-2 rounded-xl active:bg-secondary/60"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10">
+                  <item.icon size={18} className="text-primary" />
+                </div>
+                <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto">
