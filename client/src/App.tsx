@@ -12,6 +12,7 @@ import AppLayout from "./components/AppLayout";
 import { AppProvider, useApp } from "./contexts/AppContext";
 import { useCapacitor } from "./hooks/useCapacitor";
 import { useDeepLink } from "./hooks/useDeepLink";
+import { isCapacitorShell } from "./lib/isCapacitorShell";
 
 // NOTE: Onboarding and usePriceAlertSocket are lazy-loaded to keep initial bundle small
 const Onboarding = lazy(() => import("./components/Onboarding"));
@@ -42,7 +43,6 @@ const DownloadPage = lazy(() => import("./pages/Download"));
 const LoginPage = lazy(() => import("./pages/Login"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPassword"));
-const PWAInstallBanner = lazy(() => import("./components/PWAInstallBanner"));
 const AppUpdateDialog = lazy(() => import("./components/AppUpdateDialog").then(m => ({ default: m.AppUpdateDialog })));
 const UpdateBanner = lazy(() => import("./components/UpdateBanner").then(m => ({ default: m.UpdateBanner })));
 // ─── AI Consulting Center pages ───────────────────────────────────────────────
@@ -297,7 +297,14 @@ function AppContent() {
   // Handle deep links and universal links in native app
   useDeepLink();
   // Track current route to suppress update banners on non-app pages
-  const [currentPath] = useLocation();
+  const [currentPath, setLocation] = useLocation();
+  const shell = isCapacitorShell();
+  // 旧套壳不再渲染网页版 /app，只留官方下载页
+  useEffect(() => {
+    if (shell && currentPath !== "/download") {
+      setLocation("/download");
+    }
+  }, [shell, currentPath, setLocation]);
   // Suppress update dialogs/banners on landing page and download page to avoid loops
   const isUpdateSuppressed = currentPath === "/download" || currentPath === "/" || currentPath === "/login";
 
@@ -340,11 +347,6 @@ function AppContent() {
       )}
 
       <RouteContent />
-
-      {/* PWA install banner — shown to mobile users who haven't installed yet */}
-      <Suspense fallback={null}>
-        <PWAInstallBanner />
-      </Suspense>
 
       {/* App version update check — auto-checks on startup, shows dialog if update available */}
       {/* Suppressed on /download, /, /login to avoid update loops */}

@@ -9,10 +9,11 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
-  Smartphone, Apple, Download, CheckCircle, ArrowLeft, ExternalLink, QrCode, Copy, Check,
+  Smartphone, Apple, Download, ArrowLeft, ExternalLink, QrCode, Copy, Check,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
+import { isCapacitorShell } from "@/lib/isCapacitorShell";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -88,6 +89,7 @@ export default function DownloadPage() {
     /^g\d+t[0-9a-fA-F]+$/.test(rawInviteCode) || /^u\d+$/.test(rawInviteCode) ? rawInviteCode : "",
   );
   const isInviteFlow = Boolean(inviteFlowCode);
+  const inShell = isCapacitorShell();
   const continueInAppUrl = inviteFlowCode ? `nexuschat://i/${inviteFlowCode}` : "";
   // 从群/用户二维码扫来:显示"邀请你加入群聊「XXX」"/"XXX 邀请你加为好友",提高下载转化
   const [inviteTarget, setInviteTarget] = useState<{ type: "group" | "user"; name: string; avatar: string | null; memberCount?: number } | null>(null);
@@ -268,23 +270,19 @@ export default function DownloadPage() {
   const safeDirectUrl = usableDirectUrl(ver?.directUrl);
   const androidSteps = isInviteFlow
     ? [
-        "点击下方「下载 Android 版」按钮，下载 APK 安装包",
+        "若已安装约 10MB 旧套壳，先卸载 BitChat",
+        "点击下方「下载 Android 版」按钮，下载约 180MB 官方原生包",
         "点击 APK 文件，按提示完成安装",
         "安装完成后返回这个下载页面",
         "点击「打开 Bitchat 继续」完成加群或查看名片",
       ]
     : [
-        "点击下方「下载 Android 版」按钮，下载 APK 安装包",
+        "若手机里已有约 10MB 的旧 BitChat（网页套壳），先卸载再装",
+        "点击下方「下载 Android 版」按钮，下载约 180MB 官方原生包",
         "在手机「设置 → 安全」中开启「允许安装未知来源应用」",
         "点击 APK 文件，按提示完成安装",
         "安装完成后在桌面找到 Bitchat 图标，点击启动",
       ];
-  const iosSteps = [
-    "使用 Safari 浏览器打开 nexuschat.best",
-    "点击底部工具栏中间的「分享」按钮（方框加箭头图标）",
-    "在弹出菜单中向下滚动，点击「添加到主屏幕」",
-    "点击右上角「添加」，App 图标即出现在桌面",
-  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -341,19 +339,23 @@ export default function DownloadPage() {
             </div>
             <span className="font-bold text-sm">Bitchat 下载</span>
           </div>
-          <Button
-            onClick={() => setLocation("/app/chat")}
-            size="sm"
-            className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-8 px-3"
-            variant="outline"
-          >
-            进入 Web 版
-          </Button>
+          <span className="w-16" />
         </div>
       </nav>
 
+      {inShell && (
+        <section className="pt-24 px-4">
+          <div className="max-w-md mx-auto rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-left">
+            <p className="text-sm font-semibold text-amber-300 mb-1">你打开的是旧网页套壳</p>
+            <p className="text-xs leading-relaxed text-amber-200/80">
+              请先卸载当前 BitChat（大约 10MB），再下载下方约 180MB 的官方原生包。两套签名不同，不能覆盖更新。
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* Hero:邀请流压缩(徽标/口号让位,邀请卡+下载按钮要进手机第一屏) */}
-      <section className={`${isInviteFlow ? "pt-24 pb-5" : "pt-28 pb-12"} px-4 text-center`}>
+      <section className={`${isInviteFlow ? "pt-24 pb-5" : inShell ? "pt-6 pb-12" : "pt-28 pb-12"} px-4 text-center`}>
         <motion.div {...fadeUp}>
           {!isInviteFlow && (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
@@ -574,21 +576,11 @@ export default function DownloadPage() {
                 </p>
               </div>
 
-              {/* 邀请流不引导去 Web 版:自动进群/名片只在 App 深链里生效,分流到 Web 会断掉 */}
-              {!isInviteFlow && (
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground mb-2">也可直接使用 Web 版，无需安装：</p>
-                  <Button
-                    onClick={() => setLocation("/app/chat")}
-                    variant="outline"
-                    size="sm"
-                    className="border-border/30 text-muted-foreground hover:text-foreground text-sm h-8 bg-transparent"
-                  >
-                    <ExternalLink size={12} className="mr-1.5" />
-                    打开 Web 版
-                  </Button>
-                </div>
-              )}
+              <div className="mt-2 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-xs leading-relaxed text-amber-400/80">
+                  约 10MB 的旧包是网页套壳，不是官方 App。请先卸载再装本页约 180MB 原生包。
+                </p>
+              </div>
             </div>
           </motion.div>
         )}
@@ -602,84 +594,23 @@ export default function DownloadPage() {
             transition={{ duration: 0.4 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start"
           >
-            {/* QR Code Card */}
-            <div className="rounded-2xl border border-[#a855f7]/20 bg-gradient-to-br from-[#a855f7]/10 to-transparent p-6 flex flex-col items-center gap-4">
-              <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Safari 扫码打开</p>
-              <div className="rounded-xl overflow-hidden border border-[#a855f7]/20 p-3 bg-white">
-                <QRCodeSVG value={ORIGIN} size={168} level="M" />
-              </div>
-              <p className="text-sm text-muted-foreground text-center">
-                使用 iPhone Safari 扫描二维码<br />然后按步骤添加到主屏幕
+            <div className="rounded-2xl border border-[#a855f7]/20 bg-gradient-to-br from-[#a855f7]/10 to-transparent p-6 flex flex-col items-center gap-4 md:col-span-2">
+              <p className="text-sm font-semibold text-foreground">iOS 官方 App 尚未上架</p>
+              <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-md">
+                请先安装 Android 官方原生包（约 180MB）。不要把网页添加到主屏幕，那不是官方 App。
               </p>
               <Button
-                onClick={() => window.open(ORIGIN, "_blank")}
-                className="w-full bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25"
+                onClick={() => setActiveTab("android")}
+                className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25"
                 variant="outline"
               >
-                <ExternalLink size={15} className="mr-2" />
-                在 Safari 中打开
+                查看 Android 官方下载
               </Button>
-              <p className="text-sm text-muted-foreground/60 text-center">
-                需要 iOS 14.0+ · 使用 Safari 浏览器
-              </p>
-            </div>
-
-            {/* Install Steps */}
-            <div className="space-y-4">
-              <h3 className="text-base font-semibold text-foreground">添加到主屏幕</h3>
-              <div className="space-y-3">
-                {iosSteps.map((step, i) => (
-                  <div key={i} className="flex gap-3 items-start">
-                    <div className="w-6 h-6 rounded-full bg-[#a855f7]/15 border border-[#a855f7]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[#a855f7] text-sm font-bold">{i + 1}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{step}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 space-y-2">
-                {[
-                  "全屏显示，无浏览器地址栏",
-                  "图标出现在桌面，像原生 App 一样打开",
-                  "支持离线缓存，网络不佳时仍可使用",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-[#a855f7] flex-shrink-0" />
-                    <p className="text-sm text-muted-foreground">{item}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                <p className="text-sm text-blue-400/80 leading-relaxed">
-                  <strong className="text-blue-400">注意：</strong>
-                  iOS 的「添加到主屏幕」功能仅在 <strong>Safari</strong> 浏览器中可用，Chrome 或其他浏览器不支持此操作。
-                </p>
-              </div>
             </div>
           </motion.div>
         )}
 
-        {/* Bottom CTA:邀请流不放"体验 Web 版"大按钮——和下载按钮抢视觉重心,还会把要进群的人带离 App 路径 */}
-        {!isInviteFlow && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-16 text-center"
-          >
-            <p className="text-sm text-muted-foreground mb-4">
-              已有账号？直接进入 Web 版体验全部功能
-            </p>
-            <Button
-              onClick={() => setLocation("/app/chat")}
-              className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-11 px-8 text-sm font-semibold"
-            >
-              立即体验 Web 版
-            </Button>
-          </motion.div>
-        )}
+        {/* 不再引导「Web 版 / 添加到主屏幕」，避免再把网页当成 App 发出去 */}
       </section>
     </div>
   );

@@ -4,10 +4,10 @@ const config: CapacitorConfig = {
   appId: 'com.nexuschat.app',
   appName: 'BitChat',
   webDir: 'dist/public',
-  // Production server URL — the app loads your deployed website
-  // For development/testing, comment this out to use local webDir bundle
+  // 套壳已退役：不再把整站 /app 嵌进 WebView。
+  // 若有人误打 Capacitor 包，打开后只进官方下载页，引导改装 Expo 原生包。
   server: {
-    url: 'https://nexuschat.best',
+    url: 'https://nexuschat.best/download',
     cleartext: false,
   },
   plugins: {

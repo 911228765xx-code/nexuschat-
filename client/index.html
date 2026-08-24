@@ -72,6 +72,19 @@
       }
     </style>
 
+    <!-- 旧 Capacitor 套壳：在 React 起来前就踢去下载页，避免再露出网页版 /app -->
+    <script>
+      (function() {
+        try {
+          var C = window.Capacitor;
+          var native = C && C.isNativePlatform && C.isNativePlatform();
+          if (native && location.pathname !== '/download') {
+            location.replace('/download');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Blocking theme script: prevents white flash before React hydrates -->
     <script>
       (function() {

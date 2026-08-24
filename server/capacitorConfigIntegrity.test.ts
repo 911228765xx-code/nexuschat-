@@ -14,6 +14,12 @@ describe("Capacitor native shell configuration", () => {
     expect(source).not.toContain("appName: 'NexusChat'");
   });
 
+  it("does not load the live website as the Capacitor app shell", () => {
+    const urls = [...source.matchAll(/url:\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(urls).toContain("https://nexuschat.best/download");
+    expect(urls).not.toContain("https://nexuschat.best");
+  });
+
   it("keeps keyboard and safe-area settings compatible with the mobile shell", () => {
     expect(source).toContain("Keyboard:");
     expect(source).toContain("resize: 'none'");
