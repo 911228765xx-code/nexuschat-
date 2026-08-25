@@ -41,6 +41,21 @@ export function normalizeInviteCode(raw: string): string {
 }
 
 /**
+ * 绑定输入：统一用用户 ID（资料页那个数字）。
+ * 兼容旧分享：AIXXXX、NEXUS-…、名片码 u123。
+ */
+export function parseInviteInput(raw: string): { userId: number } | { code: string } | null {
+  const norm = normalizeInviteCode(raw);
+  if (!norm) return null;
+  const asId = norm.match(/^U?(\d{1,10})$/);
+  if (asId) {
+    const userId = Number(asId[1]);
+    if (Number.isInteger(userId) && userId > 0) return { userId };
+  }
+  return { code: norm };
+}
+
+/**
  * Ensure the user's stored inviteCode matches the code derived from their current name.
  * Writes only when missing or stale. Returns the current code.
  */

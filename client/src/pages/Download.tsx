@@ -418,7 +418,7 @@ export default function DownloadPage() {
         <section className="px-4 -mt-6 mb-2">
           <div className="max-w-md mx-auto rounded-2xl border border-[#a855f7]/30 bg-[#a855f7]/10 p-4 text-center">
             <p className="text-sm text-muted-foreground mb-3">
-              🎁 好友邀请你加入！安装后在 App「我的 → 邀请好友」填入下方邀请码，双方各得 IT 奖励
+              🎁 好友邀请你加入！安装后在 App「我的 → 邀请好友」填入下方 ID，双方各得 IT 奖励
             </p>
             <div className="flex min-w-0 flex-col items-center justify-center gap-3 sm:flex-row">
               <span className="max-w-full break-all text-center text-xl font-black leading-relaxed tracking-[0.12em] bg-gradient-to-r from-[#00d4ff] to-[#a855f7] bg-clip-text text-transparent sm:text-2xl sm:tracking-[0.2em]">

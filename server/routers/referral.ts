@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, or, desc, count, sql } from "drizzle-orm";
-import { ensureInviteCode, normalizeInviteCode } from "../utils/inviteCode";
+import { ensureInviteCode, parseInviteInput } from "../utils/inviteCode";
 import { ENV } from "../_core/env";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
@@ -30,9 +30,8 @@ export const referralRouter = router({
 
     const userId = ctx.user!.id;
     const userName = ctx.user!.name ?? "USER";
-    // Persist the code so it can be reverse-looked-up in recordReferral, and so the
-    // displayed code always matches what's stored (e.g. after a rename).
-    const inviteCode = await ensureInviteCode(db, userId, userName);
+    // 旧 AIXXXX 仍写入库并回给老客户端；新页面用 userId 展示/绑定。
+    const legacyCode = await ensureInviteCode(db, userId, userName);
 
     // Count referrals
     const [totalResult] = await db
@@ -61,8 +60,10 @@ export const referralRouter = router({
     }));
 
     return {
-      inviteCode,
-      inviteLink: `${ENV.publicOrigin}/i/${inviteCode}`, // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
+      inviteCode: String(userId),
+      legacyInviteCode: legacyCode,
+      userId,
+      inviteLink: `${ENV.publicOrigin}/i/${userId}`, // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
       totalInvited,
       activeInvited,
       totalRewards,
@@ -116,7 +117,7 @@ export const referralRouter = router({
     const [ref] = await db
       .select({ name: users.name, username: users.username })
       .from(users).where(eq(users.id, r.referrerId)).limit(1);
-    return { bound: true, referrerName: ref?.name ?? ref?.username ?? `用户 #${r.referrerId}` };
+    return { bound: true, referrerId: r.referrerId, referrerName: ref?.name ?? ref?.username ?? `用户 #${r.referrerId}` };
   }),
 
   // ─── Record a referral (called when invitee signs up with code) ───────────
@@ -138,15 +139,27 @@ export const referralRouter = router({
 
       if (existing) return { success: false, message: "Already referred" };
 
-      // Direct indexed lookup by stored invite code (O(1), no full-table scan / 10k cap).
-      // 输入容错:新码去横线/空格+大写(AI7KQ2);同时保留原样匹配旧存量码 NEXUS-XXXXXX-YYYY(含横线)。
-      const norm = normalizeInviteCode(input.inviteCode);
-      const rawUpper = input.inviteCode.trim().toUpperCase();
-      const [referrer] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(or(eq(users.inviteCode, norm), eq(users.inviteCode, rawUpper)))
-        .limit(1);
+      // 优先按用户 ID 绑（与资料页 ID 统一）；旧 AIXXXX / NEXUS 码仍可查。
+      const parsed = parseInviteInput(input.inviteCode);
+      if (!parsed) return { success: false, message: "Invalid invite code" };
+
+      let referrer: { id: number } | undefined;
+      if ("userId" in parsed) {
+        const [row] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, parsed.userId))
+          .limit(1);
+        referrer = row;
+      } else {
+        const rawUpper = input.inviteCode.trim().toUpperCase();
+        const [row] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(or(eq(users.inviteCode, parsed.code), eq(users.inviteCode, rawUpper)))
+          .limit(1);
+        referrer = row;
+      }
 
       if (!referrer) return { success: false, message: "Invalid invite code" };
       if (referrer.id === inviteeId) return { success: false, message: "Cannot invite yourself" };
