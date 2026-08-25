@@ -31,6 +31,40 @@ export function generateInviteCode(userId: number, _name?: string | null): strin
   return `AI${tail}`;
 }
 
+function modInverse(a: number, m: number): number {
+  let oldR = a, r = m, oldS = 1, s = 0;
+  while (r !== 0) {
+    const q = Math.floor(oldR / r);
+    [oldR, r] = [r, oldR - q * r];
+    [oldS, s] = [s, oldS - q * s];
+  }
+  return ((oldS % m) + m) % m;
+}
+
+const CODE_MULT_INV = modInverse(CODE_MULT, CODE_SPACE);
+
+/** 把旧 AIXXXX 还原成用户 ID。对不上则返回 null。 */
+export function decodeInviteCodeToUserId(raw: string): number | null {
+  const norm = normalizeInviteCode(raw);
+  if (!/^AI[2-9A-HJ-NP-Z]{4}$/.test(norm)) return null;
+  let n = 0;
+  for (const ch of norm.slice(2)) {
+    const i = CODE_ALPHABET.indexOf(ch);
+    if (i < 0) return null;
+    n = n * 31 + i;
+  }
+  const userId = (n * CODE_MULT_INV) % CODE_SPACE;
+  return userId > 0 ? userId : null;
+}
+
+/** 对外只给数字用户 ID，绝不带 AI 前缀。 */
+export function toPublicInviteId(userId: number, inviteCode?: string | null): string {
+  if (Number.isInteger(userId) && userId > 0) return String(userId);
+  if (inviteCode && /^\d+$/.test(inviteCode.trim())) return inviteCode.trim();
+  const decoded = inviteCode ? decodeInviteCodeToUserId(inviteCode) : null;
+  return decoded ? String(decoded) : "";
+}
+
 /**
  * 输入容错:去掉一切非字母数字的分隔符、转大写 —— "ai-7kq2"、"AI 7KQ2"、展示态 "AI·7KQ2"
  * (中点 U+00B7)都命中 AI7KQ2。原来只去 [\s-] 漏了中点,而邀请页复制/分享的正是 "AI·XXXX",
@@ -52,6 +86,8 @@ export function parseInviteInput(raw: string): { userId: number } | { code: stri
     const userId = Number(asId[1]);
     if (Number.isInteger(userId) && userId > 0) return { userId };
   }
+  const decoded = decodeInviteCodeToUserId(norm);
+  if (decoded) return { userId: decoded };
   return { code: norm };
 }
 

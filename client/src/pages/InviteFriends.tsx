@@ -28,8 +28,12 @@ export default function InviteFriends() {
   const { data: stats, isLoading: statsLoading } = trpc.referral.getStats.useQuery();
   const { data: referralList, isLoading: listLoading } = trpc.referral.listReferrals.useQuery();
 
-  const inviteCode = stats?.userId != null ? String(stats.userId) : (stats?.inviteCode ?? "");
-  const inviteLink = stats?.inviteLink ?? "";
+  const inviteCode = /^\d+$/.test(String(stats?.userId ?? ""))
+    ? String(stats!.userId)
+    : (/^\d+$/.test(stats?.inviteCode ?? "") ? stats!.inviteCode : "");
+  const inviteLink = inviteCode
+    ? `${window.location.origin}/i/${inviteCode}`
+    : (stats?.inviteLink ?? "");
   const totalInvited = stats?.totalInvited ?? 0;
   const activeInvited = stats?.activeInvited ?? 0;
   const totalRewards = stats?.totalRewards ?? 0;

@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { referrals, users } from "../../drizzle/schema";
 import { eq, and, or, desc, count, sql } from "drizzle-orm";
-import { ensureInviteCode, parseInviteInput } from "../utils/inviteCode";
+import { ensureInviteCode, parseInviteInput, toPublicInviteId } from "../utils/inviteCode";
 import { ENV } from "../_core/env";
 
 // ─── Reward constants ────────────────────────────────────────────────────────
@@ -60,10 +60,10 @@ export const referralRouter = router({
     }));
 
     return {
-      inviteCode: String(userId),
+      inviteCode: toPublicInviteId(userId, legacyCode),
       legacyInviteCode: legacyCode,
       userId,
-      inviteLink: `${ENV.publicOrigin}/i/${userId}`, // 别用 req Host:CF→Cloud Run 下是被墙的 *.run.app
+      inviteLink: `${ENV.publicOrigin}/i/${toPublicInviteId(userId, legacyCode)}`,
       totalInvited,
       activeInvited,
       totalRewards,
