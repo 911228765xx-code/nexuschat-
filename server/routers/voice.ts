@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { rateLimitStrict } from "../rateLimit";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { storagePut } from "../storage";
+import { appMediaUrl } from "../utils/mediaUrl";
 
 export const voiceRouter = router({
   /**
@@ -24,8 +25,8 @@ export const voiceRouter = router({
       }
       const ext = input.mimeType.split("/")[1]?.split(";")[0] ?? "webm";
       const key = `voice-messages/${ctx.user.id}/${Date.now()}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
-      return { url, key, durationSeconds: input.durationSeconds ?? 0 };
+      await storagePut(key, buffer, input.mimeType);
+      return { url: appMediaUrl(key), key, durationSeconds: input.durationSeconds ?? 0 };
     }),
 
   /**

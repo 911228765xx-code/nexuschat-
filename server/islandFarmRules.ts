@@ -31,6 +31,8 @@ export const DAILY_ORDERS = [
   { orderKey: "tomato_basket", label: "商店鲜果订单", cropKey: "tomato", requiredQuantity: 4, itReward: 24, seedRewardKey: "seed_moonberry", seedRewardQuantity: 1 },
 ] as const;
 
+export const GROUP_ISLAND_DAILY_GOAL = 5;
+
 export const WORKSHOP_RECIPES = {
   sunrise_crate: {
     label: "晨曦补给箱",

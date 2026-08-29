@@ -7,6 +7,9 @@ import { focusOnMount } from "@/lib/focusOnMount";
 import { trpc } from "@/lib/trpc";
 import { formatChatTimestamp } from "@/lib/timeFormat";
 import { compressImage } from "@/lib/imageCompress";
+import { uploadFileChunked } from "@/lib/chunkedUpload";
+import { rewriteMediaUrl } from "@/lib/mediaUrl";
+import { LinkifiedText } from "@/lib/linkify";
 import { useParams, useLocation } from "wouter";
 import { useSocket, SocketMessage } from "@/hooks/useSocket";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -94,21 +97,8 @@ function getRoleBadge(role?: string) {
   return null;
 }
 
-function renderContent(content: string, mentions?: string[]) {
-  if (!mentions || mentions.length === 0) return <span>{content}</span>;
-  const parts: (string | React.ReactElement)[] = [];
-  let remaining = content;
-  let key = 0;
-  mentions.forEach((mention) => {
-    const idx = remaining.indexOf(`@${mention}`);
-    if (idx >= 0) {
-      if (idx > 0) parts.push(remaining.slice(0, idx));
-      parts.push(<span key={key++} className="text-neon-cyan font-medium cursor-pointer hover:underline">@{mention}</span>);
-      remaining = remaining.slice(idx + mention.length + 1);
-    }
-  });
-  if (remaining) parts.push(remaining);
-  return <>{parts}</>;
+function renderContent(content: string, _mentions?: string[]) {
+  return <LinkifiedText text={content} />;
 }
 
 // ─── Read Receipt Avatar Stack ───────────────────────────────────────────────
@@ -179,6 +169,7 @@ function ReadReceiptAvatars({ messageId, readCount }: { messageId: number; readC
 function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
+  const src = rewriteMediaUrl(msg.mediaUrl);
 
   const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -191,7 +182,7 @@ function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
       {/* 视频缩略图 + 播放按鈕遮罩层 */}
       <div className="relative cursor-pointer" onClick={handleTap} onTouchEnd={handleTap}>
         <video
-          src={msg.mediaUrl}
+          src={src}
           className="w-full rounded-xl max-h-[200px] object-cover pointer-events-none"
           preload="metadata"
         />
@@ -218,7 +209,7 @@ function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
               <span>播放视频</span>
             </button>
             <button
-              onClick={() => { window.open(msg.mediaUrl, "_blank"); setShowMenu(false); }}
+              onClick={() => { window.open(src, "_blank"); setShowMenu(false); }}
               className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 transition-colors text-sm border-t border-border/20"
             >
               <Download size={18} className="text-neon-purple" />
@@ -240,7 +231,7 @@ function VideoMessageBubble({ msg }: { msg: GroupMessage }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90" onClick={() => setShowPlayer(false)}>
           <div className="w-full max-w-lg px-4" onClick={e => e.stopPropagation()}>
             <video
-              src={msg.mediaUrl}
+              src={src}
               controls
               autoPlay
               className="w-full rounded-xl max-h-[80vh]"
@@ -343,7 +334,7 @@ function renderMessageContent(msg: GroupMessage, onClaim?: (id: string) => void,
   if (msg.messageType === "image" && msg.mediaUrl) {
     return (
       <div className="mt-2">
-        <img src={msg.mediaUrl} alt="Image" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer" loading="lazy" onClick={() => window.open(msg.mediaUrl, "_blank")} />
+        <img src={rewriteMediaUrl(msg.mediaUrl)} alt="Image" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer" loading="lazy" onClick={() => window.open(rewriteMediaUrl(msg.mediaUrl), "_blank")} />
       </div>
     );
   }
@@ -366,7 +357,7 @@ function renderMessageContent(msg: GroupMessage, onClaim?: (id: string) => void,
           </div>
           <audio
             controls
-            src={msg.mediaUrl}
+            src={rewriteMediaUrl(msg.mediaUrl)}
             className="w-full h-8"
             style={{ minWidth: 180 }}
           />
@@ -374,7 +365,7 @@ function renderMessageContent(msg: GroupMessage, onClaim?: (id: string) => void,
       );
     }
     return (
-      <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
+      <a href={rewriteMediaUrl(msg.mediaUrl)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors max-w-[220px]">
         <File size={18} className="text-neon-cyan shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{msg.fileName ?? "File"}</p>
@@ -591,7 +582,7 @@ export default function GroupChatRoom() {
           time: new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
           isMine,
           messageType: (msg.messageType as "text" | "image" | "file") ?? "text",
-          mediaUrl: msg.mediaUrl ?? undefined,
+          mediaUrl: rewriteMediaUrl(msg.mediaUrl) ?? undefined,
         }];
       });
     });
@@ -630,7 +621,7 @@ export default function GroupChatRoom() {
         time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
         messageType: (m.messageType as "text" | "image" | "file") ?? "text",
-        mediaUrl: m.mediaUrl ?? undefined,
+        mediaUrl: rewriteMediaUrl(m.mediaUrl) ?? undefined,
       }));
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
@@ -660,7 +651,7 @@ export default function GroupChatRoom() {
         time: formatChatTimestamp(new Date(m.createdAt)),
         isMine: user ? m.senderId === user.id : false,
         messageType: (m.messageType as "text" | "image" | "file") ?? "text",
-        mediaUrl: m.mediaUrl ?? undefined,
+        mediaUrl: rewriteMediaUrl(m.mediaUrl) ?? undefined,
       }));
       return [...mapped, ...localOnly];
     });
@@ -803,30 +794,24 @@ export default function GroupChatRoom() {
         if (isValidGroup && connected) socketSend({ groupId, content: `[Image: ${file.name}]`, mediaUrl: result.url, messageType: "image" });
         toast.success("Image sent!");
       } else {
-        // Non-image file: read as base64 and upload
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          const result = await uploadImageMutation.mutateAsync({ base64, mimeType: file.type });
-          await saveGroupFileMutation.mutateAsync({ groupId, fileName: file.name, fileSize: file.size, mimeType: file.type, fileKey: result.url, url: result.url });
-          const newMsg: GroupMessage = {
-            id: Date.now().toString(),
-            sender: user?.name ?? "User",
-            senderAvatar: user?.avatar ?? "🦊",
-            senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
-            content: `[File: ${file.name}]`,
-            time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-            isMine: true,
-            messageType: "file",
-            mediaUrl: result.url,
-            fileName: file.name,
-            fileSize: file.size,
-          };
-          setMessages(prev => [...prev, newMsg]);
-          if (isValidGroup && connected) socketSend({ groupId, content: `[File: ${file.name}]`, mediaUrl: result.url, messageType: "file" });
-          toast.success("File sent!");
+        const result = await uploadFileChunked(file, "file");
+        await saveGroupFileMutation.mutateAsync({ groupId, fileName: file.name, fileSize: file.size, mimeType: file.type, fileKey: result.url, url: result.url });
+        const newMsg: GroupMessage = {
+          id: Date.now().toString(),
+          sender: user?.name ?? "User",
+          senderAvatar: user?.avatar ?? "🦊",
+          senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
+          content: `[File: ${file.name}]`,
+          time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          isMine: true,
+          messageType: "file",
+          mediaUrl: result.url,
+          fileName: file.name,
+          fileSize: file.size,
         };
+        setMessages(prev => [...prev, newMsg]);
+        if (isValidGroup && connected) socketSend({ groupId, content: `[File: ${file.name}]`, mediaUrl: result.url, messageType: "file" });
+        toast.success("File sent!");
       }
     } catch {
       toast.error("Upload failed");
@@ -852,30 +837,25 @@ export default function GroupChatRoom() {
     }
     setIsUploading(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        const result = await uploadImageMutation.mutateAsync({ base64, mimeType: file.type });
-        const newMsg: GroupMessage = {
-          id: Date.now().toString(),
-          sender: user?.name ?? "User",
-          senderAvatar: user?.avatar ?? "🦊",
-          senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
-          content: `[Video: ${file.name}]`,
-          time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-          isMine: true,
-          messageType: "video",
-          mediaUrl: result.url,
-          fileName: file.name,
-          fileSize: file.size,
-        };
-        setMessages(prev => [...prev, newMsg]);
-        if (isValidGroup && connected) socketSend({ groupId, content: `[Video: ${file.name}]`, mediaUrl: result.url, messageType: "video" });
-        toast.success("视频发送成功！");
+      const result = await uploadFileChunked(file, "video");
+      const newMsg: GroupMessage = {
+        id: Date.now().toString(),
+        sender: user?.name ?? "User",
+        senderAvatar: user?.avatar ?? "🦊",
+        senderRole: (myMember?.role as "owner" | "admin" | "member") ?? "member",
+        content: `[Video: ${file.name}]`,
+        time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+        isMine: true,
+        messageType: "video",
+        mediaUrl: result.url,
+        fileName: file.name,
+        fileSize: file.size,
       };
-    } catch {
-      toast.error("视频上传失败");
+      setMessages(prev => [...prev, newMsg]);
+      if (isValidGroup && connected) socketSend({ groupId, content: `[Video: ${file.name}]`, mediaUrl: result.url, messageType: "video" });
+      toast.success("视频发送成功！");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "视频上传失败");
     } finally {
       setIsUploading(false);
     }

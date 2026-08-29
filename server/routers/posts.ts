@@ -6,6 +6,7 @@ import { posts, postLikes, postComments, users, notifications, promoBanners, cha
 import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { getBenefits } from "../membership";
 import { storagePut } from "../storage";
+import { appMediaUrl } from "../utils/mediaUrl";
 import { createNotification } from "./notificationsRouter";
 import { awardTaskEvent } from "./user";
 import { sanitizeInput } from "../utils/sanitize";
@@ -527,12 +528,12 @@ export const postsRouter = router({
         const thumb = await downscaleImage(raw, 400, 70, mimeType);
         const thumbExt = thumb.mime.split("/")[1] ?? "jpg";
         const thumbKey = `posts/${ctx.user.id}/${stamp}-${randomSuffix}_thumb.${thumbExt}`;
-        const t = await storagePut(thumbKey, thumb.buffer, thumb.mime);
-        thumbUrl = t.url;
+        await storagePut(thumbKey, thumb.buffer, thumb.mime);
+        thumbUrl = appMediaUrl(thumbKey);
       }
       const key = `posts/${ctx.user.id}/${stamp}-${randomSuffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, mime);
-      return { url, thumbUrl, key };
+      await storagePut(key, buffer, mime);
+      return { url: appMediaUrl(key), thumbUrl, key };
     }),
 
   // ─── Delete post ──────────────────────────────────────────────────────────

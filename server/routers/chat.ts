@@ -20,6 +20,7 @@ import { createNotification } from "./notificationsRouter";
 import { enforceContent, reviewMessageAsync } from "../moderation";
 import { assertCanDM } from "../utils/relations";
 import { BOT_PERSONAS } from "../botAutoReply";
+import { appMediaUrl, rewriteMediaUrl, rewriteRowMedia } from "../utils/mediaUrl";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -489,7 +490,7 @@ export const chatRouter = router({
         // 按 id 排序，与 before 游标(lt id)保持一致，避免同秒消息翻页丢/重
         .orderBy(desc(messages.id))
         .limit(input.limit);
-      return rows.reverse();
+      return rows.reverse().map((row) => rewriteRowMedia(row));
     }),
 
   // ─── 群聊历史搜索（服务端，不限本地已加载消息）────────────────────────────
@@ -542,7 +543,7 @@ export const chatRouter = router({
         .where(and(...conditions))
         .orderBy(desc(messages.id))
         .limit(input.limit);
-      return rows;
+      return rows.map((row) => rewriteRowMedia(row));
     }),
 
   // Save a message (called from socket handler via REST fallback)
@@ -584,7 +585,7 @@ export const chatRouter = router({
         senderId: ctx.user.id,
         content: sanitizeInput(input.content, 5000),
         messageType: input.messageType,
-        mediaUrl: input.mediaUrl ?? undefined,
+        mediaUrl: rewriteMediaUrl(input.mediaUrl) ?? undefined,
         durationSeconds: input.durationSeconds ?? undefined,
         replyToId: input.replyToId ?? undefined,
         expiresAt,
@@ -607,7 +608,7 @@ export const chatRouter = router({
           senderAvatar: (ctx.user as any).avatar ?? null,
           content: sanitizeInput(input.content, 5000),
           messageType: input.messageType,
-          mediaUrl: input.mediaUrl ?? null,
+          mediaUrl: rewriteMediaUrl(input.mediaUrl) ?? null,
           durationSeconds: input.durationSeconds ?? null,
           replyToId: input.replyToId ?? null,
           createdAt: new Date().toISOString(),
@@ -706,7 +707,7 @@ export const chatRouter = router({
         groupId: null,
         content: sanitizeInput(input.content, 5000),
         messageType: input.messageType,
-        mediaUrl: input.mediaUrl ?? undefined,
+        mediaUrl: rewriteMediaUrl(input.mediaUrl) ?? undefined,
         durationSeconds: input.durationSeconds ?? undefined,
         replyToId: input.replyToId ?? undefined,
         expiresAt,
@@ -720,7 +721,7 @@ export const chatRouter = router({
         senderName: ctx.user.name ?? ctx.user.username ?? `User #${ctx.user.id}`,
         content: sanitizeInput(input.content, 5000),
         messageType: input.messageType,
-        mediaUrl: input.mediaUrl ?? null,
+        mediaUrl: rewriteMediaUrl(input.mediaUrl) ?? null,
         durationSeconds: input.durationSeconds ?? null,
         createdAt: new Date().toISOString(),
       });
@@ -911,7 +912,7 @@ export const chatRouter = router({
           logger.warn({ err, otherId, myId }, "markDMsRead failed");
         }
       }
-      return rows.reverse();
+      return rows.reverse().map((row) => rewriteRowMedia(row));
     }),
 
   // ─── DM: List all DM conversations for current user ───────────────────────
@@ -1225,8 +1226,8 @@ export const chatRouter = router({
       const { buffer, mime } = await downscaleImage(raw, 1600, 82, input.mimeType);
       const ext = mime.split("/")[1] ?? "jpg";
       const key = `chat-images/${ctx.user.id}/${Date.now()}.${ext}`;
-      const { url } = await storagePut(key, buffer, mime);
-      return { url };
+      await storagePut(key, buffer, mime);
+      return { url: appMediaUrl(key) };
     }),
 
   // Upload group avatar without updating a user's profile avatar.
@@ -1252,8 +1253,8 @@ export const chatRouter = router({
       const { buffer, mime } = await downscaleImage(raw, 512, 85, input.mimeType);
       const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
       const key = `group-avatars/${input.groupId}/${Date.now()}.${ext}`;
-      const { url } = await storagePut(key, buffer, mime);
-      return { url };
+      await storagePut(key, buffer, mime);
+      return { url: appMediaUrl(key) };
     }),
 
   // Upload chat video to S3 (short clips; stays under the 50MB JSON body limit)
@@ -1271,8 +1272,8 @@ export const chatRouter = router({
       }
       const ext = input.mimeType.split("/")[1]?.split(";")[0] ?? "mp4";
       const key = `chat-videos/${ctx.user.id}/${Date.now()}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
-      return { url };
+      await storagePut(key, buffer, input.mimeType);
+      return { url: appMediaUrl(key) };
     }),
 
   // Upload an arbitrary chat file (documents) to S3
@@ -1294,8 +1295,8 @@ export const chatRouter = router({
       }
       const safe = input.fileName.replace(/[^\w.\-]+/g, "_").slice(-80) || "file";
       const key = `chat-files/${ctx.user.id}/${Date.now()}_${safe}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
-      return { url };
+      await storagePut(key, buffer, input.mimeType);
+      return { url: appMediaUrl(key) };
     }),
 
   // ─── Mark group as read (update lastReadMessageId) ──────────────────────────
@@ -1697,11 +1698,12 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) return [];
       await assertGroupMember(db, input.groupId, ctx.user.id);
-      return db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name })
+      const files = await db.select({ id: groupFiles.id, fileName: groupFiles.fileName, fileSize: groupFiles.fileSize, mimeType: groupFiles.mimeType, url: groupFiles.url, createdAt: groupFiles.createdAt, uploaderName: users.name })
         .from(groupFiles)
         .leftJoin(users, eq(groupFiles.uploaderId, users.id))
         .where(eq(groupFiles.groupId, input.groupId))
         .orderBy(desc(groupFiles.createdAt)).limit(input.limit);
+      return files.map((row) => rewriteRowMedia(row));
     }),
 
   // ─── 群文件库：直接列出群内已发的 图片/视频/文件 消息 ──────────────────────
@@ -1711,7 +1713,7 @@ export const chatRouter = router({
       const db = await getDb();
       if (!db) return [];
       await assertGroupMember(db, input.groupId, ctx.user.id);
-      return db.select({
+      const media = await db.select({
         id: messages.id,
         content: messages.content,
         messageType: messages.messageType,
@@ -1729,6 +1731,7 @@ export const chatRouter = router({
         ))
         .orderBy(desc(messages.id))
         .limit(input.limit);
+      return media.map((row) => rewriteRowMedia(row));
     }),
 
   // ─── Read Receipts ────────────────────────────────────────────────────────

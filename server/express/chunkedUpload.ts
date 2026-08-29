@@ -1,5 +1,5 @@
 /**
- * 分片上传（视频/文件通用）：每片 ≤16MB（base64 文本体），任何前置代理都不会 413。
+ * 分片上传（图片/视频/文件）：每片 ≤16MB（base64 文本体），任何前置代理都不会 413。
  * 流程：/start 建会话 → /part 逐片追加到临时文件 → /finish 校验会员档位体积并入库存储。
  * 鉴权：会话 Cookie；会话归属校验防串用；2 小时过期自动清理。
  */
@@ -13,7 +13,7 @@ import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { getBenefits } from "../membership";
 
-type Kind = "video" | "file";
+type Kind = "video" | "file" | "image";
 interface Session {
   userId: number;
   kind: Kind;
@@ -27,7 +27,29 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 // 各类型硬上限（最高会员档；档内细分在 finish 按 benefits 校验）
-const HARD_MAX: Record<Kind, number> = { video: 250 * 1024 * 1024, file: 500 * 1024 * 1024 };
+const HARD_MAX: Record<Kind, number> = {
+  video: 250 * 1024 * 1024,
+  file: 500 * 1024 * 1024,
+  image: 20 * 1024 * 1024,
+};
+
+function parseKind(raw: unknown): Kind {
+  if (raw === "file") return "file";
+  if (raw === "image") return "image";
+  return "video";
+}
+
+function kindLabel(kind: Kind): string {
+  if (kind === "video") return "视频";
+  if (kind === "image") return "图片";
+  return "文件";
+}
+
+function defaultMime(kind: Kind): string {
+  if (kind === "video") return "video/mp4";
+  if (kind === "image") return "image/jpeg";
+  return "application/octet-stream";
+}
 
 // 过期会话清理（2 小时）
 setInterval(() => {
@@ -58,8 +80,8 @@ export async function handleChunkStart(req: Request, res: Response): Promise<voi
   let userSessions = 0;
   for (const s of Array.from(sessions.values())) if (s.userId === user.id) userSessions++;
   if (userSessions >= 3) { res.status(429).json({ error: "并发上传过多，请等当前上传完成再试" }); return; }
-  const kind: Kind = req.body?.kind === "file" ? "file" : "video";
-  const mime = typeof req.body?.mime === "string" ? req.body.mime.split(";")[0] : (kind === "video" ? "video/mp4" : "application/octet-stream");
+  const kind = parseKind(req.body?.kind);
+  const mime = typeof req.body?.mime === "string" ? req.body.mime.split(";")[0] : defaultMime(kind);
   const name = typeof req.body?.name === "string" ? req.body.name.slice(-100) : "file";
   const id = crypto.randomBytes(16).toString("hex");
   const filePath = path.join(os.tmpdir(), `nxup_${id}`);
@@ -87,7 +109,7 @@ export async function handleChunkPart(req: Request, res: Response): Promise<void
   if (s.bytes + chunk.length > HARD_MAX[s.kind]) {
     try { fs.unlinkSync(s.filePath); } catch { /* ignore */ }
     sessions.delete(id);
-    res.status(413).json({ error: `${s.kind === "video" ? "视频" : "文件"}超出最大体积限制` });
+    res.status(413).json({ error: `${kindLabel(s.kind)}超出最大体积限制` });
     return;
   }
   try {
@@ -122,10 +144,14 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
     }
     const db = await getDb();
     const benefits = db ? await getBenefits(db, user.id) : null;
-    const maxMB = s.kind === "video" ? (benefits?.maxVideoMB ?? 60) : (benefits?.maxFileMB ?? 60);
+    const maxMB = s.kind === "video"
+      ? (benefits?.maxVideoMB ?? 60)
+      : s.kind === "image"
+        ? 20
+        : (benefits?.maxFileMB ?? 60);
     if (s.bytes > maxMB * 1024 * 1024) {
       cleanup();
-      res.status(413).json({ error: `${s.kind === "video" ? "视频" : "文件"}不能超过 ${maxMB}MB（当前会员档位），升级会员可上传更大${s.kind === "video" ? "视频" : "文件"}` });
+      res.status(413).json({ error: `${kindLabel(s.kind)}不能超过 ${maxMB}MB（当前会员档位），升级会员可上传更大${kindLabel(s.kind)}` });
       return;
     }
     if (s.bytes === 0) { cleanup(); res.status(400).json({ error: "空文件" }); return; }
@@ -136,6 +162,9 @@ export async function handleChunkFinish(req: Request, res: Response): Promise<vo
     if (s.kind === "video") {
       const ext = s.mime.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "mp4";
       key = `chat-videos/${user.id}/${Date.now()}.${ext}`;
+    } else if (s.kind === "image") {
+      const ext = s.mime.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
+      key = `chat-images/${user.id}/${Date.now()}.${ext}`;
     } else {
       const safe = s.name.replace(/[^\w.\-一-龥]+/g, "_").slice(-100) || "file";
       key = `chat-files/${user.id}/${Date.now()}_${safe}`;

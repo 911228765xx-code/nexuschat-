@@ -24,6 +24,7 @@ async function getTaskRewardOverrides(db: Db): Promise<Record<string, number>> {
 import { storagePut } from "../storage";
 import { sanitizeInput, sanitizeUsername } from "../utils/sanitize";
 import { canViewFullProfile } from "../utils/relations";
+import { appMediaUrl } from "../utils/mediaUrl";
 import { RANK_TIERS, tierBonus, tierDaily, reputationBonus, runRankAggregation } from "../rankEngine";
 import { bitAirdropSchedule, claimBitRankAirdrop, getBitAirdropClaimStatus } from "../bitRankAirdrop";
 import { isReferralBound } from "../referralRewards";
@@ -344,7 +345,8 @@ export const userRouter = router({
       const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
       const randomSuffix = Math.random().toString(36).slice(2, 8);
       const key = `avatars/${ctx.user.id}/${Date.now()}-${randomSuffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, mime);
+      await storagePut(key, buffer, mime);
+      const url = appMediaUrl(key);
 
       // Auto-update user avatar field
       const db = await getDb();

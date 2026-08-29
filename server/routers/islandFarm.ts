@@ -16,7 +16,7 @@ import {
 import { getDb } from "../db";
 import { rateLimitWrite } from "../rateLimit";
 import { protectedProcedure, router } from "../_core/trpc";
-import { cropReadyAt, currentUtcDay, DAILY_ORDERS, FARM_LEVEL_CAP, FARM_LEVEL_EVERY_IT, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, PET_EXPLORE_COOLDOWN_MS, STARTER_SEEDS, WORKSHOP_RECIPES, type IslandCropKey } from "../islandFarmRules";
+import { cropReadyAt, currentUtcDay, DAILY_ORDERS, FARM_LEVEL_CAP, FARM_LEVEL_EVERY_IT, GROUP_ISLAND_DAILY_GOAL, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, PET_EXPLORE_COOLDOWN_MS, STARTER_SEEDS, WORKSHOP_RECIPES, type IslandCropKey } from "../islandFarmRules";
 
 const cropKeySchema = z.enum(["wheat", "tomato", "moonberry"]);
 
@@ -60,6 +60,7 @@ async function snapshot(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, user
     db.select().from(islandDailyOrders).where(and(eq(islandDailyOrders.farmId, farm.id), eq(islandDailyOrders.orderDate, day))),
   ]);
   const now = Date.now();
+  const completedCount = claimedOrders.filter((row) => row.status === "claimed").length;
   return {
     farm,
     crops: ISLAND_CROPS,
@@ -73,6 +74,13 @@ async function snapshot(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, user
     inventory: inventory.reduce<Record<string, number>>((acc, row) => ({ ...acc, [row.itemKey]: row.quantity }), {}),
     pets,
     orders: DAILY_ORDERS.map((order) => ({ ...order, status: claimedOrders.find((row) => row.orderKey === order.orderKey)?.status ?? "available" })),
+    dailyCycle: {
+      day,
+      completedCount,
+      totalCount: DAILY_ORDERS.length,
+      allOrdersClaimed: completedCount >= DAILY_ORDERS.length,
+      completionBonus: { label: "码头满载", itReward: 0, seedRewardKey: "seed_wheat", seedRewardQuantity: 0, claimed: completedCount >= DAILY_ORDERS.length },
+    },
     recipes: WORKSHOP_RECIPES,
     economy: {
       it: Number(account[0]?.it ?? 0),
@@ -301,11 +309,18 @@ export const islandFarmRouter = router({
     ]);
     return {
       day: currentUtcDay(),
-      groups: groups.map((group) => ({
-        ...group,
-        myContribution: contributions.find((row) => row.groupId === group.id && row.farmId === farm.id)?.amount ?? 0,
-        participantCount: new Set(contributions.filter((row) => row.groupId === group.id).map((row) => row.userId)).size,
-      })),
+      groups: groups.map((group) => {
+        const rows = contributions.filter((row) => row.groupId === group.id);
+        const totalContribution = rows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+        return {
+          ...group,
+          myContribution: rows.find((row) => row.farmId === farm.id)?.amount ?? 0,
+          participantCount: new Set(rows.map((row) => row.userId)).size,
+          totalContribution,
+          dailyGoal: GROUP_ISLAND_DAILY_GOAL,
+          goalReached: totalContribution >= GROUP_ISLAND_DAILY_GOAL,
+        };
+      }),
       boundary: "群岛协作只消耗游戏内晨曦补给箱并记录 IT 贡献，不产生 BIT、兑换或市场交易。",
     };
   }),

@@ -13,6 +13,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useI18n } from "@/contexts/I18nContext";
 import { io, Socket } from "socket.io-client";
+import { LinkifiedText } from "@/lib/linkify";
 
 interface DMMessage {
   id: string;
@@ -274,7 +275,7 @@ export default function DMChat() {
                       : "bg-secondary/60 text-foreground rounded-bl-sm border border-border/20"
                   } ${msg.id.startsWith("temp-") ? "opacity-70" : ""}`}
                 >
-                  {msg.content}
+                  <LinkifiedText text={msg.content} />
                 </div>
                 <span className="text-sm text-muted-foreground/50 px-2">
                   {new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}

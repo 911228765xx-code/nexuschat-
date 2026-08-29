@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cropReadyAt, DAILY_ORDERS, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, PET_EXPLORE_COOLDOWN_MS, STARTER_SEEDS, WORKSHOP_RECIPES } from "./islandFarmRules";
+import { cropReadyAt, DAILY_ORDERS, GROUP_ISLAND_DAILY_GOAL, ISLAND_CROPS, ISLAND_ECONOMY_BOUNDARY, PET_CARE_COOLDOWN_MS, PET_EXPLORE_COOLDOWN_MS, STARTER_SEEDS, WORKSHOP_RECIPES } from "./islandFarmRules";
 
 describe("island farm rules", () => {
   it("keeps the three launch crops on a short but server-verifiable growth curve", () => {
@@ -21,6 +21,10 @@ describe("island farm rules", () => {
     expect(ISLAND_ECONOMY_BOUNDARY.bitConversionEnabled).toBe(false);
     expect(ISLAND_ECONOMY_BOUNDARY.automaticBitRewardsEnabled).toBe(false);
     expect(ISLAND_ECONOMY_BOUNDARY.itTransferable).toBe(false);
+  });
+
+  it("keeps group-island daily goals small and server-defined", () => {
+    expect(GROUP_ISLAND_DAILY_GOAL).toBe(5);
   });
 
   it("starts every new island with bounded seeds and makes daily orders replenish gameplay inputs", () => {
