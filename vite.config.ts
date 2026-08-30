@@ -499,7 +499,9 @@ export default defineConfig({
             id.includes("/pino/") ||
             id.includes("get-nonce") ||
             id.includes("cross-fetch") ||
-            id.includes("html2canvas") ||
+            // html2canvas shares the webpack nonce/style helper with the main
+            // React vendor. Keeping it in vendor-web3 makes vendor -> web3 ->
+            // vendor and crashes before the public homepage can mount.
             // NOTE: react-remove-scroll, react-style-singleton, use-sidecar are intentionally NOT here.
             // They depend on use-callback-ref which is in the main vendor chunk.
             // Putting them in vendor-web3 creates: vendor -> vendor-web3 -> vendor (circular!)
@@ -518,7 +520,11 @@ export default defineConfig({
             id.includes("Web3ProviderImpl") ||
             id.includes("/lib/wagmi")
           ) {
-            return "vendor-web3";
+            // Leave Web3 dependencies on Rollup's natural dynamic-import
+            // boundaries. Forcing them into one manual chunk hoists shared
+            // style helpers out of the React vendor and creates a fatal
+            // vendor <-> vendor-web3 initialization cycle.
+            return undefined;
           }
 
           // Heavy async-only libraries — lazy loaded, isolated to prevent

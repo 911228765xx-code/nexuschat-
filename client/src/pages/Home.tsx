@@ -1,717 +1,314 @@
 /*
- * Home — 比特AI（Bitchat）产品落地页
- * Cyberpunk Noir: 深色背景 + 霓虹强调色 + 毛玻璃效果
- * 多语言支持 + 钱包连接弹窗
+ * Bitchat 官网首页 — 深海蓝产品站
+ * 只替换公开首页；登录、下载、App 路由、API 与数据库保持原样。
  */
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState, lazy, Suspense, useEffect } from "react";
-import { useWallet } from "@/hooks/useWallet";
+import { useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MessageCircle, Brain, TrendingUp, Wallet, Shield, Zap, Lock, Globe, Sparkles, ArrowRight, Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useI18n } from "@/contexts/I18nContext";
+import {
+  AppWindow, ArrowRight, Bot, Building2, Compass, Download, FileText,
+  Grid2X2, MessageCircle, Search, Send, ShieldCheck, Sparkles, Star,
+  Users, type LucideIcon,
+} from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { usePWAInstall } from "@/hooks/usePWAInstall";
-import { Download } from "lucide-react";
-// Lazy-load WalletConnectModal — avoids pulling wagmi into the Home chunk
-const WalletConnectModal = lazy(() => import("@/components/WalletConnectModal"));
+import { useI18n } from "@/contexts/I18nContext";
 
-const HERO_BG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-1_1772143409000_na1fn_aGVyby1iZw.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTFfMTc3MjE0MzQwOTAwMF9uYTFmbl9hR1Z5YnkxaVp3LnBuZz94LW9zcy1wcm9jZXNzPWltYWdlL3Jlc2l6ZSx3XzE5MjAsaF8xOTIwL2Zvcm1hdCx3ZWJwL3F1YWxpdHkscV84MCIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=YNWq2UYomZlpXHDO99M1B1U0andZ-fjmtJEK-90bzIzIVNVs~FJnfuaKVsJrayXYNQbwaTPopKxcYI9gAiqKUbeKlcEwtR45jROrIxL3ju5fToQqs9rc1GHn59ZYTSIi8uOWphC7DGE3qkzMVfyGZZcDUSOSq1flIaXMmktLwEvfg8mKIIJ5J2N5jBCkZWNIepZ7nivfF7dHNCboGiOItE8b1TLZqvJktJenCanwa7dkAc8k5VXPjq7CTODFXAJWzVvSmYRS6besGetLo6dMzU99InBBQnr2V2wTOSh0sjPx4Dkj6x0u9R87xAwiQ2eCYvwHxG0prqnGP8u-Eh8vZg__";
-const CHAT_IMG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-2_1772143383000_na1fn_Y2hhdC1pbGx1c3RyYXRpb24.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTJfMTc3MjE0MzM4MzAwMF9uYTFmbl9ZMmhoZEMxcGJHeDFjM1J5WVhScGIyNC5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=FHRKYkhNty2zDXjg1cHlEAkHz7eGD-GN1Z4lLE5xfRkeso63kr10-y5xNKxQezI6ZONOWIs950ieEJIgcXoKGO8tFG2oaVWHgbuRZyhzRZhPDbNA465WARidd4HDUXRopVswmafbkMrdr7mgeHr8RG301qV3pAeZ6wa0skZ~xIQ2zS3AX8wE0S4Xy3yulJov00rYw5nvvwPClXYqnT8t9du36uoZ6QfKx0VROAAddIglgtLwtxTkqqPccgwi65i~UDQK9iFTeFnSPmeH-jrcJzyA4SoNrxPwWJ1AzPwWnpH-JCD7T1TpmmtMsP-dt-Ct1dYPrlaZnuvh5pnV3Ewphg__";
-const RESEARCH_IMG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-3_1772143392000_na1fn_cmVzZWFyY2gtaWxsdXN0cmF0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTNfMTc3MjE0MzM5MjAwMF9uYTFmbl9jbVZ6WldGeVkyZ3RhV3hzZFhOMGNtRjBhVzl1LnBuZz94LW9zcy1wcm9jZXNzPWltYWdlL3Jlc2l6ZSx3XzE5MjAsaF8xOTIwL2Zvcm1hdCx3ZWJwL3F1YWxpdHkscV84MCIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5ODc2MTYwMH19fV19&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=CprsnGu3hBji8nacd2wHfGUrr9c5eX2eFjgo~-~ftIptVJ5lsW2V1n7XK4ABGN32UprjzqqO4OpfNFU0Gle~3qYMeXdaXxhJzqjIOXKudc9kPBslne0U2YBzVb5lfdo0a0Suw2t1jecRydwbvqOhfZ702BjpsLbWMYsOhWYThArQbiVje-pvEQlrl0o7KpSnv-wCKZh0QpWwMUo-v0k8TOmV8DUxn3QbmE6TOS~zGSgRBWycvP-07EEfB41ykEBYWOKOpXLioW0qNgW7I5guqWBFaQZFI7CydrIryaYqlCdcjr7Z~x7gZGzjFv7A9GRlfkUsIgPmq404DUVt7zO1fA__";
-const TRADING_IMG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-4_1772143400000_na1fn_dHJhZGluZy1pbGx1c3RyYXRpb24.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTRfMTc3MjE0MzQwMDAwMF9uYTFmbl9kSEpoWkdsdVp5MXBiR3gxYzNSeVlYUnBiMjQucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=dpAguH4Qg-tISDgTSBOSZrWH7A1HtxYxBM5ihIg~QoEHNrqwTExOUVzRnqszaYBUe6T4PXB3BFxtdS2p5BZuUw3ZxyGq~z3uDP0Iqc6uGE4jGyoI3YelVNB7ac36Ae3L8bWRkNd-LQM1n4QgBOQfs2J2pFVFr447urFMR2DImvgpYutrob53d~C62KdfedlrVM-XwVhvlazGyuA38BvriMfLFd-vQiPi6-X4YNW8RTbrRXlTB2amxd2MxP~jqV8vPZThK3F3645d3GLzjw-zdduqraNPK1MDweS24fbAgcB2QIqSz~PIM0o07sTt2FVH1~D7epkqDm-Y4JMwHC-JxA__";
-const WALLET_IMG = "https://private-us-east-1.manuscdn.com/sessionFile/RE5PzJwx2WNaNMZmPGIOOK/sandbox/pEIImHAuSk3yRLYcRBP9Xk-img-5_1772143400000_na1fn_d2FsbGV0LWlsbHVzdHJhdGlvbg.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvUkU1UHpKd3gyV05hTk1abVBHSU9PSy9zYW5kYm94L3BFSUltSEF1U2szeVJMWWNSQlA5WGstaW1nLTVfMTc3MjE0MzQwMDAwMF9uYTFmbl9kMkZzYkdWMExXbHNiSFZ6ZEhKaGRHbHZiZy5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=fD9aYn8PihCQyQ0wDLvBpAElP70vFB9JVbLRYsYledVMNV-dYRKfl3D-C4RrNq9lazSREbrg9adpcIn7Ya-4wg8x5PN-vwMjys5JAl~1d1W46yxigzbviIUE1DulzRduq2WOSUqDOuZ5SSb8TscG4tqDrprWwhNP4kVU4Z3ultP8sikBytdf5ljmuSGUJ3Lwfe36qs-9Z4JsqQDEPJboByui9wyHiM3Db6d3wa0Cbs54MowIXIsC6iYmiRCf~tu5l7rP-yGUJS~kvGYbIl3w5PXZreVHzmRLStFb8A-1kfH4QdlyMn~~1LcX43HKTjYnh1o-KZFaDXkWUQ4rUyo2zQ__";
+const LOGO =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png";
+
+const copy = {
+  "zh-CN": {
+    product: "产品", agents: "AI智能体", value: "价值网络", about: "关于我们",
+    enter: "进入网页版", download: "下载 App",
+    heroA: "会聊天，", heroB: "更会思考的社交平台",
+    heroDesc: "即时通讯、社区运营与AI智能体，合成一体化数字社交空间。",
+    productTitle: "把沟通、社区与智能体放在一起",
+    productDesc: "从一条消息，到一个持续生长的社区，再到随时在线的AI协作伙伴。",
+    messaging: "即时通讯", messagingDesc: "私信、群聊、语音与文件，通知未读可追踪，沟通顺滑可靠",
+    community: "社区与广场", communityDesc: "动态广场、兴趣社区、语音房连麦，一键发现与加入",
+    agent: "智能体中心", agentDesc: "8 个智能体 24 小时在线，替你研究、判断、运营",
+    report: "深度研报", reportDesc: "项目尽调、合约安全与赛道研判，一键生成",
+    valueTitle: "让每一次真实参与都有价值",
+    itTitle: "IT 社交积分", itDesc: "把日常参与沉淀为可见权益",
+    bitTitle: "BIT 应用价值", bitDesc: "让权益进入可消费、可结算的应用场景",
+    trustTitle: "安全、可靠、长期在线", trustDesc: "消息、通知与文件状态清晰可追踪，让每一次沟通都有稳定体验。",
+    companyTitle: "来自澳洲 AFT 集团的技术实践",
+    companyDesc: "澳洲 AFT 集团成立于 2017 年，总部位于澳大利亚悉尼。比特AI社交是集团旗下 AI×Social 产品。",
+    closing: "开始你的 AI 社交", footer: "© 2026 澳洲AFT集团 · 比特AI社交（Bitchat）",
+    messages: "消息", search: "搜索群聊或联系人", group: "AI社交群", members: "128 位成员",
+    insight: "刚整理好一份行业洞察，供大家参考", saved: "非常全面，已收藏",
+    summary: "AI助手 已根据讨论生成要点总结", input: "输入消息…",
+  },
+  "zh-TW": {
+    product: "產品", agents: "AI智能體", value: "價值網絡", about: "關於我們",
+    enter: "進入網頁版", download: "下載 App",
+    heroA: "會聊天，", heroB: "更會思考的社交平台",
+    heroDesc: "即時通訊、社群運營與AI智能體，合成一體化數字社交空間。",
+    productTitle: "把溝通、社群與智能體放在一起",
+    productDesc: "從一條消息，到一個持續成長的社群，再到隨時在線的AI協作夥伴。",
+    messaging: "即時通訊", messagingDesc: "私信、群聊、語音與文件，通知未讀可追蹤，溝通順滑可靠",
+    community: "社群與廣場", communityDesc: "動態廣場、興趣社群、語音房連麥，一鍵發現與加入",
+    agent: "智能體中心", agentDesc: "8 個智能體 24 小時在線，替你研究、判斷、運營",
+    report: "深度研報", reportDesc: "項目盡調、合約安全與賽道研判，一鍵生成",
+    valueTitle: "讓每一次真實參與都有價值",
+    itTitle: "IT 社交積分", itDesc: "把日常參與沉澱為可見權益",
+    bitTitle: "BIT 應用價值", bitDesc: "讓權益進入可消費、可結算的應用場景",
+    trustTitle: "安全、可靠、長期在線", trustDesc: "消息、通知與文件狀態清晰可追蹤，讓每一次溝通都有穩定體驗。",
+    companyTitle: "來自澳洲 AFT 集團的技術實踐",
+    companyDesc: "澳洲 AFT 集團成立於 2017 年，總部位於澳大利亞雪梨。比特AI社交是集團旗下 AI×Social 產品。",
+    closing: "開始你的 AI 社交", footer: "© 2026 澳洲AFT集團 · 比特AI社交（Bitchat）",
+    messages: "消息", search: "搜索群聊或聯絡人", group: "AI社交群", members: "128 位成員",
+    insight: "剛整理好一份行業洞察，供大家參考", saved: "非常全面，已收藏",
+    summary: "AI助手 已根據討論生成要點總結", input: "輸入消息…",
+  },
+  en: {
+    product: "Product", agents: "AI Agents", value: "Value Network", about: "About",
+    enter: "Enter Web App", download: "Download App",
+    heroA: "A social platform ", heroB: "that thinks with you",
+    heroDesc: "Messaging, community operations, and AI agents in one integrated social space.",
+    productTitle: "Messaging, community, and agents — together",
+    productDesc: "From one message to a growing community and always-on AI collaborators.",
+    messaging: "Messaging", messagingDesc: "DMs, groups, voice, and files with reliable unread and notification states",
+    community: "Community & feed", communityDesc: "A public feed, interest communities, and voice rooms in one place",
+    agent: "Agent center", agentDesc: "Eight agents online around the clock to research, judge, and operate",
+    report: "Research reports", reportDesc: "Project diligence, contract safety, and sector views in one tap",
+    valueTitle: "Make every real contribution valuable",
+    itTitle: "IT social points", itDesc: "Turn everyday participation into visible rights",
+    bitTitle: "BIT application value", bitDesc: "Bring rights into spendable and settled product experiences",
+    trustTitle: "Safe, reliable, always online", trustDesc: "Messages, notifications, and files stay clear and traceable for a stable experience.",
+    companyTitle: "Built through AFT Group's technology practice",
+    companyDesc: "AFT Group was founded in 2017 and is headquartered in Sydney, Australia. Bitchat is the group's AI×Social product.",
+    closing: "Start your AI social experience", footer: "© 2026 AFT Group · Bitchat",
+    messages: "Messages", search: "Search groups or contacts", group: "AI Social Group", members: "128 members",
+    insight: "I organized an industry brief for the group", saved: "Comprehensive — saved",
+    summary: "AI Assistant generated a discussion summary", input: "Message…",
+  },
+} as const;
+
+type HomeCopy = { [K in keyof typeof copy["zh-CN"]]: string };
 
 const fadeUp = {
-  initial: { opacity: 0, y: 24 },
+  initial: { opacity: 0, y: 22 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: "-60px" },
-  transition: { duration: 0.6 },
+  viewport: { once: true, margin: "-48px" },
+  transition: { duration: 0.55 },
 };
 
+function PrimaryButton({ children, secondary, onClick }: { children: ReactNode; secondary?: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-14 min-w-[176px] rounded-xl px-6 inline-flex items-center justify-center gap-2 text-[15px] font-bold transition-all active:scale-[.98] ${
+        secondary
+          ? "border border-[#2E75D7] bg-[#061126]/80 text-[#69B7FF] hover:bg-[#0B1B37]"
+          : "border border-[#4CA3FF] bg-gradient-to-r from-[#2378FF] to-[#22BDF4] text-white shadow-[0_12px_38px_rgba(35,120,255,.24)] hover:brightness-110"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ConversationRow({ initials, name, preview, active }: { initials: string; name: string; preview: string; active?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 rounded-xl px-2.5 py-2.5 ${active ? "border border-[#2C7EFF] bg-[#123267]/55" : "border border-transparent"}`}>
+      <div className={`h-9 w-9 shrink-0 rounded-full grid place-items-center text-[11px] font-extrabold text-white ${active ? "bg-gradient-to-br from-[#2378FF] to-[#31CBFF]" : "bg-[#2B3F6C]"}`}>{initials}</div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-bold text-[#F5F8FF]">{name}</p>
+        <p className="mt-0.5 truncate text-[9px] text-[#70809B]">{preview}</p>
+      </div>
+      {active && <span className="h-[18px] min-w-[18px] rounded-full bg-[#2378FF] px-1 text-center text-[8px] font-extrabold leading-[18px] text-white">12</span>}
+    </div>
+  );
+}
+
+function ProductStage({ c, compact = false }: { c: HomeCopy; compact?: boolean }) {
+  return (
+    <div className={`grid overflow-hidden rounded-[18px] border border-[#2D6CC4] bg-[#051024] shadow-[0_30px_100px_rgba(14,71,170,.20)] ${compact ? "h-[430px]" : "h-[510px]"} grid-cols-[138px_1fr] lg:grid-cols-[58px_230px_1fr]`}>
+      <div className="hidden border-r border-[#183661] bg-[#050D1E] py-5 lg:flex flex-col items-center gap-5">
+        <div className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-[#22A8FF] to-[#24D8F4] text-[#061020]"><MessageCircle size={18} fill="currentColor" /></div>
+        {[MessageCircle, Grid2X2, Compass, Users].map((Icon, i) => (
+          <div key={i} className={`grid h-9 w-9 place-items-center rounded-[10px] ${i === 0 ? "border-l-2 border-[#2378FF] bg-[#2378FF]/15 text-[#50B8FF]" : "text-[#61718D]"}`}><Icon size={17} /></div>
+        ))}
+      </div>
+
+      <div className="border-r border-[#183661] bg-[#071327] p-3 lg:p-3.5">
+        <div className="mb-3 flex items-center justify-between"><span className="text-[15px] font-extrabold text-white">{c.messages}</span><AppWindow size={16} className="text-[#3892FF]" /></div>
+        <div className="mb-2.5 flex h-8 items-center gap-1.5 rounded-lg bg-[#0C1B34] px-2 text-[9px] text-[#61718D]"><Search size={12} /><span className="truncate">{c.search}</span></div>
+        <ConversationRow initials="AI" name={c.group} preview="[图片]" active />
+        <ConversationRow initials="B" name="Bitchat Official" preview="[视频]" />
+        <ConversationRow initials="研" name="AI Research" preview="研报已更新" />
+        {!compact && <ConversationRow initials="产" name="Product Lab" preview="最近更新了文档" />}
+      </div>
+
+      <div className="min-w-0 bg-[#051124] flex flex-col">
+        <div className="h-[62px] border-b border-[#183661] px-4 flex items-center justify-between">
+          <div><p className="text-[12px] font-extrabold text-white">{c.group}</p><p className="mt-0.5 text-[8px] text-[#70809B]">{c.members}</p></div>
+          <div className="flex gap-3 text-[#7F8DA5]"><Search size={15} /><MessageCircle size={15} /></div>
+        </div>
+        <div className="min-h-0 flex-1 p-4 flex flex-col gap-3">
+          <div className="max-w-[72%] rounded-xl rounded-tl-sm bg-[#12223D] px-3 py-2 text-[10px] leading-4 text-[#D9E4F5]">{c.insight}</div>
+          <div className="w-[62%] rounded-xl border border-[#183661] bg-[#0B1A32] p-2.5 flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#2CA5FF]/15"><FileText size={18} className="text-[#54B9FF]" /></div>
+            <div><p className="text-[9px] font-bold text-white">AI Industry Insight.pdf</p><p className="text-[8px] text-[#70809B]">1.8 MB</p></div>
+          </div>
+          <div className="ml-auto rounded-xl rounded-tr-sm bg-[#2378FF] px-3 py-2 text-[9px] font-semibold text-white">{c.saved}</div>
+          <div className="mt-auto flex items-center gap-2 rounded-xl border border-[#2464AC] bg-[#2471DA]/10 p-2.5 text-[9px] text-[#BBD8F5]"><Sparkles size={15} className="shrink-0 text-[#48C6FF]" />{c.summary}</div>
+        </div>
+        <div className="mx-3 mb-3 flex h-11 items-center rounded-xl border border-[#183661] pl-3 pr-1.5 text-[9px] text-[#70809B]"><span className="flex-1">{c.input}</span><span className="grid h-8 w-8 place-items-center rounded-full bg-[#2378FF] text-white"><Send size={14} /></span></div>
+      </div>
+    </div>
+  );
+}
+
+function FeatureRail({ icon: Icon, title, desc }: { icon: LucideIcon; title: string; desc: string }) {
+  return (
+    <motion.div {...fadeUp} className="min-h-[164px]">
+      <div className="mb-4 grid h-13 w-13 place-items-center rounded-2xl border border-[#183661] bg-[#112C52]/55 text-[#48B6FF]"><Icon size={23} /></div>
+      <h3 className="text-xl font-extrabold text-white">{title}</h3>
+      <p className="mt-2.5 text-[13px] leading-6 text-[#A9B7CF]">{desc}</p>
+    </motion.div>
+  );
+}
+
+function ValueOrbit({ title, desc, violet }: { title: string; desc: string; violet?: boolean }) {
+  return (
+    <motion.div
+      {...fadeUp}
+      className={`relative grid aspect-square w-full max-w-[350px] place-items-center overflow-hidden rounded-full border ${violet ? "border-[#765EFF]/50 bg-[#291C5D]/20" : "border-[#26A0FF]/50 bg-[#0A2245]/25"}`}
+    >
+      <div className={`absolute inset-[9%] rounded-full border ${violet ? "border-[#7C5FFF]/25" : "border-[#2BB9FF]/25"}`} />
+      <div className={`absolute inset-[18%] rounded-full border ${violet ? "border-[#7C5FFF]/20" : "border-[#2BB9FF]/20"}`} />
+      <div className="relative z-10 flex flex-col items-center px-10 text-center">
+        <div className="mb-5 grid h-16 w-16 place-items-center rounded-full border border-[#183661] bg-[#07172D]">
+          {violet ? <Grid2X2 size={26} className="text-[#8F7CFF]" /> : <Star size={27} className="text-[#45C8FF]" />}
+        </div>
+        <h3 className="text-[24px] font-extrabold text-white">{title}</h3>
+        <p className="mt-3 text-[13px] leading-6 text-[#A9B7CF]">{desc}</p>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, logout } = useAuth();
-
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
+  const { locale } = useI18n();
+  const c: HomeCopy = locale === "zh-CN" ? copy["zh-CN"] : locale === "zh-TW" ? copy["zh-TW"] : copy.en;
 
-  // Auto-redirect logged-in users directly to the social (chat) page
-  // This makes the App feel native: open → straight to content, no landing page
   useEffect(() => {
-    if (!loading && user) {
-      setLocation('/app/chat');
-    }
+    if (!loading && user) setLocation("/app/chat");
   }, [loading, user, setLocation]);
 
-  // Smart CTA: logged-in → go straight to app; guest → go to login with returnTo
-  // This eliminates the extra redirect hop (Home → AppLayout → Login)
-  const handleEnterApp = () => {
-    if (user) {
-      setLocation('/app/chat');
-    } else {
-      window.location.href = '/login?returnTo=%2Fapp%2Fchat';
-    }
+  const enterApp = () => {
+    if (user) setLocation("/app/chat");
+    else window.location.href = "/login?returnTo=%2Fapp%2Fchat";
   };
-  const { t } = useI18n();
-  const [walletOpen, setWalletOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const { canInstall, platform, triggerInstall, isInstalling } = usePWAInstall();
-  const { address: walletAddress, isConnected: walletConnected, disconnect: disconnectWallet } = useWallet();
-
-  const features = [
-    {
-      icon: MessageCircle, titleKey: "feat.1t", descKey: "feat.1d", img: CHAT_IMG,
-      color: "from-[#00d4ff]/20 to-[#00d4ff]/5", borderColor: "border-[#00d4ff]/20", iconColor: "text-[#00d4ff]",
-    },
-    {
-      icon: Brain, titleKey: "feat.2t", descKey: "feat.2d", img: RESEARCH_IMG,
-      color: "from-[#a855f7]/20 to-[#a855f7]/5", borderColor: "border-[#a855f7]/20", iconColor: "text-[#a855f7]",
-    },
-    {
-      icon: TrendingUp, titleKey: "feat.3t", descKey: "feat.3d", img: TRADING_IMG,
-      color: "from-[#00ff88]/20 to-[#00ff88]/5", borderColor: "border-[#00ff88]/20", iconColor: "text-[#00ff88]",
-    },
-    {
-      icon: Wallet, titleKey: "feat.4t", descKey: "feat.4d", img: WALLET_IMG,
-      color: "from-[#00d4ff]/15 via-[#a855f7]/10 to-[#00d4ff]/5", borderColor: "border-[#a855f7]/15", iconColor: "text-[#a855f7]",
-    },
-  ];
-
-  const painPoints = [
-    { icon: Globe, titleKey: "pain.1t", descKey: "pain.1d" },
-    { icon: Lock, titleKey: "pain.2t", descKey: "pain.2d" },
-    { icon: Brain, titleKey: "pain.3t", descKey: "pain.3d" },
-    { icon: Zap, titleKey: "pain.4t", descKey: "pain.4d" },
-  ];
-
-  // While checking auth state, show a minimal splash screen
-  // This prevents the landing page from flashing before redirect
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
-            alt="比特AI Bitchat"
-            className="w-16 h-16 rounded-2xl"
-          />
-          <div className="flex gap-2.5">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full bg-[#00d4ff]/50 animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.8s' }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const heroWord = c.heroB.includes("思考") ? "思考" : "thinks";
+  const [heroBefore, heroAfter] = c.heroB.split(heroWord);
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/20 pt-[env(safe-area-inset-top)]">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/icon-192_44c1362d.png"
-              alt="比特AI Bitchat"
-              className="w-8 h-8 rounded-lg"
-            />
-            <span className="text-lg font-bold font-display">比特AI</span>
+    <div className="min-h-screen overflow-x-hidden bg-[#030A19] text-white selection:bg-[#2378FF]/40">
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#183661]/70 bg-[#030A19]/95 pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-[76px] max-w-[1320px] items-center justify-between px-4 sm:px-8">
+          <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex items-center gap-2.5">
+            <img src={LOGO} alt="Bitchat" className="h-10 w-10 rounded-xl" />
+            <span className="text-xl font-extrabold tracking-tight">Bitchat</span>
+          </button>
+          <div className="hidden items-center gap-9 lg:flex">
+            <button onClick={() => scrollTo("product")} className="text-sm font-semibold text-[#A9B7CF] hover:text-white">{c.product}</button>
+            <button onClick={() => scrollTo("product")} className="text-sm font-semibold text-[#A9B7CF] hover:text-white">{c.agents}</button>
+            <button onClick={() => scrollTo("value")} className="text-sm font-semibold text-[#A9B7CF] hover:text-white">{c.value}</button>
+            <button onClick={() => scrollTo("about")} className="text-sm font-semibold text-[#A9B7CF] hover:text-white">{c.about}</button>
           </div>
-
-          {/* Desktop nav buttons */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <LanguageSwitcher />
-            {walletConnected ? (
-              <Button
-                onClick={() => setWalletOpen(true)}
-                className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3"
-                variant="outline"
-              >
-                <div className="w-2 h-2 rounded-full bg-[#00ff88] mr-1.5 animate-pulse" />
-                {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setWalletOpen(true)}
-                className="bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 px-3"
-                variant="outline"
-              >
-                <Wallet size={14} className="mr-1.5" />
-                {t("nav.connectWallet")}
-              </Button>
-            )}
-            <Button
-              onClick={() => setLocation('/download')}
-              className="bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 px-3"
-              variant="outline"
-            >
-              <Download size={14} className="mr-1.5" />
-              {t('pwa.downloadApp')}
-            </Button>
-            <Button
-              onClick={handleEnterApp}
-              className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-9 px-4"
-              variant="outline"
-            >
-              {t("nav.enterApp")}
-              <ArrowRight size={14} className="ml-1" />
-            </Button>
-          </div>
-
-          {/* Mobile: Enter App button + Hamburger */}
-          <div className="flex sm:hidden items-center gap-2">
-            <Button
-              onClick={handleEnterApp}
-              className="bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30 hover:bg-[#00d4ff]/25 text-sm h-8 px-3"
-              variant="outline"
-            >
-              {t("nav.enterApp")}
-              <ArrowRight size={12} className="ml-1" />
-            </Button>
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-gray-300"
-            >
-              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
+            <button onClick={enterApp} className="h-10 rounded-xl border border-[#2378FF] px-4 text-sm font-bold text-[#7CC5FF] transition-colors hover:bg-[#2378FF]/10">{c.enter}</button>
           </div>
         </div>
-
-        {/* Mobile dropdown menu */}
-        {mobileMenuOpen && (
-          <div className="sm:hidden border-t border-border/20 bg-background [backdrop-filter:none] px-4 py-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{t("nav.language") || "语言"}</span>
-              <LanguageSwitcher />
-            </div>
-            {walletConnected ? (
-              <Button
-                onClick={() => { setWalletOpen(true); setMobileMenuOpen(false); }}
-                className="w-full bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 hover:bg-[#00ff88]/25 text-sm h-9 justify-start"
-                variant="outline"
-              >
-                <div className="w-2 h-2 rounded-full bg-[#00ff88] mr-2 animate-pulse" />
-                {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => { setWalletOpen(true); setMobileMenuOpen(false); }}
-                className="w-full bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/30 hover:bg-[#a855f7]/25 text-sm h-9 justify-start"
-                variant="outline"
-              >
-                <Wallet size={14} className="mr-2" />
-                {t("nav.connectWallet")}
-              </Button>
-            )}
-          </div>
-        )}
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-4 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <img src={HERO_BG} alt="" className="w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
-        </div>
-        <div className="relative z-10 max-w-3xl mx-auto text-center">
-          <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-sm font-medium mb-6">
-              <Sparkles size={12} />
-              {t("home.badge")}
-            </span>
-          </motion.div>
-          <motion.h1
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-bold font-display leading-tight mb-6"
-          >
-            {t("home.title1")}
-            <br />
-            <span className="text-gradient">{t("home.title2")}</span>
-          </motion.h1>
-          <motion.p
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto mb-8 leading-relaxed"
-          >
-            {t("home.desc")}
-          </motion.p>
-          <motion.div
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col sm:flex-row gap-3 justify-center"
-          >
-            <Button
-              onClick={handleEnterApp}
-              className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-12 px-8 text-base font-semibold glow-cyan"
-            >
-              {t("home.cta")}
-              <ArrowRight size={18} className="ml-2" />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-border/40 text-foreground hover:bg-secondary/40 h-12 px-8 text-base bg-transparent"
-            >
-              {t("home.learnMore")}
-            </Button>
-            <Button
-              onClick={() => setLocation('/download')}
-              variant="outline"
-              className="border-[#00ff88]/40 text-[#00ff88] hover:bg-[#00ff88]/10 h-12 px-8 text-base bg-transparent"
-            >
-              <Download size={16} className="mr-2" />
-              {t('pwa.downloadApp')}
-            </Button>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="grid grid-cols-3 gap-4 mt-16 max-w-md mx-auto"
-          >
-            {[
-              { value: t("home.stat1v"), label: t("home.stat1l") },
-              { value: t("home.stat2v"), label: t("home.stat2l") },
-              { value: t("home.stat3v"), label: t("home.stat3l") },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-2xl font-bold font-display text-gradient">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-2">{stat.label}</p>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Pain Points */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">
-              {t("pain.subtitle")}
-              <span className="text-[#ff3366]"> {t("pain.title")}</span>
-            </h2>
-            <p className="text-muted-foreground">{t("pain.solve")}</p>
-          </motion.div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {painPoints.map((point, i) => {
-              const Icon = point.icon;
-              return (
-                <motion.div
-                  key={point.titleKey}
-                  {...fadeUp}
-                  transition={{ duration: 0.5, delay: i * 0.1 }}
-                  className="p-5 rounded-2xl bg-card/50 border border-border/20 hover:border-[#ff3366]/20 transition-colors group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-[#ff3366]/10 flex items-center justify-center mb-3 group-hover:bg-[#ff3366]/15 transition-colors">
-                    <Icon size={20} className="text-[#ff3366]" />
-                  </div>
-                  <h3 className="text-base font-semibold font-display mb-2.5">{t(point.titleKey)}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{t(point.descKey)}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Core Features */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-14">
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">
-              {t("feat.title")}
-            </h2>
-            <p className="text-muted-foreground">{t("feat.subtitle")}</p>
-          </motion.div>
-
-          <div className="space-y-8">
-            {features.map((feat, i) => {
-              const Icon = feat.icon;
-              return (
-                <motion.div
-                  key={feat.titleKey}
-                  {...fadeUp}
-                  transition={{ duration: 0.6, delay: i * 0.1 }}
-                  className={`rounded-2xl border ${feat.borderColor} bg-gradient-to-br ${feat.color} overflow-hidden`}
-                >
-                  <div className="p-6 sm:p-8">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 rounded-xl bg-background/40 flex items-center justify-center">
-                        <Icon size={22} className={feat.iconColor} />
-                      </div>
-                      <h3 className="text-xl font-bold font-display">{t(feat.titleKey)}</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed mb-6 max-w-lg">
-                      {t(feat.descKey)}
-                    </p>
-                    <div className="rounded-xl overflow-hidden border border-border/10 max-w-sm">
-                      <img
-                        src={feat.img}
-                        alt={t(feat.titleKey)}
-                        className="w-full h-48 object-cover opacity-80"
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Design Philosophy */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("phil.title")}</h2>
-            <p className="text-muted-foreground">{t("phil.subtitle")}</p>
-          </motion.div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { num: "01", titleKey: "phil.1t", descKey: "phil.1d", icon: Shield },
-              { num: "02", titleKey: "phil.2t", descKey: "phil.2d", icon: Sparkles },
-              { num: "03", titleKey: "phil.3t", descKey: "phil.3d", icon: Zap },
-            ].map((item, i) => {
-              const Icon = item.icon;
-              return (
-                <motion.div
-                  key={item.num}
-                  {...fadeUp}
-                  transition={{ duration: 0.5, delay: i * 0.1 }}
-                  className="p-6 rounded-2xl bg-card/50 border border-border/20 relative overflow-hidden"
-                >
-                  <span className="absolute top-4 right-4 text-5xl font-bold font-display text-border/30">{item.num}</span>
-                  <Icon size={24} className="text-[#00d4ff] mb-4" />
-                  <h3 className="text-lg font-bold font-display mb-2">{t(item.titleKey)}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{t(item.descKey)}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Backed By — Investors */}
-      <section className="py-20 px-4">
-        <div className="max-w-5xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-medium mb-4">
-              <Shield size={12} />
-              {t("investors.badge")}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("investors.title")}</h2>
-            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("investors.subtitle")}</p>
-          </motion.div>
-          <motion.div
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4"
-          >
-            {[
-              { name: "Fenbushi Capital", year: "2015", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-fenbushi-mgh9u2ZkxnYYRXvvCuhTZ6.webp", color: "#00d4ff" },
-              { name: "Shima Capital", year: "2021", region: "US", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-shima-AdTNKHNSyBBuqKGmEGC27F.webp", color: "#a855f7" },
-              { name: "Waterdrip Capital", year: "2020", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-waterdrip-GjTugGXbAz4X9Y6kFasF3j.webp", color: "#00ff88" },
-              { name: "Spartan Group", year: "2018", region: "Global", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-spartan-YHycm8YPZ4WRX5AQDmFJsZ.webp", color: "#ff6b35" },
-              { name: "Folius Ventures", year: "2021", region: "Asia", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-folius-PMYJyuBxhSPhCepRVZLWUn.webp", color: "#00d4ff" },
-              { name: "Mirana Ventures", year: "2021", region: "Global", logo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/logo-mirana-VmeYTEEWEJN6JAnADFm4Cb.webp", color: "#a855f7" },
-            ].map((inv, i) => (
-              <motion.div
-                key={inv.name}
-                {...fadeUp}
-                transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="group p-4 rounded-2xl bg-card/40 border border-border/20 hover:border-[#00d4ff]/30 transition-all duration-300 text-center overflow-hidden"
-              >
-                <div className="w-full aspect-video rounded-xl overflow-hidden mb-3 bg-[#0a0e1a]">
-                  <img
-                    src={inv.logo}
-                    alt={inv.name}
-                    className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
-                  />
-                </div>
-                <p className="text-xs font-semibold font-display text-foreground/70 group-hover:text-[#00d4ff] transition-colors leading-tight mb-0.5">{inv.name}</p>
-                <p className="text-[10px] text-muted-foreground">{inv.region} · {inv.year}</p>
-              </motion.div>
-            ))}
-          </motion.div>
-          <motion.p {...fadeUp} transition={{ duration: 0.5, delay: 0.5 }} className="text-center text-xs text-muted-foreground mt-8">
-            {t("investors.note")}
-          </motion.p>
-        </div>
-      </section>
-
-      {/* Team */}
-      <section className="py-20 px-4 bg-card/20">
-        <div className="max-w-4xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#a855f7]/10 border border-[#a855f7]/20 text-[#a855f7] text-xs font-medium mb-4">
-              <Sparkles size={12} />
-              {t("team.badge")}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("team.title")}</h2>
-            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("team.subtitle")}</p>
-          </motion.div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[
-              {
-                name: "Alex Chen",
-                role: t("team.ceo"),
-                bg: t("team.ceo.bg"),
-                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-alex-hNwjCdvgDZfRLBZHg6DsqP.webp",
-                color: "#00d4ff",
-                twitter: "AlexChen_Web3",
-              },
-              {
-                name: "Sarah Kim",
-                role: t("team.cto"),
-                bg: t("team.cto.bg"),
-                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-sarah-DTtFK28hpMAoNAVvXbhSTK.webp",
-                color: "#a855f7",
-                twitter: "SarahKim_CTO",
-              },
-              {
-                name: "Marcus Liu",
-                role: t("team.cmo"),
-                bg: t("team.cmo.bg"),
-                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-marcus-kgKxQ4NoaGj5XS2AU6mWen.webp",
-                color: "#00ff88",
-                twitter: "MarcusLiu_Web3",
-              },
-              {
-                name: "Yuki Tanaka",
-                role: t("team.research"),
-                bg: t("team.research.bg"),
-                avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663385790517/fYL7bQEV8tj27K63dbYKsc/avatar-yuki-gLtrRPJTYqu59Qr25LJwVa.webp",
-                color: "#ff6b35",
-                twitter: "YukiTanaka_DeFi",
-              },
-            ].map((member, i) => (
-              <motion.div
-                key={member.name}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="p-5 rounded-2xl bg-card/50 border border-border/20 hover:border-[#a855f7]/30 transition-all duration-300 group"
-              >
-                <div
-                  className="w-20 h-20 rounded-2xl overflow-hidden mb-4 mx-auto"
-                  style={{ border: `2px solid ${member.color}40` }}
-                >
-                  <img
-                    src={member.avatar}
-                    alt={member.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="text-center">
-                  <p className="font-bold font-display text-base mb-0.5 group-hover:text-[#a855f7] transition-colors">{member.name}</p>
-                  <p className="text-xs font-medium mb-2" style={{ color: member.color }}>{member.role}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{member.bg}</p>
-                  <a
-                    href={`https://x.com/${member.twitter}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                    @{member.twitter}
-                  </a>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-          <motion.p {...fadeUp} transition={{ duration: 0.5, delay: 0.5 }} className="text-center text-xs text-muted-foreground mt-8">
-            {t("team.note")}
-          </motion.p>
-        </div>
-      </section>
-
-      {/* Partners & Ecosystem */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00ff88]/10 border border-[#00ff88]/20 text-[#00ff88] text-xs font-medium mb-4">
-              <Globe size={12} />
-              {t("partners.badge")}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold font-display mb-3">{t("partners.title")}</h2>
-            <p className="text-muted-foreground text-sm max-w-lg mx-auto">{t("partners.subtitle")}</p>
-          </motion.div>
-          <div className="space-y-8">
-            {[
-              {
-                category: t("partners.chain"),
-                color: "#00d4ff",
-                items: ["Ethereum", "BNB Chain", "Polygon", "Solana", "Arbitrum", "Base"],
-              },
-              {
-                category: t("partners.defi"),
-                color: "#a855f7",
-                items: ["Uniswap", "PancakeSwap", "1inch", "Chainlink", "The Graph", "WalletConnect"],
-              },
-              {
-                category: t("partners.security"),
-                color: "#00ff88",
-                items: ["CertiK", "SlowMist", "Hacken", "PeckShield"],
-              },
-              {
-                category: t("partners.data"),
-                color: "#ff6b35",
-                items: ["CoinGecko", "CoinMarketCap", "Nansen", "Dune Analytics"],
-              },
-            ].map((group, gi) => (
-              <motion.div
-                key={group.category}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: gi * 0.1 }}
-              >
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: group.color }} />
-                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: group.color }}>{group.category}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {group.items.map((item) => (
-                    <span
-                      key={item}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium text-foreground/80 border border-border/30 bg-card/40 hover:border-opacity-60 transition-colors"
-                      style={{ borderColor: `${group.color}25` }}
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 px-4">
-        <motion.div
-          {...fadeUp}
-          className="max-w-2xl mx-auto text-center p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-[#00d4ff]/10 via-card to-[#a855f7]/10 border border-border/20"
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold font-display mb-4">
-            {t("cta.title")}
-          </h2>
-          <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-            {t("cta.desc")}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button
-              onClick={handleEnterApp}
-              className="bg-gradient-to-r from-[#00d4ff] to-[#a855f7] text-white hover:opacity-90 h-12 px-10 text-base font-semibold glow-cyan"
-            >
-              {t("cta.button")}
-              <ArrowRight size={18} className="ml-2" />
-            </Button>
-            <Button
-              onClick={() => setWalletOpen(true)}
-              variant="outline"
-              className="border-[#a855f7]/30 text-[#a855f7] hover:bg-[#a855f7]/10 h-12 px-8 text-base bg-transparent"
-            >
-              <Wallet size={18} className="mr-2" />
-              {t("nav.connectWallet")}
-            </Button>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border/20 py-8 px-4">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-              <MessageCircle size={12} className="text-white" />
+      <main>
+        <section className="relative mx-auto flex min-h-[810px] max-w-[1320px] flex-col items-center px-4 pb-16 pt-32 sm:px-8 lg:flex-row lg:pt-24">
+          <div className="pointer-events-none absolute left-[4%] top-[24%] h-80 w-80 rounded-full bg-[#1E64FF]/10 blur-3xl" />
+          <motion.div {...fadeUp} className="relative z-10 w-full pt-10 lg:w-[45%] lg:pr-8">
+            <h1 className="text-[43px] font-black leading-[1.28] tracking-[-1.7px] sm:text-[58px] sm:tracking-[-2.2px]">
+              {c.heroA}<br className="hidden lg:block" />{heroBefore}<span className="text-[#3DA2FF]">{heroWord}</span>{heroAfter}
+            </h1>
+            <p className="mt-6 max-w-xl text-[17px] leading-8 text-[#A9B7CF]">{c.heroDesc}</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <PrimaryButton onClick={enterApp}>{c.enter}<ArrowRight size={18} /></PrimaryButton>
+              <PrimaryButton secondary onClick={() => setLocation("/download")}><Download size={18} />{c.download}</PrimaryButton>
             </div>
-            <span className="text-sm font-display font-semibold">比特AI</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {t("footer.text")}
-          </p>
-        </div>
-      </footer>
+          </motion.div>
+          <motion.div {...fadeUp} transition={{ duration: 0.65, delay: 0.08 }} className="relative mt-16 w-full lg:mt-0 lg:w-[55%] lg:[transform:perspective(1400px)_rotateY(-3deg)]">
+            <ProductStage c={c} />
+          </motion.div>
+        </section>
 
-      {/* Wallet Connect Modal — lazy loaded, only renders when walletOpen */}
-      {walletOpen && (
-        <Suspense fallback={null}>
-          <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
-        </Suspense>
-      )}
-
-      {/* PWA Install Guide Modal */}
-      {showIOSGuide && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 [backdrop-filter:none]"
-          onClick={() => setShowIOSGuide(false)}
-        >
-          <div
-            className="w-full max-w-sm mx-4 mb-6 rounded-2xl bg-[#0d1117] border border-[#00ff88]/20 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00d4ff] to-[#a855f7] flex items-center justify-center">
-                <MessageCircle size={20} className="text-white" />
+        <section id="product" className="scroll-mt-20 border-t border-[#183661]/60 px-4 py-24 sm:px-8 lg:py-28">
+          <div className="mx-auto max-w-[1320px]">
+            <motion.div {...fadeUp} className="text-center">
+              <h2 className="text-3xl font-black tracking-[-1px] text-white sm:text-[44px]">{c.productTitle}</h2>
+              <p className="mt-4 text-[16px] text-[#A9B7CF]">{c.productDesc}</p>
+            </motion.div>
+            <div className="mt-14 grid items-center gap-8 lg:grid-cols-[230px_1fr_230px]">
+              <div className="order-2 grid gap-10 sm:grid-cols-2 lg:order-1 lg:grid-cols-1 lg:gap-16">
+                <FeatureRail icon={MessageCircle} title={c.messaging} desc={c.messagingDesc} />
+                <FeatureRail icon={Users} title={c.community} desc={c.communityDesc} />
               </div>
-              <div>
-                <p className="font-bold text-white">{t('pwa.installTitle')}</p>
-                <p className="text-sm text-muted-foreground">{t('pwa.installSubtitle')}</p>
+              <motion.div {...fadeUp} className="order-1 lg:order-2"><ProductStage c={c} compact /></motion.div>
+              <div className="order-3 grid gap-10 sm:grid-cols-2 lg:grid-cols-1 lg:gap-16">
+                <FeatureRail icon={Bot} title={c.agent} desc={c.agentDesc} />
+                <FeatureRail icon={FileText} title={c.report} desc={c.reportDesc} />
               </div>
             </div>
-
-            {platform === 'ios' ? (
-              /* iOS Safari steps */
-              <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</span>
-                  <p className="text-gray-300">{t('pwa.iosStep1')} <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-sm">⬆ {t('pwa.iosStep1b')}</span></p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</span>
-                  <p className="text-gray-300">{t('pwa.iosStep2')} <span className="text-white font-medium">{t('pwa.iosStep2b')}</span></p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</span>
-                  <p className="text-gray-300">{t('pwa.iosStep3')}</p>
-                </div>
-              </div>
-            ) : (
-              /* Android / Desktop: show browser menu tip */
-              <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</span>
-                  <p className="text-gray-300">Open <span className="text-white font-medium">nexuschat.best</span> in Chrome browser</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</span>
-                  <p className="text-gray-300">Tap the <span className="inline-block bg-gray-700 rounded px-2.5 py-1 text-white text-sm">⋮ menu</span> in the top-right corner</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#00ff88]/20 text-[#00ff88] flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</span>
-                  <p className="text-gray-300">Tap <span className="text-white font-medium">“Add to Home screen”</span> or <span className="text-white font-medium">“Install app”</span></p>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowIOSGuide(false)}
-              className="mt-5 w-full h-10 rounded-xl bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 text-sm font-medium hover:bg-[#00ff88]/25 transition-colors"
-            >
-              OK
-            </button>
           </div>
-        </div>
-      )}
+        </section>
+
+        <section id="value" className="scroll-mt-20 border-t border-[#183661]/60 px-4 py-24 sm:px-8 lg:py-28">
+          <div className="mx-auto max-w-[1320px]">
+            <motion.h2 {...fadeUp} className="text-center text-3xl font-black tracking-[-1px] text-white sm:text-[44px]">{c.valueTitle}</motion.h2>
+            <div className="mt-14 grid items-center gap-12 lg:grid-cols-[1fr_330px]">
+              <div className="flex flex-col items-center justify-center sm:flex-row sm:-space-x-6">
+                <ValueOrbit title={c.itTitle} desc={c.itDesc} />
+                <ValueOrbit title={c.bitTitle} desc={c.bitDesc} violet />
+              </div>
+              <motion.div {...fadeUp} className="border-t border-[#183661] pt-8 text-center lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0 lg:text-left">
+                <ShieldCheck size={38} className="mx-auto text-[#3989FF] lg:mx-0" />
+                <h3 className="mt-5 text-[24px] font-extrabold text-white">{c.trustTitle}</h3>
+                <div className="mx-auto my-5 h-0.5 w-10 bg-[#28CBFF] lg:mx-0" />
+                <p className="text-[14px] leading-7 text-[#A9B7CF]">{c.trustDesc}</p>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        <section id="about" className="scroll-mt-20 px-4 pb-24 sm:px-8">
+          <motion.div {...fadeUp} className="relative mx-auto flex max-w-[1320px] flex-col items-start gap-6 overflow-hidden rounded-[20px] border border-[#183661] bg-[#061225] px-7 py-9 sm:px-12 lg:flex-row lg:items-center">
+            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-[#2878FF]/10 text-[#3E8DFF]"><Building2 size={34} /></div>
+            <div className="relative z-10 max-w-3xl">
+              <h2 className="text-2xl font-extrabold text-white sm:text-[27px]">{c.companyTitle}</h2>
+              <p className="mt-3 text-[14px] leading-7 text-[#A9B7CF]">{c.companyDesc}</p>
+            </div>
+            <div className="pointer-events-none absolute right-[-3%] top-1/2 h-px w-[40%] -rotate-6 bg-gradient-to-r from-transparent via-[#2BAAFF]/70 to-transparent" />
+          </motion.div>
+        </section>
+
+        <section className="relative min-h-[450px] overflow-hidden border-t border-[#183661]/40 bg-[#020715] px-4 pt-24 text-center sm:px-8">
+          <div className="pointer-events-none absolute bottom-[-420px] left-1/2 h-[720px] w-[1200px] -translate-x-1/2 rounded-full border-[24px] border-[#1D79FF]/20 bg-[#0E55D2]/10" />
+          <motion.div {...fadeUp} className="relative z-10">
+            <h2 className="text-3xl font-black tracking-[-1px] text-white sm:text-[46px]">{c.closing}</h2>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <PrimaryButton onClick={enterApp}><AppWindow size={18} />{c.enter}<ArrowRight size={18} /></PrimaryButton>
+              <PrimaryButton secondary onClick={() => setLocation("/download")}><Download size={18} />{c.download}</PrimaryButton>
+            </div>
+            <p className="mt-20 text-xs text-[#70809B]">{c.footer}</p>
+          </motion.div>
+        </section>
+      </main>
     </div>
   );
 }
