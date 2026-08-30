@@ -416,6 +416,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
+        // Version the entry file for this release. A fixed name can be immutable-cached
+        // and continue importing a prior dynamic homepage chunk after deployment.
+        entryFileNames: "assets/bitchat-entry-d95a1e3.js",
         // Prevent Rollup from hoisting transitive imports of dynamic chunks
         // to the entry chunk's synchronous dependencies.
         // This keeps vendor-web3, vendor-misc etc. as truly async chunks.
