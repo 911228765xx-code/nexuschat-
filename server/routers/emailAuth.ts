@@ -150,20 +150,14 @@ export const emailAuthRouter = router({
         });
       }
 
-      // ── IP 注册频率限制 ──
+      // ── IP 注册频率限制（只计成功开户，失败重试不占额度）──
       const clientIp = clientIpOf(ctx.req);
       const now = Date.now();
-      const ipRecord = ipRegisterAttempts.get(clientIp);
-      if (ipRecord && now < ipRecord.resetAt) {
-        if (ipRecord.count >= IP_REGISTER_LIMIT) {
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `同一网络注册次数过多，请 24 小时后再试`,
-          });
-        }
-        ipRecord.count++;
-      } else {
-        ipRegisterAttempts.set(clientIp, { count: 1, resetAt: now + IP_REGISTER_WINDOW_MS });
+      if (isWindowLocked(ipRegisterAttempts, clientIp, now, IP_REGISTER_LIMIT)) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `同一网络注册次数过多，请 24 小时后再试`,
+        });
       }
 
       // ── 方案2：Cloudflare Turnstile 人机验证 ──
@@ -222,6 +216,7 @@ export const emailAuthRouter = router({
         deviceId,
         lastSignedIn: new Date(),
       });
+      bumpWindow(ipRegisterAttempts, clientIp, now, IP_REGISTER_WINDOW_MS);
 
       // Assign a referral invite code so this user can be referred by code immediately.
       const newUserId = (insertResult as { insertId?: number }).insertId;
