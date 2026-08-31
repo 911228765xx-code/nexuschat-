@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp, feedback, itTransactions, nnTransactions } from "../../drizzle/schema";
+import { users, userTasks, posts, referrals, tradingPositions, appConfig, contentViolations, userDailyNp, feedback, itTransactions, nnTransactions, bitRankAirdropClaim } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte, count, ne, inArray } from "drizzle-orm";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -710,10 +710,6 @@ export const userRouter = router({
     }
     const bitAirdrop = bitAirdropSchedule();
     const claimStatus = await getBitAirdropClaimStatus(db, ctx.user.id, tier);
-    // 估算：同段位活跃均分；真实到账以领取时为准
-    const myBitAirdropEstimate = claimStatus.estimatedBit > 0
-      ? claimStatus.estimatedBit
-      : (tier >= 1 ? bitAirdrop.tierPot : 0);
     return {
       score,
       tier,
@@ -728,10 +724,10 @@ export const userRouter = router({
       teamDirect: directCount,
       teamActiveToday,
       tiers: RANK_TIERS.map((t, i) => ({ idx: i + 1, name: t.name, min: t.min, bonusPct: Math.round(t.bonus * 100), daily: t.daily })),
-      // BIT 段位空投：捐献 IT 后领取（V1=1000 … V10=10000）
+      // BIT 段位空投：捐献 IT 后按加权分红（不是捐 1000 就领走整份）
       bitAirdrop: {
         ...bitAirdrop,
-        myTierPot: myBitAirdropEstimate,
+        myTierPot: claimStatus.estimatedBit,
         itCost: claimStatus.itCost,
         estimatedBit: claimStatus.estimatedBit,
         claimedToday: claimStatus.claimedToday,
@@ -739,7 +735,10 @@ export const userRouter = router({
         claimedItCost: claimStatus.claimedItCost,
         canClaim: claimStatus.canClaim,
         claimReason: claimStatus.reason,
-        note: "捐献对应段位 IT 后领取当日 BIT 空投；日额度均分 10 段位，同段位活跃用户均分",
+        donorCount: claimStatus.donorCount,
+        donatedItTotal: claimStatus.donatedItTotal,
+        pendingSettle: claimStatus.pendingSettle,
+        note: "达到段位后每天捐献 IT；≤50 人每人拿额度 1%，超过 50 人按捐献 IT 加权，北京时间凌晨 12 点结算",
       },
     };
   }),
@@ -938,6 +937,108 @@ export const userRouter = router({
         })),
       ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return rows.slice(0, limit);
+    }),
+
+  /** IT / BIT 产出与领取明细（任务、日俸、空投、农场、转账等） */
+  listEarnings: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const limit = input?.limit ?? 50;
+      const [taskRows, itRows, bitRows, pendingClaims] = await Promise.all([
+        db.select({
+          id: userTasks.id,
+          taskType: userTasks.taskType,
+          npEarned: userTasks.npEarned,
+          completedAt: userTasks.completedAt,
+        }).from(userTasks)
+          .where(and(eq(userTasks.userId, ctx.user.id), gte(userTasks.npEarned, 1)))
+          .orderBy(desc(userTasks.completedAt)).limit(limit),
+        db.select().from(itTransactions)
+          .where(eq(itTransactions.userId, ctx.user.id))
+          .orderBy(desc(itTransactions.createdAt)).limit(limit),
+        db.select().from(nnTransactions)
+          .where(eq(nnTransactions.userId, ctx.user.id))
+          .orderBy(desc(nnTransactions.createdAt)).limit(limit),
+        db.select().from(bitRankAirdropClaim)
+          .where(and(eq(bitRankAirdropClaim.userId, ctx.user.id), eq(bitRankAirdropClaim.bitAmount, 0)))
+          .orderBy(desc(bitRankAirdropClaim.claimedAt)).limit(10),
+      ]);
+
+      const itLabel: Record<string, string> = {
+        transfer_in: "IT 转入",
+        transfer_out: "IT 转出",
+        island_farm: "岛屿经营",
+        bit_airdrop_donate: "捐献段位空投",
+        rank_daily: "段位日俸",
+        rank_upgrade: "升段奖励",
+        convert_bit_to_it: "BIT 兑 IT",
+        convert_it_to_bit: "IT 兑 BIT",
+      };
+      const bitLabel: Record<string, string> = {
+        rank_bit_airdrop: "段位 BIT 分红",
+        grant: "官方发放",
+        spend: "消费",
+        transfer_in: "BIT 转入",
+        transfer_out: "BIT 转出",
+        partner_div: "合伙人分红",
+        convert_it_to_bit: "IT 兑 BIT",
+        convert_bit_to_it: "BIT 兑 IT",
+        membership: "会员",
+        bot_sub: "机器人订阅",
+        package: "机器人套餐",
+        node: "节点认购",
+      };
+
+      const items: Array<{
+        id: string;
+        currency: "it" | "bit";
+        amount: number;
+        type: string;
+        label: string;
+        createdAt: Date | string;
+      }> = [
+        ...taskRows.map((t) => ({
+          id: `task-${t.id}`,
+          currency: "it" as const,
+          amount: t.npEarned,
+          type: "task",
+          label: TASK_DEFINITIONS[t.taskType]?.label ?? t.taskType,
+          createdAt: t.completedAt,
+        })),
+        ...itRows.map((r) => ({
+          id: `it-${r.id}`,
+          currency: "it" as const,
+          amount: r.amount,
+          type: r.type,
+          label: itLabel[r.type] ?? r.memo ?? r.type,
+          createdAt: r.createdAt,
+        })),
+        ...bitRows.map((r) => ({
+          id: `bit-${r.id}`,
+          currency: "bit" as const,
+          amount: r.amount,
+          type: r.type,
+          label: bitLabel[r.type] ?? r.memo ?? r.type,
+          createdAt: r.createdAt,
+        })),
+        ...pendingClaims.map((c) => ({
+          id: `airdrop-pending-${c.id}`,
+          currency: "bit" as const,
+          amount: 0,
+          type: "rank_bit_airdrop_pending",
+          label: "段位空投待分红",
+          createdAt: c.claimedAt,
+        })),
+      ];
+
+      items.sort((a, b) => {
+        const tb = new Date(b.createdAt).getTime();
+        const ta = new Date(a.createdAt).getTime();
+        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+      });
+      return items.slice(0, limit);
     }),
 
   // ─── 管理员：手动触发某日段位聚合（测试/补算用；幂等）────────────────────────────

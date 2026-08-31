@@ -15,7 +15,7 @@
  */
 import { eq, and, gte, lt, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { users, userTasks, referrals, chatGroups, rankAggRun } from "../drizzle/schema";
+import { users, userTasks, referrals, chatGroups, rankAggRun, itTransactions } from "../drizzle/schema";
 import { effectiveTier } from "./membership";
 import logger from "./utils/logger";
 
@@ -144,6 +144,11 @@ export async function runRankAggregation(
       await db.update(users)
         .set({ rankScore: newScore, rankTier: newTier, npPoints: sql`npPoints + ${upReward}` })
         .where(eq(users.id, u.id));
+      if (upReward > 0) {
+        await db.insert(itTransactions).values({
+          userId: u.id, amount: upReward, type: "rank_upgrade", memo: `T${newTier}`,
+        }).catch(() => {});
+      }
       ancestorsUpdated++;
     }
   }
@@ -154,16 +159,15 @@ export async function runRankAggregation(
     .from(users).where(and(inArray(users.id, activeIds), gte(users.rankTier, 1)));
   for (const u of dayuneers) {
     const pay = tierDaily(u.rankTier ?? 0);
-    if (pay > 0) await db.update(users).set({ npPoints: sql`npPoints + ${pay}` }).where(eq(users.id, u.id));
+    if (pay > 0) {
+      await db.update(users).set({ npPoints: sql`npPoints + ${pay}` }).where(eq(users.id, u.id));
+      await db.insert(itTransactions).values({
+        userId: u.id, amount: pay, type: "rank_daily", memo: ymd,
+      }).catch(() => {});
+    }
   }
 
-  // 7) BIT 段位空投：日额度均分 10 段位，活跃用户按所在段位领取（独立幂等，失败不影响 IT 结算）
-  try {
-    const { runBitRankAirdrop } = await import("./bitRankAirdrop");
-    await runBitRankAirdrop(db, ymd);
-  } catch (err) {
-    logger.warn({ err, ymd }, "rankEngine: BIT 段位空投失败");
-  }
+  // 7) BIT 段位空投改由北京时间凌晨 0 点独立结算，不再跟 UTC 段位聚合绑在一起
 
   logger.info({ ymd, activeMembers: activeIds.length, ancestorsUpdated }, "rankEngine: 每日聚合完成");
   return { ran: true, ymd, activeMembers: activeIds.length, ancestorsUpdated };

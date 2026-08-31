@@ -1,5 +1,5 @@
 /**
- * BIT 段位空投：月度递增额度、10 段位均分、同段位均分到人。
+ * BIT 段位空投：月度递增额度、10 段位池、按捐献 IT 加权分红。
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -8,9 +8,13 @@ import {
   bitAirdropMonthlyTotal,
   bitAirdropTierPot,
   bitAirdropPerUser,
+  bitAirdropWeightedShare,
+  bitAirdropFlatShare,
+  bitAirdropPayout,
   bitAirdropSchedule,
   bitAirdropItCost,
   bitAirdropDonateLadder,
+  ymdShanghai,
   BIT_AIRDROP_BASE_DAILY,
   BIT_AIRDROP_MONTHLY_STEP,
   BIT_AIRDROP_IT_COSTS,
@@ -69,6 +73,37 @@ describe("tier pot / per user", () => {
   });
 });
 
+describe("flat 1% vs weighted", () => {
+  it("100 BIT 的 1% = 1", () => {
+    expect(bitAirdropFlatShare(100)).toBe(1);
+  });
+  it("≤50 人：1 人捐献也只拿 1%，不是整份 100", () => {
+    expect(bitAirdropPayout(100, 1, 1000, 1000)).toBe(1);
+    expect(bitAirdropPayout(100, 50, 1000, 50_000)).toBe(1);
+  });
+  it(">50 人才按 IT 加权", () => {
+    expect(bitAirdropPayout(100, 51, 1000, 51_000)).toBe(1);
+    expect(bitAirdropPayout(100, 51, 2000, 51_000)).toBe(3);
+  });
+});
+
+describe("weighted share", () => {
+  it("100 BIT 池、10 人各捐 1000 → 每人 10，不是谁捐 1000 就领 100", () => {
+    expect(bitAirdropWeightedShare(100, 1000, 10_000)).toBe(10);
+  });
+  it("捐得多分得多", () => {
+    expect(bitAirdropWeightedShare(100, 3000, 10_000)).toBe(30);
+    expect(bitAirdropWeightedShare(100, 1000, 10_000)).toBe(10);
+  });
+  it("余数留池", () => {
+    expect(bitAirdropWeightedShare(100, 1, 3)).toBe(33);
+  });
+  it("无人 / 零份额 → 0", () => {
+    expect(bitAirdropWeightedShare(100, 1000, 0)).toBe(0);
+    expect(bitAirdropWeightedShare(0, 1000, 1000)).toBe(0);
+  });
+});
+
 describe("bitAirdropSchedule", () => {
   it("返回 10 个月进度表", () => {
     const s = bitAirdropSchedule("2026-08-15");
@@ -80,6 +115,15 @@ describe("bitAirdropSchedule", () => {
     expect(s.schedule[9]).toEqual({ month: 10, daily: 5500, monthly: 165000 });
     expect(s.tiers).toHaveLength(10);
     expect(s.donateLadder).toHaveLength(10);
+  });
+});
+
+describe("ymdShanghai", () => {
+  it("UTC 16:00 起算次日上海日历", () => {
+    expect(ymdShanghai(new Date("2026-08-30T16:00:00.000Z"))).toBe("2026-08-31");
+  });
+  it("UTC 15:59 仍是当日上海", () => {
+    expect(ymdShanghai(new Date("2026-08-30T15:59:00.000Z"))).toBe("2026-08-30");
   });
 });
 

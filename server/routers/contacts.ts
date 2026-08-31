@@ -450,11 +450,21 @@ export const contactsRouter = router({
         )
         .limit(1);
       const row = rows[0];
-      if (!row) return { isFavorite: false, note: "", tags: [] as string[] };
+      if (!row) return { isFavorite: false, note: "", tags: [] as string[], remarkName: null as string | null };
+      let tags: string[] = [];
+      if (row.tags) {
+        try {
+          const parsed = JSON.parse(row.tags);
+          if (Array.isArray(parsed)) tags = parsed.filter((x) => typeof x === "string");
+        } catch {
+          tags = [];
+        }
+      }
       return {
         isFavorite: row.isFavorite,
         note: row.note ?? "",
-        tags: row.tags ? (JSON.parse(row.tags) as string[]) : ([] as string[]),
+        tags,
+        remarkName: row.remarkName ?? null,
       };
     }),
 
