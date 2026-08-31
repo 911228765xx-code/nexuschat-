@@ -222,7 +222,7 @@ export default function PosterGenerator({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "比特AI社交（Bitchat）· 澳洲 AFT 集团",
+          title: "邀请你加入 Bitchat · 澳洲 AFT 集团",
           text: t("poster.shareText") + " " + inviteCode,
           url: inviteLink,
         });
@@ -342,7 +342,7 @@ export default function PosterGenerator({
                           className="text-sm font-bold tracking-wide"
                           style={{ color: template.textColor, fontFamily: "'Space Grotesk', sans-serif" }}
                         >
-                          比特AI社交
+                          Bitchat
                         </span>
                       </div>
                       <div

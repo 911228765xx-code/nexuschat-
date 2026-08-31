@@ -49,7 +49,7 @@ export default function Login() {
 
   const registerMutation = trpc.emailAuth.register.useMutation({
     onSuccess: () => {
-      toast.success("注册成功，欢迎加入比特AI！");
+      toast.success("注册成功，欢迎加入 Bitchat！");
       window.location.href = returnPath;
     },
     onError: (err) => {
@@ -325,8 +325,8 @@ export default function Login() {
         <div style={S.logoIcon}>
           <MessageCircle size={28} color="white" />
         </div>
-        <h1 style={S.logoTitle}>比特AI</h1>
-        <p style={S.logoSub}>让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
+        <h1 style={S.logoTitle}>Bitchat</h1>
+        <p style={S.logoSub}>澳洲 AFT 集团旗下</p>
       </div>
 
       {/* Card — solid background, NO backdrop-blur */}

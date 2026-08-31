@@ -118,8 +118,8 @@ export default function AppLayout({ children, hideNav, requireAuth = true }: App
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #2942AB, #4F6BE8)" }}>
             <MessageCircle size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#16171A" }}>比特AI</h1>
-          <p className="text-sm text-center" style={{ color: "#76787E" }}>让AI社交成为生活习惯 · 澳洲 AFT 集团</p>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#16171A" }}>Bitchat</h1>
+          <p className="text-sm text-center" style={{ color: "#76787E" }}>澳洲 AFT 集团旗下</p>
         </div>
         {/* Login button */}
         <a

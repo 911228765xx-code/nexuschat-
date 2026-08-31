@@ -388,8 +388,7 @@ export default function Profile() {
 
           {/* Version info */}
           <div className="text-center pb-4">
-            <p className="text-sm text-muted-foreground/40 font-mono">比特AI · Bitchat</p>
-            <p className="text-sm text-muted-foreground/30 mt-1">Built for Web3 • Powered by NexusAI</p>
+            <p className="text-sm text-muted-foreground/40 font-mono">Bitchat · 澳洲 AFT 集团</p>
           </div>
         </div>
       </div>

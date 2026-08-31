@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useI18n, LOCALES } from "@/contexts/I18nContext";
 
-export default function LanguageSwitcher({ className = "" }: { className?: string }) {
+export default function LanguageSwitcher({ className = "", light = false }: { className?: string; light?: boolean }) {
   const { locale, setLocale, localeInfo } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -18,10 +18,12 @@ export default function LanguageSwitcher({ className = "" }: { className?: strin
     <div ref={ref} className={`relative ${className}`}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00d4ff]/40 hover:bg-white/10 transition-all text-sm"
+        className={light
+          ? "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E4DF] hover:border-[#3554D1]/40 transition-all text-sm"
+          : "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00d4ff]/40 hover:bg-white/10 transition-all text-sm"}
       >
         <span className="text-lg leading-none">{localeInfo.flag}</span>
-        <span className="text-gray-300 hidden sm:inline">{localeInfo.name}</span>
+        <span className={`${light ? "text-[#4A4C52]" : "text-gray-300"} hidden sm:inline`}>{localeInfo.name}</span>
         <svg className={`w-3 h-3 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
