@@ -1,19 +1,6 @@
 /** 浏览器端分片上传：图片/视频/文件走 /api/upload/chunked，避开 tRPC 请求体上限。 */
 const CHUNK_BYTES = 6 * 1024 * 1024;
 
-async function readSliceBase64(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result ?? "");
-      const comma = dataUrl.indexOf(",");
-      resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("读取分片失败"));
-    reader.readAsDataURL(file);
-  });
-}
-
 async function errorFrom(res: Response, fallback: string): Promise<string> {
   try {
     const body = await res.json();
@@ -44,13 +31,15 @@ export async function uploadFileChunked(
   let seq = 0;
   while (offset < file.size) {
     const slice = file.slice(offset, offset + CHUNK_BYTES);
-    const b64 = await readSliceBase64(slice);
-    const partRes = await fetch(`/api/upload/chunked/part?id=${encodeURIComponent(id)}&seq=${seq}`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "text/plain" },
-      body: b64,
-    });
+    const partRes = await fetch(
+      `/api/upload/chunked/part?id=${encodeURIComponent(id)}&seq=${seq}&enc=bin`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: slice,
+      },
+    );
     if (!partRes.ok) throw new Error(await errorFrom(partRes, "分片上传失败，请重试"));
     offset += slice.size;
     seq += 1;

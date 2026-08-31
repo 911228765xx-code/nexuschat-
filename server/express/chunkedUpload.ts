@@ -93,7 +93,7 @@ export async function handleChunkStart(req: Request, res: Response): Promise<voi
   res.json({ id });
 }
 
-/** POST /api/upload/chunked/part?id=&seq=  body: base64 文本 */
+/** POST /api/upload/chunked/part?id=&seq=&enc=  body: enc=bin 为原始字节，否则 base64 文本（旧客户端） */
 export async function handleChunkPart(req: Request, res: Response): Promise<void> {
   const user = await authUser(req, res);
   if (!user) return;
@@ -102,10 +102,21 @@ export async function handleChunkPart(req: Request, res: Response): Promise<void
   const s = sessions.get(id);
   if (!s || s.userId !== user.id) { res.status(404).json({ error: "上传会话不存在或已过期" }); return; }
   if (seq !== s.seq) { res.status(409).json({ error: "分片顺序错误，请重新上传" }); return; }
-  const b64 = typeof req.body === "string" ? req.body : "";
-  if (!b64) { res.status(400).json({ error: "空分片" }); return; }
+  const enc = String(req.query.enc ?? "");
   let chunk: Buffer;
-  try { chunk = Buffer.from(b64, "base64"); } catch { res.status(400).json({ error: "分片解码失败" }); return; }
+  if (enc === "bin") {
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      res.status(400).json({ error: "空分片" });
+      return;
+    }
+    chunk = req.body;
+  } else {
+    const b64 = Buffer.isBuffer(req.body)
+      ? req.body.toString("utf8")
+      : (typeof req.body === "string" ? req.body : "");
+    if (!b64) { res.status(400).json({ error: "空分片" }); return; }
+    try { chunk = Buffer.from(b64, "base64"); } catch { res.status(400).json({ error: "分片解码失败" }); return; }
+  }
   if (s.bytes + chunk.length > HARD_MAX[s.kind]) {
     try { fs.unlinkSync(s.filePath); } catch { /* ignore */ }
     sessions.delete(id);

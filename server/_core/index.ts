@@ -15,6 +15,7 @@ import { startPriceAlertChecker } from "../priceAlertChecker";
 import { startBotScheduler } from "../botScheduler";
 import { startMessageCleanup } from "../messageCleanup";
 import { startRankAggregation } from "../rankEngine";
+import { startBitRankAirdropSettlement } from "../bitRankAirdrop";
 import { startCallResolver } from "../callResolver";
 import { startPartnerSettlement } from "../partner";
 import { startIcoRewardScheduler } from "../icoRewardScheduler";
@@ -22,6 +23,7 @@ import { applySchemaPatches } from "../schemaPatches";
 import { handleTokenChatStream } from "../express/tokenChatStream";
 import { handleApkDownload, redirectToDownloadPage } from "../express/apkDownload";
 import { handleVideoUpload } from "../express/videoUpload";
+import { handleImageUpload } from "../express/imageUpload";
 import { handleFileUpload } from "../express/fileUpload";
 import { handleChunkStart, handleChunkPart, handleChunkFinish } from "../express/chunkedUpload";
 import { handleResearchStream } from "../express/researchStream";
@@ -125,11 +127,13 @@ async function startServer() {
   // SSE streaming endpoints (must be before tRPC middleware)
   // 视频直传（raw body，按会员档位限体积；须在 json 解析器之前注册）
   app.post("/api/upload/video", express.raw({ type: () => true, limit: "260mb" }), handleVideoUpload);
+  // 图片直传（相册压完通常几 MB，整文件二进制比分片+base64 快）
+  app.post("/api/upload/image", express.raw({ type: () => true, limit: "22mb" }), handleImageUpload);
   // 文件直传（PPT/PDF 等，按会员档位限体积，Pro 最高 500MB）
   app.post("/api/upload/file", express.raw({ type: () => true, limit: "510mb" }), handleFileUpload);
-  // 分片上传（每片 ≤16MB，穿透任何前置代理的体积限制；视频/文件通用）
+  // 分片上传（每片 ≤16MB，穿透任何前置代理的体积限制；enc=bin 原始字节，否则旧客户端 base64）
   app.post("/api/upload/chunked/start", express.json({ limit: "1mb" }), handleChunkStart);
-  app.post("/api/upload/chunked/part", express.text({ type: () => true, limit: "16mb" }), handleChunkPart);
+  app.post("/api/upload/chunked/part", express.raw({ type: () => true, limit: "16mb" }), handleChunkPart);
   app.post("/api/upload/chunked/finish", handleChunkFinish);
   app.post("/api/token-chat/stream", handleTokenChatStream);
   app.post("/api/research/stream", handleResearchStream);
@@ -172,6 +176,8 @@ async function startServer() {
   startMessageCleanup();
   // AC 段位：每日全网体价值分聚合（每 6h 检查，每个 UTC 日只跑一次）
   startRankAggregation();
+  // BIT 段位空投：北京时间凌晨 0 点结算前一日捐献
+  startBitRankAirdropSettlement();
   // Alpha 战绩：每 1 分钟结算到期 Call（短窗盘口）
   startCallResolver();
   // 合伙人双池分红：每日结算（幂等）

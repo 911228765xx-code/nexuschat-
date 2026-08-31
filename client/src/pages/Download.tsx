@@ -172,6 +172,7 @@ export default function DownloadPage() {
    */
   async function fetchApkChunked(): Promise<Blob> {
     const CHUNK = 4 * 1024 * 1024;
+    const CONCURRENCY = 3;
     let start = 0;
     let total = 0;
     // Chrome Android 支持 OPFS：边下边写盘，避免 180MB 全扛在 JS 内存里被系统杀掉
@@ -187,50 +188,68 @@ export default function DownloadPage() {
       ? await fileHandle.createWritable().catch(() => null)
       : null;
     const parts: BlobPart[] = [];
+    const apkPath = `/apk?v=${encodeURIComponent(ver?.latestVersion || "1")}`;
+
+    async function fetchRange(from: number, to: number, knownTotal: number): Promise<{ buf: Uint8Array; total: number }> {
+      const end = knownTotal > 0 ? Math.min(to, knownTotal - 1) : to;
+      let res: globalThis.Response | null = null;
+      let lastErr = "";
+      for (let tryN = 0; tryN < 3; tryN++) {
+        try {
+          res = await fetch(apkPath, { headers: { Range: `bytes=${from}-${end}` }, cache: "no-store" });
+          if (res.status === 206) break;
+          lastErr = `no partial (${res.status})`;
+          res = null;
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : "network";
+          res = null;
+        }
+        if (tryN < 2) await new Promise((r) => setTimeout(r, 500 * (tryN + 1)));
+      }
+      if (!res || res.status !== 206) throw new Error(lastErr || "no partial");
+      const type = res.headers.get("content-type")?.toLowerCase() ?? "";
+      if (type.includes("text/html")) throw new Error("received html");
+      const cr = res.headers.get("content-range");
+      const range = cr?.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+      if (!range) throw new Error("invalid content-range");
+      const returnedStart = Number(range[1]);
+      const returnedEnd = Number(range[2]);
+      const returnedTotal = Number(range[3]);
+      if (returnedStart !== from || !Number.isFinite(returnedTotal) || !returnedTotal) {
+        throw new Error("mismatched content-range");
+      }
+      if (knownTotal && returnedTotal !== knownTotal) throw new Error("total length changed");
+      const expectedEnd = knownTotal > 0 ? Math.min(end, knownTotal - 1) : returnedEnd;
+      if (returnedEnd !== expectedEnd) throw new Error("mismatched content-range");
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.length !== expectedEnd - from + 1) throw new Error(`chunk ${from}-${expectedEnd} got ${buf.length}`);
+      return { buf, total: returnedTotal };
+    }
 
     try {
-      for (;;) {
-        const end = total > 0 ? Math.min(start + CHUNK - 1, total - 1) : start + CHUNK - 1;
-        const apkPath = `/apk?v=${encodeURIComponent(ver?.latestVersion || "1")}`;
-        let res: globalThis.Response | null = null;
-        let lastErr = "";
-        for (let tryN = 0; tryN < 3; tryN++) {
-          try {
-            res = await fetch(apkPath, { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store" });
-            if (res.status === 206) break;
-            lastErr = `no partial (${res.status})`;
-            res = null;
-          } catch (e) {
-            lastErr = e instanceof Error ? e.message : "network";
-            res = null;
-          }
-          if (tryN < 2) await new Promise((r) => setTimeout(r, 500 * (tryN + 1)));
+      const first = await fetchRange(0, CHUNK - 1, 0);
+      total = first.total;
+      if (first.buf[0] !== 0x50 || first.buf[1] !== 0x4b) throw new Error("not an apk/zip");
+      if (writable) await writable.write(first.buf);
+      else parts.push(first.buf);
+      start = first.buf.length;
+      setDlProgress(Math.min(0.999, start / total));
+
+      while (start < total) {
+        const jobs: { from: number; to: number }[] = [];
+        let cursor = start;
+        for (let i = 0; i < CONCURRENCY && cursor < total; i++) {
+          const to = Math.min(cursor + CHUNK - 1, total - 1);
+          jobs.push({ from: cursor, to });
+          cursor = to + 1;
         }
-        if (!res || res.status !== 206) throw new Error(lastErr || "no partial");
-        const type = res.headers.get("content-type")?.toLowerCase() ?? "";
-        if (type.includes("text/html")) throw new Error("received html");
-        const cr = res.headers.get("content-range"); // "bytes s-e/TOTAL"
-        const range = cr?.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
-        if (!range) throw new Error("invalid content-range");
-        const returnedStart = Number(range[1]);
-        const returnedEnd = Number(range[2]);
-        const returnedTotal = Number(range[3]);
-        if (returnedStart !== start || !Number.isFinite(returnedTotal) || !returnedTotal) {
-          throw new Error("mismatched content-range");
+        const results = await Promise.all(jobs.map((j) => fetchRange(j.from, j.to, total)));
+        for (const r of results) {
+          if (writable) await writable.write(r.buf);
+          else parts.push(r.buf);
+          start += r.buf.length;
+          setDlProgress(Math.min(0.999, start / total));
         }
-        if (!total) total = returnedTotal;
-        if (total !== returnedTotal) throw new Error("total length changed");
-        // 按固定块长请求可能越过文件尾（末块 / 小于一块的包）：允许服务端把上界收窄到 total-1
-        const expectedEnd = Math.min(end, total - 1);
-        if (returnedEnd !== expectedEnd) throw new Error("mismatched content-range");
-        const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.length !== expectedEnd - start + 1) throw new Error(`chunk ${start}-${expectedEnd} got ${buf.length}`);
-        if (start === 0 && (buf[0] !== 0x50 || buf[1] !== 0x4b)) throw new Error("not an apk/zip");
-        if (writable) await writable.write(buf);
-        else parts.push(buf);
-        start += buf.length;
-        setDlProgress(Math.min(0.999, start / total));
-        if (start >= total) break;
       }
 
       if (writable && fileHandle) {
@@ -368,7 +387,7 @@ export default function DownloadPage() {
           </h1>
           {!isInviteFlow && (
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              澳洲 AFT 集团旗下 · 让AI社交成为生活习惯
+              澳洲 AFT 集团旗下
             </p>
           )}
         </motion.div>
