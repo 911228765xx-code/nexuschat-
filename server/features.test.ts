@@ -660,6 +660,29 @@ describe("Chat Group List", () => {
 
 // ─── Phase 8: Trading Chart, Research History, Follow ────────────────────────
 
+describe("Stock token quotes (display-only)", () => {
+  it("catalog keys are unique and every candidate is a USDT pair", async () => {
+    const { STOCK_TOKEN_CATALOG, STOCK_TOKEN_DISCLAIMER } = await import("./stockTokens");
+    const keys = STOCK_TOKEN_CATALOG.map((item) => item.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(STOCK_TOKEN_CATALOG.length).toBeGreaterThanOrEqual(8);
+    for (const item of STOCK_TOKEN_CATALOG) {
+      expect(item.candidates.length).toBeGreaterThanOrEqual(1);
+      expect(item.candidates.every((pair) => pair.endsWith("USDT"))).toBe(true);
+    }
+    expect(STOCK_TOKEN_DISCLAIMER).toMatch(/代币化股票/);
+    expect(STOCK_TOKEN_DISCLAIMER).toMatch(/不开户/);
+    expect(STOCK_TOKEN_DISCLAIMER).toMatch(/不撮合/);
+  });
+
+  it("trading router exposes getStockTokens and getStockTokenChart", async () => {
+    const { tradingRouter } = await import("./routers/trading");
+    const procs = (tradingRouter as any)._def.procedures;
+    expect(procs.getStockTokens).toBeDefined();
+    expect(procs.getStockTokenChart).toBeDefined();
+  });
+});
+
 describe("Phase 8: Trading getChart", () => {
   it("trading router is defined", async () => {
     const { tradingRouter } = await import("./routers/trading");

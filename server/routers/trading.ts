@@ -6,6 +6,7 @@ import { priceAlerts, tradingPositions } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { cachedFetch, TTL } from "../utils/coinGeckoCache";
 import { getPrices as getMultiSourcePrices } from "../utils/priceService";
+import { fetchStockTokenChart, fetchStockTokenQuotes } from "../stockTokens";
 
 // CoinGecko free API - no key required
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
@@ -39,6 +40,13 @@ export const tradingRouter = router({
       // Use multi-source price service: CoinGecko → CoinCap → Binance
       return getMultiSourcePrices(symbols);
     }),
+
+  /** 币安美股代币只读行情。公开接口，不下单、不开户。 */
+  getStockTokens: publicProcedure.query(async () => fetchStockTokenQuotes()),
+
+  getStockTokenChart: publicProcedure
+    .input(z.object({ key: z.string().min(1).max(12) }))
+    .query(async ({ input }) => fetchStockTokenChart(input.key)),
 
   // ─── Get detailed chart data for a single coin ────────────────────────────
   getChart: publicProcedure
