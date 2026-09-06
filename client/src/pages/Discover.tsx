@@ -734,7 +734,7 @@ export default function Discover() {
             ))}
           </div>
         )}
-        {surface === "discover" && stockTokens?.items?.length ? (
+        {surface === "discover" ? (
           <button
             type="button"
             onClick={() => setLocation("/app/stock-tokens")}
@@ -745,14 +745,27 @@ export default function Discover() {
               <span className="text-[11px] text-muted-foreground">只看行情</span>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {stockTokens.items.slice(0, 8).map((item) => {
+              {(stockTokens?.items?.length
+                ? stockTokens.items
+                : [
+                    { key: "AAPL", equity: "AAPL", lastPrice: 0, change24h: null },
+                    { key: "TSLA", equity: "TSLA", lastPrice: 0, change24h: null },
+                    { key: "NVDA", equity: "NVDA", lastPrice: 0, change24h: null },
+                    { key: "MSFT", equity: "MSFT", lastPrice: 0, change24h: null },
+                    { key: "AMZN", equity: "AMZN", lastPrice: 0, change24h: null },
+                    { key: "GOOGL", equity: "GOOGL", lastPrice: 0, change24h: null },
+                    { key: "META", equity: "META", lastPrice: 0, change24h: null },
+                    { key: "SPY", equity: "SPY", lastPrice: 0, change24h: null },
+                  ]
+              ).slice(0, 8).map((item) => {
+                const live = item.lastPrice > 0;
                 const up = (item.change24h ?? 0) >= 0;
                 return (
                   <div key={item.key} className="min-w-0">
                     <div className="text-[11px] font-semibold text-muted-foreground">{item.equity}</div>
-                    <div className="truncate text-[13px] font-bold tabular-nums">{item.lastPrice.toFixed(item.lastPrice >= 100 ? 2 : 4)}</div>
-                    <div className={`text-[11px] font-semibold ${up ? "text-emerald-500" : "text-rose-500"}`}>
-                      {item.change24h == null ? "—" : `${item.change24h > 0 ? "+" : ""}${item.change24h.toFixed(2)}%`}
+                    <div className="truncate text-[13px] font-bold tabular-nums">{live ? item.lastPrice.toFixed(item.lastPrice >= 100 ? 2 : 4) : "—"}</div>
+                    <div className={`text-[11px] font-semibold ${live ? (up ? "text-emerald-500" : "text-rose-500") : "text-muted-foreground"}`}>
+                      {!live || item.change24h == null ? "—" : `${item.change24h > 0 ? "+" : ""}${item.change24h.toFixed(2)}%`}
                     </div>
                   </div>
                 );
